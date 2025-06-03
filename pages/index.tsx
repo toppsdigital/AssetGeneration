@@ -107,47 +107,11 @@ export default function Home() {
     fetchFiles();
   };
 
-  const handleTemplateClick = async (template: string) => {
-    const fileName = template.split('/').pop()!;
-    if (downloadedFiles.includes(fileName)) {
-      // Already downloaded, navigate immediately
-      const psdfile = fileName.replace(/\.psd$/i, '');
-      reset();
-      router.push(`/${psdfile}/edit`);
-      return;
-    }
-    setDownloadingKey(template);
-    setDownloadProgress(0);
-    try {
-      const res = await fetch('/api/download-psd', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: template }),
-      });
-      const data = await res.json();
-      if (data.downloaded) {
-        const psdfile = fileName.replace(/\.psd$/i, '');
-        reset();
-        router.push(`/${psdfile}/edit`);
-        fetchDownloadedFiles();
-      } else {
-        alert('Download failed!');
-      }
-    } catch (e) {
-      alert('Download failed!');
-    } finally {
-      setDownloadingKey(null);
-    }
-    setDownloadProgress(0);
-  };
-
-  const handleDeleteDownloaded = async (file: string) => {
-    await fetch('/api/delete-downloaded-psd', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ file }),
-    });
-    fetchDownloadedFiles();
+  const handleTemplateClick = (template: string) => {
+    const fileName = template.split('/').pop();
+    const psdfile = fileName.replace(/\.psd$/i, '');
+    reset();
+    router.push(`/${psdfile}/edit`);
   };
 
   return (
@@ -176,19 +140,7 @@ export default function Home() {
                   {downloadedFiles.includes(fileName) && (
                     <>
                       <span title="Downloaded">✅</span>
-                      <button
-                        onClick={e => { e.stopPropagation(); handleDeleteDownloaded(fileName); }}
-                        title="Delete downloaded PSD"
-                        style={{ marginLeft: 8, background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', fontSize: 18 }}
-                      >
-                        🗑️
-                      </button>
                     </>
-                  )}
-                  {downloadingKey === template && (
-                    <span style={{ marginLeft: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      {spinner}
-                    </span>
                   )}
                 </li>
               );

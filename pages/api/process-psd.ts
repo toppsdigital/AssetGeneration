@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
+import fetch from 'node-fetch';
 
 function copyDirSync(src: string, dest: string) {
   console.log(`[API] Copying directory from ${src} to ${dest}`);
@@ -30,10 +31,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const psdFile = file.endsWith('.psd') ? file : `${file}.psd`;
   const localPsdPath = path.join('/tmp', psdFile);
 
-  // Check if PSD file exists
-  if (!fs.existsSync(localPsdPath)) {
-    console.log(`[API] Error: PSD file not found at ${localPsdPath}`);
-    return res.status(404).json({ error: 'PSD file not found' });
+  // Always download the PSD from S3 using a presigned URL
+  try {
+    // Get presigned URL from s3-proxy
+    const s3Res = await fetch('http://localhost:3000/api/s3-proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_method: 'get', filename: psdFile }),
+    });
+    if (!s3Res.ok) {
+      console.error('[API] Failed to get presigned S3 URL');
+      return res.status(500).json({ error: 'Failed to get presigned S3 URL' });
+    }
+    const { url } = await s3Res.json();
+    // Download the PSD file to /tmp
+    const fileRes = await fetch(url);
+    if (!fileRes.ok) {
+      console.error('[API] Failed to download PSD from S3');
+      return res.status(500).json({ error: 'Failed to download PSD from S3' });
+    }
+    const arrayBuffer = await fileRes.arrayBuffer();
+    fs.writeFileSync(localPsdPath, Buffer.from(arrayBuffer));
+    console.log(`[API] Downloaded PSD to ${localPsdPath}`);
+  } catch (err) {
+    console.error('[API] Error downloading PSD from S3:', err);
+    return res.status(500).json({ error: 'Error downloading PSD from S3' });
   }
 
   // Run the Python script using the virtual environment
