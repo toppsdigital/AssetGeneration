@@ -114,6 +114,15 @@ export default function Home() {
     router.push(`/${psdfile}/edit`);
   };
 
+  const handleDeleteDownloaded = async (fileName: string) => {
+    await fetch('/api/delete-downloaded-psd', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file: fileName }),
+    });
+    fetchDownloadedFiles();
+  };
+
   return (
     <div className={styles.container}>
       <h1 className={styles.title}>Asset Generation using Firefly</h1>
@@ -129,6 +138,7 @@ export default function Home() {
           <ul>
             {templates.map((template, index) => {
               const fileName = template.split('/').pop()!;
+              const isDownloaded = downloadedFiles.includes(fileName);
               return (
                 <li
                   key={index}
@@ -137,9 +147,16 @@ export default function Home() {
                   style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
                 >
                   {fileName}
-                  {downloadedFiles.includes(fileName) && (
+                  {isDownloaded && (
                     <>
                       <span title="Downloaded">✅</span>
+                      <button
+                        title="Delete local copy"
+                        onClick={e => { e.stopPropagation(); handleDeleteDownloaded(fileName); }}
+                        style={{ marginLeft: 4, background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: 16 }}
+                      >
+                        🗑️
+                      </button>
                     </>
                   )}
                 </li>

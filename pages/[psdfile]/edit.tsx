@@ -59,6 +59,7 @@ export default function EditPage() {
   const [tempDir, setTempDir] = useState('');
   const [loading, setLoading] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
 
   useEffect(() => {
     if (!psdfileStr) return;
@@ -67,9 +68,33 @@ export default function EditPage() {
     if (lastLoadedPsd !== psdfileStr) {
       reset();
       setLoading(true);
+      setStatus('Downloading PSD...');
 
-      fetch(`/api/process-psd?file=${psdfileStr}`)
-        .then(res => res.json())
+      // 1. Download PSD
+      fetch('/api/download-psd', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: psdfileStr.endsWith('.psd') ? psdfileStr : psdfileStr + '.psd' }),
+      })
+        .then(async res => {
+          if (!res.ok) {
+            const errJson = await res.json().catch(() => ({}));
+            throw new Error(errJson.error || 'Failed to download PSD.');
+          }
+          setStatus('Extracting PSD Layers...');
+          return res.json();
+        })
+        .then(() => {
+          // 2. Extract PSD
+          return fetch(`/api/process-psd?file=${psdfileStr}`);
+        })
+        .then(async res => {
+          if (!res.ok) {
+            const errJson = await res.json().catch(() => ({}));
+            throw new Error(errJson.error || 'Failed to extract PSD.');
+          }
+          return res.json();
+        })
         .then(json => {
           // STRONG GUARD: Only set data if the PSD matches
           console.log('Fetched PSD file:', json.psd_file, 'Requested PSD file:', psdfileStr);
@@ -83,7 +108,6 @@ export default function EditPage() {
               const smartObjs: Record<number, string | undefined> = {};
               const setFromPsd = (layers: Layer[]) => {
                 layers.forEach(layer => {
-                  // Make all layers visible by default, regardless of PSD settings
                   vis[layer.id] = layer.layer_properties?.visible ?? true;
                   if (layer.type === 'type' && layer.layer_properties?.text) {
                     texts[layer.id] = layer.layer_properties.text;
@@ -101,20 +125,24 @@ export default function EditPage() {
             }
             setEdits({ visibility: {}, text: {}, smartObjects: {} });
             setLoading(false);
+            setStatus(null);
             setLastLoadedPsd(psdfileStr);
           } else {
             setError('Loaded PSD does not match requested file!');
             setLoading(false);
+            setStatus(null);
             console.error('PSD mismatch:', json.psd_file, psdfileStr);
           }
         })
         .catch(err => {
-          setError('Failed to fetch or process PSD.');
+          setError(err.message || 'Failed to fetch or process PSD.');
           setLoading(false);
+          setStatus(null);
           console.error('Fetch error:', err);
         });
     } else {
       setLoading(false);
+      setStatus(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [psdfileStr, lastLoadedPsd]);
@@ -347,7 +375,8 @@ export default function EditPage() {
   const handleResetZoom = () => setZoom(1);
 
   if (error) return <div className={styles.loading}>{error}</div>;
-  if (loading || !data || !Array.isArray(data.layers)) return <Spinner />;
+  if (status) return <div className={styles.loading}><Spinner /> {status}</div>;
+  if (loading || !data || !Array.isArray(data.layers)) return <div className={styles.loading}><Spinner /> Processing PSD and loading layers...</div>;
 
   const psdInfo = data.summary?.psd_info;
   const canvasWidth = psdInfo?.size?.[0] || 800;
