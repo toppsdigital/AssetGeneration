@@ -17,8 +17,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         },
         body: new URLSearchParams({
           grant_type: 'client_credentials',
-          client_id: FIREFLY_CLIENT_ID,
-          client_secret: FIREFLY_CLIENT_SECRET,
+          client_id: process.env.FIREFLY_CLIENT_ID,
+          client_secret: process.env.FIREFLY_CLIENT_SECRET,
           scope: 'openid,AdobeID,session,additional_info,read_organizations,firefly_api,ff_apis',
         }),
       });
@@ -39,8 +39,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         },
         body: new URLSearchParams({
           grant_type: 'client_credentials',
-          client_id: FIREFLY_CLIENT_ID,
-          client_secret: FIREFLY_CLIENT_SECRET,
+          client_id: process.env.FIREFLY_CLIENT_ID,
+          client_secret: process.env.FIREFLY_CLIENT_SECRET,
           scope: 'openid,AdobeID,session,additional_info,read_organizations,firefly_api,ff_apis',
         }),
       });
@@ -55,7 +55,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Check job status
       const statusResponse = await fetch(jobUrl, {
         headers: {
-          'x-api-key': FIREFLY_CLIENT_ID,
+          'x-api-key': process.env.FIREFLY_CLIENT_ID,
           'Authorization': `Bearer ${token}`,
           'Accept': 'application/json',
         },
@@ -77,8 +77,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         },
         body: new URLSearchParams({
           grant_type: 'client_credentials',
-          client_id: FIREFLY_CLIENT_ID,
-          client_secret: FIREFLY_CLIENT_SECRET,
+          client_id: process.env.FIREFLY_CLIENT_ID,
+          client_secret: process.env.FIREFLY_CLIENT_SECRET,
           scope: 'openid,AdobeID,session,additional_info,read_organizations,firefly_api,ff_apis',
         }),
       });
@@ -95,7 +95,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': FIREFLY_CLIENT_ID,
+          'x-api-key': process.env.FIREFLY_CLIENT_ID,
           'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify(req.body),

@@ -62,3 +62,5 @@ var/
 
 tmp/
 /tmp/ 
+.vercel
+.env*.local
