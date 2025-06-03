@@ -34,10 +34,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Download the PSD from S3 if not already present
   if (!fs.existsSync(localPsdPath)) {
     try {
-      // Use correct base URL for internal API calls
-      const baseUrl = process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}`
-        : 'http://localhost:3000';
+      // Use correct base URL for internal API calls (works on Vercel/serverless)
+      const protocol = req.headers['x-forwarded-proto'] || 'https';
+      const host = req.headers.host;
+      const baseUrl = `${protocol}://${host}`;
       // Get presigned URL from s3-proxy
       const s3Res = await fetch(`${baseUrl}/api/s3-proxy`, {
         method: 'POST',
