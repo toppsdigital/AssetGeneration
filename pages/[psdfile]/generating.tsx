@@ -1,0 +1,403 @@
+import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/router';
+import styles from '../../styles/Review.module.css';
+import NavBar from '../../components/NavBar';
+import { usePsdStore } from '../../web/store/psdStore';
+import { getPresignedUrl, uploadFileToPresignedUrl } from '../../web/utils/s3Presigned';
+import { getFireflyToken, createFireflyAsset, collectLayerParameters, buildFireflyLayersPayload } from '../../web/utils/firefly';
+
+const baseSteps = [
+  'Uploading replaced smart objects',
+  'Getting presigned URLs for inputs',
+  'Getting presigned URL for output',
+  'Authenticating with Firefly',
+  'Creating asset with Firefly',
+  'Polling job status',
+  'Complete!'
+];
+
+// Recursively flatten and merge all layers (including children)
+function buildLayerList(layers: any[], edits: any, smartObjectUrls: Record<string, string>) {
+  let result: any[] = [];
+  for (const layer of layers) {
+    const id = layer.id;
+    const edit = edits[id] || {};
+    const out: any = {
+      name: layer.name,
+      visible: edit.visible !== undefined ? edit.visible : layer.visible,
+      edit: {},
+    };
+    if (layer.type === 'type' && (edit.text || layer.text)) {
+      out.text = { content: edit.text || layer.text };
+    }
+    if (layer.type === 'smartobject' && smartObjectUrls[id]) {
+      out.input = {
+        storage: 'external',
+        href: smartObjectUrls[id]
+      };
+    }
+    result.push(out);
+    if (layer.children && Array.isArray(layer.children)) {
+      result = result.concat(buildLayerList(layer.children, edits, smartObjectUrls));
+    }
+  }
+  return result;
+}
+
+export default function GeneratingPage() {
+  const router = useRouter();
+  const { psdfile } = router.query;
+  const { data, edits, originals } = usePsdStore();
+  const [currentStep, setCurrentStep] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [stepStatus, setStepStatus] = useState<(null | 'done' | 'error')[]>(Array(baseSteps.length).fill(null));
+  const [outputImageUrl, setOutputImageUrl] = useState<string | null>(null);
+  const [jobStatus, setJobStatus] = useState<string>('submitted');
+  const [smartObjectUploadProgress, setSmartObjectUploadProgress] = useState<Record<string, number>>({});
+
+  // Helper to get all replaced smart object files
+  const getReplacedSmartObjects = () => {
+    return Object.entries(edits.smartObjects)
+      .filter(([id, file]) => file && file instanceof File)
+      .map(([id, file]) => ({
+        id,
+        file: file as File
+      }));
+  };
+
+  // Make smartObjects available in render scope
+  const smartObjects = getReplacedSmartObjects();
+
+  // Helper to poll Firefly job status
+  const pollJobStatus = async (jobUrl: string) => {
+    try {
+      const response = await fetch('/api/firefly-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'status', jobUrl }),
+      });
+      if (!response.ok) throw new Error('Failed to check job status');
+      const data = await response.json();
+      const status = data.status || (data.outputs && data.outputs[0]?.status);
+      setJobStatus(status);
+      return status;
+    } catch (err: any) {
+      setError('Failed to check job status: ' + (err.message || err.toString()));
+      setStepStatus(s => { const arr = [...s]; arr[5] = 'error'; return arr; });
+      return 'failed';
+    }
+  };
+
+  // Helper to upload file with progress tracking
+  const uploadFileWithProgress = async (file: File, uploadUrl: string): Promise<void> => {
+    return new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('PUT', uploadUrl, true);
+      xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const percent = Math.round((event.loaded / event.total) * 100);
+            setSmartObjectUploadProgress(prev => ({
+              ...prev,
+              [file.name]: percent
+            }));
+        }
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+            setSmartObjectUploadProgress(prev => ({
+              ...prev,
+              [file.name]: 100
+            }));
+          resolve();
+        } else {
+          reject(new Error(`S3 upload failed: ${xhr.status} ${xhr.statusText}\n${xhr.responseText}`));
+        }
+      };
+      xhr.onerror = () => reject(new Error('S3 upload failed: Network error'));
+      xhr.send(file);
+    });
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+    let pollInterval: NodeJS.Timeout;
+
+    async function runSteps() {
+      try {
+        // Pre-check for valid options/parameters
+        if (!data?.layers || !Array.isArray(data.layers)) {
+          setError('PSD data is missing or invalid. Please review your edits.');
+          return;
+        }
+
+        // Build smartObjectUrls map for replaced smart objects
+        const smartObjectUrls: Record<number, string> = {};
+        Object.entries(edits.smartObjects).forEach(([id, file]) => {
+          if (file && file instanceof File) {
+            // We'll get the presigned URL for this below, but for now, just mark as needing upload
+            smartObjectUrls[Number(id)] = '';
+          }
+        });
+
+        // 1. Upload smart objects
+        setCurrentStep(0);
+        setStepStatus(s => { const arr = [...s]; arr[0] = null; return arr; });
+        try {
+          for (const { id, file } of smartObjects) {
+            const uploadPath = `${psdfile}/inputs/${file.name}`;
+            const uploadUrl = await getPresignedUrl({ filename: uploadPath, method: 'put' });
+            await uploadFileWithProgress(file, uploadUrl);
+          }
+          if (!isMounted) return;
+          setStepStatus(s => { const arr = [...s]; arr[0] = 'done'; return arr; });
+        } catch (err: any) {
+          setError('Failed to upload smart objects: ' + (err.message || err.toString()));
+          setStepStatus(s => { const arr = [...s]; arr[0] = 'error'; return arr; });
+          return;
+        }
+
+        // 2. Get presigned URLs for inputs
+        setCurrentStep(1);
+        setStepStatus(s => { const arr = [...s]; arr[1] = null; return arr; });
+        let psdGetUrl: string;
+        try {
+          // Ensure .psd extension is present
+          let psdFilename = typeof psdfile === 'string' && !psdfile.toLowerCase().endsWith('.psd')
+            ? `${psdfile}.psd`
+            : psdfile as string;
+          psdGetUrl = await getPresignedUrl({ filename: psdFilename, method: 'get' });
+          if (!psdGetUrl) {
+            throw new Error('Failed to get presigned URL for PSD file');
+          }
+          console.log('PSD Get URL:', psdGetUrl);
+
+        // Fill in the smartObjectUrls with presigned GET URLs
+        const smartObjectGetUrls = await Promise.all(
+          Object.entries(edits.smartObjects).map(async ([id, file]) => {
+            if (!file) return null;
+              const url = await getPresignedUrl({ filename: `${psdfile}/inputs/${file.name}`, method: 'get' });
+              if (!url) {
+                throw new Error(`Failed to get presigned URL for smart object ${file.name}`);
+              }
+            return {
+              id: Number(id),
+                url
+            };
+          })
+        );
+        smartObjectGetUrls.forEach(obj => {
+          if (obj) smartObjectUrls[obj.id] = obj.url;
+        });
+        if (!isMounted) return;
+          setStepStatus(s => { const arr = [...s]; arr[1] = 'done'; return arr; });
+        } catch (err: any) {
+          setError('Failed to get presigned URLs: ' + (err.message || err.toString()));
+          setStepStatus(s => { const arr = [...s]; arr[1] = 'error'; return arr; });
+          return;
+        }
+
+        // 3. Get presigned URL for output
+        setCurrentStep(2);
+        setStepStatus(s => { const arr = [...s]; arr[2] = null; return arr; });
+        // Extract base name (remove .psd if present)
+        const baseName = (psdfile as string).replace(/\.psd$/i, '');
+        // Format date as mm:dd:yy_HH:mm
+        const now = new Date();
+        const pad = (n: number) => n.toString().padStart(2, '0');
+        const mm = pad(now.getMonth() + 1);
+        const dd = pad(now.getDate());
+        const yy = now.getFullYear().toString().slice(-2);
+        const HH = pad(now.getHours());
+        const min = pad(now.getMinutes());
+        const dateStr = `${mm}:${dd}:${yy}_${HH}:${min}`;
+        // Build output path
+        const outputFilename = `${psdfile}/output/output_${dateStr}.png`;
+
+        const outputPutUrl = await getPresignedUrl({ 
+          filename: outputFilename, 
+          method: 'put' 
+        });
+        if (!isMounted) return;
+        setStepStatus(s => { const arr = [...s]; arr[2] = 'done'; return arr; });
+
+        // 4. Authenticate with Firefly
+        setCurrentStep(3);
+        setStepStatus(s => { const arr = [...s]; arr[3] = null; return arr; });
+        let fireflyToken;
+        try {
+          fireflyToken = await getFireflyToken();
+        } catch (err: any) {
+          setError('Firefly authentication failed: ' + (err.message || err.toString()));
+          setStepStatus(s => { const arr = [...s]; arr[3] = 'error'; return arr; });
+          return;
+        }
+        if (!isMounted) return;
+        setStepStatus(s => { const arr = [...s]; arr[3] = 'done'; return arr; });
+
+        // 5. Create asset with Firefly
+        setCurrentStep(4);
+        setStepStatus(s => { const arr = [...s]; arr[4] = null; return arr; });
+        try {
+          // Use the canonical buildFireflyLayersPayload to only include changed layers
+          const layersPayload = buildFireflyLayersPayload(data.layers, edits, originals, smartObjectUrls);
+          const optionsLayers = { layers: layersPayload };
+          console.log('Firefly Options Layers Preview:', JSON.stringify({ options: optionsLayers }, null, 2));
+          console.log('Total changed layers in payload:', layersPayload.length);
+
+          const fireflyPayload: any = {
+            inputs: [
+              {
+                storage: 'external',
+                href: psdGetUrl
+              }
+            ],
+            outputs: [
+              {
+                href: outputPutUrl,
+                storage: 'external',
+                type: 'image/png'
+              }
+            ],
+            options: optionsLayers
+          };
+
+          console.log('Firefly Payload:', JSON.stringify(fireflyPayload, null, 2));
+
+          const result = await createFireflyAsset({ body: fireflyPayload });
+          if (!isMounted) return;
+          setStepStatus(s => { const arr = [...s]; arr[4] = 'done'; return arr; });
+
+          // 6. Poll job status
+          setCurrentStep(5);
+          setStepStatus(s => { const arr = [...s]; arr[5] = null; return arr; });
+          
+          const jobUrl = result._links?.self?.href;
+          if (!jobUrl) {
+            throw new Error('No job URL returned from Firefly');
+          }
+
+          // Start polling
+          pollInterval = setInterval(async () => {
+            const status = await pollJobStatus(jobUrl);
+            if (status === 'succeeded' || status === 'failed') {
+              clearInterval(pollInterval);
+              if (status === 'succeeded') {
+                setStepStatus(s => { const arr = [...s]; arr[5] = 'done'; return arr; });
+                setCurrentStep(6);
+                setStepStatus(s => { const arr = [...s]; arr[6] = 'done'; return arr; });
+                // Get the output image URL
+                const outputUrl = await getPresignedUrl({ 
+                  filename: outputFilename, 
+                  method: 'get' 
+                });
+                setOutputImageUrl(outputUrl);
+              } else {
+                setError('Asset generation failed');
+                setStepStatus(s => { const arr = [...s]; arr[5] = 'error'; return arr; });
+              }
+            }
+          }, 1000); // Poll every second
+
+        } catch (err: any) {
+          setError('Asset creation failed: ' + (err.message || err.toString()));
+          setStepStatus(s => { const arr = [...s]; arr[4] = 'error'; return arr; });
+        }
+      } catch (err: any) {
+        setError(err.message || err.toString());
+      }
+    }
+
+    if (psdfile) {
+      runSteps();
+    }
+
+    return () => {
+      isMounted = false;
+      if (pollInterval) clearInterval(pollInterval);
+    };
+  }, [psdfile, data, edits, originals, router]);
+
+  return (
+    <div className={styles.pageContainer}>
+      <NavBar
+        showHome={currentStep >= 6 || error !== null}
+        showBackToEdit={false}
+        onHome={() => router.push('/')}
+        title={currentStep >= 6 ? 'Generated Asset' : 'Generating Asset'}
+      />
+      <div className={styles.reviewContainer} style={{ justifyContent: 'flex-start' }}>
+        {/* Show generated asset image between title and steps only when ready, with larger size and tighter spacing */}
+        {currentStep >= 6 && outputImageUrl && (
+          <div style={{ margin: '16px 0 24px 0', textAlign: 'center' }}>
+            <img 
+              src={outputImageUrl} 
+              alt="Generated asset" 
+              style={{ 
+                maxWidth: '80%', 
+                maxHeight: '45vh', 
+                borderRadius: 8,
+                boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+              }} 
+            />
+          </div>
+        )}
+        <ol style={{ padding: 0, margin: (currentStep >= 6 && outputImageUrl) ? '32px 0' : '0', listStyle: 'none', maxWidth: 400 }}>
+          {baseSteps.map((step, idx) => (
+            <li key={step} style={{
+              display: 'flex',
+              alignItems: 'center',
+              marginBottom: 18,
+              color:
+                stepStatus[idx] === 'error' ? '#dc2626' :
+                idx < currentStep ? '#22c55e' : idx === currentStep ? '#3b82f6' : '#888',
+              fontWeight: idx === currentStep ? 700 : 500,
+              fontSize: 18,
+              opacity: idx > currentStep ? 0.6 : 1,
+              transition: 'color 0.2s, opacity 0.2s',
+            }}>
+              <span style={{
+                display: 'inline-block',
+                width: 22,
+                height: 22,
+                borderRadius: '50%',
+                background:
+                  stepStatus[idx] === 'error' ? '#dc2626' :
+                  idx < currentStep ? '#22c55e' : idx === currentStep ? '#3b82f6' : '#444c56',
+                color: '#fff',
+                textAlign: 'center',
+                lineHeight: '22px',
+                marginRight: 16,
+                fontWeight: 700,
+                fontSize: 15,
+                border:
+                  stepStatus[idx] === 'error' ? '2px solid #dc2626' :
+                  idx === currentStep ? '2px solid #3b82f6' : '2px solid #444c56',
+              }}>{stepStatus[idx] === 'error' ? '!' : idx < currentStep ? '✓' : idx + 1}</span>
+              {step}
+              {/* Show progress for smart object upload step */}
+              {idx === 0 && currentStep === 0 && smartObjects.length > 0 && (
+                <ul style={{ marginLeft: 16, fontSize: 15, padding: 0, listStyle: 'none' }}>
+                  {smartObjects.map(({ id, file }) => (
+                    <li key={id} style={{ marginBottom: 4 }}>
+                      {file.name} — <span style={{ color: smartObjectUploadProgress[file.name] === 100 ? '#22c55e' : '#3b82f6' }}>
+                        {smartObjectUploadProgress[file.name] === 100 ? 'Uploaded' : 'Uploading...'}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {/* Show job status for polling step */}
+              {idx === 5 && currentStep === 5 && (
+                <span style={{ marginLeft: 16, fontSize: 15, color: '#3b82f6' }}>
+                  {jobStatus}
+                </span>
+              )}
+            </li>
+          ))}
+        </ol>
+        {error && <div style={{ color: '#dc2626', fontWeight: 600, marginTop: 16 }}>{error}</div>}
+      </div>
+    </div>
+  );
+} 

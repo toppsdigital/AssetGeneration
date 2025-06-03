@@ -1,0 +1,204 @@
+.pageContainer {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  width: 100vw;
+}
+
+.editContainer {
+  display: flex;
+  flex: 1;
+  background: #2c2c2c;
+  color: #fff;
+}
+
+.sidebar {
+  width: 350px;
+  background: #383838;
+  border-right: 1px solid #555;
+  padding: 2rem 1.5rem 2rem 2rem;
+  overflow-y: auto;
+}
+
+.mainContent {
+  flex: 1;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #23272f;
+}
+
+.canvasFooter {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 32px;
+  margin-top: 56px;
+  margin-bottom: 32px;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.canvasFooter button {
+  pointer-events: auto;
+}
+
+.canvasInfo, .zoomControls {
+  pointer-events: auto;
+}
+
+.canvasInfo {
+  position: static;
+  background: #444c56;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #cbd5e1;
+  min-width: 120px;
+  margin-right: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.10);
+  border: none;
+}
+
+.zoomControls {
+  position: static;
+  display: flex;
+  gap: 8px;
+  background: #444c56;
+  padding: 8px 12px;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.10);
+}
+
+.zoomBtn {
+  background: #e5e7eb;
+  color: #23272f;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.2s, color 0.2s;
+}
+.zoomBtn:hover {
+  background: #d1d5db;
+  color: #111827;
+}
+
+.canvasWrapper {
+  position: relative;
+  background: #1e1e1e;
+  border-radius: 12px;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.2);
+  overflow: hidden;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.layerImage {
+  max-width: 100%;
+  max-height: 100%;
+  pointer-events: none;
+}
+
+.layerName {
+  gap: 8px;
+  display: flex;
+  align-items: center;
+}
+
+.layerType {
+  color: #60a5fa;
+  font-size: 0.9em;
+}
+
+.loading {
+  color: #60a5fa;
+  font-size: 1.2rem;
+  padding: 2rem;
+  text-align: center;
+}
+
+.summary {
+  background: #1e3a8a;
+  padding: 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  margin-bottom: 1rem;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.statItem {
+  background: rgba(255,255,255,0.1);
+  padding: 8px;
+  border-radius: 4px;
+  text-align: center;
+}
+
+.statValue {
+  font-size: 16px;
+  font-weight: bold;
+  color: #60a5fa;
+}
+
+.toggleAll {
+  width: 100%;
+  padding: 8px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  margin-bottom: 1rem;
+}
+.toggleAll:hover {
+  background: #2563eb;
+}
+
+.groupLayer {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid #555;
+  border-radius: 4px;
+  padding: 8px;
+  margin: 3px 0;
+}
+
+.layerItem {
+  margin-bottom: 6px;
+  padding: 4px 0 4px 0;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+.layerItem:hover, .groupLayer:hover {
+  background: rgba(60, 130, 246, 0.08);
+}
+
+.layerBadge {
+  font-size: 10px;
+  padding: 3px 6px;
+  margin-left: 8px;
+}
+.typeBadge { background: #555; }
+.visibleBadge { background: #16a34a; }
+.hiddenBadge { background: #dc2626; }
+.successBadge { background: #16a34a; }
+.emptyBadge { background: #ea580c; }
+
+.layerCheckbox {
+  margin-right: 8px;
+} 
