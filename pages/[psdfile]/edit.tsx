@@ -68,30 +68,13 @@ export default function EditPage() {
     if (lastLoadedPsd !== psdfileStr) {
       reset();
       setLoading(true);
-      setStatus('Downloading PSD...');
+      setStatus('Processing PSD (downloading and extracting)...');
 
-      // 1. Download PSD
-      fetch('/api/download-psd', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: psdfileStr.endsWith('.psd') ? psdfileStr : psdfileStr + '.psd' }),
-      })
+      fetch(`/api/process-psd?file=${psdfileStr}`)
         .then(async res => {
           if (!res.ok) {
             const errJson = await res.json().catch(() => ({}));
-            throw new Error(errJson.error || 'Failed to download PSD.');
-          }
-          setStatus('Extracting PSD Layers...');
-          return res.json();
-        })
-        .then(() => {
-          // 2. Extract PSD
-          return fetch(`/api/process-psd?file=${psdfileStr}`);
-        })
-        .then(async res => {
-          if (!res.ok) {
-            const errJson = await res.json().catch(() => ({}));
-            throw new Error(errJson.error || 'Failed to extract PSD.');
+            throw new Error(errJson.error || 'Failed to fetch or process PSD.');
           }
           return res.json();
         })
