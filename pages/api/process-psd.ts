@@ -38,12 +38,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const protocol = req.headers['x-forwarded-proto'] || 'https';
       const host = req.headers.host;
       const baseUrl = `${protocol}://${host}`;
-      // Get presigned URL from s3-proxy
-      const s3Res = await fetch(`${baseUrl}/api/s3-proxy`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_method: 'get', filename: psdFile }),
-      });
+      console.log('[API] About to fetch presigned S3 URL', { url: `${baseUrl}/api/s3-proxy`, filename: psdFile });
+      let s3Res;
+      try {
+        s3Res = await fetch(`${baseUrl}/api/s3-proxy`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ client_method: 'get', filename: psdFile }),
+        });
+        console.log('[API] Fetched s3-proxy, status:', s3Res.status);
+      } catch (err) {
+        console.error('[API] Exception during fetch to s3-proxy:', err);
+        return res.status(500).json({ error: 'Exception during fetch to s3-proxy' });
+      }
       if (!s3Res.ok) {
         console.error('[API] Failed to get presigned S3 URL');
         return res.status(500).json({ error: 'Failed to get presigned S3 URL' });
