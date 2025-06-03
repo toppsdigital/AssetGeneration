@@ -3,12 +3,14 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 const S3_SERVICE_URL = 'https://devops-dev.services.toppsapps.com/s3/presigned-url';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  console.log('--- S3 Proxy: Incoming request ---');
+  console.log('Method:', req.method);
+  console.log('Body:', JSON.stringify(req.body, null, 2));
   const { client_method } = req.body;
 
   if (client_method === 'list') {
-    // Use the working endpoint and payload from the user's curl command
     const backendEndpoint = 'https://devops-dev.services.toppsapps.com/s3/presigned-url';
-
+    console.log('S3 Proxy: LIST - Forwarding to backendEndpoint:', backendEndpoint);
     const listRes = await fetch(backendEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -17,11 +19,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         expires_in: 3600,
       }),
     });
+    console.log('S3 Proxy: LIST - Backend response status:', listRes.status);
     if (!listRes.ok) {
       return res.status(500).json({ error: 'Failed to get presigned S3 LIST URL' });
     }
     const { url } = await listRes.json();
-
     const s3Res = await fetch(url);
     if (!s3Res.ok) {
       return res.status(500).json({ error: 'Failed to fetch S3 file list' });
@@ -34,8 +36,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (client_method === 'put') {
     const { filename } = req.body;
+    console.log('S3 Proxy: PUT - filename:', filename);
     const backendEndpoint = 'https://devops-dev.services.toppsapps.com/s3/presigned-url';
-
     const putRes = await fetch(backendEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -44,6 +46,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         filename,
       }),
     });
+    console.log('S3 Proxy: PUT - Backend response status:', putRes.status);
     if (!putRes.ok) {
       return res.status(500).json({ error: 'Failed to get presigned S3 PUT URL' });
     }
@@ -52,22 +55,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   if (client_method === 'get') {
-    const { filename } = req.body;
-    if (!filename) {
-      return res.status(400).json({ error: 'Missing filename for GET request' });
+    const { filename, key } = req.body;
+    console.log('S3 Proxy: GET - filename:', filename, 'key:', key);
+    if (!filename && !key) {
+      return res.status(400).json({ error: 'Missing filename or key for GET request' });
     }
-
+    // Try both filename and key for compatibility
     const backendEndpoint = 'https://devops-dev.services.toppsapps.com/s3/presigned-url';
     const getRes = await fetch(backendEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         client_method: 'get',
-        filename,
+        filename: filename || key,
+        key: key || filename,
         expires_in: 720,
       }),
     });
-
+    console.log('S3 Proxy: GET - Backend response status:', getRes.status);
     if (!getRes.ok) {
       return res.status(500).json({ error: 'Failed to get presigned S3 GET URL' });
     }
