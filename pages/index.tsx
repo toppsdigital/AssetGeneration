@@ -109,7 +109,7 @@ export default function Home() {
 
   const handleTemplateClick = (template: string) => {
     const fileName = template.split('/').pop();
-    const psdfile = fileName.replace(/\.psd$/i, '');
+    const psdfile = fileName.replace(/\.json$/i, '');
     reset();
     router.push(`/${psdfile}/edit`);
   };
@@ -125,10 +125,10 @@ export default function Home() {
 
   return (
     <div className={styles.container}>
-      <h1 className={styles.title}>Asset Generation using Firefly</h1>
+      <h1 className={styles.title}>Asset Generation using Photoshop APIs</h1>
       <div className={styles.templates} style={downloadingKey ? { opacity: 0.5, pointerEvents: 'none', filter: 'grayscale(1)' } : {}}>
         <h2>
-          {loadingFiles ? 'Fetching PSDs from S3' : 'PSD Templates'}
+          {loadingFiles ? 'Fetching available PSDs in S3' : 'PSD Templates'}
         </h2>
         {loadingFiles ? (
           <div style={{ textAlign: 'center', margin: '24px 0' }}>
@@ -138,6 +138,7 @@ export default function Home() {
           <ul>
             {templates.map((template, index) => {
               const fileName = template.split('/').pop()!;
+              const displayName = fileName.replace(/\.json$/i, '');
               const isDownloaded = downloadedFiles.includes(fileName);
               return (
                 <li
@@ -146,7 +147,7 @@ export default function Home() {
                   onClick={() => handleTemplateClick(template)}
                   style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
                 >
-                  {fileName}
+                  {displayName}
                   {isDownloaded && (
                     <>
                       <span title="Downloaded">✅</span>

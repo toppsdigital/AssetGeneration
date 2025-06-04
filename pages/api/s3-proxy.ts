@@ -29,7 +29,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(500).json({ error: 'Failed to fetch S3 file list' });
     }
     const xml = await s3Res.text();
-    const matches = Array.from(xml.matchAll(/<Key>([^<]+\.psd)<\/Key>/g));
+    const matches = Array.from(xml.matchAll(/<Key>([^<]+\.json)<\/Key>/g));
     const files = matches.map(m => m[1]);
     return res.status(200).json({ files });
   }
