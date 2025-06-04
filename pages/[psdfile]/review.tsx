@@ -43,43 +43,11 @@ export default function ReviewPage() {
       smartObjectUrls[Number(id)] = '';
     });
 
-    // Helper to determine if a layer is visible (recursively, including parent visibility)
-    const isLayerVisible = (layer: any, parentVisible = true) => {
-      const isEnabled = edits.visibility.hasOwnProperty(layer.id)
-        ? edits.visibility[layer.id]
-        : (originals.visibility ? originals.visibility[layer.id] : true);
-      const effectiveVisible = parentVisible && isEnabled;
-      if (!effectiveVisible) return false;
-      if (layer.children && layer.children.length > 0) {
-        // If group, check if any child is visible
-        return layer.children.some((child: any) => isLayerVisible(child, effectiveVisible));
-      }
-      return effectiveVisible;
-    };
-
-    // Recursively filter only visible layers (and their visible children)
-    const filterVisibleLayers = (layers: any[], parentVisible = true) => {
-      if (!Array.isArray(layers)) return [];
-      return layers.reduce((acc: any[], layer: any) => {
-        const isEnabled = edits.visibility.hasOwnProperty(layer.id)
-          ? edits.visibility[layer.id]
-          : (originals.visibility ? originals.visibility[layer.id] : true);
-        const effectiveVisible = parentVisible && isEnabled;
-        if (!effectiveVisible) return acc;
-        let filteredLayer = { ...layer };
-        if (layer.children && layer.children.length > 0) {
-          filteredLayer.children = filterVisibleLayers(layer.children, effectiveVisible);
-        }
-        acc.push(filteredLayer);
-        return acc;
-      }, []);
-    };
-
-    const visibleLayers = filterVisibleLayers(data.layers);
-    const layersPayload = buildFireflyLayersPayload(visibleLayers, edits, originals, smartObjectUrls);
+    // Remove filterVisibleLayers and isLayerVisible logic for Firefly payload
+    const layersPayload = buildFireflyLayersPayload(data.layers, edits, originals, smartObjectUrls);
     const optionsLayers = { layers: layersPayload };
     console.log('Firefly Options Layers Preview:', JSON.stringify({ options: optionsLayers }, null, 2));
-    console.log('Total visible layers in payload:', layersPayload.length);
+    console.log('Total changed layers in payload:', layersPayload.length);
   }, [data?.layers, edits, originals]);
 
   if (error) return <div className={styles.loading}>{error}</div>;

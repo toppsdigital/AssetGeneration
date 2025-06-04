@@ -141,71 +141,54 @@ export function collectLayerParameters(layers: any[], edits: any, originals: any
 
 // Build Firefly options.layers array for payload
 export function buildFireflyLayersPayload(layers: any[], edits: any, originals: any, smartObjectPutUrls: Record<number, string>) {
-  function buildLayer(layer: any): any | null {
-    const id = layer.id;
-    // Determine visibility (edits take precedence, else originals, else true)
-    const originalVisible = originals.visibility && originals.visibility.hasOwnProperty(id)
-      ? originals.visibility[id]
-      : true;
-    const editedVisible = edits.visibility && edits.visibility.hasOwnProperty(id)
-      ? edits.visibility[id]
-      : originalVisible;
-    
-    // Skip if no changes and no children with changes
-    const hasVisibilityChange = editedVisible !== originalVisible;
-    const hasTextChange = layer.type === 'type' && edits.text && edits.text.hasOwnProperty(id) && edits.text[id] !== originals.text?.[id];
-    const hasSmartObjectChange = layer.type === 'smartobject' && smartObjectPutUrls && smartObjectPutUrls[id];
-    
-    // Process children first to check if any have changes
-    let childrenWithChanges: any[] = [];
-    if (layer.children && Array.isArray(layer.children)) {
-      childrenWithChanges = layer.children
-        .map((child: any) => buildLayer(child))
-        .filter((child: any) => child !== null);
-    }
+  // Helper to recursively collect all changed layers into a flat array
+  function collectChangedLayersFlat(layers: any[]): any[] {
+    let changed: any[] = [];
+    for (const layer of layers) {
+      const id = layer.id;
+      // Determine visibility (edits take precedence, else originals, else true)
+      const originalVisible = originals.visibility && originals.visibility.hasOwnProperty(id)
+        ? originals.visibility[id]
+        : true;
+      const editedVisible = edits.visibility && edits.visibility.hasOwnProperty(id)
+        ? edits.visibility[id]
+        : originalVisible;
+      const hasVisibilityChange = editedVisible !== originalVisible;
+      const hasTextChange = layer.type === 'type' && edits.text && edits.text.hasOwnProperty(id) && edits.text[id] !== originals.text?.[id];
+      const hasSmartObjectChange = layer.type === 'smartobject' && smartObjectPutUrls && smartObjectPutUrls[id];
 
-    // If no changes in this layer or its children, return null
-    if (!hasVisibilityChange && !hasTextChange && !hasSmartObjectChange && childrenWithChanges.length === 0) {
-      return null;
+      // If any change, add the layer (flat, no children)
+      if (hasVisibilityChange || hasTextChange || hasSmartObjectChange) {
+        const obj: any = {
+          name: layer.name,
+          visible: editedVisible,
+          edit: {},
+        };
+        if (hasTextChange) {
+          obj.text = { content: edits.text[id] };
+          obj.edit.text = { content: edits.text[id] };
+        }
+        if (hasSmartObjectChange) {
+          obj.input = {
+            storage: 'external',
+            href: smartObjectPutUrls[id]
+          };
+          obj.edit.input = {
+            storage: 'external',
+            href: smartObjectPutUrls[id]
+          };
+        }
+        changed.push(obj);
+      }
+      // Recurse into children
+      if (layer.children && Array.isArray(layer.children)) {
+        changed = changed.concat(collectChangedLayersFlat(layer.children));
+      }
     }
-
-    const obj: any = {
-      name: layer.name,
-      visible: editedVisible,
-      edit: {},
-    };
-
-    // If only visibility is changed, leave edit as empty object
-    // If text or smart object is changed, add those to edit
-    if (hasTextChange) {
-      obj.text = { content: edits.text[id] };
-      obj.edit.text = { content: edits.text[id] };
-    }
-    if (hasSmartObjectChange) {
-      obj.input = {
-        storage: 'external',
-        href: smartObjectPutUrls[id]
-      };
-      obj.edit.input = {
-        storage: 'external',
-        href: smartObjectPutUrls[id]
-      };
-    }
-    // If only visibility is changed, edit remains {} (empty object)
-    // If no other changes, remove edit if not needed (but Firefly expects edit: {})
-
-    // Add children with changes
-    if (childrenWithChanges.length > 0) {
-      obj.children = childrenWithChanges;
-    }
-
-    return obj;
+    return changed;
   }
-
-  // Start with the root layers and filter out null results
-  return layers
-    .map(layer => buildLayer(layer))
-    .filter((layer): layer is any => layer !== null);
+  // Return flat array of changed layers
+  return collectChangedLayersFlat(layers);
 }
 
 // New reusable function to build the Firefly payload
