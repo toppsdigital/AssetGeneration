@@ -166,14 +166,9 @@ export function buildFireflyLayersPayload(layers: any[], edits: any, originals: 
         };
         if (hasTextChange) {
           obj.text = { content: edits.text[id] };
-          obj.edit.text = { content: edits.text[id] };
         }
         if (hasSmartObjectChange) {
           obj.input = {
-            storage: 'external',
-            href: smartObjectPutUrls[id]
-          };
-          obj.edit.input = {
             storage: 'external',
             href: smartObjectPutUrls[id]
           };
