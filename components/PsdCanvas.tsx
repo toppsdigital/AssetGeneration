@@ -59,6 +59,13 @@ const renderCanvasLayers = (
 
     if (!effectiveVisible) return [];
 
+    // If this is a group (has children), always recurse into children, even if no bbox
+    if (layer.children && layer.children.length > 0) {
+      // Optionally, you could render a visual indicator for the group here
+      // But always recurse into children
+      return renderCanvasLayers(layer.children, tempDir, zoom, edits, originals, showDebug);
+    }
+
     // Only render if we have valid layer properties
     if (!layer.layer_properties?.bbox) return [];
 
@@ -188,12 +195,6 @@ const renderCanvasLayers = (
           {layer.preview_status === 'failed' && 'Preview Failed'}
           {!layer.preview_status && 'No Preview'}
         </div>
-      );
-    }
-    // Recursively render children if present
-    if (layer.children && layer.children.length > 0) {
-      elements.push(
-        ...renderCanvasLayers(layer.children, tempDir, zoom, edits, originals, showDebug)
       );
     }
     if (showDebug) {

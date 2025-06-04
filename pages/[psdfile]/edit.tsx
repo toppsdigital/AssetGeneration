@@ -136,6 +136,33 @@ export default function EditPage() {
       : originals.visibility[id];
     updateVisibility(id, !effectiveVisible);
     if (!effectiveVisible) {
+      setExpanded(exp => ({ ...exp, [id]: true }));
+      // Optionally, recursively expand all children if this is a group
+      const expandAllChildren = (layers: Layer[]) => {
+        layers.forEach(layer => {
+          setExpanded(exp => ({ ...exp, [layer.id]: true }));
+          if (layer.children && layer.children.length > 0) {
+            expandAllChildren(layer.children);
+          }
+        });
+      };
+      if (data && Array.isArray(data.layers)) {
+        const findLayerById = (layers: Layer[]): Layer | undefined => {
+          for (const layer of layers) {
+            if (layer.id === id) return layer;
+            if (layer.children) {
+              const found = findLayerById(layer.children);
+              if (found) return found;
+            }
+          }
+          return undefined;
+        };
+        const toggledLayer = findLayerById(data.layers);
+        if (toggledLayer && toggledLayer.children && toggledLayer.children.length > 0) {
+          expandAllChildren(toggledLayer.children);
+        }
+      }
+    } else {
       setExpanded(exp => ({ ...exp, [id]: false }));
     }
   };
