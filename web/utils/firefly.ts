@@ -160,7 +160,7 @@ export function buildFireflyLayersPayload(layers: any[], edits: any, originals: 
       // If any change, add the layer (flat, no children)
       if (hasVisibilityChange || hasTextChange || hasSmartObjectChange) {
         const obj: any = {
-          name: layer.name,
+          id: layer.id,
           visible: editedVisible,
           edit: {},
         };
