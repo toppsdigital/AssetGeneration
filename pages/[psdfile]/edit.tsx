@@ -17,8 +17,8 @@ interface Layer {
   children?: Layer[];
 }
 
-interface LayerData {
-  psd_file: string;
+interface TemplateLayerData {
+  json_file: string;
   summary: any;
   layers: Layer[];
   tempDir?: string;
@@ -37,7 +37,10 @@ interface Change {
 export default function EditPage() {
   const router = useRouter();
   const { psdfile } = router.query;
-  const psdfileStr = Array.isArray(psdfile) ? psdfile[0] : psdfile;
+  let templateStr = Array.isArray(psdfile) ? psdfile[0] : psdfile;
+  if (templateStr && !templateStr.endsWith('.json')) {
+    templateStr = `${templateStr}.json`;
+  }
   const {
     data,
     edits,
@@ -49,8 +52,8 @@ export default function EditPage() {
     updateText,
     updateSmartObject,
     reset,
-    lastLoadedPsd,
-    setLastLoadedPsd,
+    lastLoadedTemplate,
+    setLastLoadedTemplate,
   } = usePsdStore();
   const [selectedLayer, setSelectedLayer] = useState<Layer | null>(null);
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
@@ -62,73 +65,81 @@ export default function EditPage() {
   const [status, setStatus] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!psdfileStr) return;
-
-    // Only reset and fetch if the PSD is different from the last loaded one in the store
-    if (lastLoadedPsd !== psdfileStr) {
+    if (!templateStr) {
+      console.log('[EditPage] No templateStr, skipping fetch.');
+      return;
+    }
+    if (lastLoadedTemplate !== templateStr) {
+      console.log('[EditPage] Resetting store and starting JSON fetch for:', templateStr);
       reset();
       setLoading(true);
-      setStatus('Processing PSD (downloading and extracting)...');
-
-      fetch(`/api/process-psd?file=${psdfileStr}`)
+      setStatus('Loading layer data from JSON...');
+      fetch('/api/s3-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_method: 'get', key: templateStr }),
+      })
+        .then(res => {
+          console.log('[EditPage] /api/s3-proxy response:', res);
+          return res.json();
+        })
+        .then(({ url }) => {
+          console.log('[EditPage] Got presigned URL:', url);
+          return fetch(url);
+        })
         .then(async res => {
+          console.log('[EditPage] Fetched JSON file, status:', res.status);
           if (!res.ok) {
             const errJson = await res.json().catch(() => ({}));
-            throw new Error(errJson.error || 'Failed to fetch or process PSD.');
+            console.error('[EditPage] JSON fetch error:', errJson.error || 'Failed to fetch JSON data.');
+            throw new Error(errJson.error || 'Failed to fetch JSON data.');
           }
           return res.json();
         })
         .then(json => {
-          // STRONG GUARD: Only set data if the PSD matches
-          console.log('Fetched PSD file:', json.psd_file, 'Requested PSD file:', psdfileStr);
-          if (json.psd_file && json.psd_file.replace(/\.psd$/i, '') === psdfileStr) {
-            setData(json);
-            setTempDir(`/temp/${psdfileStr}`);
-            // Initialize originals only if not already set or PSD file changes
-            if (!originals.visibility || Object.keys(originals.visibility).length === 0 || (data && data.psd_file !== json.psd_file)) {
-              const vis: Record<number, boolean> = {};
-              const texts: Record<number, string> = {};
-              const smartObjs: Record<number, string | undefined> = {};
-              const setFromPsd = (layers: Layer[]) => {
-                layers.forEach(layer => {
-                  vis[layer.id] = layer.layer_properties?.visible ?? true;
-                  if (layer.type === 'type' && layer.layer_properties?.text) {
-                    texts[layer.id] = layer.layer_properties.text;
-                  }
-                  if (layer.type === 'smartobject' && layer.preview) {
-                    smartObjs[layer.id] = layer.preview;
-                  }
-                  if (layer.children && layer.children.length > 0) {
-                    setFromPsd(layer.children);
-                  }
-                });
-              };
-              setFromPsd(json.layers);
-              setOriginals({ visibility: vis, text: texts, smartObjects: smartObjs });
-            }
-            setEdits({ visibility: {}, text: {}, smartObjects: {} });
-            setLoading(false);
-            setStatus(null);
-            setLastLoadedPsd(psdfileStr);
-          } else {
-            setError('Loaded PSD does not match requested file!');
-            setLoading(false);
-            setStatus(null);
-            console.error('PSD mismatch:', json.psd_file, psdfileStr);
+          console.log('[EditPage] Downloaded JSON content:', json);
+          setData(json);
+          setTempDir(`/temp/${templateStr.replace(/\.json$/i, '')}`);
+          if (!originals.visibility || Object.keys(originals.visibility).length === 0 || (data && data.json_file !== (json.json_file || ''))) {
+            const vis: Record<number, boolean> = {};
+            const texts: Record<number, string> = {};
+            const smartObjs: Record<number, string | undefined> = {};
+            const setFromJson = (layers: Layer[]) => {
+              layers.forEach(layer => {
+                vis[layer.id] = layer.layer_properties?.visible ?? true;
+                if (layer.type === 'type' && layer.layer_properties?.text) {
+                  texts[layer.id] = layer.layer_properties.text;
+                }
+                if (layer.type === 'smartobject' && layer.preview) {
+                  smartObjs[layer.id] = layer.preview;
+                }
+                if (layer.children && layer.children.length > 0) {
+                  setFromJson(layer.children);
+                }
+              });
+            };
+            setFromJson(json.layers);
+            setOriginals({ visibility: vis, text: texts, smartObjects: smartObjs });
           }
-        })
-        .catch(err => {
-          setError(err.message || 'Failed to fetch or process PSD.');
+          setEdits({ visibility: {}, text: {}, smartObjects: {} });
           setLoading(false);
           setStatus(null);
-          console.error('Fetch error:', err);
+          setLastLoadedTemplate(templateStr);
+          console.log('[EditPage] JSON loaded and state set.');
+        })
+        .catch(err => {
+          setError(err.message || 'Failed to fetch JSON data.');
+          setLoading(false);
+          setStatus(null);
+          console.error('[EditPage] Fetch error:', err);
         });
     } else {
       setLoading(false);
       setStatus(null);
+      console.log('[EditPage] Already loaded template:', templateStr);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [psdfileStr, lastLoadedPsd]);
+  }, [templateStr, lastLoadedTemplate]);
 
   const toggleVisibility = (id: number) => {
     const effectiveVisible = edits.visibility.hasOwnProperty(id)
@@ -243,7 +254,7 @@ export default function EditPage() {
   const handleReview = () => {
     const changes = data ? collectChanges(data.layers) : [];
     router.push({
-      pathname: `/${psdfileStr}/review`,
+      pathname: `/${templateStr}/review`,
       query: { changesJson: JSON.stringify(changes) },
     });
   };
@@ -386,7 +397,7 @@ export default function EditPage() {
 
   if (error) return <div className={styles.loading}>{error}</div>;
   if (status) return <div className={styles.loading}><Spinner /> {status}</div>;
-  if (loading || !data || !Array.isArray(data.layers)) return <div className={styles.loading}><Spinner /> Processing PSD and loading layers...</div>;
+  if (loading || !data || !Array.isArray(data.layers)) return <div className={styles.loading}><Spinner /> Downloading PSD Layer data...</div>;
 
   const psdInfo = data.summary?.psd_info;
   const canvasWidth = psdInfo?.size?.[0] || 800;
@@ -403,7 +414,7 @@ export default function EditPage() {
         showReview
         onHome={() => router.push('/')}
         onReview={handleReview}
-        title={`Edit: ${psdfile}`}
+        title={`Edit: ${templateStr}`}
       />
       <div className={styles.editContainer}>
         <main className={styles.mainContent}>
