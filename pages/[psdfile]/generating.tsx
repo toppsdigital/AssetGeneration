@@ -88,34 +88,55 @@ export default function GeneratingPage() {
     }
   };
 
-  // Helper to upload file with progress tracking
-  const uploadFileWithProgress = async (file: File, uploadUrl: string): Promise<void> => {
+  // Helper to upload file with progress tracking via proxy to avoid CORS
+  const uploadFileWithProgress = async (file: File, filename: string): Promise<void> => {
     return new Promise<void>((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open('PUT', uploadUrl, true);
-      xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
-      xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable) {
-          const percent = Math.round((event.loaded / event.total) * 100);
+      // First get the upload URL from our proxy
+      fetch('/api/s3-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          client_method: 'put', 
+          filename,
+          upload: true 
+        }),
+      })
+      .then(res => res.json())
+      .then(({ uploadUrl, presignedUrl }) => {
+        // Now upload via our proxy endpoint
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('presignedUrl', presignedUrl);
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', uploadUrl, true);
+        
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const percent = Math.round((event.loaded / event.total) * 100);
             setSmartObjectUploadProgress(prev => ({
               ...prev,
               [file.name]: percent
             }));
-        }
-      };
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
+          }
+        };
+        
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
             setSmartObjectUploadProgress(prev => ({
               ...prev,
               [file.name]: 100
             }));
-          resolve();
-        } else {
-          reject(new Error(`S3 upload failed: ${xhr.status} ${xhr.statusText}\n${xhr.responseText}`));
-        }
-      };
-      xhr.onerror = () => reject(new Error('S3 upload failed: Network error'));
-      xhr.send(file);
+            resolve();
+          } else {
+            reject(new Error(`Upload failed: ${xhr.status} ${xhr.statusText}`));
+          }
+        };
+        
+        xhr.onerror = () => reject(new Error('Upload failed: Network error'));
+        xhr.send(formData);
+      })
+      .catch(reject);
     });
   };
 
@@ -146,8 +167,7 @@ export default function GeneratingPage() {
         try {
           for (const { id, file } of smartObjects) {
             const uploadPath = `${psdfile}/inputs/${file.name}`;
-            const uploadUrl = await getPresignedUrl({ filename: uploadPath, method: 'put' });
-            await uploadFileWithProgress(file, uploadUrl);
+            await uploadFileWithProgress(file, uploadPath);
           }
           if (!isMounted) return;
           setStepStatus(s => { const arr = [...s]; arr[0] = 'done'; return arr; });
