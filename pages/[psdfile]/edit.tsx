@@ -71,8 +71,6 @@ export default function EditPage() {
     }
     if (lastLoadedTemplate !== templateStr) {
       console.log('[EditPage] Resetting store and starting JSON fetch for:', templateStr);
-      console.log('[EditPage] DEBUG - templateStr value:', templateStr);
-      console.log('[EditPage] DEBUG - Will send filename parameter:', templateStr);
       reset();
       setLoading(true);
       setStatus('Loading layer data from JSON...');
