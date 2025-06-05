@@ -165,8 +165,18 @@ export default function GeneratingPage() {
         setCurrentStep(0);
         setStepStatus(s => { const arr = [...s]; arr[0] = null; return arr; });
         try {
+          // Extract base name (remove any extension like .json) for upload paths
+          let baseName: string;
+          if (typeof psdfile === 'string') {
+            baseName = psdfile.replace(/\.[^/.]+$/, '');
+          } else if (Array.isArray(psdfile) && psdfile.length > 0) {
+            baseName = psdfile[0].replace(/\.[^/.]+$/, '');
+          } else {
+            throw new Error('Invalid psdfile parameter');
+          }
+          
           for (const { id, file } of smartObjects) {
-            const uploadPath = `${psdfile}/inputs/${file.name}`;
+            const uploadPath = `${baseName}/inputs/${file.name}`;
             await uploadFileWithProgress(file, uploadPath);
           }
           if (!isMounted) return;
@@ -202,10 +212,20 @@ export default function GeneratingPage() {
           console.log('PSD Get URL:', psdGetUrl);
 
         // Fill in the smartObjectUrls with presigned GET URLs
+        // Extract base name for smart object URLs (same as used for upload)
+        let smartObjectBaseName: string;
+        if (typeof psdfile === 'string') {
+          smartObjectBaseName = psdfile.replace(/\.[^/.]+$/, '');
+        } else if (Array.isArray(psdfile) && psdfile.length > 0) {
+          smartObjectBaseName = psdfile[0].replace(/\.[^/.]+$/, '');
+        } else {
+          throw new Error('Invalid psdfile parameter');
+        }
+        
         const smartObjectGetUrls = await Promise.all(
           Object.entries(edits.smartObjects).map(async ([id, file]) => {
             if (!file) return null;
-              const url = await getPresignedUrl({ filename: `${psdfile}/inputs/${file.name}`, method: 'get' });
+              const url = await getPresignedUrl({ filename: `${smartObjectBaseName}/inputs/${file.name}`, method: 'get' });
               if (!url) {
                 throw new Error(`Failed to get presigned URL for smart object ${file.name}`);
               }
