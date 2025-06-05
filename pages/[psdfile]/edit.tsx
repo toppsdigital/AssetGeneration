@@ -71,13 +71,15 @@ export default function EditPage() {
     }
     if (lastLoadedTemplate !== templateStr) {
       console.log('[EditPage] Resetting store and starting JSON fetch for:', templateStr);
+      console.log('[EditPage] DEBUG - templateStr value:', templateStr);
+      console.log('[EditPage] DEBUG - Will send filename parameter:', templateStr);
       reset();
       setLoading(true);
       setStatus('Loading layer data from JSON...');
       fetch('/api/s3-proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_method: 'get', key: templateStr }),
+        body: JSON.stringify({ client_method: 'get', filename: templateStr }),
       })
         .then(res => {
           console.log('[EditPage] /api/s3-proxy response:', res);

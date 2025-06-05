@@ -57,20 +57,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (client_method === 'get') {
     const { filename, key } = req.body;
     console.log('S3 Proxy: GET - filename:', filename, 'key:', key);
+    console.log('S3 Proxy: GET DEBUG - Request body:', JSON.stringify(req.body));
     if (!filename && !key) {
       return res.status(400).json({ error: 'Missing filename or key for GET request' });
     }
     // Try both filename and key for compatibility
     const backendEndpoint = 'https://devops-dev.services.toppsapps.com/s3/presigned-url';
+    const backendPayload = {
+      client_method: 'get',
+      filename: filename || key,
+      key: key || filename,
+      expires_in: 720,
+    };
+    console.log('S3 Proxy: GET DEBUG - Sending to backend:', JSON.stringify(backendPayload));
     const getRes = await fetch(backendEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        client_method: 'get',
-        filename: filename || key,
-        key: key || filename,
-        expires_in: 720,
-      }),
+      body: JSON.stringify(backendPayload),
     });
     console.log('S3 Proxy: GET - Backend response status:', getRes.status);
     if (!getRes.ok) {
