@@ -162,10 +162,19 @@ export default function GeneratingPage() {
         setStepStatus(s => { const arr = [...s]; arr[1] = null; return arr; });
         let psdGetUrl: string;
         try {
-          // Ensure .psd extension is present
-          let psdFilename = typeof psdfile === 'string' && !psdfile.toLowerCase().endsWith('.psd')
-            ? `${psdfile}.psd`
-            : psdfile as string;
+          // Ensure .psd extension is present, removing any existing extension first
+          let psdFilename: string;
+          if (typeof psdfile === 'string') {
+            // Remove any existing extension (like .json) and add .psd
+            const baseName = psdfile.replace(/\.[^/.]+$/, '');
+            psdFilename = `${baseName}.psd`;
+          } else if (Array.isArray(psdfile) && psdfile.length > 0) {
+            // Handle array case from router query
+            const baseName = psdfile[0].replace(/\.[^/.]+$/, '');
+            psdFilename = `${baseName}.psd`;
+          } else {
+            throw new Error('Invalid psdfile parameter');
+          }
           psdGetUrl = await getPresignedUrl({ filename: psdFilename, method: 'get' });
           if (!psdGetUrl) {
             throw new Error('Failed to get presigned URL for PSD file');
@@ -200,8 +209,15 @@ export default function GeneratingPage() {
         // 3. Get presigned URL for output
         setCurrentStep(2);
         setStepStatus(s => { const arr = [...s]; arr[2] = null; return arr; });
-        // Extract base name (remove .psd if present)
-        const baseName = (psdfile as string).replace(/\.psd$/i, '');
+        // Extract base name (remove any extension like .json, .psd, etc.)
+        let baseName: string;
+        if (typeof psdfile === 'string') {
+          baseName = psdfile.replace(/\.[^/.]+$/, '');
+        } else if (Array.isArray(psdfile) && psdfile.length > 0) {
+          baseName = psdfile[0].replace(/\.[^/.]+$/, '');
+        } else {
+          throw new Error('Invalid psdfile parameter');
+        }
         // Format date as mm:dd:yy_HH:mm
         const now = new Date();
         const pad = (n: number) => n.toString().padStart(2, '0');
@@ -211,8 +227,8 @@ export default function GeneratingPage() {
         const HH = pad(now.getHours());
         const min = pad(now.getMinutes());
         const dateStr = `${mm}:${dd}:${yy}_${HH}:${min}`;
-        // Build output path
-        const outputFilename = `${psdfile}/output/output_${dateStr}.png`;
+        // Build output path using base name without extension
+        const outputFilename = `${baseName}/output/output_${dateStr}.png`;
 
         const outputPutUrl = await getPresignedUrl({ 
           filename: outputFilename, 
