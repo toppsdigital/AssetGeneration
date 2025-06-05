@@ -55,11 +55,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   if (client_method === 'get') {
-    const { filename, key } = req.body;
-    console.log('S3 Proxy: GET - filename:', filename, 'key:', key);
+    const { filename, key, download } = req.body;
+    console.log('S3 Proxy: GET - filename:', filename, 'key:', key, 'download:', download);
     if (!filename && !key) {
       return res.status(400).json({ error: 'Missing filename or key for GET request' });
     }
+    
     // Try both filename and key for compatibility
     const backendEndpoint = 'https://devops-dev.services.toppsapps.com/s3/presigned-url';
     const getRes = await fetch(backendEndpoint, {
@@ -77,6 +78,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(500).json({ error: 'Failed to get presigned S3 GET URL' });
     }
     const { url } = await getRes.json();
+    
+    // If download=true, fetch the content and return it directly (to avoid CORS)
+    if (download) {
+      console.log('S3 Proxy: Downloading content from S3 to avoid CORS...');
+      const s3Response = await fetch(url);
+      if (!s3Response.ok) {
+        return res.status(500).json({ error: 'Failed to download file from S3' });
+      }
+      const content = await s3Response.json();
+      return res.status(200).json(content);
+    }
+    
     return res.status(200).json({ url });
   }
 

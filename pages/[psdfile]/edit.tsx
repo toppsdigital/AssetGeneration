@@ -77,21 +77,13 @@ export default function EditPage() {
       fetch('/api/s3-proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_method: 'get', filename: templateStr }),
+        body: JSON.stringify({ client_method: 'get', filename: templateStr, download: true }),
       })
-        .then(res => {
-          console.log('[EditPage] /api/s3-proxy response:', res);
-          return res.json();
-        })
-        .then(({ url }) => {
-          console.log('[EditPage] Got presigned URL:', url);
-          return fetch(url);
-        })
         .then(async res => {
-          console.log('[EditPage] Fetched JSON file, status:', res.status);
+          console.log('[EditPage] /api/s3-proxy response:', res);
           if (!res.ok) {
             const errJson = await res.json().catch(() => ({}));
-            console.error('[EditPage] JSON fetch error:', errJson.error || 'Failed to fetch JSON data.');
+            console.error('[EditPage] S3 proxy error:', errJson.error || 'Failed to fetch JSON data.');
             throw new Error(errJson.error || 'Failed to fetch JSON data.');
           }
           return res.json();
