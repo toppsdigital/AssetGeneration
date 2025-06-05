@@ -15,7 +15,6 @@ interface Layer {
 interface PsdCanvasProps {
   layers: Layer[];
   tempDir?: string;
-  zoom: number;
   width: number;
   height: number;
   showDebug?: boolean;
@@ -32,7 +31,9 @@ interface RefreshedUrls {
 const renderCanvasLayers = (
   layers: Layer[],
   tempDir: string,
-  zoom: number,
+  canvasWidth: number,
+  canvasHeight: number,
+  scale: number,
   edits: any,
   originals: any,
   showDebug: boolean = false,
@@ -72,7 +73,7 @@ const renderCanvasLayers = (
     if (layer.children && layer.children.length > 0) {
       // Optionally, you could render a visual indicator for the group here
       // But always recurse into children
-      return renderCanvasLayers(layer.children, tempDir, zoom, edits, originals, showDebug, refreshedUrls, handleImageError);
+      return renderCanvasLayers(layer.children, tempDir, canvasWidth, canvasHeight, scale, edits, originals, showDebug, refreshedUrls, handleImageError);
     }
 
     // Only render if we have valid layer properties
@@ -84,12 +85,15 @@ const renderCanvasLayers = (
     // BBox validation: skip if width/height are not positive
     if (bboxW <= 0 || bboxH <= 0) return [];
 
-    // Clamp bbox to canvas bounds (assume canvasWidth/canvasHeight are available in closure)
-    // If not, you may need to pass them as arguments
-    // For now, clamp to 0 as minimum
-    left = Math.max(0, left);
-    top = Math.max(0, top);
-    // Optionally clamp right/bottom to width/height if available
+    // Clamp bbox to canvas bounds
+    left = Math.max(0, Math.min(left, canvasWidth));
+    top = Math.max(0, Math.min(top, canvasHeight));
+    right = Math.max(left, Math.min(right, canvasWidth));
+    bottom = Math.max(top, Math.min(bottom, canvasHeight));
+    
+    // Recalculate dimensions after clamping
+    bboxW = right - left;
+    bboxH = bottom - top;
 
     let imgW = bboxW;
     let imgH = bboxH;
@@ -110,10 +114,10 @@ const renderCanvasLayers = (
           key={layer.id}
           style={{
             position: 'absolute',
-            left: left * zoom,
-            top: top * zoom,
-            width: bboxW * zoom,
-            height: bboxH * zoom,
+            left: left,
+            top: top,
+            width: bboxW,
+            height: bboxH,
             overflow: 'hidden',
             pointerEvents: 'none',
           }}
@@ -123,8 +127,8 @@ const renderCanvasLayers = (
               src={imageUrl}
               alt={layer.name}
               style={{
-                width: bboxW * zoom,
-                height: bboxH * zoom,
+                width: bboxW,
+                height: bboxH,
                 opacity,
                 objectFit: 'contain',
                 position: 'absolute',
@@ -150,7 +154,7 @@ const renderCanvasLayers = (
                 alignItems: 'center',
                 justifyContent: 'center',
                 color: '#fff',
-                fontSize: '12px',
+                fontSize: Math.max(10, 12 * scale),
                 zIndex: 10,
               }}
             >
@@ -168,15 +172,15 @@ const renderCanvasLayers = (
       const imgAR = imgW / imgH;
       let drawW, drawH, offsetX, offsetY;
       if (imgAR > bboxAR) {
-        drawH = bboxH * zoom;
-        drawW = imgW * (bboxH / imgH) * zoom;
-        offsetX = -(drawW - bboxW * zoom) / 2;
+        drawH = bboxH;
+        drawW = imgW * (bboxH / imgH);
+        offsetX = -(drawW - bboxW) / 2;
         offsetY = 0;
       } else {
-        drawW = bboxW * zoom;
-        drawH = imgH * (bboxW / imgW) * zoom;
+        drawW = bboxW;
+        drawH = imgH * (bboxW / imgW);
         offsetX = 0;
-        offsetY = -(drawH - bboxH * zoom) / 2;
+        offsetY = -(drawH - bboxH) / 2;
       }
 
       elements.push(
@@ -184,10 +188,10 @@ const renderCanvasLayers = (
           key={layer.id}
           style={{
             position: 'absolute',
-            left: left * zoom,
-            top: top * zoom,
-            width: bboxW * zoom,
-            height: bboxH * zoom,
+            left: left,
+            top: top,
+            width: bboxW,
+            height: bboxH,
             overflow: 'hidden',
             pointerEvents: 'none',
           }}
@@ -222,7 +226,7 @@ const renderCanvasLayers = (
                 alignItems: 'center',
                 justifyContent: 'center',
                 color: '#fff',
-                fontSize: '12px',
+                fontSize: Math.max(10, 12 * scale),
                 zIndex: 10,
               }}
             >
@@ -237,10 +241,10 @@ const renderCanvasLayers = (
           key={layer.id}
           style={{
             position: 'absolute',
-            left: left * zoom,
-            top: top * zoom,
-            width: bboxW * zoom,
-            height: bboxH * zoom,
+            left: left,
+            top: top,
+            width: bboxW,
+            height: bboxH,
             backgroundColor: showDebug ? 'rgba(128, 128, 128, 0.2)' : 'transparent',
             border: showDebug ? '1px dashed rgba(255, 255, 255, 0.3)' : 'none',
             pointerEvents: 'none',
@@ -248,7 +252,7 @@ const renderCanvasLayers = (
             alignItems: 'center',
             justifyContent: 'center',
             color: 'rgba(255, 255, 255, 0.5)',
-            fontSize: '12px',
+            fontSize: Math.max(10, 12 * scale),
             textAlign: 'center',
             padding: '4px',
           }}
@@ -266,10 +270,10 @@ const renderCanvasLayers = (
           key={`${layer.id}-debug`}
           style={{
             position: 'absolute',
-            left: left * zoom,
-            top: top * zoom,
-            width: bboxW * zoom,
-            height: bboxH * zoom,
+            left: left,
+            top: top,
+            width: bboxW,
+            height: bboxH,
             border: `2px solid ${debugColors[idx % debugColors.length]}`,
             boxSizing: 'border-box',
             pointerEvents: 'none',
@@ -282,7 +286,7 @@ const renderCanvasLayers = (
               left: 0,
               background: '#222',
               color: '#fff',
-              fontSize: 10,
+              fontSize: Math.max(8, 10 * scale),
               padding: '0 2px',
               opacity: 0.8,
             }}
@@ -296,7 +300,7 @@ const renderCanvasLayers = (
   });
 };
 
-const PsdCanvas: React.FC<PsdCanvasProps> = ({ layers, tempDir = '', zoom, width, height, showDebug = false }) => {
+const PsdCanvas: React.FC<PsdCanvasProps> = ({ layers, tempDir = '', width, height, showDebug = false }) => {
   const { edits, originals } = usePsdStore();
   const [refreshedUrls, setRefreshedUrls] = useState<RefreshedUrls>({});
 
@@ -376,25 +380,41 @@ const PsdCanvas: React.FC<PsdCanvasProps> = ({ layers, tempDir = '', zoom, width
     refreshPreSignedUrl(layerId, originalUrl);
   }, [refreshPreSignedUrl]);
 
-  const canvasLayers = useMemo(() => renderCanvasLayers(layers, tempDir, zoom, edits, originals, showDebug, refreshedUrls, handleImageError), [layers, tempDir, zoom, edits, originals, showDebug, refreshedUrls, handleImageError]);
+  // Calculate scale to fit canvas in available space
+  // Assume available space is roughly 90% of viewport width and height (accounting for sidebar and padding)
+  const maxWidth = typeof window !== 'undefined' ? window.innerWidth * 0.6 : 800; // 60% for main content area
+  const maxHeight = typeof window !== 'undefined' ? window.innerHeight * 0.7 : 600; // 70% for canvas area
+  
+  const scaleX = maxWidth / width;
+  const scaleY = maxHeight / height;
+  const scale = Math.min(scaleX, scaleY, 1); // Don't scale up, only down
+  
+  const scaledWidth = width * scale;
+  const scaledHeight = height * scale;
+
+  const canvasLayers = useMemo(() => renderCanvasLayers(layers, tempDir, width, height, scale, edits, originals, showDebug, refreshedUrls, handleImageError), [layers, tempDir, width, height, scale, edits, originals, showDebug, refreshedUrls, handleImageError]);
+  
   return (
     <div
       style={{
-        width: width * zoom,
-        height: height * zoom,
+        width: scaledWidth,
+        height: scaledHeight,
         position: 'relative',
         background: '#1e1e1e',
         borderRadius: 8,
         boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
         overflow: 'hidden',
         border: '1px solid #30343c',
+        margin: '0 auto', // Center the canvas
       }}
     >
       <div
         style={{
-          width: width * zoom,
-          height: height * zoom,
+          width: width,
+          height: height,
           position: 'relative',
+          transform: `scale(${scale})`,
+          transformOrigin: 'top left',
         }}
       >
         {canvasLayers}

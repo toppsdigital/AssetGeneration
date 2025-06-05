@@ -58,7 +58,6 @@ export default function EditPage() {
   const [selectedLayer, setSelectedLayer] = useState<Layer | null>(null);
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
   const [error, setError] = useState<string | null>(null);
-  const [zoom, setZoom] = useState(1);
   const [tempDir, setTempDir] = useState('');
   const [loading, setLoading] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
@@ -416,10 +415,7 @@ export default function EditPage() {
     return bgId;
   };
 
-  const handleZoom = (factor: number) => {
-    setZoom(z => Math.max(0.1, Math.min(3, z * factor)));
-  };
-  const handleResetZoom = () => setZoom(1);
+
 
   if (error) return <div className={styles.loading}>{error}</div>;
   if (status) return <div className={styles.loading}><Spinner /> {status}</div>;
@@ -451,7 +447,6 @@ export default function EditPage() {
               tempDir={data.tempDir}
               width={canvasWidth}
               height={canvasHeight}
-              zoom={zoom}
               showDebug={showDebug}
             />
           </div>
@@ -465,13 +460,7 @@ export default function EditPage() {
             <div className={styles.canvasInfo}>
               📐 {canvasWidth} × {canvasHeight}px<br />
               🎨 {colorMode ? (colorMode === '3' ? 'RGB' : `Color Mode ${colorMode}`) : ''}<br />
-              🔍 Zoom: {Math.round(zoom * 100)}%<br />
               Depth: {depth}
-            </div>
-            <div className={styles.zoomControls}>
-              <button className={styles.zoomBtn} onClick={() => handleZoom(0.8)}>−</button>
-              <button className={styles.zoomBtn} onClick={() => handleZoom(1.25)}>+</button>
-              <button className={styles.zoomBtn} onClick={handleResetZoom}>Reset</button>
             </div>
           </div>
         </main>
