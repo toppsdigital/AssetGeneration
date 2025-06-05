@@ -15,6 +15,10 @@ export default function ReviewPage() {
   const canvasWidth = data?.summary?.psd_info?.size?.[0] || 800;
   const canvasHeight = data?.summary?.psd_info?.size?.[1] || 600;
 
+  // Thumbnail sizing for review page
+  const THUMBNAIL_MAX_WIDTH = 480;
+  const THUMBNAIL_MAX_HEIGHT = 320;
+
   useEffect(() => {
     if (!data && psdfile) {
       fetch(`/api/process-psd?file=${psdfile}`)
@@ -129,13 +133,15 @@ export default function ReviewPage() {
       />
       <div className={styles.reviewContainer}>
         <main className={styles.mainContent}>
-          <div style={{ display: 'flex', justifyContent: 'center', margin: '24px 0' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', margin: '8px 0 24px 0' }}>
             <div className={styles.canvasWrapper}>
               <PsdCanvas
                 layers={data.layers}
                 tempDir={data.tempDir}
                 width={canvasWidth}
                 height={canvasHeight}
+                maxWidth={THUMBNAIL_MAX_WIDTH}
+                maxHeight={THUMBNAIL_MAX_HEIGHT}
               />
             </div>
           </div>

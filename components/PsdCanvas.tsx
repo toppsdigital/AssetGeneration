@@ -18,6 +18,8 @@ interface PsdCanvasProps {
   width: number;
   height: number;
   showDebug?: boolean;
+  maxWidth?: number;
+  maxHeight?: number;
 }
 
 interface RefreshedUrls {
@@ -300,7 +302,7 @@ const renderCanvasLayers = (
   });
 };
 
-const PsdCanvas: React.FC<PsdCanvasProps> = ({ layers, tempDir = '', width, height, showDebug = false }) => {
+const PsdCanvas: React.FC<PsdCanvasProps> = ({ layers, tempDir = '', width, height, showDebug = false, maxWidth, maxHeight }) => {
   const { edits, originals } = usePsdStore();
   const [refreshedUrls, setRefreshedUrls] = useState<RefreshedUrls>({});
 
@@ -381,12 +383,12 @@ const PsdCanvas: React.FC<PsdCanvasProps> = ({ layers, tempDir = '', width, heig
   }, [refreshPreSignedUrl]);
 
   // Calculate scale to fit canvas in available space
-  // Assume available space is roughly 90% of viewport width and height (accounting for sidebar and padding)
-  const maxWidth = typeof window !== 'undefined' ? window.innerWidth * 0.6 : 800; // 60% for main content area
-  const maxHeight = typeof window !== 'undefined' ? window.innerHeight * 0.7 : 600; // 70% for canvas area
+  // Use provided maxWidth/maxHeight or default to viewport-based calculation
+  const availableWidth = maxWidth || (typeof window !== 'undefined' ? window.innerWidth * 0.6 : 800); // 60% for main content area
+  const availableHeight = maxHeight || (typeof window !== 'undefined' ? window.innerHeight * 0.7 : 600); // 70% for canvas area
   
-  const scaleX = maxWidth / width;
-  const scaleY = maxHeight / height;
+  const scaleX = availableWidth / width;
+  const scaleY = availableHeight / height;
   const scale = Math.min(scaleX, scaleY, 1); // Don't scale up, only down
   
   const scaledWidth = width * scale;
