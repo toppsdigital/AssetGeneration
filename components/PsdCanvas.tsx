@@ -473,31 +473,55 @@ const PsdCanvas: React.FC<PsdCanvasProps> = ({ layers, tempDir = '', width, heig
 
   const canvasLayers = useMemo(() => renderCanvasLayers(layers, tempDir, width, height, scale, edits, originals, showDebug, refreshedUrls, handleImageError, objectUrls), [layers, tempDir, width, height, scale, edits, originals, showDebug, refreshedUrls, handleImageError, objectUrls]);
   
+  // Check if there are any changes that need warnings
+  const hasSmartObjectChanges = Object.keys(edits.smartObjects).length > 0;
+  const hasTextChanges = Object.keys(edits.text).length > 0;
+
   return (
-    <div
-      style={{
-        width: scaledWidth,
-        height: scaledHeight,
-        position: 'relative',
-        background: '#1e1e1e',
-        borderRadius: 8,
-        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-        overflow: 'hidden',
-        border: '1px solid #30343c',
-        margin: '0 auto', // Center the canvas
-      }}
-    >
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
       <div
         style={{
-          width: width,
-          height: height,
+          width: scaledWidth,
+          height: scaledHeight,
           position: 'relative',
-          transform: `scale(${scale})`,
-          transformOrigin: 'top left',
+          background: '#1e1e1e',
+          borderRadius: 8,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+          overflow: 'hidden',
+          border: '1px solid #30343c',
         }}
       >
-        {canvasLayers}
+        <div
+          style={{
+            width: width,
+            height: height,
+            position: 'relative',
+            transform: `scale(${scale})`,
+            transformOrigin: 'top left',
+          }}
+        >
+          {canvasLayers}
+        </div>
       </div>
+      
+      {(hasSmartObjectChanges || hasTextChanges) && (
+        <div
+          style={{
+            maxWidth: scaledWidth,
+            padding: '8px 12px',
+            fontSize: '12px',
+            color: '#9ca3af',
+            lineHeight: '1.3',
+          }}
+        >
+          {hasSmartObjectChanges && (
+            <div>• Smart Object Replacements: Rotation and transformation details may not be precisely preserved.</div>
+          )}
+          {hasTextChanges && (
+            <div>• Text Modifications: Font family, weight, and exact sizing may vary from the original PSD.</div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
