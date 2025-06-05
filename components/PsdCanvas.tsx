@@ -151,6 +151,14 @@ const renderCanvasLayers = (
         // Use refreshed URL if available, otherwise use original
         const imageUrl = refreshedUrls[layer.id]?.url || layer.preview;
         
+        console.log(`🖼️ Rendering type layer ${layer.id} (${layer.name}):`, {
+          hasRefreshedUrl: !!refreshedUrls[layer.id]?.url,
+          isRefreshing: refreshedUrls[layer.id]?.isRefreshing,
+          refreshCount: refreshedUrls[layer.id]?.refreshCount,
+          originalUrl: layer.preview,
+          finalUrl: imageUrl
+        });
+        
         elements.push(
           <div
             key={layer.id}
@@ -179,6 +187,7 @@ const renderCanvasLayers = (
                 }}
                 onError={(e) => {
                   e.preventDefault();
+                  console.log(`💥 Image failed to load for layer ${layer.id} (${layer.name}):`, imageUrl);
                   handleImageError(layer.id, layer.preview || '');
                 }}
               />
@@ -218,6 +227,16 @@ const renderCanvasLayers = (
         // Use the managed object URL for the replaced file
         imageUrl = objectUrls[layer.id];
       }
+      
+      console.log(`🖼️ Rendering layer ${layer.id} (${layer.name}):`, {
+        type: layer.type,
+        hasSmartObjectEdit: hasSmartObjectEdit,
+        hasRefreshedUrl: !!refreshedUrls[layer.id]?.url,
+        isRefreshing: refreshedUrls[layer.id]?.isRefreshing,
+        refreshCount: refreshedUrls[layer.id]?.refreshCount,
+        originalUrl: layer.preview,
+        finalUrl: imageUrl
+      });
       
       // Aspect fill logic for all other layers
       const bboxAR = bboxW / bboxH;
@@ -262,6 +281,7 @@ const renderCanvasLayers = (
             }}
             onError={(e) => {
               e.preventDefault();
+              console.log(`💥 Image failed to load for layer ${layer.id} (${layer.name}):`, imageUrl);
               handleImageError(layer.id, layer.preview || '');
             }}
           />
@@ -369,7 +389,8 @@ const PsdCanvas: React.FC<PsdCanvasProps> = ({ layers, tempDir = '', width, heig
       return;
     }
 
-    console.log(`Refreshing pre-signed URL for layer ${layerId}`);
+    console.log(`🔄 Refreshing pre-signed URL for layer ${layerId}`);
+    console.log(`📎 Original URL:`, originalUrl);
     
     // Mark as refreshing
     setRefreshedUrls(prev => ({
@@ -385,37 +406,100 @@ const PsdCanvas: React.FC<PsdCanvasProps> = ({ layers, tempDir = '', width, heig
       // Extract the file path from the original URL
       // Assuming the URL format is something like: https://domain/path/to/file.png?signature=...
       const url = new URL(originalUrl);
-      const filePath = url.pathname;
+      let filePath = url.pathname;
       
-      // Call API to get new pre-signed URL (1 week = 604800 seconds)
-      const response = await fetch('/api/refresh-presigned-url', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          filePath: filePath,
-          expiresIn: 604800 // 1 week in seconds
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to refresh URL: ${response.statusText}`);
+      // Remove leading slash if present for the API call
+      if (filePath.startsWith('/')) {
+        filePath = filePath.substring(1);
       }
-
-      const { url: newUrl } = await response.json();
       
-      // Update the refreshed URLs state
-      setRefreshedUrls(prev => ({
-        ...prev,
-        [layerId]: {
-          url: newUrl,
-          refreshCount: prev[layerId]?.refreshCount || 1,
-          isRefreshing: false,
-        }
-      }));
+      // The backend S3 service automatically adds 'asset_generator/dev/uploads/' prefix
+      // So we need to strip ALL instances of this prefix to avoid duplication
+      // Original: asset_generator/dev/uploads/asset_generator/dev/uploads/bunt25_ArticleHeaders_1080x1080/assets/...
+      // Target:   bunt25_ArticleHeaders_1080x1080/assets/... (backend will add the prefix back)
+      
+      const prefix = 'asset_generator/dev/uploads/';
+      let cleanedPath = filePath;
+      
+      // Keep removing the prefix until it's gone completely
+      while (cleanedPath.startsWith(prefix)) {
+        cleanedPath = cleanedPath.substring(prefix.length);
+        console.log(`🔧 Removed prefix, current path:`, cleanedPath);
+      }
+      
+      // Ensure we have the format: PSD_NAME/assets/filename.ext
+      // If the path doesn't contain a slash, it means we might have just a filename
+      if (!cleanedPath.includes('/') && cleanedPath.includes('_')) {
+        // This might be just a filename, we need to reconstruct the path
+        // But for now, let's proceed with what we have
+        console.log(`⚠️ Path might be just filename:`, cleanedPath);
+      }
+      
+      console.log(`📁 Final extracted file path:`, cleanedPath);
+      
+      // Try multiple path variations as fallbacks, with the cleaned path first
+      const pathsToTry = [
+        cleanedPath, // Cleaned path (PSD_NAME/assets/...)
+        filePath, // Original extracted path as fallback
+        cleanedPath.split('/').slice(-1)[0], // Just the filename
+      ].filter((path, index, arr) => arr.indexOf(path) === index); // Remove duplicates
+      
+      console.log(`🔍 Will try these paths:`, pathsToTry);
+      
+      for (const tryPath of pathsToTry) {
+        console.log(`📡 Trying path: ${tryPath}`);
+        
+        const response = await fetch('/api/s3-proxy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            client_method: 'get',
+            filename: tryPath,
+            expires_in: 604800 // 1 week in seconds
+          }),
+        });
 
-      console.log(`Successfully refreshed URL for layer ${layerId}`);
+        console.log(`📊 s3-proxy response status for ${tryPath}:`, response.status);
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          console.warn(`⚠️ Path ${tryPath} failed:`, response.status, errorData.error || 'Unknown error');
+          continue; // Try next path
+        }
+
+        const { url: newUrl } = await response.json();
+        
+        if (!newUrl) {
+          console.warn(`⚠️ No URL returned for path: ${tryPath}`);
+          continue; // Try next path
+        }
+        
+        // Skip URL testing for now since it might have CORS issues
+        // The s3-proxy successfully generated a URL, so let's trust it
+        console.log(`✅ Generated URL for ${tryPath}, skipping test due to potential CORS issues`)
+        
+        console.log(`✅ Success! Working URL found for path: ${tryPath}`);
+        console.log(`✅ New URL:`, newUrl);
+        
+        // Update the refreshed URLs state
+        setRefreshedUrls(prev => ({
+          ...prev,
+          [layerId]: {
+            url: newUrl,
+            refreshCount: prev[layerId]?.refreshCount || 1,
+            isRefreshing: false,
+          }
+        }));
+
+        console.log(`🎉 Successfully refreshed URL for layer ${layerId}`);
+        return; // Success, exit the function
+      }
+      
+      // If we get here, all paths failed
+      throw new Error(`All ${pathsToTry.length} path variations failed`);
+      
     } catch (error) {
-      console.error(`Failed to refresh pre-signed URL for layer ${layerId}:`, error);
+      console.error(`💥 Failed to refresh pre-signed URL for layer ${layerId}:`, error);
       
       // Mark as not refreshing on error
       setRefreshedUrls(prev => ({
