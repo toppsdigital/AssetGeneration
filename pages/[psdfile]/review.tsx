@@ -143,7 +143,6 @@ export default function ReviewPage() {
                 width={canvasWidth}
                 height={canvasHeight}
                 zoom={scale}
-                imageUrls={data.layers.map(layer => layer.preview).filter(Boolean)}
               />
             </div>
           </div>
