@@ -1,4 +1,4 @@
-import React, { type ReactNode, useMemo, useState, useCallback } from 'react';
+import React, { type ReactNode, useMemo, useState, useCallback, useEffect } from 'react';
 import { usePsdStore } from '../web/store/psdStore';
 
 interface Layer {
@@ -40,7 +40,8 @@ const renderCanvasLayers = (
   originals: any,
   showDebug: boolean = false,
   refreshedUrls: RefreshedUrls = {},
-  handleImageError: (layerId: number, originalUrl: string) => void = () => {}
+  handleImageError: (layerId: number, originalUrl: string) => void = () => {},
+  objectUrls: Record<number, string> = {}
 ): ReactNode[] => {
   console.log('Layers received by PsdCanvas:', layers);
   console.log('tempDir:', tempDir);
@@ -75,7 +76,7 @@ const renderCanvasLayers = (
     if (layer.children && layer.children.length > 0) {
       // Optionally, you could render a visual indicator for the group here
       // But always recurse into children
-      return renderCanvasLayers(layer.children, tempDir, canvasWidth, canvasHeight, scale, edits, originals, showDebug, refreshedUrls, handleImageError);
+      return renderCanvasLayers(layer.children, tempDir, canvasWidth, canvasHeight, scale, edits, originals, showDebug, refreshedUrls, handleImageError, objectUrls);
     }
 
     // Only render if we have valid layer properties
@@ -108,66 +109,114 @@ const renderCanvasLayers = (
     const elements = [];
     // Handle different layer types
     if (layer.type === 'type') {
-      // Use refreshed URL if available, otherwise use original
-      const imageUrl = refreshedUrls[layer.id]?.url || layer.preview;
+      // Check if there's a text edit for this layer
+      const hasTextEdit = edits.text.hasOwnProperty(layer.id);
+      const editedText = hasTextEdit ? edits.text[layer.id] : null;
       
-      elements.push(
-        <div
-          key={layer.id}
-          style={{
-            position: 'absolute',
-            left: left,
-            top: top,
-            width: bboxW,
-            height: bboxH,
-            overflow: 'hidden',
-            pointerEvents: 'none',
-          }}
-        >
-          {imageUrl && (
-            <img
-              src={imageUrl}
-              alt={layer.name}
-              style={{
-                width: bboxW,
-                height: bboxH,
-                opacity,
-                objectFit: 'contain',
-                position: 'absolute',
-                left: 0,
-                top: 0,
-              }}
-              onError={(e) => {
-                e.preventDefault();
-                handleImageError(layer.id, layer.preview || '');
-              }}
-            />
-          )}
-          {refreshedUrls[layer.id]?.isRefreshing && (
-            <div
-              style={{
-                position: 'absolute',
-                left: 0,
-                top: 0,
-                width: '100%',
-                height: '100%',
-                backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#fff',
-                fontSize: Math.max(10, 12 * scale),
-                zIndex: 10,
-              }}
-            >
-              Refreshing...
-            </div>
-          )}
-        </div>
-      );
-    } else if (layer.preview || refreshedUrls[layer.id]?.url) {
-      // Use refreshed URL if available, otherwise use original
-      const imageUrl = refreshedUrls[layer.id]?.url || layer.preview;
+      if (hasTextEdit && editedText !== null) {
+        // Render custom text instead of image
+        // Make text size fit the height better - use 90% of height, with reasonable min/max
+        const fontSize = Math.max(12, Math.min(bboxH * 0.9, 120)) * scale;
+        elements.push(
+          <div
+            key={layer.id}
+            style={{
+              position: 'absolute',
+              left: left + (bboxW / 2),
+              top: top,
+              width: 'auto',
+              minWidth: bboxW,
+              height: bboxH,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              pointerEvents: 'none',
+              color: '#ffffff',
+              fontSize: fontSize,
+              fontFamily: 'Arial, sans-serif',
+              fontWeight: 'normal',
+              textAlign: 'center',
+              whiteSpace: 'nowrap',
+              opacity,
+              overflow: 'visible',
+              textShadow: '1px 1px 2px rgba(0,0,0,0.5)',
+              transform: 'translateX(-50%)',
+            }}
+          >
+            {editedText}
+          </div>
+        );
+      } else {
+        // Use refreshed URL if available, otherwise use original
+        const imageUrl = refreshedUrls[layer.id]?.url || layer.preview;
+        
+        elements.push(
+          <div
+            key={layer.id}
+            style={{
+              position: 'absolute',
+              left: left,
+              top: top,
+              width: bboxW,
+              height: bboxH,
+              overflow: 'hidden',
+              pointerEvents: 'none',
+            }}
+          >
+            {imageUrl && (
+              <img
+                src={imageUrl}
+                alt={layer.name}
+                style={{
+                  width: bboxW,
+                  height: bboxH,
+                  opacity,
+                  objectFit: 'contain',
+                  position: 'absolute',
+                  left: 0,
+                  top: 0,
+                }}
+                onError={(e) => {
+                  e.preventDefault();
+                  handleImageError(layer.id, layer.preview || '');
+                }}
+              />
+            )}
+            {refreshedUrls[layer.id]?.isRefreshing && (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  top: 0,
+                  width: '100%',
+                  height: '100%',
+                  backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  fontSize: Math.max(10, 12 * scale),
+                  zIndex: 10,
+                }}
+              >
+                Refreshing...
+              </div>
+            )}
+          </div>
+        );
+      }
+    } else if (layer.preview || refreshedUrls[layer.id]?.url || edits.smartObjects.hasOwnProperty(layer.id)) {
+      // Check if this layer has a smart object replacement
+      const hasSmartObjectEdit = edits.smartObjects.hasOwnProperty(layer.id);
+      const replacedFile = hasSmartObjectEdit ? edits.smartObjects[layer.id] : null;
+      
+      // Use replaced image URL if available, then refreshed URL, then original
+      let imageUrl = refreshedUrls[layer.id]?.url || layer.preview;
+      
+      if (replacedFile && replacedFile instanceof File && objectUrls[layer.id]) {
+        // Use the managed object URL for the replaced file
+        imageUrl = objectUrls[layer.id];
+      }
       
       // Aspect fill logic for all other layers
       const bboxAR = bboxW / bboxH;
@@ -305,6 +354,7 @@ const renderCanvasLayers = (
 const PsdCanvas: React.FC<PsdCanvasProps> = ({ layers, tempDir = '', width, height, showDebug = false, maxWidth, maxHeight }) => {
   const { edits, originals } = usePsdStore();
   const [refreshedUrls, setRefreshedUrls] = useState<RefreshedUrls>({});
+  const [objectUrls, setObjectUrls] = useState<Record<number, string>>({});
 
   const refreshPreSignedUrl = useCallback(async (layerId: number, originalUrl: string) => {
     // Prevent concurrent refreshes for the same layer
@@ -382,6 +432,33 @@ const PsdCanvas: React.FC<PsdCanvasProps> = ({ layers, tempDir = '', width, heig
     refreshPreSignedUrl(layerId, originalUrl);
   }, [refreshPreSignedUrl]);
 
+  // Create and manage object URLs for replaced smart objects
+  useEffect(() => {
+    const newObjectUrls: Record<number, string> = {};
+    
+    // Create object URLs for smart object replacements
+    Object.entries(edits.smartObjects).forEach(([layerId, file]) => {
+      if (file && file instanceof File) {
+        const id = Number(layerId);
+        newObjectUrls[id] = URL.createObjectURL(file);
+      }
+    });
+    
+    // Clean up old object URLs
+    Object.values(objectUrls).forEach(url => {
+      URL.revokeObjectURL(url);
+    });
+    
+    setObjectUrls(newObjectUrls);
+    
+    // Cleanup on unmount
+    return () => {
+      Object.values(newObjectUrls).forEach(url => {
+        URL.revokeObjectURL(url);
+      });
+    };
+  }, [edits.smartObjects]); // Only depend on smartObjects to avoid cleanup issues
+
   // Calculate scale to fit canvas in available space
   // Use provided maxWidth/maxHeight or default to viewport-based calculation
   const availableWidth = maxWidth || (typeof window !== 'undefined' ? window.innerWidth * 0.6 : 800); // 60% for main content area
@@ -394,7 +471,7 @@ const PsdCanvas: React.FC<PsdCanvasProps> = ({ layers, tempDir = '', width, heig
   const scaledWidth = width * scale;
   const scaledHeight = height * scale;
 
-  const canvasLayers = useMemo(() => renderCanvasLayers(layers, tempDir, width, height, scale, edits, originals, showDebug, refreshedUrls, handleImageError), [layers, tempDir, width, height, scale, edits, originals, showDebug, refreshedUrls, handleImageError]);
+  const canvasLayers = useMemo(() => renderCanvasLayers(layers, tempDir, width, height, scale, edits, originals, showDebug, refreshedUrls, handleImageError, objectUrls), [layers, tempDir, width, height, scale, edits, originals, showDebug, refreshedUrls, handleImageError, objectUrls]);
   
   return (
     <div
