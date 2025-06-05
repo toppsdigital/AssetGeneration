@@ -142,6 +142,7 @@ export default function ReviewPage() {
                 height={canvasHeight}
                 maxWidth={THUMBNAIL_MAX_WIDTH}
                 maxHeight={THUMBNAIL_MAX_HEIGHT}
+                isThumbnail={true}
               />
             </div>
           </div>

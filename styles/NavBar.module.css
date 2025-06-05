@@ -76,6 +76,15 @@
 .generateBtn:hover::before {
   left: 100%;
 }
+.generateBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: 0 4px 16px rgba(168, 85, 247, 0.2);
+}
+.generateBtn:disabled::before {
+  display: none;
+}
 
 .navLeft {
   display: flex;

@@ -20,6 +20,7 @@ interface PsdCanvasProps {
   showDebug?: boolean;
   maxWidth?: number;
   maxHeight?: number;
+  isThumbnail?: boolean;
 }
 
 interface RefreshedUrls {
@@ -351,7 +352,7 @@ const renderCanvasLayers = (
   });
 };
 
-const PsdCanvas: React.FC<PsdCanvasProps> = ({ layers, tempDir = '', width, height, showDebug = false, maxWidth, maxHeight }) => {
+const PsdCanvas: React.FC<PsdCanvasProps> = ({ layers, tempDir = '', width, height, showDebug = false, maxWidth, maxHeight, isThumbnail = false }) => {
   const { edits, originals } = usePsdStore();
   const [refreshedUrls, setRefreshedUrls] = useState<RefreshedUrls>({});
   const [objectUrls, setObjectUrls] = useState<Record<number, string>>({});
@@ -473,9 +474,9 @@ const PsdCanvas: React.FC<PsdCanvasProps> = ({ layers, tempDir = '', width, heig
 
   const canvasLayers = useMemo(() => renderCanvasLayers(layers, tempDir, width, height, scale, edits, originals, showDebug, refreshedUrls, handleImageError, objectUrls), [layers, tempDir, width, height, scale, edits, originals, showDebug, refreshedUrls, handleImageError, objectUrls]);
   
-  // Check if there are any changes that need warnings
-  const hasSmartObjectChanges = Object.keys(edits.smartObjects).length > 0;
-  const hasTextChanges = Object.keys(edits.text).length > 0;
+  // Check if there are any changes that need warnings (only show if not thumbnail)
+  const hasSmartObjectChanges = !isThumbnail && Object.keys(edits.smartObjects).length > 0;
+  const hasTextChanges = !isThumbnail && Object.keys(edits.text).length > 0;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>

@@ -50,7 +50,7 @@ const NavBar: React.FC<NavBarProps> = ({
       <div className={styles.navRight}>
         {showReview && (
           <button 
-            className={styles.navBtn} 
+            className={styles.generateBtn} 
             onClick={onReview}
             disabled={reviewDisabled}
             style={{ 
