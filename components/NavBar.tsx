@@ -7,6 +7,7 @@ interface NavBarProps {
   showReview?: boolean;
   showBackToEdit?: boolean;
   showGenerate?: boolean;
+  reviewDisabled?: boolean;
   onHome?: () => void;
   onReview?: () => void;
   onBackToEdit?: () => void;
@@ -20,6 +21,7 @@ const NavBar: React.FC<NavBarProps> = ({
   showReview,
   showBackToEdit,
   showGenerate,
+  reviewDisabled,
   onHome,
   onReview,
   onBackToEdit,
@@ -47,7 +49,17 @@ const NavBar: React.FC<NavBarProps> = ({
       <div className={styles.navTitle}>{title}</div>
       <div className={styles.navRight}>
         {showReview && (
-          <button className={styles.navBtn} onClick={onReview}>Review</button>
+          <button 
+            className={styles.navBtn} 
+            onClick={onReview}
+            disabled={reviewDisabled}
+            style={{ 
+              opacity: reviewDisabled ? 0.5 : 1, 
+              cursor: reviewDisabled ? 'not-allowed' : 'pointer' 
+            }}
+          >
+            Review
+          </button>
         )}
         {showGenerate && (
           <button className={styles.generateBtn} onClick={onGenerate}>Generate</button>

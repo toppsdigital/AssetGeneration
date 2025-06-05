@@ -198,6 +198,40 @@ export default function EditPage() {
     return [...parentTrail, layer.name].join(' → ');
   };
 
+  const hasAnyChanges = (): boolean => {
+    // Check visibility changes
+    if (Object.keys(edits.visibility).length > 0) {
+      for (const [id, editVisible] of Object.entries(edits.visibility)) {
+        const origVisible = originals.visibility[parseInt(id)];
+        if (editVisible !== origVisible) {
+          return true;
+        }
+      }
+    }
+
+    // Check text changes
+    if (Object.keys(edits.text).length > 0) {
+      for (const [id, editText] of Object.entries(edits.text)) {
+        const origText = originals.text[parseInt(id)];
+        if (editText !== origText) {
+          return true;
+        }
+      }
+    }
+
+    // Check smart object changes
+    if (Object.keys(edits.smartObjects).length > 0) {
+      for (const [id, editSmartObj] of Object.entries(edits.smartObjects)) {
+        const origSmartObj = originals.smartObjects[parseInt(id)];
+        if (editSmartObj && editSmartObj.name !== origSmartObj) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  };
+
   const collectChanges = (layers: Layer[], parentTrail: string[] = []): any[] => {
     let changes: any[] = [];
     layers.forEach(layer => {
@@ -404,6 +438,7 @@ export default function EditPage() {
       <NavBar
         showHome
         showReview
+        reviewDisabled={!hasAnyChanges()}
         onHome={() => router.push('/')}
         onReview={handleReview}
         title={`Edit: ${templateStr}`}
