@@ -1,4 +1,4 @@
-import React, { type ReactNode, useMemo } from 'react';
+import React, { type ReactNode, useMemo, useState, useCallback } from 'react';
 import { usePsdStore } from '../web/store/psdStore';
 
 interface Layer {
@@ -21,6 +21,14 @@ interface PsdCanvasProps {
   showDebug?: boolean;
 }
 
+interface RefreshedUrls {
+  [layerId: number]: {
+    url: string;
+    refreshCount: number;
+    isRefreshing: boolean;
+  };
+}
+
 const renderCanvasLayers = (
   layers: Layer[],
   tempDir: string,
@@ -28,6 +36,8 @@ const renderCanvasLayers = (
   edits: any,
   originals: any,
   showDebug: boolean = false,
+  refreshedUrls: RefreshedUrls = {},
+  handleImageError: (layerId: number, originalUrl: string) => void = () => {}
 ): ReactNode[] => {
   console.log('Layers received by PsdCanvas:', layers);
   console.log('tempDir:', tempDir);
@@ -62,7 +72,7 @@ const renderCanvasLayers = (
     if (layer.children && layer.children.length > 0) {
       // Optionally, you could render a visual indicator for the group here
       // But always recurse into children
-      return renderCanvasLayers(layer.children, tempDir, zoom, edits, originals, showDebug);
+      return renderCanvasLayers(layer.children, tempDir, zoom, edits, originals, showDebug, refreshedUrls, handleImageError);
     }
 
     // Only render if we have valid layer properties
@@ -92,6 +102,9 @@ const renderCanvasLayers = (
     const elements = [];
     // Handle different layer types
     if (layer.type === 'type') {
+      // Use refreshed URL if available, otherwise use original
+      const imageUrl = refreshedUrls[layer.id]?.url || layer.preview;
+      
       elements.push(
         <div
           key={layer.id}
@@ -105,9 +118,9 @@ const renderCanvasLayers = (
             pointerEvents: 'none',
           }}
         >
-          {layer.preview && (
+          {imageUrl && (
             <img
-              src={layer.preview}
+              src={imageUrl}
               alt={layer.name}
               style={{
                 width: bboxW * zoom,
@@ -118,11 +131,38 @@ const renderCanvasLayers = (
                 left: 0,
                 top: 0,
               }}
+              onError={(e) => {
+                e.preventDefault();
+                handleImageError(layer.id, layer.preview || '');
+              }}
             />
+          )}
+          {refreshedUrls[layer.id]?.isRefreshing && (
+            <div
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: 0,
+                width: '100%',
+                height: '100%',
+                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#fff',
+                fontSize: '12px',
+                zIndex: 10,
+              }}
+            >
+              Refreshing...
+            </div>
           )}
         </div>
       );
-    } else if (layer.preview) {
+    } else if (layer.preview || refreshedUrls[layer.id]?.url) {
+      // Use refreshed URL if available, otherwise use original
+      const imageUrl = refreshedUrls[layer.id]?.url || layer.preview;
+      
       // Aspect fill logic for all other layers
       const bboxAR = bboxW / bboxH;
       const imgAR = imgW / imgH;
@@ -153,7 +193,7 @@ const renderCanvasLayers = (
           }}
         >
           <img
-            src={layer.preview}
+            src={imageUrl}
             alt={layer.name}
             style={{
               width: drawW,
@@ -164,7 +204,31 @@ const renderCanvasLayers = (
               left: offsetX,
               top: offsetY,
             }}
+            onError={(e) => {
+              e.preventDefault();
+              handleImageError(layer.id, layer.preview || '');
+            }}
           />
+          {refreshedUrls[layer.id]?.isRefreshing && (
+            <div
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: 0,
+                width: '100%',
+                height: '100%',
+                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#fff',
+                fontSize: '12px',
+                zIndex: 10,
+              }}
+            >
+              Refreshing...
+            </div>
+          )}
         </div>
       );
     } else {
@@ -234,7 +298,85 @@ const renderCanvasLayers = (
 
 const PsdCanvas: React.FC<PsdCanvasProps> = ({ layers, tempDir = '', zoom, width, height, showDebug = false }) => {
   const { edits, originals } = usePsdStore();
-  const canvasLayers = useMemo(() => renderCanvasLayers(layers, tempDir, zoom, edits, originals, showDebug), [layers, tempDir, zoom, edits, originals, showDebug]);
+  const [refreshedUrls, setRefreshedUrls] = useState<RefreshedUrls>({});
+
+  const refreshPreSignedUrl = useCallback(async (layerId: number, originalUrl: string) => {
+    // Prevent concurrent refreshes for the same layer
+    if (refreshedUrls[layerId]?.isRefreshing) {
+      return;
+    }
+
+    // Don't retry more than 3 times
+    if (refreshedUrls[layerId]?.refreshCount >= 3) {
+      console.warn(`Max refresh attempts reached for layer ${layerId}`);
+      return;
+    }
+
+    console.log(`Refreshing pre-signed URL for layer ${layerId}`);
+    
+    // Mark as refreshing
+    setRefreshedUrls(prev => ({
+      ...prev,
+      [layerId]: {
+        ...prev[layerId],
+        isRefreshing: true,
+        refreshCount: (prev[layerId]?.refreshCount || 0) + 1,
+      }
+    }));
+
+    try {
+      // Extract the file path from the original URL
+      // Assuming the URL format is something like: https://domain/path/to/file.png?signature=...
+      const url = new URL(originalUrl);
+      const filePath = url.pathname;
+      
+      // Call API to get new pre-signed URL (1 week = 604800 seconds)
+      const response = await fetch('/api/refresh-presigned-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          filePath: filePath,
+          expiresIn: 604800 // 1 week in seconds
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to refresh URL: ${response.statusText}`);
+      }
+
+      const { url: newUrl } = await response.json();
+      
+      // Update the refreshed URLs state
+      setRefreshedUrls(prev => ({
+        ...prev,
+        [layerId]: {
+          url: newUrl,
+          refreshCount: prev[layerId]?.refreshCount || 1,
+          isRefreshing: false,
+        }
+      }));
+
+      console.log(`Successfully refreshed URL for layer ${layerId}`);
+    } catch (error) {
+      console.error(`Failed to refresh pre-signed URL for layer ${layerId}:`, error);
+      
+      // Mark as not refreshing on error
+      setRefreshedUrls(prev => ({
+        ...prev,
+        [layerId]: {
+          ...prev[layerId],
+          isRefreshing: false,
+        }
+      }));
+    }
+  }, [refreshedUrls]);
+
+  const handleImageError = useCallback((layerId: number, originalUrl: string) => {
+    console.log(`Image load failed for layer ${layerId}, attempting to refresh URL`);
+    refreshPreSignedUrl(layerId, originalUrl);
+  }, [refreshPreSignedUrl]);
+
+  const canvasLayers = useMemo(() => renderCanvasLayers(layers, tempDir, zoom, edits, originals, showDebug, refreshedUrls, handleImageError), [layers, tempDir, zoom, edits, originals, showDebug, refreshedUrls, handleImageError]);
   return (
     <div
       style={{
