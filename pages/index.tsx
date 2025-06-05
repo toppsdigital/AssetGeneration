@@ -11,7 +11,6 @@ export default function Home() {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [downloadingKey, setDownloadingKey] = useState<string | null>(null);
-  const [downloadedFiles, setDownloadedFiles] = useState<string[]>([]);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [loadingFiles, setLoadingFiles] = useState(false);
 
@@ -40,95 +39,100 @@ export default function Home() {
   }
 
   // Refactor file list fetch into a function
-  const fetchFiles = () => {
+  const fetchFiles = async () => {
     setLoadingFiles(true);
-    fetch('/api/s3-proxy', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ client_method: 'list' }),
-    })
-      .then(res => res.json())
-      .then(data => setTemplates(data.files))
-      .finally(() => setLoadingFiles(false));
-  };
-
-  const fetchDownloadedFiles = () => {
-    fetch('/api/list-downloaded-psds')
-      .then(res => res.json())
-      .then(data => setDownloadedFiles(data.files));
+    try {
+      const res = await fetch('/api/s3-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_method: 'list' }),
+      });
+      if (!res.ok) throw new Error('Failed to fetch templates');
+      const data = await res.json();
+      setTemplates(data.files);
+    } catch (err) {
+      alert('Error fetching templates: ' + (err as Error).message);
+    } finally {
+      setLoadingFiles(false);
+    }
   };
 
   useEffect(() => {
     fetchFiles();
-    fetchDownloadedFiles();
   }, []);
 
   const handleUpload = async () => {
     if (!selectedFile) return;
     setUploading(true);
     setUploadProgress(0);
+    try {
+      // 1. Get presigned PUT URL
+      const res = await fetch('/api/s3-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_method: 'put',
+          filename: selectedFile.name,
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to get upload URL');
+      const { url } = await res.json();
 
-    // 1. Get presigned PUT URL
-    const res = await fetch('/api/s3-proxy', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        client_method: 'put',
-        filename: selectedFile.name,
-      }),
-    });
-    const { url } = await res.json();
+      // 2. Upload with progress
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', url, true);
+        xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            setUploadProgress(Math.round((event.loaded / event.total) * 100));
+          }
+        };
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            setUploadProgress(100);
+            resolve();
+          } else {
+            reject(new Error(`Upload failed: ${xhr.status}`));
+          }
+        };
+        xhr.onerror = () => reject(new Error('Upload failed: Network error'));
+        xhr.send(selectedFile);
+      });
 
-    // 2. Upload with progress
-    await new Promise<void>((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open('PUT', url, true);
-      xhr.setRequestHeader('Content-Type', 'application/octet-stream');
-      xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable) {
-          setUploadProgress(Math.round((event.loaded / event.total) * 100));
-        }
-      };
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          setUploadProgress(100);
-          resolve();
-        } else {
-          reject(new Error(`Upload failed: ${xhr.status}`));
-        }
-      };
-      xhr.onerror = () => reject(new Error('Upload failed: Network error'));
-      xhr.send(selectedFile);
-    });
-
-    setUploading(false);
-    setSelectedFile(null);
-    setUploadProgress(0);
-    fetchFiles();
+      setUploading(false);
+      setSelectedFile(null);
+      setUploadProgress(0);
+      fetchFiles();
+    } catch (err) {
+      setUploading(false);
+      alert('Error uploading file: ' + (err as Error).message);
+    }
   };
 
-  const handleTemplateClick = (template: string) => {
+  const handleTemplateClick = async (template: string) => {
     const fileName = template.split('/').pop();
-    const psdfile = fileName.replace(/\.psd$/i, '');
+    const psdfile = fileName.replace(/\.json$/i, '');
     reset();
-    router.push(`/${psdfile}/edit`);
-  };
-
-  const handleDeleteDownloaded = async (fileName: string) => {
-    await fetch('/api/delete-downloaded-psd', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ file: fileName }),
-    });
-    fetchDownloadedFiles();
+    // Check if the edit page exists before navigating
+    try {
+      const res = await fetch(`/${psdfile}/edit`, { method: 'HEAD' });
+      if (res.ok) {
+        router.push(`/${psdfile}/edit`);
+      } else {
+        alert('Edit page not found for this template.');
+      }
+    } catch {
+      alert('Error checking edit page.');
+    }
   };
 
   return (
     <div className={styles.container}>
-      <h1 className={styles.title}>Asset Generation using Firefly</h1>
+      <h1 className={styles.title}>Asset Generation using Photoshop APIs</h1>
       <div className={styles.templates} style={downloadingKey ? { opacity: 0.5, pointerEvents: 'none', filter: 'grayscale(1)' } : {}}>
         <h2>
-          {loadingFiles ? 'Fetching PSDs from S3' : 'PSD Templates'}
+          {loadingFiles ? 'Fetching available PSDs in S3' : 'PSD Templates'}
         </h2>
         {loadingFiles ? (
           <div style={{ textAlign: 'center', margin: '24px 0' }}>
@@ -138,7 +142,7 @@ export default function Home() {
           <ul>
             {templates.map((template, index) => {
               const fileName = template.split('/').pop()!;
-              const isDownloaded = downloadedFiles.includes(fileName);
+              const displayName = fileName.replace(/\.json$/i, '');
               return (
                 <li
                   key={index}
@@ -146,19 +150,7 @@ export default function Home() {
                   onClick={() => handleTemplateClick(template)}
                   style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
                 >
-                  {fileName}
-                  {isDownloaded && (
-                    <>
-                      <span title="Downloaded">✅</span>
-                      <button
-                        title="Delete local copy"
-                        onClick={e => { e.stopPropagation(); handleDeleteDownloaded(fileName); }}
-                        style={{ marginLeft: 4, background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: 16 }}
-                      >
-                        🗑️
-                      </button>
-                    </>
-                  )}
+                  {displayName}
                 </li>
               );
             })}

@@ -27,7 +27,7 @@ const renderCanvasLayers = (
   zoom: number,
   edits: any,
   originals: any,
-  showDebug: boolean = false
+  showDebug: boolean = false,
 ): ReactNode[] => {
   console.log('Layers received by PsdCanvas:', layers);
   console.log('tempDir:', tempDir);
@@ -54,7 +54,6 @@ const renderCanvasLayers = (
       '| Edit Visible:', edits.visibility[layer.id],
       '| Preview:', layer.preview,
       '| Status:', layer.preview_status,
-      '| Image URL:', layer.preview ? `${tempDir}/previews/${layer.preview}` : 'none'
     );
 
     if (!effectiveVisible) return [];
@@ -106,9 +105,9 @@ const renderCanvasLayers = (
             pointerEvents: 'none',
           }}
         >
-          {layer.preview && layer.preview_status && layer.preview_status.startsWith('success') && (
+          {layer.preview && (
             <img
-              src={`${tempDir}/previews/${layer.preview}`}
+              src={layer.preview}
               alt={layer.name}
               style={{
                 width: bboxW * zoom,
@@ -123,7 +122,7 @@ const renderCanvasLayers = (
           )}
         </div>
       );
-    } else if (layer.preview && layer.preview_status && layer.preview_status.startsWith('success')) {
+    } else if (layer.preview) {
       // Aspect fill logic for all other layers
       const bboxAR = bboxW / bboxH;
       const imgAR = imgW / imgH;
@@ -154,7 +153,7 @@ const renderCanvasLayers = (
           }}
         >
           <img
-            src={`${tempDir}/previews/${layer.preview}`}
+            src={layer.preview}
             alt={layer.name}
             style={{
               width: drawW,
@@ -235,13 +234,7 @@ const renderCanvasLayers = (
 
 const PsdCanvas: React.FC<PsdCanvasProps> = ({ layers, tempDir = '', zoom, width, height, showDebug = false }) => {
   const { edits, originals } = usePsdStore();
-
-  // Memoize the rendered layers to prevent unnecessary re-renders
-  const renderedLayers = useMemo(() => 
-    renderCanvasLayers(layers, tempDir, zoom, edits, originals, showDebug),
-    [layers, tempDir, zoom, edits, originals, showDebug]
-  );
-
+  const canvasLayers = useMemo(() => renderCanvasLayers(layers, tempDir, zoom, edits, originals, showDebug), [layers, tempDir, zoom, edits, originals, showDebug]);
   return (
     <div
       style={{
@@ -262,7 +255,7 @@ const PsdCanvas: React.FC<PsdCanvasProps> = ({ layers, tempDir = '', zoom, width
           position: 'relative',
         }}
       >
-        {renderedLayers}
+        {canvasLayers}
       </div>
     </div>
   );

@@ -11,8 +11,8 @@ export interface Layer {
   children?: Layer[];
 }
 
-export interface LayerData {
-  psd_file: string;
+export interface TemplateLayerData {
+  json_file: string;
   summary: any;
   layers: Layer[];
   tempDir?: string;
@@ -31,12 +31,12 @@ interface Originals {
 }
 
 export interface PsdStoreState {
-  data: LayerData | null;
+  data: TemplateLayerData | null;
   psdFile: File | null;
   edits: Edits;
   originals: Originals;
-  lastLoadedPsd: string | null;
-  setData: (data: LayerData) => void;
+  lastLoadedTemplate: string | null;
+  setData: (data: TemplateLayerData) => void;
   setPsdFile: (file: File | null) => void;
   setEdits: (edits: Edits) => void;
   setOriginals: (originals: Originals) => void;
@@ -44,7 +44,7 @@ export interface PsdStoreState {
   updateText: (id: number, text: string) => void;
   updateSmartObject: (id: number, file: File | null) => void;
   reset: () => void;
-  setLastLoadedPsd: (psd: string | null) => void;
+  setLastLoadedTemplate: (template: string | null) => void;
 }
 
 export const usePsdStore = create<PsdStoreState>((set, get) => ({
@@ -52,7 +52,7 @@ export const usePsdStore = create<PsdStoreState>((set, get) => ({
   psdFile: null,
   edits: { visibility: {}, text: {}, smartObjects: {} },
   originals: { visibility: {}, text: {}, smartObjects: {} },
-  lastLoadedPsd: null,
+  lastLoadedTemplate: null,
   setData: (data) => set({ data }),
   setPsdFile: (file) => set({ psdFile: file }),
   setEdits: (edits) => set({ edits }),
@@ -88,6 +88,6 @@ export const usePsdStore = create<PsdStoreState>((set, get) => ({
     }
     return { edits: { ...state.edits, smartObjects: newEdits } };
   }),
-  reset: () => set({ data: null, psdFile: null, edits: { visibility: {}, text: {}, smartObjects: {} }, originals: { visibility: {}, text: {}, smartObjects: {} }, lastLoadedPsd: null }),
-  setLastLoadedPsd: (psd) => set({ lastLoadedPsd: psd }),
+  reset: () => set({ data: null, psdFile: null, edits: { visibility: {}, text: {}, smartObjects: {} }, originals: { visibility: {}, text: {}, smartObjects: {} }, lastLoadedTemplate: null }),
+  setLastLoadedTemplate: (template) => set({ lastLoadedTemplate: template }),
 })); 
