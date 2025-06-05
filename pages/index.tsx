@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import styles from '../styles/Home.module.css';
+import NavBar from '../components/NavBar';
 import { usePsdStore } from '../web/store/psdStore';
 
 export default function Home() {
@@ -13,6 +14,9 @@ export default function Home() {
   const [downloadingKey, setDownloadingKey] = useState<string | null>(null);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [loadingFiles, setLoadingFiles] = useState(false);
+
+  // Temporarily hide upload functionality
+  const showUpload = false;
 
   // Spinner CSS
   const spinner = (
@@ -129,57 +133,61 @@ export default function Home() {
 
   return (
     <div className={styles.container}>
-      <h1 className={styles.title}>Asset Generation using Photoshop APIs</h1>
-      <div className={styles.templates} style={downloadingKey ? { opacity: 0.5, pointerEvents: 'none', filter: 'grayscale(1)' } : {}}>
-        <h2>
-          {loadingFiles ? 'Fetching available PSDs in S3' : 'PSD Templates'}
-        </h2>
-        {loadingFiles ? (
-          <div style={{ textAlign: 'center', margin: '24px 0' }}>
-            <progress style={{ width: 120 }} />
-          </div>
-        ) : (
-          <ul>
-            {templates.map((template, index) => {
-              const fileName = template.split('/').pop()!;
-              const displayName = fileName.replace(/\.json$/i, '');
-              return (
-                <li
-                  key={index}
-                  className={styles.templateItem}
-                  onClick={() => handleTemplateClick(template)}
-                  style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+      <NavBar title="Asset Generation using Photoshop APIs" />
+      <div className={styles.content}>
+        <div className={styles.templates} style={downloadingKey ? { opacity: 0.5, pointerEvents: 'none', filter: 'grayscale(1)' } : {}}>
+          <h2>
+            {loadingFiles ? 'Fetching available PSDs in S3' : 'PSD Templates'}
+          </h2>
+          {loadingFiles ? (
+            <div style={{ textAlign: 'center', margin: '24px 0' }}>
+              <progress style={{ width: 120 }} />
+            </div>
+          ) : (
+            <ul>
+              {templates.map((template, index) => {
+                const fileName = template.split('/').pop()!;
+                const displayName = fileName.replace(/\.json$/i, '');
+                return (
+                  <li
+                    key={index}
+                    className={styles.templateItem}
+                    onClick={() => handleTemplateClick(template)}
+                    style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+                  >
+                    {displayName}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+        {showUpload && (
+          <div className={styles.upload} style={downloadingKey ? { opacity: 0.5, pointerEvents: 'none', filter: 'grayscale(1)' } : {}}>
+            <h2>Upload New PSD</h2>
+            {!uploading && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <input
+                  type="file"
+                  accept=".psd"
+                  onChange={e => setSelectedFile(e.target.files?.[0] || null)}
+                  disabled={uploading || !!downloadingKey}
+                />
+                <button
+                  onClick={handleUpload}
+                  disabled={!selectedFile || !!downloadingKey}
+                  style={{ padding: '8px 18px', fontWeight: 600 }}
                 >
-                  {displayName}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
-      <div className={styles.upload} style={downloadingKey ? { opacity: 0.5, pointerEvents: 'none', filter: 'grayscale(1)' } : {}}>
-        <h2>Upload New PSD</h2>
-        {!uploading && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <input
-              type="file"
-              accept=".psd"
-              onChange={e => setSelectedFile(e.target.files?.[0] || null)}
-              disabled={uploading || !!downloadingKey}
-            />
-            <button
-              onClick={handleUpload}
-              disabled={!selectedFile || !!downloadingKey}
-              style={{ padding: '8px 18px', fontWeight: 600 }}
-            >
-              Upload
-            </button>
-          </div>
-        )}
-        {uploading && (
-          <div style={{ marginTop: 12 }}>
-            <progress value={uploadProgress} max={100} style={{ width: 120, verticalAlign: 'middle' }} />
-            <span style={{ marginLeft: 8 }}>{uploadProgress}%</span>
+                  Upload
+                </button>
+              </div>
+            )}
+            {uploading && (
+              <div style={{ marginTop: 12 }}>
+                <progress value={uploadProgress} max={100} style={{ width: 120, verticalAlign: 'middle' }} />
+                <span style={{ marginLeft: 8 }}>{uploadProgress}%</span>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -58,7 +58,6 @@ export default function EditPage() {
   const [selectedLayer, setSelectedLayer] = useState<Layer | null>(null);
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
   const [error, setError] = useState<string | null>(null);
-  const [zoom, setZoom] = useState(1);
   const [tempDir, setTempDir] = useState('');
   const [loading, setLoading] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
@@ -196,6 +195,40 @@ export default function EditPage() {
 
   const buildTrail = (layer: Layer, parentTrail: string[] = []): string => {
     return [...parentTrail, layer.name].join(' → ');
+  };
+
+  const hasAnyChanges = (): boolean => {
+    // Check visibility changes
+    if (Object.keys(edits.visibility).length > 0) {
+      for (const [id, editVisible] of Object.entries(edits.visibility)) {
+        const origVisible = originals.visibility[parseInt(id)];
+        if (editVisible !== origVisible) {
+          return true;
+        }
+      }
+    }
+
+    // Check text changes
+    if (Object.keys(edits.text).length > 0) {
+      for (const [id, editText] of Object.entries(edits.text)) {
+        const origText = originals.text[parseInt(id)];
+        if (editText !== origText) {
+          return true;
+        }
+      }
+    }
+
+    // Check smart object changes
+    if (Object.keys(edits.smartObjects).length > 0) {
+      for (const [id, editSmartObj] of Object.entries(edits.smartObjects)) {
+        const origSmartObj = originals.smartObjects[parseInt(id)];
+        if (editSmartObj && editSmartObj.name !== origSmartObj) {
+          return true;
+        }
+      }
+    }
+
+    return false;
   };
 
   const collectChanges = (layers: Layer[], parentTrail: string[] = []): any[] => {
@@ -382,11 +415,6 @@ export default function EditPage() {
     return bgId;
   };
 
-  const handleZoom = (factor: number) => {
-    setZoom(z => Math.max(0.1, Math.min(3, z * factor)));
-  };
-  const handleResetZoom = () => setZoom(1);
-
   if (error) return <div className={styles.loading}>{error}</div>;
   if (status) return <div className={styles.loading}><Spinner /> {status}</div>;
   if (loading || !data || !Array.isArray(data.layers)) return <div className={styles.loading}><Spinner /> Downloading PSD Layer data...</div>;
@@ -399,14 +427,18 @@ export default function EditPage() {
 
   const backgroundLayerId = findBackgroundLayerId(data.layers);
 
+  // Clean up the filename for display
+  const displayName = templateStr ? templateStr.replace(/\.json$/i, '') : 'Unknown';
+
   return (
     <div className={styles.pageContainer}>
       <NavBar
         showHome
         showReview
+        reviewDisabled={!hasAnyChanges()}
         onHome={() => router.push('/')}
         onReview={handleReview}
-        title={`Edit: ${templateStr}`}
+        title={`Editing: ${displayName}`}
       />
       <div className={styles.editContainer}>
         <main className={styles.mainContent}>
@@ -416,7 +448,6 @@ export default function EditPage() {
               tempDir={data.tempDir}
               width={canvasWidth}
               height={canvasHeight}
-              zoom={zoom}
               showDebug={showDebug}
             />
           </div>
@@ -430,13 +461,7 @@ export default function EditPage() {
             <div className={styles.canvasInfo}>
               📐 {canvasWidth} × {canvasHeight}px<br />
               🎨 {colorMode ? (colorMode === '3' ? 'RGB' : `Color Mode ${colorMode}`) : ''}<br />
-              🔍 Zoom: {Math.round(zoom * 100)}%<br />
               Depth: {depth}
-            </div>
-            <div className={styles.zoomControls}>
-              <button className={styles.zoomBtn} onClick={() => handleZoom(0.8)}>−</button>
-              <button className={styles.zoomBtn} onClick={() => handleZoom(1.25)}>+</button>
-              <button className={styles.zoomBtn} onClick={handleResetZoom}>Reset</button>
             </div>
           </div>
         </main>
