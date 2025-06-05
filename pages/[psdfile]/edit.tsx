@@ -415,8 +415,6 @@ export default function EditPage() {
     return bgId;
   };
 
-
-
   if (error) return <div className={styles.loading}>{error}</div>;
   if (status) return <div className={styles.loading}><Spinner /> {status}</div>;
   if (loading || !data || !Array.isArray(data.layers)) return <div className={styles.loading}><Spinner /> Downloading PSD Layer data...</div>;
@@ -429,6 +427,9 @@ export default function EditPage() {
 
   const backgroundLayerId = findBackgroundLayerId(data.layers);
 
+  // Clean up the filename for display
+  const displayName = templateStr ? templateStr.replace(/\.json$/i, '') : 'Unknown';
+
   return (
     <div className={styles.pageContainer}>
       <NavBar
@@ -437,7 +438,7 @@ export default function EditPage() {
         reviewDisabled={!hasAnyChanges()}
         onHome={() => router.push('/')}
         onReview={handleReview}
-        title={`Edit: ${templateStr}`}
+        title={`Editing: ${displayName}`}
       />
       <div className={styles.editContainer}>
         <main className={styles.mainContent}>

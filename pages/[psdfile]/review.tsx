@@ -11,18 +11,9 @@ export default function ReviewPage() {
   const { psdfile, changesJson } = router.query;
   const { data, edits, originals } = usePsdStore();
   const [error, setError] = React.useState<string | null>(null);
-  const [zoom, setZoom] = React.useState(1);
 
-  // Calculate zoom to fit within thumbnail size
-  const THUMBNAIL_MAX_WIDTH = 320;
-  const THUMBNAIL_MAX_HEIGHT = 180;
   const canvasWidth = data?.summary?.psd_info?.size?.[0] || 800;
   const canvasHeight = data?.summary?.psd_info?.size?.[1] || 600;
-  const scale = Math.min(
-    THUMBNAIL_MAX_WIDTH / canvasWidth,
-    THUMBNAIL_MAX_HEIGHT / canvasHeight,
-    1
-  );
 
   useEffect(() => {
     if (!data && psdfile) {
@@ -119,6 +110,9 @@ export default function ReviewPage() {
     );
   };
 
+  // Clean up the filename for display
+  const displayName = psdfile ? String(psdfile).replace(/\.json$/i, '') : 'Unknown';
+
   return (
     <div className={styles.pageContainer}>
       <NavBar
@@ -131,7 +125,7 @@ export default function ReviewPage() {
           router.push(`/${psdfile}/edit`);
         }}
         onGenerate={() => router.push(`/${psdfile}/generating`)}
-        title={`Review: ${psdfile}`}
+        title={`Review: ${displayName}`}
       />
       <div className={styles.reviewContainer}>
         <main className={styles.mainContent}>
@@ -142,7 +136,6 @@ export default function ReviewPage() {
                 tempDir={data.tempDir}
                 width={canvasWidth}
                 height={canvasHeight}
-                zoom={scale}
               />
             </div>
           </div>
