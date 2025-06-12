@@ -54,6 +54,8 @@ export default function GeneratingPage() {
   const [outputImageUrl, setOutputImageUrl] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<string>('submitted');
   const [smartObjectUploadProgress, setSmartObjectUploadProgress] = useState<Record<string, number>>({});
+  const [outputFilename, setOutputFilename] = useState<string>('');
+  const [imageSize, setImageSize] = useState<{ width: number; height: number } | null>(null);
 
   // Helper to get all replaced smart object files
   const getReplacedSmartObjects = () => {
@@ -268,7 +270,7 @@ export default function GeneratingPage() {
         const min = pad(now.getMinutes());
         const dateStr = `${mm}:${dd}:${yy}_${HH}:${min}`;
         // Build output path using base name without extension
-        const outputFilename = `${baseName}/output/output_${dateStr}.png`;
+        const outputFilename = `${baseName}/output/output_${dateStr}.jpg`;
 
         const outputPutUrl = await getPresignedUrl({ 
           filename: outputFilename, 
@@ -312,7 +314,7 @@ export default function GeneratingPage() {
               {
                 href: outputPutUrl,
                 storage: 'external',
-                type: 'image/png'
+                type: 'image/jpeg'
               }
             ],
             options: optionsLayers
@@ -348,6 +350,7 @@ export default function GeneratingPage() {
                   method: 'get' 
                 });
                 setOutputImageUrl(outputUrl);
+                setOutputFilename(outputFilename);
               } else {
                 setError('Asset generation failed');
                 setStepStatus(s => { const arr = [...s]; arr[5] = 'error'; return arr; });
@@ -395,10 +398,114 @@ export default function GeneratingPage() {
                 borderRadius: 8,
                 boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
               }} 
+              onLoad={e => {
+                const img = e.currentTarget;
+                setImageSize({ width: img.naturalWidth, height: img.naturalHeight });
+              }}
             />
+            {outputFilename && imageSize && (
+              <div style={{
+                margin: '24px auto 0 auto',
+                padding: '20px 32px',
+                background: 'transparent',
+                borderRadius: 12,
+                boxShadow: 'none',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                minWidth: 320,
+                maxWidth: 420,
+                width: '100%',
+                fontFamily: 'inherit',
+              }}>
+                <div style={{ marginBottom: 10, width: '100%' }}>
+                  <span style={{ fontWeight: 700, color: '#fff', fontSize: 16 }}>Image Name:</span>
+                  <span style={{ marginLeft: 8, color: '#fff', fontWeight: 500, fontSize: 16 }}>
+                    {outputFilename.split('/').pop()}
+                  </span>
+                </div>
+                <div style={{ marginBottom: 18, width: '100%' }}>
+                  <span style={{ fontWeight: 700, color: '#fff', fontSize: 16 }}>Size:</span>
+                  <span style={{ marginLeft: 8, color: '#fff', fontWeight: 500, fontSize: 16 }}>
+                    {imageSize.width} x {imageSize.height}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: 14, width: '100%', justifyContent: 'center', marginBottom: 0 }}>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const response = await fetch(outputImageUrl);
+                        const blob = await response.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = outputFilename.split('/').pop() || 'generated-asset.png';
+                        document.body.appendChild(a);
+                        a.click();
+                        setTimeout(() => {
+                          window.URL.revokeObjectURL(url);
+                          document.body.removeChild(a);
+                        }, 100);
+                      } catch (err) {
+                        alert('Failed to download image.');
+                      }
+                    }}
+                    style={{
+                      padding: '10px 22px',
+                      background: 'linear-gradient(90deg, #6366f1 0%, #a855f7 100%)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: 8,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      fontSize: 15,
+                      fontWeight: 600,
+                      boxShadow: '0 2px 8px rgba(168, 85, 247, 0.10)',
+                      transition: 'background 0.2s',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                    Download
+                  </button>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(outputImageUrl);
+                      alert('Image URL copied to clipboard!');
+                    }}
+                    style={{
+                      padding: '10px 22px',
+                      background: '#f1f5f9',
+                      color: '#1e293b',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: 8,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      fontSize: 15,
+                      fontWeight: 600,
+                      transition: 'background 0.2s',
+                    }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                    </svg>
+                    Copy Link
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
-        <ol style={{ padding: 0, margin: (currentStep >= 6 && outputImageUrl) ? '32px 0' : '0', listStyle: 'none', maxWidth: 400 }}>
+        <ol style={{ padding: 0, margin: (currentStep >= 6 && outputImageUrl) ? '12px 0' : '0', listStyle: 'none', maxWidth: 400 }}>
           {baseSteps.map((step, idx) => (
             <li key={step} style={{
               display: 'flex',
