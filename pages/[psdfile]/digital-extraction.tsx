@@ -47,11 +47,14 @@ export default function DigitalExtractionPage() {
   } = usePsdStore();
   
   const [selectedLayer, setSelectedLayer] = useState<Layer | null>(null);
+  const [selectedFolderPath, setSelectedFolderPath] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [uploadLoading, setUploadLoading] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderPathInputRef = useRef<HTMLInputElement>(null);
 
   // Load template data (copied from edit.tsx)
   useEffect(() => {
@@ -174,40 +177,58 @@ export default function DigitalExtractionPage() {
     updateSmartObject(id, file);
   };
 
-  // PDF upload functions
-  const handleFolderUpload = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
+  // PDF folder path functions
+  const handleFolderPathChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const path = event.target.value;
+    setSelectedFolderPath(path);
+    console.log('Folder path entered:', path);
   };
 
-  const handleFolderChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (files && files.length > 0) {
-      console.log('Selected files:', files);
-      // You can process the PDF files here
-    }
-  };
-
-  const handleStartExtraction = () => {
-    if (!fileInputRef.current?.files?.length) {
-      alert('Please select a PDF folder first.');
+  const handleStartExtraction = async () => {
+    if (!selectedFolderPath.trim()) {
+      alert('Please enter a PDF folder path first.');
       return;
     }
     
-    const extractionConfig = {
-      template: templateStr,
-      pdfFiles: fileInputRef.current.files,
-      layerEdits: edits,
-    };
+    setUploadLoading(true);
+    setUploadStatus('Starting PDF upload process...');
     
-    console.log('Starting extraction with config:', extractionConfig);
-    
-    // Navigate to processing/results page
-    router.push({
-      pathname: `/${templateStr?.replace('.json', '')}/extraction-processing`,
-      query: { config: JSON.stringify(extractionConfig) },
-    });
+    try {
+      // Call the local Python script to upload PDFs
+      setUploadStatus('Connecting to upload service...');
+      const response = await fetch('/api/upload-pdfs', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          folderPath: selectedFolderPath,
+          template: templateStr,
+          layerEdits: edits,
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to start PDF upload process');
+      }
+      
+      setUploadStatus('Processing upload request...');
+      const result = await response.json();
+      console.log('Upload process started:', result);
+      
+      setUploadStatus('Redirecting to results...');
+      
+      // Navigate to processing/results page
+      router.push({
+        pathname: `/${templateStr?.replace('.json', '')}/extraction-processing`,
+        query: { uploadResult: JSON.stringify(result) },
+      });
+    } catch (error) {
+      console.error('Error starting upload:', error);
+      alert('Failed to start PDF upload process: ' + (error as Error).message);
+      setUploadLoading(false);
+      setUploadStatus(null);
+    }
   };
 
   // Render layer tree exactly like edit.tsx
@@ -331,6 +352,76 @@ export default function DigitalExtractionPage() {
         onHome={() => router.push('/')}
         title={`Digital Extraction: ${displayName}`}
       />
+      
+      {/* Upload Loading Overlay */}
+      {uploadLoading && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.8)',
+          backdropFilter: 'blur(10px)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          color: 'white'
+        }}>
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.1)',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            borderRadius: 20,
+            padding: 40,
+            textAlign: 'center',
+            maxWidth: 500,
+            width: '90%'
+          }}>
+            <div style={{
+              fontSize: 60,
+              marginBottom: 20,
+              animation: 'pulse 1.5s infinite'
+            }}>
+              📤
+            </div>
+            
+            <h2 style={{
+              fontSize: '1.8rem',
+              fontWeight: 600,
+              marginBottom: 16,
+              color: '#3b82f6'
+            }}>
+              Uploading PDFs
+            </h2>
+            
+            <Spinner />
+            
+            <p style={{
+              fontSize: 16,
+              color: '#e0e0e0',
+              marginTop: 16,
+              lineHeight: 1.5
+            }}>
+              {uploadStatus || 'Processing your request...'}
+            </p>
+            
+            <div style={{
+              marginTop: 24,
+              padding: 16,
+              background: 'rgba(59, 130, 246, 0.1)',
+              border: '1px solid rgba(59, 130, 246, 0.3)',
+              borderRadius: 12,
+              fontSize: 14,
+              color: '#93c5fd'
+            }}>
+              💡 <strong>Tip:</strong> This process runs in the background. You'll be redirected to the results page once complete.
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className={styles.editContainer}>
         <main className={styles.mainContent}>
           <div style={{ 
@@ -344,60 +435,76 @@ export default function DigitalExtractionPage() {
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
           }}>
             <h2 style={{ marginBottom: 24, fontSize: '1.5rem', fontWeight: 600, color: '#f8f8f8' }}>
-              Upload PDF Folder
+              PDF Folder Path
             </h2>
             
-            <button
-              onClick={handleFolderUpload}
-              style={{
-                width: '100%',
-                padding: '16px',
-                background: 'rgba(255, 255, 255, 0.1)',
-                border: '2px dashed rgba(255, 255, 255, 0.3)',
-                borderRadius: 12,
-                color: '#fff',
-                fontSize: 16,
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 12
-              }}
-            >
-              📁 Upload PDF Folder from Computer
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept=".pdf"
-              onChange={handleFolderChange}
-              style={{ display: 'none' }}
-              {...({ webkitdirectory: "", directory: "" } as any)}
-            />
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontSize: 14, color: '#e0e0e0' }}>
+                Enter the full path to your PDF folder:
+              </label>
+              <input
+                ref={folderPathInputRef}
+                type="text"
+                value={selectedFolderPath}
+                onChange={handleFolderPathChange}
+                placeholder="/Users/username/Desktop/MyPDFs"
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  borderRadius: 8,
+                  color: '#fff',
+                  fontSize: 14,
+                  outline: 'none',
+                  transition: 'all 0.2s'
+                }}
+                onFocus={(e) => {
+                  e.target.style.border = '1px solid rgba(59, 130, 246, 0.5)';
+                  e.target.style.background = 'rgba(255, 255, 255, 0.15)';
+                }}
+                onBlur={(e) => {
+                  e.target.style.border = '1px solid rgba(255, 255, 255, 0.2)';
+                  e.target.style.background = 'rgba(255, 255, 255, 0.1)';
+                }}
+              />
+            </div>
+            
+            {selectedFolderPath && (
+              <div style={{
+                marginTop: 16,
+                padding: 12,
+                background: 'rgba(34, 197, 94, 0.1)',
+                border: '1px solid rgba(34, 197, 94, 0.3)',
+                borderRadius: 8,
+                color: '#10b981',
+                fontSize: 14
+              }}>
+                ✅ Folder path set: <strong>{selectedFolderPath}</strong>
+              </div>
+            )}
             
             <div style={{ marginTop: 32, textAlign: 'center' }}>
-              <button
-                onClick={handleStartExtraction}
-                disabled={!fileInputRef.current?.files?.length}
-                style={{
-                  padding: '16px 48px',
-                  fontSize: 18,
-                  fontWeight: 600,
-                  background: (!fileInputRef.current?.files?.length) 
-                    ? 'rgba(255, 255, 255, 0.1)' 
-                    : 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: 12,
-                  cursor: (!fileInputRef.current?.files?.length) ? 'not-allowed' : 'pointer',
-                  transition: 'all 0.2s',
-                  opacity: (!fileInputRef.current?.files?.length) ? 0.5 : 1
-                }}
-              >
-                Start Digital Extraction
-              </button>
+                              <button
+                  onClick={handleStartExtraction}
+                  disabled={!selectedFolderPath || loading || uploadLoading}
+                  style={{
+                    padding: '16px 48px',
+                    fontSize: 18,
+                    fontWeight: 600,
+                    background: (!selectedFolderPath || loading || uploadLoading) 
+                      ? 'rgba(255, 255, 255, 0.1)' 
+                      : 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: 12,
+                    cursor: (!selectedFolderPath || loading || uploadLoading) ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.2s',
+                    opacity: (!selectedFolderPath || loading || uploadLoading) ? 0.5 : 1
+                  }}
+                >
+                  {uploadLoading ? 'Uploading...' : 'Start Uploading PDFs'}
+                </button>
             </div>
           </div>
         </main>

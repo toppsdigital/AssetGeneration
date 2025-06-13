@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test PDF Upload API</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        button { padding: 10px 20px; font-size: 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        #result { margin-top: 20px; padding: 20px; background: #f8f9fa; border-radius: 4px; min-height: 100px; }
+        pre { background: #ffffff; padding: 10px; border-radius: 4px; overflow: auto; }
+    </style>
+</head>
+<body>
+    <h1>Test PDF Upload API</h1>
+    <p>This will test the /api/upload-pdfs endpoint</p>
+    <button onclick="testAPI()">🧪 Test API Call</button>
+    <div id="result">Click the button above to test the API...</div>
+
+    <script>
+        async function testAPI() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '⏳ Testing API call...';
+            
+            try {
+                console.log('Making API call to /api/upload-pdfs');
+                
+                const response = await fetch('/api/upload-pdfs', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        folderPath: '/Users/mvemula/Desktop/Content-Scripts/PDF/test_pdfs',
+                        template: 'test.json',
+                        layerEdits: {}
+                    }),
+                });
+                
+                console.log('Response received:', response.status, response.statusText);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                
+                resultDiv.innerHTML = `
+                    <h3>✅ SUCCESS! Response Status: ${response.status}</h3>
+                    <h4>Response Data:</h4>
+                    <pre>${JSON.stringify(result, null, 2)}</pre>
+                `;
+                
+                console.log('API call successful:', result);
+                
+            } catch (error) {
+                console.error('API call failed:', error);
+                
+                resultDiv.innerHTML = `
+                    <h3>❌ ERROR!</h3>
+                    <p><strong>Error Message:</strong> ${error.message}</p>
+                    <p><strong>Check the browser console for more details.</strong></p>
+                `;
+            }
+        }
+    </script>
+</body>
+</html> 
