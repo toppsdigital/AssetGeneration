@@ -23,8 +23,12 @@ export default function ExtractionProcessingPage() {
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(true);
   const [processingStatus, setProcessingStatus] = useState<string>('Starting PDF upload...');
-  const [jobFiles, setJobFiles] = useState<string[]>([]);
+  const [jobFiles, setJobFiles] = useState<any[]>([]);
   const [loadingJobs, setLoadingJobs] = useState(false);
+  const [mostRecentJob, setMostRecentJob] = useState<any>(null);
+  const [jobStatus, setJobStatus] = useState<string | null>(null);
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [extractionCompleted, setExtractionCompleted] = useState(false);
 
   useEffect(() => {
     if (uploadResult) {
@@ -46,30 +50,65 @@ export default function ExtractionProcessingPage() {
     }
   }, [uploadResult]);
 
-  // Fetch job files from uploads/jobs/ directory (referenced from index.tsx logic)
+  // Fetch and download the most recent job file details
   const fetchJobFiles = async () => {
     setLoadingJobs(true);
     try {
-      const res = await fetch('/api/s3-proxy', {
+      // 1. Get list of job files
+      const listRes = await fetch('/api/s3-proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ client_method: 'list' }),
       });
-      if (!res.ok) throw new Error('Failed to fetch job files');
-      const data = await res.json();
+      if (!listRes.ok) throw new Error('Failed to fetch job files');
+      const listData = await listRes.json();
       
-      // Filter for files in uploads/Jobs/ directory
-      const jobFiles = data.files.filter((file: string) => {
+      console.log('Raw S3 API response:', listData);
+      
+      // Filter for files in uploads/Jobs/ directory and pick the first one
+      const jobFiles = listData.files.filter((file: string) => {
         const isInJobsDir = file.startsWith('asset_generator/dev/uploads/Jobs/');
         return isInJobsDir;
       });
       
-      // Sort by most recent first (assuming filename contains timestamp or is naturally sortable)
-      jobFiles.sort((a: string, b: string) => b.localeCompare(a));
+      console.log('Job files found:', jobFiles);
+      setJobFiles(jobFiles.map(file => ({ name: file })));
       
-      setJobFiles(jobFiles);
+      if (jobFiles.length > 0) {
+        const firstJobFile = jobFiles[0];
+        console.log('Selected first job file:', firstJobFile);
+        
+        // 2. Download the JSON file directly (same pattern as index.tsx)
+        // Extract just the relative path from Jobs/ onwards
+        const relativePath = firstJobFile.replace('asset_generator/dev/uploads/', '');
+        const downloadRes = await fetch('/api/s3-proxy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            client_method: 'get', 
+            filename: relativePath,
+            download: true 
+          }),
+        });
+        
+        if (!downloadRes.ok) throw new Error('Failed to download job file');
+        const jobData = await downloadRes.json();
+        
+        console.log('Job data updated:', jobData);
+        setMostRecentJob(jobData);
+        setJobStatus(jobData.job_status || 'Status unknown');
+        
+        // Check if extraction is already completed and update state accordingly
+        if (jobData.job_status && jobData.job_status.toLowerCase().includes('extraction completed')) {
+          setExtractionCompleted(true);
+        }
+        
+        // Log the updated status for debugging
+        console.log('Updated job status:', jobData.job_status);
+      }
     } catch (err) {
-      console.error('Error fetching job files:', err);
+      console.error('Error fetching job details:', err);
+      setJobStatus('Failed to load job status');
     } finally {
       setLoadingJobs(false);
     }
@@ -105,6 +144,67 @@ export default function ExtractionProcessingPage() {
     }, 8000); // 8 seconds total processing time
   };
 
+  const startPdfExtraction = async () => {
+    if (!jobFiles[0]?.name) {
+      alert('No job file found to extract');
+      return;
+    }
+
+    setIsExtracting(true);
+    try {
+      // Extract the relative path from the full S3 path
+      const jobFilePath = jobFiles[0].name.replace('asset_generator/dev/uploads/', '');
+      
+      const response = await fetch('/api/extract-pdfs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobFilePath }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to start PDF extraction');
+      }
+
+      const result = await response.json();
+      console.log('Extraction started:', result);
+
+      // Simulate extraction process monitoring
+      let extractionStatusMessages = [
+        'Starting PDF extraction...',
+        'Analyzing PDF layers...',
+        'Extracting assets...',
+        'Processing layers...',
+        'Finalizing extraction...'
+      ];
+      let messageIndex = 0;
+      setProcessingStatus(extractionStatusMessages[messageIndex]);
+
+      const statusInterval = setInterval(() => {
+        if (messageIndex < extractionStatusMessages.length - 1) {
+          messageIndex++;
+          setProcessingStatus(extractionStatusMessages[messageIndex]);
+        }
+      }, 3000);
+
+      // Simulate extraction completion after 15 seconds
+      setTimeout(() => {
+        clearInterval(statusInterval);
+        setProcessingStatus('Extraction complete!');
+        setTimeout(async () => {
+          setIsExtracting(false);
+          setExtractionCompleted(true);
+          // Refresh job status to see updated status
+          await fetchJobFiles();
+        }, 1000);
+      }, 15000);
+
+    } catch (error) {
+      console.error('Error starting extraction:', error);
+      alert('Failed to start PDF extraction: ' + (error as Error).message);
+      setIsExtracting(false);
+    }
+  };
+
   const displayName = Array.isArray(psdfile) ? psdfile[0] : psdfile;
 
   if (error) {
@@ -113,7 +213,7 @@ export default function ExtractionProcessingPage() {
         <NavBar
           showHome
           onHome={() => router.push('/')}
-          title="Extraction Processing"
+          title={extractionCompleted ? "PDF Extraction completed successfully" : "Extraction Processing"}
         />
         <div className={styles.loading}>
           <h2>❌ Error</h2>
@@ -137,13 +237,13 @@ export default function ExtractionProcessingPage() {
     );
   }
 
-  if (!result || isProcessing) {
+  if (!result || isProcessing || isExtracting) {
     return (
       <div className={styles.pageContainer}>
         <NavBar
           showHome
           onHome={() => router.push('/')}
-          title="Processing Upload"
+          title={isExtracting ? "Processing PDF Extraction" : "Processing Upload"}
         />
         <div className={styles.editContainer}>
           <main className={styles.mainContent}>
@@ -233,7 +333,7 @@ export default function ExtractionProcessingPage() {
                   color: '#10b981',
                   marginBottom: 24
                 }}>
-                  ✅ PDF Upload Completed Successfully
+                  {extractionCompleted ? '🎉 PDF Extraction Completed Successfully' : '✅ PDF Upload Completed Successfully'}
                 </h2>
 
                 <div style={{
@@ -276,7 +376,7 @@ export default function ExtractionProcessingPage() {
                   )}
                 </div>
 
-                {/* Job Files Section - EMPHASIZED */}
+                {/* Most Recent Job Status - EMPHASIZED */}
                 <div style={{
                   background: 'rgba(59, 130, 246, 0.08)',
                   border: '2px solid rgba(59, 130, 246, 0.3)',
@@ -295,191 +395,132 @@ export default function ExtractionProcessingPage() {
                     alignItems: 'center',
                     gap: 8
                   }}>
-                    📊 Recent Jobs
+                    📊 Most Recent Job
                   </h3>
                   
                   {loadingJobs ? (
                     <div style={{ textAlign: 'center', padding: 16 }}>
                       <Spinner />
-                      <p style={{ marginTop: 8, color: '#e0e0e0' }}>Loading job history...</p>
+                      <p style={{ marginTop: 8, color: '#e0e0e0' }}>Loading job details...</p>
                     </div>
-                  ) : jobFiles.length > 0 ? (
+                  ) : mostRecentJob ? (
                     <div style={{
-                      maxHeight: 300,
-                      overflowY: 'auto',
                       border: '1px solid rgba(59, 130, 246, 0.2)',
                       borderRadius: 12,
-                      background: 'rgba(0, 0, 0, 0.3)'
+                      background: 'rgba(0, 0, 0, 0.3)',
+                      padding: 20
                     }}>
-                                             {jobFiles.slice(0, 10).map((jobFile, index) => {
-                         const fileName = jobFile.split('/').pop();
-                         const isCurrentJob = fileName && result.jobId && fileName.includes(result.jobId);
-                         
-                         // Extract timestamp from filename (assuming format includes timestamp)
-                         const getTimestampFromFilename = (filename: string) => {
-                           console.log('Trying to extract timestamp from filename:', filename);
-                           
-                           // Try multiple timestamp patterns
-                           const patterns = [
-                             // Pattern 1: 2024-01-15_14-30-45 or 2024_01_15_14_30_45
-                             /(\d{4}[-_]\d{2}[-_]\d{2}[-_]\d{2}[-_]\d{2}[-_]\d{2})/,
-                             // Pattern 2: 20240115_143045 or 20240115143045
-                             /(\d{14})/,
-                             // Pattern 3: 2024-01-15T14:30:45 (ISO format)
-                             /(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})/,
-                             // Pattern 4: Unix timestamp (10 digits)
-                             /(\d{10})/
-                           ];
-                           
-                           for (const pattern of patterns) {
-                             const match = filename.match(pattern);
-                             if (match) {
-                               console.log('Found timestamp match:', match[1]);
-                               try {
-                                 let dateStr = match[1];
-                                 
-                                 // Handle different formats
-                                 if (pattern === patterns[0]) {
-                                   // Format: 2024-01-15_14-30-45
-                                   const timestamp = dateStr.replace(/[-_]/g, '');
-                                   const year = timestamp.slice(0, 4);
-                                   const month = timestamp.slice(4, 6);
-                                   const day = timestamp.slice(6, 8);
-                                   const hour = timestamp.slice(8, 10);
-                                   const minute = timestamp.slice(10, 12);
-                                   const second = timestamp.slice(12, 14);
-                                   return new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`);
-                                 } else if (pattern === patterns[1]) {
-                                   // Format: 20240115143045
-                                   const year = dateStr.slice(0, 4);
-                                   const month = dateStr.slice(4, 6);
-                                   const day = dateStr.slice(6, 8);
-                                   const hour = dateStr.slice(8, 10);
-                                   const minute = dateStr.slice(10, 12);
-                                   const second = dateStr.slice(12, 14);
-                                   return new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`);
-                                 } else if (pattern === patterns[2]) {
-                                   // Format: 2024-01-15T14:30:45
-                                   return new Date(dateStr);
-                                 } else if (pattern === patterns[3]) {
-                                   // Unix timestamp
-                                   return new Date(parseInt(dateStr) * 1000);
-                                 }
-                               } catch (e) {
-                                 console.error('Error parsing timestamp:', e);
-                                 continue;
-                               }
-                             }
-                           }
-                           
-                           console.log('No timestamp pattern matched for:', filename);
-                           return null;
-                         };
-                         
-                         const timestamp = getTimestampFromFilename(fileName || '') || new Date(); // Fallback to current time
-                         const formatDate = (date: Date) => {
-                           return date.toLocaleString('en-US', {
-                             year: 'numeric',
-                             month: 'short',
-                             day: 'numeric',
-                             hour: '2-digit',
-                             minute: '2-digit',
-                             second: '2-digit'
-                           });
-                         };
-                         
-                         return (
-                           <div
-                             key={index}
-                             style={{
-                               padding: 12,
-                               borderBottom: index < Math.min(jobFiles.length, 10) - 1 ? '1px solid rgba(255, 255, 255, 0.1)' : 'none',
-                               background: isCurrentJob ? 'rgba(34, 197, 94, 0.1)' : 'transparent',
-                               border: isCurrentJob ? '1px solid rgba(34, 197, 94, 0.3)' : 'none',
-                               borderRadius: isCurrentJob ? 6 : 0,
-                               margin: isCurrentJob ? 4 : 0
-                             }}
-                           >
-                             <div style={{
-                               display: 'flex',
-                               alignItems: 'center',
-                               justifyContent: 'space-between',
-                               gap: 12
-                             }}>
-                               <div style={{ 
-                                 display: 'flex', 
-                                 alignItems: 'center', 
-                                 flex: 1, 
-                                 minWidth: 0,
-                                 gap: 16
-                               }}>
-                                 <code style={{
-                                   fontSize: 12,
-                                   color: isCurrentJob ? '#10b981' : '#cbd5e0',
-                                   fontWeight: isCurrentJob ? 600 : 400,
-                                   wordBreak: 'break-all',
-                                   flex: 1,
-                                   minWidth: 0
-                                 }}>
-                                   {fileName}
-                                 </code>
-                                 
-                                 <div style={{
-                                   fontSize: 11,
-                                   color: isCurrentJob ? '#6ee7b7' : '#9ca3af',
-                                   fontWeight: 400,
-                                   whiteSpace: 'nowrap',
-                                   flexShrink: 0
-                                 }}>
-                                   {formatDate(timestamp)}
-                                 </div>
-                               </div>
-                               
-                               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                                 {isCurrentJob && (
-                                   <span style={{
-                                     background: 'rgba(34, 197, 94, 0.2)',
-                                     color: '#10b981',
-                                     padding: '2px 8px',
-                                     borderRadius: 12,
-                                     fontSize: 10,
-                                     fontWeight: 600
-                                   }}>
-                                     CURRENT
-                                   </span>
-                                 )}
-                                 
-                                 <button
-                                   onClick={() => {
-                                     // Handle "Next" action - could navigate to job details or download
-                                     console.log('Next action for job:', fileName);
-                                     // TODO: Implement next action (navigate to job details, download, etc.)
-                                   }}
-                                   style={{
-                                     padding: '4px 12px',
-                                     fontSize: 10,
-                                     fontWeight: 600,
-                                     background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
-                                     color: 'white',
-                                     border: 'none',
-                                     borderRadius: 6,
-                                     cursor: 'pointer',
-                                     transition: 'all 0.2s'
-                                   }}
-                                   onMouseEnter={(e) => {
-                                     e.currentTarget.style.transform = 'scale(1.05)';
-                                   }}
-                                   onMouseLeave={(e) => {
-                                     e.currentTarget.style.transform = 'scale(1)';
-                                   }}
-                                 >
-                                   Next
-                                 </button>
-                               </div>
-                             </div>
-                           </div>
-                         );
-                       })}
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 16,
+                        marginBottom: 16
+                      }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{
+                            fontSize: 12,
+                            color: '#9ca3af',
+                            marginBottom: 4
+                          }}>
+                            {jobFiles[0]?.name?.split('/').pop() || 'Unknown File'}
+                          </div>
+                          <div style={{
+                            fontSize: 14,
+                            fontWeight: 600,
+                            color: '#f8f8f8',
+                            marginBottom: 8
+                          }}>
+                            Job Status
+                          </div>
+                          <div style={{
+                            fontSize: 16,
+                            fontWeight: 700,
+                            color: jobStatus?.toLowerCase().includes('succeed') ? '#10b981' : 
+                                  jobStatus?.toLowerCase().includes('fail') ? '#ef4444' : 
+                                  jobStatus?.toLowerCase().includes('running') ? '#3b82f6' : '#9ca3af',
+                            marginBottom: 4
+                          }}>
+                            {jobStatus || 'Unknown Status'}
+                          </div>
+                          {(mostRecentJob.last_updated || jobFiles[0]?.lastModified) && (
+                            <div style={{
+                              fontSize: 12,
+                              color: '#9ca3af'
+                            }}>
+                              Last updated: {new Date(mostRecentJob.last_updated || jobFiles[0]?.lastModified).toLocaleString('en-US', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                second: '2-digit'
+                              })}
+                            </div>
+                          )}
+                        </div>
+                        
+                        <button
+                          onClick={() => {
+                            const status = jobStatus?.toLowerCase() || '';
+                            if (status.includes('upload completed')) {
+                              startPdfExtraction();
+                            } else {
+                              // Handle other statuses
+                              console.log('Next action for status:', jobStatus, mostRecentJob);
+                              // TODO: Implement other next actions (create digital assets, preview assets, etc.)
+                            }
+                          }}
+                          disabled={isExtracting}
+                          style={{
+                            padding: '8px 20px',
+                            fontSize: 14,
+                            fontWeight: 600,
+                            background: isExtracting 
+                              ? 'rgba(107, 114, 128, 0.5)' 
+                              : 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: 8,
+                            cursor: isExtracting ? 'not-allowed' : 'pointer',
+                            transition: 'all 0.2s',
+                            flexShrink: 0,
+                            opacity: isExtracting ? 0.6 : 1
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.transform = 'scale(1.05)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.transform = 'scale(1)';
+                          }}
+                        >
+                          {(() => {
+                            const status = jobStatus?.toLowerCase() || '';
+                            if (status.includes('upload completed')) return 'Start PDF Extraction';
+                            if (status.includes('extraction completed')) return 'Create Digital Assets';
+                            if (status.includes('digital assets completed')) return 'Preview Assets';
+                            return 'Next';
+                          })()}
+                        </button>
+                      </div>
+                      
+                      {/* Additional job details */}
+                      {mostRecentJob.job_id && (
+                        <div style={{
+                          marginTop: 12,
+                          padding: 12,
+                          background: 'rgba(255, 255, 255, 0.05)',
+                          borderRadius: 8,
+                          fontSize: 12
+                        }}>
+                          <strong>Job ID:</strong> <code style={{ 
+                            marginLeft: 8,
+                            background: 'rgba(255, 255, 255, 0.1)', 
+                            padding: '2px 6px', 
+                            borderRadius: 4 
+                          }}>{mostRecentJob.job_id}</code>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <p style={{ 
