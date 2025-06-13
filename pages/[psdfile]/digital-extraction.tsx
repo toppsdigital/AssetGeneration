@@ -447,7 +447,7 @@ export default function DigitalExtractionPage() {
                 type="text"
                 value={selectedFolderPath}
                 onChange={handleFolderPathChange}
-                placeholder="/Users/username/Desktop/MyPDFs"
+                placeholder="/Users/mvemula/Desktop/25TBB1_BALL_TO_THE_HALL"
                 style={{
                   width: '100%',
                   padding: '12px 16px',
@@ -468,6 +468,19 @@ export default function DigitalExtractionPage() {
                   e.target.style.background = 'rgba(255, 255, 255, 0.1)';
                 }}
               />
+            </div>
+            
+            {/* Helper tip */}
+            <div style={{
+              marginBottom: 16,
+              padding: 12,
+              background: 'rgba(59, 130, 246, 0.1)',
+              border: '1px solid rgba(59, 130, 246, 0.3)',
+              borderRadius: 8,
+              color: '#93c5fd',
+              fontSize: 13
+            }}>
+              💡 <strong>Tip:</strong> Right-click your PDF folder in Finder → "Get Info" → copy the path, or drag the folder into Terminal to get the full path.
             </div>
             
             {selectedFolderPath && (

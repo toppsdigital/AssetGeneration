@@ -67,22 +67,57 @@ export default function ExtractionProcessingPage() {
       
       console.log('Raw S3 API response:', listData);
       
-      // Filter for files in uploads/Jobs/ directory and pick the first one
-      const jobFiles = listData.files.filter((file: string) => {
-        const isInJobsDir = file.startsWith('asset_generator/dev/uploads/Jobs/');
+      // Filter for files in uploads/Jobs/ directory
+      const jobFiles = listData.files.filter((file: any) => {
+        const fileName = typeof file === 'string' ? file : file.name;
+        const isInJobsDir = fileName.startsWith('asset_generator/dev/uploads/Jobs/');
         return isInJobsDir;
       });
       
       console.log('Job files found:', jobFiles);
-      setJobFiles(jobFiles.map(file => ({ name: file })));
       
-      if (jobFiles.length > 0) {
-        const firstJobFile = jobFiles[0];
-        console.log('Selected first job file:', firstJobFile);
+      // Sort by lastModified date (most recent first)
+      const sortedJobFiles = jobFiles.sort((a: any, b: any) => {
+        const aFileName = typeof a === 'string' ? a : a.name;
+        const bFileName = typeof b === 'string' ? b : b.name;
+        const aModified = typeof a === 'string' ? null : a.lastModified;
+        const bModified = typeof b === 'string' ? null : b.lastModified;
+        
+        // If we have lastModified dates, use them
+        if (aModified && bModified) {
+          const aDate = new Date(aModified);
+          const bDate = new Date(bModified);
+          return bDate.getTime() - aDate.getTime(); // Descending order (most recent first)
+        }
+        
+        // Fallback to filename timestamp extraction
+        const timestampRegex = /(\d{8}_\d{6})/; // YYYYMMDD_HHMMSS format
+        const aMatch = aFileName.match(timestampRegex);
+        const bMatch = bFileName.match(timestampRegex);
+        
+        if (aMatch && bMatch) {
+          return bMatch[1].localeCompare(aMatch[1]); // Descending order (most recent first)
+        }
+        
+        // Final fallback to alphabetical sort (descending)
+        return bFileName.localeCompare(aFileName);
+      });
+      
+      console.log('Sorted job files (most recent first):', sortedJobFiles);
+      setJobFiles(sortedJobFiles.map((file: any) => ({
+        name: typeof file === 'string' ? file : file.name,
+        lastModified: typeof file === 'string' ? null : file.lastModified
+      })));
+      
+      if (sortedJobFiles.length > 0) {
+        const mostRecentJobFile = sortedJobFiles[0];
+        const fileName = typeof mostRecentJobFile === 'string' ? mostRecentJobFile : mostRecentJobFile.name;
+        const lastModified = typeof mostRecentJobFile === 'string' ? null : mostRecentJobFile.lastModified;
+        console.log('Selected most recent job file:', fileName, 'modified:', lastModified);
         
         // 2. Download the JSON file directly (same pattern as index.tsx)
         // Extract just the relative path from Jobs/ onwards
-        const relativePath = firstJobFile.replace('asset_generator/dev/uploads/', '');
+        const relativePath = fileName.replace('asset_generator/dev/uploads/', '');
         const downloadRes = await fetch('/api/s3-proxy', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

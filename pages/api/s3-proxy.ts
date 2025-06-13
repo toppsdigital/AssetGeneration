@@ -29,8 +29,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(500).json({ error: 'Failed to fetch S3 file list' });
     }
     const xml = await s3Res.text();
-    const matches = Array.from(xml.matchAll(/<Key>([^<]+\.json)<\/Key>/g));
-    const files = matches.map(m => m[1]);
+    console.log('S3 Proxy: LIST - Raw XML response:', xml);
+    
+    // Parse both Key and LastModified from the XML
+    // The XML structure has <Contents> elements with <Key> and <LastModified> children
+    const contentsRegex = /<Contents>[\s\S]*?<\/Contents>/g;
+    const keyRegex = /<Key>([^<]+\.json)<\/Key>/;
+    const lastModifiedRegex = /<LastModified>([^<]+)<\/LastModified>/;
+    
+    const files = [];
+    let match;
+    while ((match = contentsRegex.exec(xml)) !== null) {
+      const contentXml = match[0];
+      const keyMatch = contentXml.match(keyRegex);
+      const lastModifiedMatch = contentXml.match(lastModifiedRegex);
+      
+      if (keyMatch) {
+        files.push({
+          name: keyMatch[1],
+          lastModified: lastModifiedMatch ? lastModifiedMatch[1] : null
+        });
+      }
+    }
+    
+    console.log('S3 Proxy: LIST - Parsed files with metadata:', files);
     return res.status(200).json({ files });
   }
 
