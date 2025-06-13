@@ -29,6 +29,8 @@ export default function ExtractionProcessingPage() {
   const [jobStatus, setJobStatus] = useState<string | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractionCompleted, setExtractionCompleted] = useState(false);
+  const [isCreatingAssets, setIsCreatingAssets] = useState(false);
+  const [assetsCompleted, setAssetsCompleted] = useState(false);
 
   useEffect(() => {
     if (uploadResult) {
@@ -103,6 +105,14 @@ export default function ExtractionProcessingPage() {
           setExtractionCompleted(true);
         }
         
+        // Check if digital assets are already completed and update state accordingly
+        if (jobData.job_status && (
+          jobData.job_status.toLowerCase().includes('digital assets completed') ||
+          jobData.job_status.toLowerCase().includes('digital assets succeeded')
+        )) {
+          setAssetsCompleted(true);
+        }
+        
         // Log the updated status for debugging
         console.log('Updated job status:', jobData.job_status);
       }
@@ -136,10 +146,10 @@ export default function ExtractionProcessingPage() {
     setTimeout(() => {
       clearInterval(statusInterval);
       setProcessingStatus('Upload complete!');
-      setTimeout(() => {
+      setTimeout(async () => {
         setIsProcessing(false);
         // Fetch job files when processing is complete
-        fetchJobFiles();
+        await fetchJobFiles();
       }, 1000);
     }, 8000); // 8 seconds total processing time
   };
@@ -193,8 +203,12 @@ export default function ExtractionProcessingPage() {
         setTimeout(async () => {
           setIsExtracting(false);
           setExtractionCompleted(true);
-          // Refresh job status to see updated status
-          await fetchJobFiles();
+          // Wait additional time for the Python script to upload updated job file to S3
+          console.log('Waiting for job file to be updated in S3...');
+          setTimeout(async () => {
+            // Refresh job status to see updated status
+            await fetchJobFiles();
+          }, 2000); // Additional 2-second delay for S3 upload and consistency
         }, 1000);
       }, 15000);
 
@@ -202,6 +216,98 @@ export default function ExtractionProcessingPage() {
       console.error('Error starting extraction:', error);
       alert('Failed to start PDF extraction: ' + (error as Error).message);
       setIsExtracting(false);
+    }
+  };
+
+  const createDigitalAssets = async () => {
+    if (!jobFiles[0]?.name) {
+      alert('No job file found to create assets');
+      return;
+    }
+
+    setIsCreatingAssets(true);
+    try {
+      // Extract the relative path from the full S3 path
+      const jobFilePath = jobFiles[0].name.replace('asset_generator/dev/uploads/', '');
+      
+      const response = await fetch('/api/create-digital-assets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobFilePath }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to start digital asset creation');
+      }
+
+      const result = await response.json();
+      console.log('Asset creation started:', result);
+
+      // Simulate asset creation process monitoring
+      let assetCreationStatusMessages = [
+        'Starting digital asset creation...',
+        'Connecting to Adobe Firefly API...',
+        'Processing extracted layers...',
+        'Generating digital assets...',
+        'Uploading generated assets...',
+        'Finalizing asset creation...'
+      ];
+      let messageIndex = 0;
+      setProcessingStatus(assetCreationStatusMessages[messageIndex]);
+
+      const statusInterval = setInterval(() => {
+        if (messageIndex < assetCreationStatusMessages.length - 1) {
+          messageIndex++;
+          setProcessingStatus(assetCreationStatusMessages[messageIndex]);
+        }
+      }, 4000);
+
+      // Simulate asset creation completion after 24 seconds
+      setTimeout(() => {
+        clearInterval(statusInterval);
+        setProcessingStatus('Digital asset creation complete!');
+        setTimeout(async () => {
+          setIsCreatingAssets(false);
+          setAssetsCompleted(true);
+          // Wait additional time for the Python script to upload updated job file to S3
+          console.log('Waiting for job file to be updated in S3...');
+          setTimeout(async () => {
+            // Refresh job status to see updated status
+            await fetchJobFiles();
+          }, 2000); // Additional 2-second delay for S3 upload and consistency
+        }, 1000);
+      }, 24000);
+
+    } catch (error) {
+      console.error('Error starting asset creation:', error);
+      alert('Failed to start digital asset creation: ' + (error as Error).message);
+      setIsCreatingAssets(false);
+    }
+  };
+
+  const previewAssets = async () => {
+    if (!jobFiles[0]?.name || !mostRecentJob) {
+      alert('No job file found to preview assets');
+      return;
+    }
+
+    try {
+      console.log('Preview assets for job:', mostRecentJob);
+      
+      // Navigate to the preview assets page with job data
+      const psdfile = router.query.psdfile;
+      const jobDataString = JSON.stringify(mostRecentJob);
+      
+      router.push({
+        pathname: `/${psdfile}/preview-assets`,
+        query: {
+          jobData: jobDataString
+        }
+      });
+      
+    } catch (error) {
+      console.error('Error navigating to preview assets:', error);
+      alert('Failed to preview assets: ' + (error as Error).message);
     }
   };
 
@@ -213,7 +319,8 @@ export default function ExtractionProcessingPage() {
         <NavBar
           showHome
           onHome={() => router.push('/')}
-          title={extractionCompleted ? "PDF Extraction completed successfully" : "Extraction Processing"}
+          title={assetsCompleted ? "Digital Assets Created Successfully" :
+                 extractionCompleted ? "PDF Extraction completed successfully" : "Extraction Processing"}
         />
         <div className={styles.loading}>
           <h2>❌ Error</h2>
@@ -237,13 +344,14 @@ export default function ExtractionProcessingPage() {
     );
   }
 
-  if (!result || isProcessing || isExtracting) {
+  if (!result || isProcessing || isExtracting || isCreatingAssets) {
     return (
       <div className={styles.pageContainer}>
         <NavBar
           showHome
           onHome={() => router.push('/')}
-          title={isExtracting ? "Processing PDF Extraction" : "Processing Upload"}
+          title={isCreatingAssets ? "Creating Digital Assets" : 
+                 isExtracting ? "Processing PDF Extraction" : "Processing Upload"}
         />
         <div className={styles.editContainer}>
           <main className={styles.mainContent}>
@@ -333,7 +441,8 @@ export default function ExtractionProcessingPage() {
                   color: '#10b981',
                   marginBottom: 24
                 }}>
-                  {extractionCompleted ? '🎉 PDF Extraction Completed Successfully' : '✅ PDF Upload Completed Successfully'}
+                  {assetsCompleted ? '🚀 Digital Assets Created Successfully' : 
+                   extractionCompleted ? '🎉 PDF Extraction Completed Successfully' : '✅ PDF Upload Completed Successfully'}
                 </h2>
 
                 <div style={{
@@ -465,27 +574,31 @@ export default function ExtractionProcessingPage() {
                             const status = jobStatus?.toLowerCase() || '';
                             if (status.includes('upload completed')) {
                               startPdfExtraction();
+                            } else if (status.includes('extraction completed')) {
+                              createDigitalAssets();
+                            } else if (status.includes('digital assets completed') || status.includes('digital assets succeeded')) {
+                              previewAssets();
                             } else {
                               // Handle other statuses
                               console.log('Next action for status:', jobStatus, mostRecentJob);
-                              // TODO: Implement other next actions (create digital assets, preview assets, etc.)
+                              // TODO: Implement other next actions
                             }
                           }}
-                          disabled={isExtracting}
+                          disabled={isExtracting || isCreatingAssets}
                           style={{
                             padding: '8px 20px',
                             fontSize: 14,
                             fontWeight: 600,
-                            background: isExtracting 
+                            background: (isExtracting || isCreatingAssets)
                               ? 'rgba(107, 114, 128, 0.5)' 
                               : 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
                             color: 'white',
                             border: 'none',
                             borderRadius: 8,
-                            cursor: isExtracting ? 'not-allowed' : 'pointer',
+                            cursor: (isExtracting || isCreatingAssets) ? 'not-allowed' : 'pointer',
                             transition: 'all 0.2s',
                             flexShrink: 0,
-                            opacity: isExtracting ? 0.6 : 1
+                            opacity: (isExtracting || isCreatingAssets) ? 0.6 : 1
                           }}
                           onMouseEnter={(e) => {
                             e.currentTarget.style.transform = 'scale(1.05)';
@@ -498,7 +611,7 @@ export default function ExtractionProcessingPage() {
                             const status = jobStatus?.toLowerCase() || '';
                             if (status.includes('upload completed')) return 'Start PDF Extraction';
                             if (status.includes('extraction completed')) return 'Create Digital Assets';
-                            if (status.includes('digital assets completed')) return 'Preview Assets';
+                            if (status.includes('digital assets completed') || status.includes('digital assets succeeded')) return 'Preview Assets';
                             return 'Next';
                           })()}
                         </button>
