@@ -56,10 +56,11 @@ export default function Home() {
       const data = await res.json();
       
       // Filter for only .json files in uploads/ directory (no subdirectories)
-      const jsonFiles = data.files.filter((file: string) => {
-        const isJsonFile = file.toLowerCase().endsWith('.json');
-        const isInUploads = file.startsWith('asset_generator/dev/uploads/');
-        const pathParts = file.split('/');
+      const jsonFiles = data.files.filter((file: any) => {
+        const fileName = typeof file === 'string' ? file : file.name;
+        const isJsonFile = fileName.toLowerCase().endsWith('.json');
+        const isInUploads = fileName.startsWith('asset_generator/dev/uploads/');
+        const pathParts = fileName.split('/');
         const isDirectlyInUploads = pathParts.length === 4; // asset_generator/dev/uploads/filename.json (4 parts)
         return isJsonFile && isInUploads && isDirectlyInUploads;
       });
@@ -68,11 +69,12 @@ export default function Home() {
       const physical: string[] = [];
       const singleAsset: string[] = [];
       
-      jsonFiles.forEach((file: string) => {
-        if (file.toLowerCase().includes('physical')) {
-          physical.push(file);
+      jsonFiles.forEach((file: any) => {
+        const fileName = typeof file === 'string' ? file : file.name;
+        if (fileName.toLowerCase().includes('physical')) {
+          physical.push(fileName);
         } else {
-          singleAsset.push(file);
+          singleAsset.push(fileName);
         }
       });
       
