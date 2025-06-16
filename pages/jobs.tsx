@@ -16,7 +16,7 @@ export default function JobsPage() {
   const [jobs, setJobs] = useState<JobFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [expandedJob, setExpandedJob] = useState<string | null>(null);
+
 
   // Fetch all job files from S3
   const fetchJobs = async () => {
@@ -131,42 +131,14 @@ export default function JobsPage() {
     }
   };
 
-  // Toggle job expansion and fetch details if needed
-  const toggleJobExpansion = (jobName: string) => {
-    if (expandedJob === jobName) {
-      setExpandedJob(null);
-    } else {
-      setExpandedJob(jobName);
-      const job = jobs.find(j => j.name === jobName);
-      if (job && !job.jobData && !job.loading) {
-        fetchJobDetails(jobName);
-      }
-    }
-  };
+
 
   // Navigate to processing page for a specific job
   const viewJobProcessing = (job: JobFile) => {
     if (!job.jobData) return;
     
-    // Extract template name from job data or filename
-    const templateName = job.jobData.template || 'Unknown';
-    const cleanTemplateName = templateName.replace('.json', '');
-    
-    router.push({
-      pathname: `/${cleanTemplateName}/extraction-processing`,
-      query: { 
-        uploadResult: JSON.stringify({
-          success: true,
-          jobId: job.jobData.job_id || 'unknown',
-          message: 'Viewing existing job',
-          folderPath: job.jobData.source_folder || 'Unknown',
-          metadata: {
-            template: templateName,
-            layerEdits: null
-          }
-        })
-      },
-    });
+    // Since extraction-processing page was removed, just show job details in an alert
+    alert(`Job Details:\n\nJob ID: ${job.jobData.job_id || 'Unknown'}\nStatus: ${job.jobData.job_status || 'Unknown'}\nSource Folder: ${job.jobData.source_folder || 'Unknown'}\nTemplate: ${job.jobData.template || 'Unknown'}\nTotal Files: ${job.jobData.total_files || 'Unknown'}`);
   };
 
   // Execute appropriate action based on job status
@@ -267,11 +239,8 @@ export default function JobsPage() {
   const previewAssets = (job: JobFile) => {
     if (!job.jobData) return;
     
-    const templateName = job.jobData.template || 'Unknown';
-    const cleanTemplateName = templateName.replace('.json', '');
-    
     router.push({
-      pathname: `/${cleanTemplateName}/preview-assets`,
+      pathname: '/job/preview',
       query: {
         jobData: JSON.stringify(job.jobData)
       }
@@ -282,15 +251,39 @@ export default function JobsPage() {
     fetchJobs();
   }, []);
 
+  // Auto-refresh in-progress jobs every 10 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refreshInProgressJobs();
+    }, 10000); // 10 seconds
+
+    return () => clearInterval(interval);
+  }, [jobs]); // Re-run when jobs change to update the interval
+
   const getJobDisplayName = (jobName: string) => {
     return jobName.split('/').pop()?.replace('.json', '') || jobName;
   };
 
   const getStatusColor = (status: string) => {
     const lowerStatus = status.toLowerCase();
+    
+    // Green for completed/successful states
     if (lowerStatus.includes('succeed') || lowerStatus.includes('completed')) return '#10b981';
+    
+    // Red for failed/error states
     if (lowerStatus.includes('fail') || lowerStatus.includes('error')) return '#ef4444';
-    if (lowerStatus.includes('running') || lowerStatus.includes('processing') || lowerStatus.includes('started')) return '#3b82f6';
+    
+    // Yellow for in-progress states
+    if (lowerStatus.includes('upload') && lowerStatus.includes('progress')) return '#f59e0b';
+    if (lowerStatus.includes('extraction') && lowerStatus.includes('progress')) return '#f59e0b';
+    if (lowerStatus.includes('assets') && lowerStatus.includes('progress')) return '#f59e0b';
+    if (lowerStatus.includes('running') || lowerStatus.includes('processing') || lowerStatus.includes('started')) return '#f59e0b';
+    if (lowerStatus.includes('in progress')) return '#f59e0b';
+    
+    // Blue for other active states
+    if (lowerStatus.includes('upload') || lowerStatus.includes('extraction') || lowerStatus.includes('assets')) return '#3b82f6';
+    
+    // Gray for unknown/default states
     return '#9ca3af';
   };
 
@@ -300,6 +293,31 @@ export default function JobsPage() {
     if (lowerStatus.includes('extraction completed')) return 'Create Digital Assets';
     if (lowerStatus.includes('digital assets completed') || lowerStatus.includes('digital assets succeeded')) return 'Preview Assets';
     return 'View Processing';
+  };
+
+  const refreshInProgressJobs = async () => {
+    // Get all jobs that are in progress
+    const inProgressJobs = jobs.filter(job => {
+      if (!job.jobData?.job_status) return false;
+      const status = job.jobData.job_status.toLowerCase();
+      return status.includes('progress') || 
+             status.includes('running') || 
+             status.includes('processing') || 
+             status.includes('started');
+    });
+
+    if (inProgressJobs.length === 0) {
+      return;
+    }
+
+    // Refresh each in-progress job
+    const refreshPromises = inProgressJobs.map(job => fetchJobDetails(job.name));
+    
+    try {
+      await Promise.all(refreshPromises);
+    } catch (error) {
+      console.error('Error refreshing in-progress jobs:', error);
+    }
   };
 
   if (loading) {
@@ -382,7 +400,7 @@ export default function JobsPage() {
                 fontSize: 14
               }}
             >
-              🔄 Refresh
+              🔄 Refresh All
             </button>
           </div>
 
@@ -414,14 +432,43 @@ export default function JobsPage() {
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ flex: 1 }}>
-                      <h3 style={{ 
-                        fontSize: '1.2rem', 
-                        fontWeight: 600, 
-                        color: '#f8f8f8',
-                        marginBottom: 8
-                      }}>
-                        {getJobDisplayName(job.name)}
-                      </h3>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+                        <h3 style={{ 
+                          fontSize: '1.2rem', 
+                          fontWeight: 600, 
+                          color: '#f8f8f8',
+                          margin: 0
+                        }}>
+                          {getJobDisplayName(job.name)}
+                        </h3>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            fetchJobDetails(job.name);
+                          }}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#60a5fa',
+                            cursor: 'pointer',
+                            fontSize: 14,
+                            padding: '4px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            opacity: 0.7,
+                            transition: 'opacity 0.2s'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.opacity = '1';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.opacity = '0.7';
+                          }}
+                          title="Refresh job data"
+                        >
+                          🔄
+                        </button>
+                      </div>
                       <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
                         {job.lastModified && (
                           <span style={{ color: '#9ca3af', fontSize: 14 }}>
@@ -432,13 +479,15 @@ export default function JobsPage() {
                           <span style={{ 
                             color: getStatusColor(job.jobData.job_status),
                             fontSize: 14,
-                            fontWeight: 600,
-                            padding: '4px 8px',
-                            background: `${getStatusColor(job.jobData.job_status)}20`,
-                            borderRadius: 6,
-                            border: `1px solid ${getStatusColor(job.jobData.job_status)}40`
+                            fontWeight: 600
                           }}>
-                            🔄 {job.jobData.job_status}
+                            {(() => {
+                              const status = job.jobData.job_status.toLowerCase();
+                              if (status.includes('succeed') || status.includes('completed')) return '✅';
+                              if (status.includes('fail') || status.includes('error')) return '❌';
+                              if (status.includes('progress') || status.includes('running') || status.includes('processing') || status.includes('started')) return '⏳';
+                              return '🔄';
+                            })()} {job.jobData.job_status}
                           </span>
                         )}
                         {job.jobData?.source_folder && (
@@ -449,141 +498,92 @@ export default function JobsPage() {
                       </div>
                     </div>
                     
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      {job.loading && <Spinner />}
-                      
-                      {job.jobData && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const status = job.jobData.job_status?.toLowerCase() || '';
-                            if (status.includes('digital assets completed') || status.includes('digital assets succeeded')) {
-                              previewAssets(job);
-                            } else if (status.includes('upload completed') || status.includes('extraction completed')) {
-                              executeJobAction(job);
-                            } else {
-                              viewJobProcessing(job);
-                            }
-                          }}
-                          style={{
-                            padding: '8px 16px',
-                            background: job.jobData.job_status?.toLowerCase().includes('digital assets completed') || 
-                                       job.jobData.job_status?.toLowerCase().includes('digital assets succeeded')
-                              ? 'linear-gradient(135deg, #10b981, #059669)'
-                              : job.jobData.job_status?.toLowerCase().includes('upload completed') ||
-                                job.jobData.job_status?.toLowerCase().includes('extraction completed')
-                              ? 'linear-gradient(135deg, #f59e0b, #d97706)'
-                              : 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: 6,
-                            cursor: 'pointer',
-                            fontSize: 14,
-                            fontWeight: 600,
-                            transition: 'all 0.2s'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.transform = 'scale(1.05)';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.transform = 'scale(1)';
-                          }}
-                        >
-                          {job.jobData.job_status ? getActionButtonText(job.jobData.job_status) : 'View Processing'}
-                        </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, minHeight: '32px' }}>
+                      {job.loading && (
+                        <span style={{ 
+                          color: '#60a5fa', 
+                          fontSize: 12, 
+                          fontStyle: 'italic',
+                          minWidth: '80px'
+                        }}>
+                          Refreshing...
+                        </span>
                       )}
                       
-                      <span 
-                        style={{ 
-                          fontSize: 18, 
-                          color: '#9ca3af',
-                          transform: expandedJob === job.name ? 'rotate(180deg)' : 'rotate(0deg)',
-                          transition: 'transform 0.2s',
-                          cursor: 'pointer'
-                        }}
-                        onClick={() => toggleJobExpansion(job.name)}
-                      >
-                        ▼
-                      </span>
+                      {job.jobData && (() => {
+                        const status = job.jobData.job_status?.toLowerCase() || '';
+                        const isInProgress = status.includes('progress') || 
+                                           status.includes('running') || 
+                                           status.includes('processing') || 
+                                           status.includes('started');
+                        
+                        // Show spinner and hide button when in progress
+                        if (isInProgress) {
+                          return (
+                            <div style={{ 
+                              width: '32px', 
+                              height: '32px', 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              justifyContent: 'center' 
+                            }}>
+                              <div style={{
+                                width: '20px',
+                                height: '20px',
+                                border: '2px solid rgba(249, 115, 22, 0.3)',
+                                borderTop: '2px solid #f97316',
+                                borderRadius: '50%',
+                                animation: 'spin 1s linear infinite'
+                              }} />
+                            </div>
+                          );
+                        }
+                        
+                        // Show action button when not in progress
+                        return (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (status.includes('digital assets completed') || status.includes('digital assets succeeded')) {
+                                previewAssets(job);
+                              } else if (status.includes('upload completed') || status.includes('extraction completed')) {
+                                executeJobAction(job);
+                              } else {
+                                viewJobProcessing(job);
+                              }
+                            }}
+                            style={{
+                              padding: '8px 16px',
+                              background: status.includes('digital assets completed') || 
+                                         status.includes('digital assets succeeded')
+                                ? 'linear-gradient(135deg, #10b981, #059669)'
+                                : status.includes('upload completed') ||
+                                  status.includes('extraction completed')
+                                ? 'linear-gradient(135deg, #f59e0b, #d97706)'
+                                : 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: 6,
+                              cursor: 'pointer',
+                              fontSize: 14,
+                              fontWeight: 600,
+                              transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.transform = 'scale(1.05)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.transform = 'scale(1)';
+                            }}
+                          >
+                            {job.jobData.job_status ? getActionButtonText(job.jobData.job_status) : 'View Processing'}
+                          </button>
+                        );
+                      })()}
                     </div>
                   </div>
 
-                  {expandedJob === job.name && job.jobData && (
-                    <div style={{ 
-                      marginTop: 20, 
-                      padding: 16,
-                      background: 'rgba(0, 0, 0, 0.3)',
-                      borderRadius: 8,
-                      border: '1px solid rgba(255, 255, 255, 0.1)'
-                    }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-                        {job.jobData.job_id && (
-                          <div>
-                            <strong style={{ color: '#e0e0e0' }}>Job ID:</strong>
-                            <p style={{ color: '#9ca3af', fontSize: 14, marginTop: 4 }}>{job.jobData.job_id}</p>
-                          </div>
-                        )}
-                        {job.jobData.source_folder && (
-                          <div>
-                            <strong style={{ color: '#e0e0e0' }}>Source Folder:</strong>
-                            <p style={{ color: '#9ca3af', fontSize: 14, marginTop: 4, wordBreak: 'break-all' }}>
-                              {job.jobData.source_folder}
-                            </p>
-                          </div>
-                        )}
-                        {job.jobData.template && (
-                          <div>
-                            <strong style={{ color: '#e0e0e0' }}>Template:</strong>
-                            <p style={{ color: '#9ca3af', fontSize: 14, marginTop: 4 }}>{job.jobData.template}</p>
-                          </div>
-                        )}
-                        {job.jobData.total_files && (
-                          <div>
-                            <strong style={{ color: '#e0e0e0' }}>Total Files:</strong>
-                            <p style={{ color: '#9ca3af', fontSize: 14, marginTop: 4 }}>{job.jobData.total_files}</p>
-                          </div>
-                        )}
-                      </div>
-                      
-                      <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            viewJobProcessing(job);
-                          }}
-                          style={{
-                            padding: '8px 16px',
-                            background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: 6,
-                            cursor: 'pointer',
-                            fontSize: 14,
-                            fontWeight: 600
-                          }}
-                        >
-                          View Processing
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigator.clipboard.writeText(JSON.stringify(job.jobData, null, 2));
-                          }}
-                          style={{
-                            padding: '8px 16px',
-                            background: 'rgba(255, 255, 255, 0.1)',
-                            color: '#e0e0e0',
-                            border: '1px solid rgba(255, 255, 255, 0.2)',
-                            borderRadius: 6,
-                            cursor: 'pointer',
-                            fontSize: 14
-                          }}
-                        >
-                          Copy JSON
-                        </button>
-                      </div>
-                    </div>
-                  )}
+
                 </div>
               ))}
             </div>

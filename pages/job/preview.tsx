@@ -12,9 +12,9 @@ interface AssetItem {
   presignedUrl?: string;
 }
 
-export default function PreviewAssetsPage() {
+export default function JobPreviewPage() {
   const router = useRouter();
-  const { psdfile, jobData } = router.query;
+  const { jobData } = router.query;
   
   const [assets, setAssets] = useState<AssetItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -95,7 +95,6 @@ export default function PreviewAssetsPage() {
     }
   };
 
-  const displayName = Array.isArray(psdfile) ? psdfile[0] : psdfile;
   const successfulAssets = assets.filter(asset => asset.status === 'succeeded');
   const failedAssets = assets.filter(asset => asset.status === 'failed');
 
@@ -129,7 +128,7 @@ export default function PreviewAssetsPage() {
           <h2>Error Loading Assets</h2>
           <p>{error}</p>
           <button 
-            onClick={() => router.back()}
+            onClick={() => router.push('/jobs')}
             style={{
               marginTop: 16,
               padding: '8px 16px',
@@ -140,7 +139,7 @@ export default function PreviewAssetsPage() {
               cursor: 'pointer'
             }}
           >
-            Go Back
+            Back to Jobs
           </button>
         </div>
       </div>
@@ -152,7 +151,9 @@ export default function PreviewAssetsPage() {
       <NavBar
         showHome
         onHome={() => router.push('/')}
-        title={`Preview Assets - ${displayName}`}
+        showViewJobs
+        onViewJobs={() => router.push('/jobs')}
+        title="Preview Job Assets"
       />
       
       <div className={styles.editContainer}>
@@ -174,16 +175,44 @@ export default function PreviewAssetsPage() {
                 fontSize: '2rem',
                 fontWeight: 600,
                 color: '#f8f8f8',
-                marginBottom: 0
+                marginBottom: 16
               }}>
-                🎨 Preview Digital Variants: {fileName} — <span style={{
+                🎨 Preview Digital Assets
+              </h1>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                background: 'rgba(255, 255, 255, 0.05)',
+                padding: 16,
+                borderRadius: 12,
+                border: '1px solid rgba(255, 255, 255, 0.1)'
+              }}>
+                <div>
+                  <h2 style={{
+                    fontSize: '1.2rem',
+                    fontWeight: 600,
+                    color: '#f8f8f8',
+                    margin: 0
+                  }}>
+                    {fileName}
+                  </h2>
+                </div>
+                <div style={{
+                  fontSize: '1.1rem',
+                  fontWeight: 600,
                   color: assets.length > 0 && successfulAssets.length === assets.length ? '#10b981' : 
                         successfulAssets.length === 0 ? '#ef4444' : '#f59e0b'
                 }}>
                   {assets.length > 0 ? Math.round((successfulAssets.length / assets.length) * 100) : 0}% successful
-                </span>
-              </h1>
+                  <span style={{ fontSize: '0.9rem', color: '#9ca3af', marginLeft: 8 }}>
+                    ({successfulAssets.length}/{assets.length} assets)
+                  </span>
+                </div>
+              </div>
             </div>
+
+
 
             {/* Image Grid */}
             {successfulAssets.length > 0 && (
@@ -308,6 +337,22 @@ export default function PreviewAssetsPage() {
               </div>
             )}
 
+            {/* No Assets Message */}
+            {assets.length === 0 && (
+              <div style={{
+                textAlign: 'center',
+                padding: '48px 0',
+                background: 'rgba(255, 255, 255, 0.05)',
+                borderRadius: 12,
+                border: '1px solid rgba(255, 255, 255, 0.1)'
+              }}>
+                <div style={{ fontSize: 48, marginBottom: 16 }}>📷</div>
+                <h3 style={{ color: '#9ca3af', fontSize: 18, marginBottom: 8 }}>No Assets Found</h3>
+                <p style={{ color: '#6b7280', fontSize: 14 }}>
+                  This job doesn't have any generated assets yet.
+                </p>
+              </div>
+            )}
 
           </div>
         </main>

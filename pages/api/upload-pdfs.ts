@@ -30,6 +30,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       throw new Error(`PDF uploader script not found at: ${scriptPath}`);
     }
 
+    // Check if the folder path exists
+    if (!fs.existsSync(folderPath)) {
+      throw new Error(`Folder path does not exist: ${folderPath}`);
+    }
+
+    // Check if the folder path is actually a directory
+    const stats = fs.statSync(folderPath);
+    if (!stats.isDirectory()) {
+      throw new Error(`Path is not a directory: ${folderPath}`);
+    }
+
     // Prepare arguments for the Python script
     // The script expects: python pdf_uploader.py upload <path> [options]
     const args = [
@@ -49,7 +60,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const pythonProcess = spawn(venvPath, args, {
       cwd: scriptsDir,
       detached: true,
-      stdio: 'ignore'
+      stdio: ['ignore', 'pipe', 'pipe'] // Capture stdout and stderr for debugging
+    });
+
+    // Handle process errors
+    pythonProcess.on('error', (error) => {
+      console.error('Python process error:', error);
+    });
+
+    // Log stdout and stderr for debugging
+    pythonProcess.stdout?.on('data', (data) => {
+      console.log('Python stdout:', data.toString());
+    });
+
+    pythonProcess.stderr?.on('data', (data) => {
+      console.error('Python stderr:', data.toString());
+    });
+
+    pythonProcess.on('close', (code) => {
+      console.log(`Python process exited with code: ${code}`);
     });
 
     // Detach the process so it can run independently

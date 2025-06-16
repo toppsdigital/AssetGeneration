@@ -216,13 +216,10 @@ export default function DigitalExtractionPage() {
       const result = await response.json();
       console.log('Upload process started:', result);
       
-      setUploadStatus('Redirecting to results...');
+      setUploadStatus('Redirecting to jobs page...');
       
-      // Navigate to processing/results page
-      router.push({
-        pathname: `/${templateStr?.replace('.json', '')}/extraction-processing`,
-        query: { uploadResult: JSON.stringify(result) },
-      });
+      // Navigate to jobs page
+      router.push('/jobs');
     } catch (error) {
       console.error('Error starting upload:', error);
       alert('Failed to start PDF upload process: ' + (error as Error).message);
