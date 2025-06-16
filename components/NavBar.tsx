@@ -7,11 +7,13 @@ interface NavBarProps {
   showReview?: boolean;
   showBackToEdit?: boolean;
   showGenerate?: boolean;
+  showViewJobs?: boolean;
   reviewDisabled?: boolean;
   onHome?: () => void;
   onReview?: () => void;
   onBackToEdit?: () => void;
   onGenerate?: () => void;
+  onViewJobs?: () => void;
   title?: string | React.ReactNode;
   children?: React.ReactNode;
 }
@@ -21,11 +23,13 @@ const NavBar: React.FC<NavBarProps> = ({
   showReview,
   showBackToEdit,
   showGenerate,
+  showViewJobs,
   reviewDisabled,
   onHome,
   onReview,
   onBackToEdit,
   onGenerate,
+  onViewJobs,
   title,
   children,
 }) => {
@@ -63,6 +67,9 @@ const NavBar: React.FC<NavBarProps> = ({
         )}
         {showGenerate && (
           <button className={styles.generateBtn} onClick={onGenerate}>Generate</button>
+        )}
+        {showViewJobs && (
+          <button className={styles.generateBtn} onClick={onViewJobs}>View Jobs</button>
         )}
         {children}
       </div>

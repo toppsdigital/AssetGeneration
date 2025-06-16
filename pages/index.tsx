@@ -165,7 +165,11 @@ export default function Home() {
 
   return (
     <div className={styles.container}>
-      <NavBar title="Asset Generation using Photoshop APIs" />
+      <NavBar 
+        title="Asset Generation using Photoshop APIs" 
+        showViewJobs
+        onViewJobs={() => router.push('/jobs')}
+      />
       <div className={styles.content}>
       <div className={styles.templates} style={downloadingKey ? { opacity: 0.5, pointerEvents: 'none', filter: 'grayscale(1)' } : {}}>
         <h2>
