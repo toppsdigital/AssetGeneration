@@ -15,6 +15,14 @@ export default function ReviewPage() {
   const canvasWidth = data?.summary?.psd_info?.size?.[0] || 800;
   const canvasHeight = data?.summary?.psd_info?.size?.[1] || 600;
 
+  // Construct the S3 public URL for assets
+  let templateStr = Array.isArray(psdfile) ? psdfile[0] : psdfile;
+  if (templateStr && !templateStr.endsWith('.json')) {
+    templateStr = `${templateStr}.json`;
+  }
+  const psdFileName = templateStr ? templateStr.replace(/\.json$/i, '') : '';
+  const tempDir = `https://topps-nexus-powertools.s3.us-east-1.amazonaws.com/asset_generator/dev/public/${psdFileName}/assets/`;
+
   // Thumbnail sizing for review page
   const THUMBNAIL_MAX_WIDTH = 480;
   const THUMBNAIL_MAX_HEIGHT = 320;
@@ -137,7 +145,7 @@ export default function ReviewPage() {
             <div className={styles.canvasWrapper}>
               <PsdCanvas
                 layers={data.layers}
-                tempDir={data.tempDir}
+                tempDir={tempDir}
                 width={canvasWidth}
                 height={canvasHeight}
                 maxWidth={THUMBNAIL_MAX_WIDTH}

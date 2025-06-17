@@ -126,6 +126,9 @@ export default function EditPage() {
           console.error('[EditPage] Fetch error:', err);
         });
     } else {
+      // Even if template is already loaded, ensure tempDir is set
+      const psdFileName = templateStr.replace(/\.json$/i, '');
+      setTempDir(`https://topps-nexus-powertools.s3.us-east-1.amazonaws.com/asset_generator/dev/public/${psdFileName}/assets/`);
       setLoading(false);
       setStatus(null);
       console.log('[EditPage] Already loaded template:', templateStr);
