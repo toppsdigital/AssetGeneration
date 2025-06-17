@@ -90,7 +90,8 @@ export default function EditPage() {
         .then(json => {
           console.log('[EditPage] Downloaded JSON content:', json);
           setData(json);
-          setTempDir(`/temp/${templateStr.replace(/\.json$/i, '')}`);
+          const psdFileName = templateStr.replace(/\.json$/i, '');
+          setTempDir(`https://topps-nexus-powertools.s3.us-east-1.amazonaws.com/asset_generator/dev/public/${psdFileName}/assets/`);
           if (!originals.visibility || Object.keys(originals.visibility).length === 0 || (data && data.json_file !== (json.json_file || ''))) {
             const vis: Record<number, boolean> = {};
             const texts: Record<number, string> = {};
@@ -445,7 +446,7 @@ export default function EditPage() {
           <div className={styles.canvasWrapper}>
             <PsdCanvas
               layers={data.layers}
-              tempDir={data.tempDir}
+              tempDir={tempDir}
               width={canvasWidth}
               height={canvasHeight}
               showDebug={showDebug}

@@ -23,13 +23,7 @@ interface PsdCanvasProps {
   isThumbnail?: boolean;
 }
 
-interface RefreshedUrls {
-  [layerId: number]: {
-    url: string;
-    refreshCount: number;
-    isRefreshing: boolean;
-  };
-}
+
 
 const renderCanvasLayers = (
   layers: Layer[],
@@ -40,7 +34,6 @@ const renderCanvasLayers = (
   edits: any,
   originals: any,
   showDebug: boolean = false,
-  refreshedUrls: RefreshedUrls = {},
   handleImageError: (layerId: number, originalUrl: string) => void = () => {},
   objectUrls: Record<number, string> = {}
 ): ReactNode[] => {
@@ -77,7 +70,7 @@ const renderCanvasLayers = (
     if (layer.children && layer.children.length > 0) {
       // Optionally, you could render a visual indicator for the group here
       // But always recurse into children
-      return renderCanvasLayers(layer.children, tempDir, canvasWidth, canvasHeight, scale, edits, originals, showDebug, refreshedUrls, handleImageError, objectUrls);
+              return renderCanvasLayers(layer.children, tempDir, canvasWidth, canvasHeight, scale, edits, originals, showDebug, handleImageError, objectUrls);
     }
 
     // Only render if we have valid layer properties
@@ -148,13 +141,10 @@ const renderCanvasLayers = (
           </div>
         );
       } else {
-        // Use refreshed URL if available, otherwise use original
-        const imageUrl = refreshedUrls[layer.id]?.url || layer.preview;
+        // Construct the full URL from tempDir + preview
+        const imageUrl = layer.preview ? `${tempDir}${layer.preview}` : '';
         
         console.log(`🖼️ Rendering type layer ${layer.id} (${layer.name}):`, {
-          hasRefreshedUrl: !!refreshedUrls[layer.id]?.url,
-          isRefreshing: refreshedUrls[layer.id]?.isRefreshing,
-          refreshCount: refreshedUrls[layer.id]?.refreshCount,
           originalUrl: layer.preview,
           finalUrl: imageUrl
         });
@@ -188,40 +178,20 @@ const renderCanvasLayers = (
                 onError={(e) => {
                   e.preventDefault();
                   console.log(`💥 Image failed to load for layer ${layer.id} (${layer.name}):`, imageUrl);
-                  handleImageError(layer.id, layer.preview || '');
+                  handleImageError(layer.id, imageUrl);
                 }}
               />
-            )}
-            {refreshedUrls[layer.id]?.isRefreshing && (
-              <div
-                style={{
-                  position: 'absolute',
-                  left: 0,
-                  top: 0,
-                  width: '100%',
-                  height: '100%',
-                  backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff',
-                  fontSize: Math.max(10, 12 * scale),
-                  zIndex: 10,
-                }}
-              >
-                Refreshing...
-              </div>
             )}
           </div>
         );
       }
-    } else if (layer.preview || refreshedUrls[layer.id]?.url || edits.smartObjects.hasOwnProperty(layer.id)) {
+    } else if (layer.preview || edits.smartObjects.hasOwnProperty(layer.id)) {
       // Check if this layer has a smart object replacement
       const hasSmartObjectEdit = edits.smartObjects.hasOwnProperty(layer.id);
       const replacedFile = hasSmartObjectEdit ? edits.smartObjects[layer.id] : null;
       
-      // Use replaced image URL if available, then refreshed URL, then original
-      let imageUrl = refreshedUrls[layer.id]?.url || layer.preview;
+      // Use replaced image URL if available, then construct from tempDir + preview
+      let imageUrl = layer.preview ? `${tempDir}${layer.preview}` : '';
       
       if (replacedFile && replacedFile instanceof File && objectUrls[layer.id]) {
         // Use the managed object URL for the replaced file
@@ -231,9 +201,6 @@ const renderCanvasLayers = (
       console.log(`🖼️ Rendering layer ${layer.id} (${layer.name}):`, {
         type: layer.type,
         hasSmartObjectEdit: hasSmartObjectEdit,
-        hasRefreshedUrl: !!refreshedUrls[layer.id]?.url,
-        isRefreshing: refreshedUrls[layer.id]?.isRefreshing,
-        refreshCount: refreshedUrls[layer.id]?.refreshCount,
         originalUrl: layer.preview,
         finalUrl: imageUrl
       });
@@ -282,29 +249,10 @@ const renderCanvasLayers = (
             onError={(e) => {
               e.preventDefault();
               console.log(`💥 Image failed to load for layer ${layer.id} (${layer.name}):`, imageUrl);
-              handleImageError(layer.id, layer.preview || '');
+              handleImageError(layer.id, imageUrl);
             }}
           />
-          {refreshedUrls[layer.id]?.isRefreshing && (
-            <div
-              style={{
-                position: 'absolute',
-                left: 0,
-                top: 0,
-                width: '100%',
-                height: '100%',
-                backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#fff',
-                fontSize: Math.max(10, 12 * scale),
-                zIndex: 10,
-              }}
-            >
-              Refreshing...
-            </div>
-          )}
+
         </div>
       );
     } else {
@@ -374,148 +322,12 @@ const renderCanvasLayers = (
 
 const PsdCanvas: React.FC<PsdCanvasProps> = ({ layers, tempDir = '', width, height, showDebug = false, maxWidth, maxHeight, isThumbnail = false }) => {
   const { edits, originals } = usePsdStore();
-  const [refreshedUrls, setRefreshedUrls] = useState<RefreshedUrls>({});
   const [objectUrls, setObjectUrls] = useState<Record<number, string>>({});
 
-  const refreshPreSignedUrl = useCallback(async (layerId: number, originalUrl: string) => {
-    // Prevent concurrent refreshes for the same layer
-    if (refreshedUrls[layerId]?.isRefreshing) {
-      return;
-    }
-
-    // Don't retry more than 3 times
-    if (refreshedUrls[layerId]?.refreshCount >= 3) {
-      console.warn(`Max refresh attempts reached for layer ${layerId}`);
-      return;
-    }
-
-    console.log(`🔄 Refreshing pre-signed URL for layer ${layerId}`);
-    console.log(`📎 Original URL:`, originalUrl);
-    
-    // Mark as refreshing
-    setRefreshedUrls(prev => ({
-      ...prev,
-      [layerId]: {
-        ...prev[layerId],
-        isRefreshing: true,
-        refreshCount: (prev[layerId]?.refreshCount || 0) + 1,
-      }
-    }));
-
-    try {
-      // Extract the file path from the original URL
-      // Assuming the URL format is something like: https://domain/path/to/file.png?signature=...
-      const url = new URL(originalUrl);
-      let filePath = url.pathname;
-      
-      // Remove leading slash if present for the API call
-      if (filePath.startsWith('/')) {
-        filePath = filePath.substring(1);
-      }
-      
-      // The backend S3 service automatically adds 'asset_generator/dev/uploads/' prefix
-      // So we need to strip ALL instances of this prefix to avoid duplication
-      // Original: asset_generator/dev/uploads/asset_generator/dev/uploads/bunt25_ArticleHeaders_1080x1080/assets/...
-      // Target:   bunt25_ArticleHeaders_1080x1080/assets/... (backend will add the prefix back)
-      
-      const prefix = 'asset_generator/dev/uploads/';
-      let cleanedPath = filePath;
-      
-      // Keep removing the prefix until it's gone completely
-      while (cleanedPath.startsWith(prefix)) {
-        cleanedPath = cleanedPath.substring(prefix.length);
-        console.log(`🔧 Removed prefix, current path:`, cleanedPath);
-      }
-      
-      // Ensure we have the format: PSD_NAME/assets/filename.ext
-      // If the path doesn't contain a slash, it means we might have just a filename
-      if (!cleanedPath.includes('/') && cleanedPath.includes('_')) {
-        // This might be just a filename, we need to reconstruct the path
-        // But for now, let's proceed with what we have
-        console.log(`⚠️ Path might be just filename:`, cleanedPath);
-      }
-      
-      console.log(`📁 Final extracted file path:`, cleanedPath);
-      
-      // Try multiple path variations as fallbacks, with the cleaned path first
-      const pathsToTry = [
-        cleanedPath, // Cleaned path (PSD_NAME/assets/...)
-        filePath, // Original extracted path as fallback
-        cleanedPath.split('/').slice(-1)[0], // Just the filename
-      ].filter((path, index, arr) => arr.indexOf(path) === index); // Remove duplicates
-      
-      console.log(`🔍 Will try these paths:`, pathsToTry);
-      
-      for (const tryPath of pathsToTry) {
-        console.log(`📡 Trying path: ${tryPath}`);
-        
-        const response = await fetch('/api/s3-proxy', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            client_method: 'get',
-            filename: tryPath,
-            expires_in: 604800 // 1 week in seconds
-          }),
-        });
-
-        console.log(`📊 s3-proxy response status for ${tryPath}:`, response.status);
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          console.warn(`⚠️ Path ${tryPath} failed:`, response.status, errorData.error || 'Unknown error');
-          continue; // Try next path
-        }
-
-        const { url: newUrl } = await response.json();
-        
-        if (!newUrl) {
-          console.warn(`⚠️ No URL returned for path: ${tryPath}`);
-          continue; // Try next path
-        }
-        
-        // Skip URL testing for now since it might have CORS issues
-        // The s3-proxy successfully generated a URL, so let's trust it
-        console.log(`✅ Generated URL for ${tryPath}, skipping test due to potential CORS issues`)
-        
-        console.log(`✅ Success! Working URL found for path: ${tryPath}`);
-        console.log(`✅ New URL:`, newUrl);
-        
-        // Update the refreshed URLs state
-        setRefreshedUrls(prev => ({
-          ...prev,
-          [layerId]: {
-            url: newUrl,
-            refreshCount: prev[layerId]?.refreshCount || 1,
-            isRefreshing: false,
-          }
-        }));
-
-        console.log(`🎉 Successfully refreshed URL for layer ${layerId}`);
-        return; // Success, exit the function
-      }
-      
-      // If we get here, all paths failed
-      throw new Error(`All ${pathsToTry.length} path variations failed`);
-      
-    } catch (error) {
-      console.error(`💥 Failed to refresh pre-signed URL for layer ${layerId}:`, error);
-      
-      // Mark as not refreshing on error
-      setRefreshedUrls(prev => ({
-        ...prev,
-        [layerId]: {
-          ...prev[layerId],
-          isRefreshing: false,
-        }
-      }));
-    }
-  }, [refreshedUrls]);
-
   const handleImageError = useCallback((layerId: number, originalUrl: string) => {
-    console.log(`Image load failed for layer ${layerId}, attempting to refresh URL`);
-    refreshPreSignedUrl(layerId, originalUrl);
-  }, [refreshPreSignedUrl]);
+    console.log(`Image load failed for layer ${layerId}:`, originalUrl);
+    // Since we're using public S3 URLs now, we just log the error without attempting refresh
+  }, []);
 
   // Create and manage object URLs for replaced smart objects
   useEffect(() => {
@@ -556,7 +368,7 @@ const PsdCanvas: React.FC<PsdCanvasProps> = ({ layers, tempDir = '', width, heig
   const scaledWidth = width * scale;
   const scaledHeight = height * scale;
 
-  const canvasLayers = useMemo(() => renderCanvasLayers(layers, tempDir, width, height, scale, edits, originals, showDebug, refreshedUrls, handleImageError, objectUrls), [layers, tempDir, width, height, scale, edits, originals, showDebug, refreshedUrls, handleImageError, objectUrls]);
+  const canvasLayers = useMemo(() => renderCanvasLayers(layers, tempDir, width, height, scale, edits, originals, showDebug, handleImageError, objectUrls), [layers, tempDir, width, height, scale, edits, originals, showDebug, handleImageError, objectUrls]);
   
   // Check if there are any changes that need warnings (only show if not thumbnail)
   const hasSmartObjectChanges = !isThumbnail && Object.keys(edits.smartObjects).length > 0;
