@@ -15,6 +15,7 @@ interface NavBarProps {
   onGenerate?: () => void;
   onViewJobs?: () => void;
   title?: string | React.ReactNode;
+  backLabel?: string;
   children?: React.ReactNode;
 }
 
@@ -31,6 +32,7 @@ const NavBar: React.FC<NavBarProps> = ({
   onGenerate,
   onViewJobs,
   title,
+  backLabel,
   children,
 }) => {
   const router = useRouter();
@@ -47,7 +49,9 @@ const NavBar: React.FC<NavBarProps> = ({
           </button>
         )}
         {showBackToEdit && (
-          <button className={styles.navBtn} onClick={onBackToEdit}>Back to Edit</button>
+          <button className={styles.navBtn} onClick={onBackToEdit}>
+            {backLabel || 'Back to Edit'}
+          </button>
         )}
       </div>
       <div className={styles.navTitle}>{title}</div>

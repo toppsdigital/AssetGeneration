@@ -609,43 +609,45 @@ export default function JobsPage() {
                             >
                               📋 View Details
                             </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (status.includes('digital assets completed') || status.includes('digital assets succeeded')) {
-                                  previewAssets(job);
-                                } else if (status.includes('upload completed') || status.includes('extraction completed')) {
-                                  executeJobAction(job);
-                                } else {
-                                  viewJobProcessing(job);
-                                }
-                              }}
-                              style={{
-                                padding: '8px 16px',
-                                background: status.includes('digital assets completed') || 
-                                           status.includes('digital assets succeeded')
-                                  ? 'linear-gradient(135deg, #10b981, #059669)'
-                                  : status.includes('upload completed') ||
-                                    status.includes('extraction completed')
-                                  ? 'linear-gradient(135deg, #f59e0b, #d97706)'
-                                  : 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: 6,
-                                cursor: 'pointer',
-                                fontSize: 14,
-                                fontWeight: 600,
-                                transition: 'all 0.2s'
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.transform = 'scale(1.05)';
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.transform = 'scale(1)';
-                              }}
-                            >
-                              {job.jobData.job_status ? getActionButtonText(job.jobData.job_status) : 'View Processing'}
-                            </button>
+                            {!status.includes('digital assets succeeded') && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (status.includes('digital assets completed') || status.includes('digital assets succeeded')) {
+                                    previewAssets(job);
+                                  } else if (status.includes('upload completed') || status.includes('extraction completed')) {
+                                    executeJobAction(job);
+                                  } else {
+                                    viewJobProcessing(job);
+                                  }
+                                }}
+                                style={{
+                                  padding: '8px 16px',
+                                  background: status.includes('digital assets completed') || 
+                                             status.includes('digital assets succeeded')
+                                    ? 'linear-gradient(135deg, #10b981, #059669)'
+                                    : status.includes('upload completed') ||
+                                      status.includes('extraction completed')
+                                    ? 'linear-gradient(135deg, #f59e0b, #d97706)'
+                                    : 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: 6,
+                                  cursor: 'pointer',
+                                  fontSize: 14,
+                                  fontWeight: 600,
+                                  transition: 'all 0.2s'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.transform = 'scale(1.05)';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.transform = 'scale(1)';
+                                }}
+                              >
+                                {job.jobData.job_status ? getActionButtonText(job.jobData.job_status) : 'View Processing'}
+                              </button>
+                            )}
                           </>
                         );
                       })()}

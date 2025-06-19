@@ -95,9 +95,10 @@ export default function JobDetailsPage() {
       <div className={styles.pageContainer}>
         <NavBar
           showHome
-          showViewJobs
+          showBackToEdit
           onHome={() => router.push('/')}
-          onViewJobs={() => router.push('/jobs')}
+          onBackToEdit={() => router.push('/jobs')}
+          backLabel="Back to Jobs"
           title="Loading Job Details..."
         />
         <div className={styles.loading}>
@@ -113,9 +114,10 @@ export default function JobDetailsPage() {
       <div className={styles.pageContainer}>
         <NavBar
           showHome
-          showViewJobs
+          showBackToEdit
           onHome={() => router.push('/')}
-          onViewJobs={() => router.push('/jobs')}
+          onBackToEdit={() => router.push('/jobs')}
+          backLabel="Back to Jobs"
           title="Job Details"
         />
         <div className={styles.loading}>
@@ -146,9 +148,10 @@ export default function JobDetailsPage() {
       <div className={styles.pageContainer}>
         <NavBar
           showHome
-          showViewJobs
+          showBackToEdit
           onHome={() => router.push('/')}
-          onViewJobs={() => router.push('/jobs')}
+          onBackToEdit={() => router.push('/jobs')}
+          backLabel="Back to Jobs"
           title="Job Details"
         />
         <div className={styles.loading}>
@@ -176,9 +179,10 @@ export default function JobDetailsPage() {
     <div className={styles.pageContainer}>
       <NavBar
         showHome
-        showViewJobs
+        showBackToEdit
         onHome={() => router.push('/')}
-        onViewJobs={() => router.push('/jobs')}
+        onBackToEdit={() => router.push('/jobs')}
+        backLabel="Back to Jobs"
         title={`Job Details: ${getJobDisplayName()}`}
       />
       

@@ -492,7 +492,7 @@ export default function JobPreviewPage() {
           <h2>Error Loading Assets</h2>
           <p>{error}</p>
           <button 
-            onClick={() => router.push('/jobs')}
+            onClick={() => router.push(`/job/details?jobPath=${encodeURIComponent(jobPath as string)}`)}
             style={{
               marginTop: 16,
               padding: '8px 16px',
@@ -503,7 +503,7 @@ export default function JobPreviewPage() {
               cursor: 'pointer'
             }}
           >
-            Back to Jobs
+            Back to Job Details
           </button>
         </div>
       </div>
@@ -519,9 +519,10 @@ export default function JobPreviewPage() {
         <NavBar
           showHome
           onHome={() => router.push('/')}
-          showViewJobs
-          onViewJobs={() => router.push('/jobs')}
-          title="Preview Job Assets"
+          showBackToEdit
+          onBackToEdit={() => router.push(`/job/details?jobPath=${encodeURIComponent(jobPath as string)}`)}
+          backLabel="Job Details"
+          title={`${displayName} ${type === 'extracted' ? 'Extracted Layers' : 'Generated Assets'}`}
         />
       
       <div className={styles.editContainer}>
@@ -537,48 +538,7 @@ export default function JobPreviewPage() {
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
           }}>
             
-            {/* Header */}
-            <div style={{ textAlign: 'center', marginBottom: 32 }}>
-              <h1 style={{
-                fontSize: '2rem',
-                fontWeight: 600,
-                color: '#f8f8f8',
-                marginBottom: 16
-              }}>
-                {type === 'extracted' ? '🖼️ Preview Extracted Layers' : '🎨 Preview Final Assets'}
-              </h1>
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                background: 'rgba(255, 255, 255, 0.05)',
-                padding: 16,
-                borderRadius: 12,
-                border: '1px solid rgba(255, 255, 255, 0.1)'
-              }}>
-                <div>
-                  <h2 style={{
-                    fontSize: '1.2rem',
-                    fontWeight: 600,
-                    color: '#f8f8f8',
-                    margin: 0
-                  }}>
-                    {displayName}
-                  </h2>
-                </div>
-                <div style={{
-                  fontSize: '1.1rem',
-                  fontWeight: 600,
-                  color: assets.length > 0 && successfulAssets.length === assets.length ? '#10b981' : 
-                        successfulAssets.length === 0 ? '#ef4444' : '#f59e0b'
-                }}>
-                  {assets.length > 0 ? Math.round((successfulAssets.length / assets.length) * 100) : 0}% successful
-                  <span style={{ fontSize: '0.9rem', color: '#9ca3af', marginLeft: 8 }}>
-                    ({successfulAssets.length}/{assets.length} assets)
-                  </span>
-                </div>
-              </div>
-            </div>
+
 
 
 
