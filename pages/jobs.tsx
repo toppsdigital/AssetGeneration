@@ -16,6 +16,7 @@ export default function JobsPage() {
   const [jobs, setJobs] = useState<JobFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [expandedJobs, setExpandedJobs] = useState<Set<string>>(new Set());
 
 
   // Fetch all job files from S3
@@ -320,6 +321,18 @@ export default function JobsPage() {
     }
   };
 
+  const toggleJobExpansion = (jobName: string) => {
+    setExpandedJobs(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(jobName)) {
+        newSet.delete(jobName);
+      } else {
+        newSet.add(jobName);
+      }
+      return newSet;
+    });
+  };
+
   if (loading) {
     return (
       <div className={styles.container}>
@@ -520,64 +533,120 @@ export default function JobsPage() {
                         // Show spinner and hide button when in progress
                         if (isInProgress) {
                           return (
-                            <div style={{ 
-                              width: '32px', 
-                              height: '32px', 
-                              display: 'flex', 
-                              alignItems: 'center', 
-                              justifyContent: 'center' 
-                            }}>
-                              <div style={{
-                                width: '20px',
-                                height: '20px',
-                                border: '2px solid rgba(249, 115, 22, 0.3)',
-                                borderTop: '2px solid #f97316',
-                                borderRadius: '50%',
-                                animation: 'spin 1s linear infinite'
-                              }} />
-                            </div>
+                            <>
+                              <div style={{ 
+                                width: '32px', 
+                                height: '32px', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'center' 
+                              }}>
+                                <div style={{
+                                  width: '20px',
+                                  height: '20px',
+                                  border: '2px solid rgba(249, 115, 22, 0.3)',
+                                  borderTop: '2px solid #f97316',
+                                  borderRadius: '50%',
+                                  animation: 'spin 1s linear infinite'
+                                }} />
+                              </div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const jobPath = job.name.replace('asset_generator/dev/uploads/', '');
+                                  router.push(`/job/details?jobPath=${encodeURIComponent(jobPath)}`);
+                                }}
+                                style={{
+                                  padding: '8px 16px',
+                                  background: 'rgba(255, 255, 255, 0.1)',
+                                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                                  borderRadius: 6,
+                                  color: '#e5e7eb',
+                                  cursor: 'pointer',
+                                  fontSize: 14,
+                                  fontWeight: 500,
+                                  transition: 'all 0.2s'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                                }}
+                              >
+                                📋 View Details
+                              </button>
+                            </>
                           );
                         }
                         
-                        // Show action button when not in progress
+                        // Show action button and view details button when not in progress
                         return (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (status.includes('digital assets completed') || status.includes('digital assets succeeded')) {
-                                previewAssets(job);
-                              } else if (status.includes('upload completed') || status.includes('extraction completed')) {
-                                executeJobAction(job);
-                              } else {
-                                viewJobProcessing(job);
-                              }
-                            }}
-                            style={{
-                              padding: '8px 16px',
-                              background: status.includes('digital assets completed') || 
-                                         status.includes('digital assets succeeded')
-                                ? 'linear-gradient(135deg, #10b981, #059669)'
-                                : status.includes('upload completed') ||
-                                  status.includes('extraction completed')
-                                ? 'linear-gradient(135deg, #f59e0b, #d97706)'
-                                : 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: 6,
-                              cursor: 'pointer',
-                              fontSize: 14,
-                              fontWeight: 600,
-                              transition: 'all 0.2s'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.transform = 'scale(1.05)';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.transform = 'scale(1)';
-                            }}
-                          >
-                            {job.jobData.job_status ? getActionButtonText(job.jobData.job_status) : 'View Processing'}
-                          </button>
+                          <>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const jobPath = job.name.replace('asset_generator/dev/uploads/', '');
+                                router.push(`/job/details?jobPath=${encodeURIComponent(jobPath)}`);
+                              }}
+                              style={{
+                                padding: '8px 16px',
+                                background: 'rgba(255, 255, 255, 0.1)',
+                                border: '1px solid rgba(255, 255, 255, 0.2)',
+                                borderRadius: 6,
+                                color: '#e5e7eb',
+                                cursor: 'pointer',
+                                fontSize: 14,
+                                fontWeight: 500,
+                                transition: 'all 0.2s'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                              }}
+                            >
+                              📋 View Details
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (status.includes('digital assets completed') || status.includes('digital assets succeeded')) {
+                                  previewAssets(job);
+                                } else if (status.includes('upload completed') || status.includes('extraction completed')) {
+                                  executeJobAction(job);
+                                } else {
+                                  viewJobProcessing(job);
+                                }
+                              }}
+                              style={{
+                                padding: '8px 16px',
+                                background: status.includes('digital assets completed') || 
+                                           status.includes('digital assets succeeded')
+                                  ? 'linear-gradient(135deg, #10b981, #059669)'
+                                  : status.includes('upload completed') ||
+                                    status.includes('extraction completed')
+                                  ? 'linear-gradient(135deg, #f59e0b, #d97706)'
+                                  : 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: 6,
+                                cursor: 'pointer',
+                                fontSize: 14,
+                                fontWeight: 600,
+                                transition: 'all 0.2s'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.transform = 'scale(1.05)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.transform = 'scale(1)';
+                              }}
+                            >
+                              {job.jobData.job_status ? getActionButtonText(job.jobData.job_status) : 'View Processing'}
+                            </button>
+                          </>
                         );
                       })()}
                     </div>
