@@ -55,9 +55,11 @@ export default function JobPreviewPage() {
           try {
             // Extract PDF filename without extension for folder structure
             const pdfNameWithoutExt = firstFile.filename.replace(/\.pdf$/i, '');
+            // Remove language suffix like _FR, _EN, _ES, etc.
+            const baseName = pdfNameWithoutExt.replace(/_[A-Z]{2}$/, '');
             
             // Construct relative S3 path (API will add asset_generator/dev/uploads/ prefix)
-            const relativeAssetPath = `PDFs/Output/${pdfNameWithoutExt}/${asset.filename}`;
+            const relativeAssetPath = `PDFs/Output/${baseName}/${asset.filename}`;
             
             const response = await fetch('/api/s3-proxy', {
               method: 'POST',
