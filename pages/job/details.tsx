@@ -342,23 +342,23 @@ export default function JobDetailsPage() {
                           </div>
                         </div>
 
-                        {/* Extracted Layers */}
-                        <div>
-                          <div style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            marginBottom: 12
-                          }}>
-                            <h4 style={{
-                              color: '#60a5fa',
-                              fontSize: 16,
-                              fontWeight: 600,
-                              margin: 0
+                        {/* Extracted Layers - Only show if there are extracted files */}
+                        {file.extracted_files && file.extracted_files.length > 0 && (
+                          <div>
+                            <div style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              marginBottom: 12
                             }}>
-                              🖼️ Extracted Layers ({file.extracted_files?.length || 0})
-                            </h4>
-                            {file.extracted_files && file.extracted_files.length > 0 && (
+                              <h4 style={{
+                                color: '#60a5fa',
+                                fontSize: 16,
+                                fontWeight: 600,
+                                margin: 0
+                              }}>
+                                🖼️ Extracted Layers ({file.extracted_files.length})
+                              </h4>
                               <button
                                 onClick={() => {
                                   // Navigate to preview page for extracted layers
@@ -386,18 +386,16 @@ export default function JobDetailsPage() {
                               >
                                 👁️ Preview Layers
                               </button>
-                            )}
-                          </div>
-                          <div style={{
-                            background: 'rgba(59, 130, 246, 0.1)',
-                            border: '1px solid rgba(59, 130, 246, 0.3)',
-                            borderRadius: 8,
-                            padding: 12,
-                            maxHeight: 200,
-                            overflowY: 'auto'
-                          }}>
-                            {file.extracted_files && file.extracted_files.length > 0 ? (
-                              file.extracted_files.map((extractedFile, extIndex) => (
+                            </div>
+                            <div style={{
+                              background: 'rgba(59, 130, 246, 0.1)',
+                              border: '1px solid rgba(59, 130, 246, 0.3)',
+                              borderRadius: 8,
+                              padding: 12,
+                              maxHeight: 200,
+                              overflowY: 'auto'
+                            }}>
+                              {file.extracted_files.map((extractedFile, extIndex) => (
                                 <div key={extIndex} style={{
                                   marginBottom: 8,
                                   fontSize: 13,
@@ -409,33 +407,29 @@ export default function JobDetailsPage() {
                                   <span>🖼️</span>
                                   <span>{extractedFile}</span>
                                 </div>
-                              ))
-                            ) : (
-                              <p style={{ color: '#9ca3af', fontSize: 13, margin: 0 }}>
-                                No extracted layers found
-                              </p>
-                            )}
+                              ))}
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
 
-                      {/* Firefly Assets - Full Width Below */}
-                      <div>
-                        <div style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          marginBottom: 12
-                        }}>
-                          <h4 style={{
-                            color: '#34d399',
-                            fontSize: 16,
-                            fontWeight: 600,
-                            margin: 0
+                      {/* Firefly Assets - Only show if there are firefly assets */}
+                      {file.firefly_assets && file.firefly_assets.length > 0 && (
+                        <div>
+                          <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            marginBottom: 12
                           }}>
-                            🎨 Firefly Assets ({file.firefly_assets?.length || 0})
-                          </h4>
-                          {file.firefly_assets && file.firefly_assets.length > 0 && (
+                            <h4 style={{
+                              color: '#34d399',
+                              fontSize: 16,
+                              fontWeight: 600,
+                              margin: 0
+                            }}>
+                              🎨 Firefly Assets ({file.firefly_assets.length})
+                            </h4>
                             <button
                               onClick={() => {
                                 // Navigate to preview page for firefly assets
@@ -460,19 +454,17 @@ export default function JobDetailsPage() {
                               onMouseLeave={(e) => {
                                 e.currentTarget.style.background = 'rgba(16, 185, 129, 0.2)';
                               }}
-                                                         >
-                               👁️ Preview Final Assets
-                             </button>
-                          )}
-                        </div>
-                        <div style={{
-                          background: 'rgba(16, 185, 129, 0.1)',
-                          border: '1px solid rgba(16, 185, 129, 0.3)',
-                          borderRadius: 8,
-                          padding: 12
-                        }}>
-                          {file.firefly_assets && file.firefly_assets.length > 0 ? (
-                            file.firefly_assets.map((asset, assetIndex) => (
+                            >
+                              👁️ Preview Final Assets
+                            </button>
+                          </div>
+                          <div style={{
+                            background: 'rgba(16, 185, 129, 0.1)',
+                            border: '1px solid rgba(16, 185, 129, 0.3)',
+                            borderRadius: 8,
+                            padding: 12
+                          }}>
+                            {file.firefly_assets.map((asset, assetIndex) => (
                               <div key={assetIndex} style={{
                                 marginBottom: 8,
                                 fontSize: 13,
@@ -529,14 +521,10 @@ export default function JobDetailsPage() {
                                   )}
                                 </div>
                               </div>
-                            ))
-                          ) : (
-                            <p style={{ color: '#9ca3af', fontSize: 13, margin: 0 }}>
-                              No firefly assets found
-                            </p>
-                          )}
+                            ))}
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   ))}
                 </div>
