@@ -102,44 +102,40 @@ function TiffViewer({ src, alt, style, onError }: {
         
         console.log(`🖼️ Loading TIFF: ${alt} from ${src}`);
 
-        // First, try native browser support
+        // Create proxy URL to avoid CORS issues
+        const proxyUrl = `/api/tiff-proxy?url=${encodeURIComponent(src)}`;
+        console.log(`🔗 Original TIFF URL: ${src}`);
+        console.log(`🔗 Using proxy URL: ${proxyUrl}`);
+        
+        // First, try native browser support with proxy to avoid CORS
         const testImg = new Image();
         testImg.crossOrigin = 'anonymous';
         
         const nativeSupport = await new Promise<boolean>((resolve) => {
           testImg.onload = () => {
-            console.log(`✅ Native TIFF support for: ${alt}`);
+            console.log(`✅ Native TIFF support via proxy for: ${alt}`);
             resolve(true);
           };
           testImg.onerror = () => {
-            console.log(`❌ No native TIFF support for: ${alt}, trying conversion`);
+            console.log(`❌ No native TIFF support for: ${alt}, trying UTIF conversion`);
             resolve(false);
           };
-          testImg.src = src;
+          testImg.src = proxyUrl;
           
-          // Timeout after 2 seconds
-          setTimeout(() => resolve(false), 2000);
+          // Timeout after 3 seconds
+          setTimeout(() => resolve(false), 3000);
         });
 
         if (nativeSupport) {
-          setImageUrl(src);
+          setImageUrl(proxyUrl);
           setLoading(false);
           return;
         }
 
-        // Fetch TIFF data for conversion
+        // Fetch TIFF data for conversion using proxy to avoid CORS issues
         console.log(`📥 Fetching TIFF data for conversion: ${alt}`);
-        console.log(`🔗 TIFF URL: ${src}`);
         
-        // Test if the URL is accessible first
-        try {
-          const testResponse = await fetch(src, { method: 'HEAD' });
-          console.log(`🔍 HEAD request status for ${alt}:`, testResponse.status, testResponse.statusText);
-        } catch (headError) {
-          console.warn(`⚠️ HEAD request failed for ${alt}:`, headError);
-        }
-        
-        const response = await fetch(src);
+        const response = await fetch(proxyUrl);
         if (!response.ok) {
           console.error(`❌ TIFF fetch failed for ${alt}:`, {
             status: response.status,
