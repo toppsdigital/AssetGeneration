@@ -13,7 +13,6 @@ interface AssetItem {
   presignedUrl?: string;
   isTiff?: boolean;
   error?: string;
-  debugInfo?: string;
 }
 
 // Color conversion helper functions
@@ -520,8 +519,7 @@ export default function JobPreviewPage() {
                 job_id: jobData.job_id || '',
                 status: 'succeeded',
                 presignedUrl: successfulUrl,
-                isTiff: filename.toLowerCase().endsWith('.tif') || filename.toLowerCase().endsWith('.tiff'),
-                debugInfo: `Found at one of ${possiblePaths.length} paths`
+                isTiff: filename.toLowerCase().endsWith('.tif') || filename.toLowerCase().endsWith('.tiff')
               };
             } else {
               console.error(`❌ All paths failed for ${filename}. Last error:`, lastError);
@@ -642,32 +640,7 @@ export default function JobPreviewPage() {
 
 
 
-            {/* Debug Information */}
-            {assets.length > 0 && (
-              <div style={{
-                marginBottom: 24,
-                padding: 16,
-                background: 'rgba(59, 130, 246, 0.1)',
-                border: '1px solid rgba(59, 130, 246, 0.3)',
-                borderRadius: 12,
-                fontSize: 12,
-                color: '#93c5fd'
-              }}>
-                <h4 style={{ margin: '0 0 8px 0', color: '#60a5fa' }}>🔍 Debug Info</h4>
-                <div>Total assets found: {assets.length}</div>
-                <div>Successful: {successfulAssets.length} | Failed: {failedAssets.length}</div>
-                {successfulAssets.length > 0 && (
-                  <div style={{ marginTop: 8 }}>
-                    Successful URLs:
-                    {successfulAssets.map((asset, i) => (
-                      <div key={i} style={{ marginLeft: 16, fontSize: 10, fontFamily: 'monospace', wordBreak: 'break-all' }}>
-                        • {asset.filename}: {asset.presignedUrl?.slice(0, 100)}...
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+
 
             {/* Image Grid */}
             {successfulAssets.length > 0 && (
