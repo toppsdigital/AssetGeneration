@@ -13,6 +13,7 @@ interface AssetItem {
   presignedUrl?: string;
   isTiff?: boolean;
   error?: string;
+  debugInfo?: string;
 }
 
 // Color conversion helper functions
@@ -116,12 +117,22 @@ function TiffViewer({ src, alt, style, onError }: {
         // Fetch TIFF data for conversion
         console.log(`📥 Fetching TIFF data for conversion: ${alt}`);
         console.log(`🔗 TIFF URL: ${src}`);
+        
+        // Test if the URL is accessible first
+        try {
+          const testResponse = await fetch(src, { method: 'HEAD' });
+          console.log(`🔍 HEAD request status for ${alt}:`, testResponse.status, testResponse.statusText);
+        } catch (headError) {
+          console.warn(`⚠️ HEAD request failed for ${alt}:`, headError);
+        }
+        
         const response = await fetch(src);
         if (!response.ok) {
           console.error(`❌ TIFF fetch failed for ${alt}:`, {
             status: response.status,
             statusText: response.statusText,
-            url: src
+            url: src,
+            headers: Object.fromEntries(response.headers.entries())
           });
           throw new Error(`Failed to fetch TIFF: ${response.status} ${response.statusText}`);
         }
@@ -372,22 +383,41 @@ export default function JobPreviewPage() {
       }
 
       const jobData = await jobResponse.json();
-      const firstFile = jobData.files?.[0];
       
-      if (!firstFile) {
+      if (!jobData.files || jobData.files.length === 0) {
         setError('No files found in job data');
         return;
       }
 
+      // Find the specific file that matches our fileName parameter
+      const targetFileName = fileName as string;
+      const matchingFile = jobData.files.find((file: any) => {
+        // The fileName parameter is the base name without .pdf extension
+        // So we need to match against the file.filename without .pdf/.PDF
+        const fileBaseName = file.filename.replace(/\.pdf$/i, '');
+        return fileBaseName.toLowerCase() === targetFileName.toLowerCase();
+      });
+
+      if (!matchingFile) {
+        console.error(`No matching file found for fileName: ${targetFileName}`);
+        console.log('Available files:', jobData.files.map((f: any) => f.filename));
+        setError(`No matching file found for: ${targetFileName}`);
+        return;
+      }
+
+      console.log(`✅ Found matching file for ${targetFileName}:`, matchingFile.filename);
+
       let filesToPreview: string[] = [];
       
       if (type === 'extracted') {
-        // Get extracted files (layers)
-        filesToPreview = firstFile.extracted_files || [];
+        // Get extracted files (layers) from the matching file
+        filesToPreview = matchingFile.extracted_files || [];
+        console.log(`📄 Using extracted files from ${matchingFile.filename}:`, filesToPreview);
       } else if (type === 'firefly') {
-        // Get firefly assets
-        const fireflyAssets = firstFile.firefly_assets || [];
+        // Get firefly assets from the matching file
+        const fireflyAssets = matchingFile.firefly_assets || [];
         filesToPreview = fireflyAssets.map((asset: any) => asset.filename);
+        console.log(`🎨 Using firefly assets from ${matchingFile.filename}:`, filesToPreview);
       }
       
       if (filesToPreview.length === 0) {
@@ -490,7 +520,8 @@ export default function JobPreviewPage() {
                 job_id: jobData.job_id || '',
                 status: 'succeeded',
                 presignedUrl: successfulUrl,
-                isTiff: filename.toLowerCase().endsWith('.tif') || filename.toLowerCase().endsWith('.tiff')
+                isTiff: filename.toLowerCase().endsWith('.tif') || filename.toLowerCase().endsWith('.tiff'),
+                debugInfo: `Found at one of ${possiblePaths.length} paths`
               };
             } else {
               console.error(`❌ All paths failed for ${filename}. Last error:`, lastError);
@@ -610,6 +641,33 @@ export default function JobPreviewPage() {
 
 
 
+
+            {/* Debug Information */}
+            {assets.length > 0 && (
+              <div style={{
+                marginBottom: 24,
+                padding: 16,
+                background: 'rgba(59, 130, 246, 0.1)',
+                border: '1px solid rgba(59, 130, 246, 0.3)',
+                borderRadius: 12,
+                fontSize: 12,
+                color: '#93c5fd'
+              }}>
+                <h4 style={{ margin: '0 0 8px 0', color: '#60a5fa' }}>🔍 Debug Info</h4>
+                <div>Total assets found: {assets.length}</div>
+                <div>Successful: {successfulAssets.length} | Failed: {failedAssets.length}</div>
+                {successfulAssets.length > 0 && (
+                  <div style={{ marginTop: 8 }}>
+                    Successful URLs:
+                    {successfulAssets.map((asset, i) => (
+                      <div key={i} style={{ marginLeft: 16, fontSize: 10, fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                        • {asset.filename}: {asset.presignedUrl?.slice(0, 100)}...
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Image Grid */}
             {successfulAssets.length > 0 && (
