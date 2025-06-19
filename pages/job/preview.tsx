@@ -4,6 +4,20 @@ import Head from 'next/head';
 import NavBar from '../../components/NavBar';
 import styles from '../../styles/Edit.module.css';
 
+// Preload UTIF for better performance
+let utifModule: any = null;
+const loadUTIF = async () => {
+  if (!utifModule && typeof window !== 'undefined') {
+    try {
+      utifModule = await import('utif');
+      console.log('📦 UTIF library preloaded successfully');
+    } catch (error) {
+      console.error('❌ Failed to preload UTIF library:', error);
+    }
+  }
+  return utifModule;
+};
+
 interface AssetItem {
   filename: string;
   job_id: string;
@@ -142,17 +156,35 @@ function TiffViewer({ src, alt, style, onError }: {
         // Try to decode with UTIF and create a blob URL
         if (typeof window !== 'undefined') {
           try {
-            // Dynamic import for UTIF
-            const UTIF = await import('utif');
+            // Use preloaded UTIF or load dynamically with better error handling
+            console.log(`📦 Attempting to load UTIF library for: ${alt}`);
+            const UTIF = utifModule || await loadUTIF();
+            
+            if (!UTIF) {
+              throw new Error('UTIF library not available - this might be a bundling issue on Vercel');
+            }
             
             console.log(`🔧 Decoding TIFF with UTIF: ${alt}`);
             
-            const ifds = UTIF.decode(arrayBuffer);
+            let ifds;
+            try {
+              ifds = UTIF.decode(arrayBuffer);
+            } catch (decodeError) {
+              console.error(`❌ UTIF decode failed for ${alt}:`, decodeError);
+              throw new Error(`TIFF decode failed: ${decodeError.message}`);
+            }
+            
             if (ifds && ifds.length > 0) {
               console.log(`📋 Found ${ifds.length} IFD(s) in TIFF: ${alt}`);
               
               // Decode the first image
-              UTIF.decodeImage(arrayBuffer, ifds[0]);
+              try {
+                UTIF.decodeImage(arrayBuffer, ifds[0]);
+              } catch (decodeImageError) {
+                console.error(`❌ UTIF decodeImage failed for ${alt}:`, decodeImageError);
+                throw new Error(`TIFF image decode failed: ${decodeImageError.message}`);
+              }
+              
               const ifd = ifds[0];
               
               if (ifd.width && ifd.height && ifd.data) {
@@ -353,6 +385,11 @@ export default function JobPreviewPage() {
       loadAssets();
     }
   }, [jobPath, fileName, type]);
+
+  // Preload UTIF library when component mounts
+  useEffect(() => {
+    loadUTIF();
+  }, []);
 
   const loadAssets = async () => {
     try {
