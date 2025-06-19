@@ -12,6 +12,7 @@ interface AssetItem {
   color_variant?: string;
   presignedUrl?: string;
   isTiff?: boolean;
+  error?: string;
 }
 
 // Color conversion helper functions
@@ -114,9 +115,15 @@ function TiffViewer({ src, alt, style, onError }: {
 
         // Fetch TIFF data for conversion
         console.log(`📥 Fetching TIFF data for conversion: ${alt}`);
+        console.log(`🔗 TIFF URL: ${src}`);
         const response = await fetch(src);
         if (!response.ok) {
-          throw new Error(`Failed to fetch TIFF: ${response.statusText}`);
+          console.error(`❌ TIFF fetch failed for ${alt}:`, {
+            status: response.status,
+            statusText: response.statusText,
+            url: src
+          });
+          throw new Error(`Failed to fetch TIFF: ${response.status} ${response.statusText}`);
         }
 
         const arrayBuffer = await response.arrayBuffer();
@@ -400,10 +407,12 @@ export default function JobPreviewPage() {
               // Path for extracted layers: PDFs/Assets/25cwwe_1001/25cwwe_1001_bk.tif
               const baseName = (fileName as string).toLowerCase();
               relativeAssetPath = `PDFs/Assets/${baseName}/${filename}`;
+              console.log(`🔍 Extracted path construction: fileName="${fileName}" -> baseName="${baseName}" -> path="${relativeAssetPath}"`);
             } else if (type === 'firefly') {
               // Path for firefly assets: PDFs/Output/25CWWE_1001/25CWWE_1001_BK.jpg
               const baseName = (fileName as string).replace(/_[A-Z]{2}$/, ''); // Remove language suffix
               relativeAssetPath = `PDFs/Output/${baseName}/${filename}`;
+              console.log(`🔍 Firefly path construction: fileName="${fileName}" -> baseName="${baseName}" -> path="${relativeAssetPath}"`);
             }
             
             console.log(`🔗 Requesting presigned URL for: ${relativeAssetPath}`);
@@ -428,12 +437,19 @@ export default function JobPreviewPage() {
                 isTiff: filename.toLowerCase().endsWith('.tif') || filename.toLowerCase().endsWith('.tiff')
               };
             } else {
-              console.warn(`❌ Failed to get presigned URL for ${filename}:`, response.status, response.statusText);
+              const errorText = await response.text().catch(() => 'Unknown error');
+              console.warn(`❌ Failed to get presigned URL for ${filename}:`, {
+                status: response.status,
+                statusText: response.statusText,
+                path: relativeAssetPath,
+                errorBody: errorText
+              });
               return {
                 filename,
                 job_id: jobData.job_id || '',
                 status: 'failed',
-                isTiff: filename.toLowerCase().endsWith('.tif') || filename.toLowerCase().endsWith('.tiff')
+                isTiff: filename.toLowerCase().endsWith('.tif') || filename.toLowerCase().endsWith('.tiff'),
+                error: `${response.status} ${response.statusText}: ${errorText}`
               };
             }
           } catch (error) {
@@ -686,10 +702,22 @@ export default function JobPreviewPage() {
                 }}>
                   {failedAssets.map((asset, index) => (
                     <div key={index} style={{
-                      marginBottom: 8,
+                      marginBottom: 12,
                       color: '#fca5a5'
                     }}>
-                      • {asset.filename}
+                      <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                        • {asset.filename}
+                      </div>
+                      {asset.error && (
+                        <div style={{ 
+                          fontSize: '0.8rem', 
+                          color: '#f87171', 
+                          marginLeft: 16,
+                          fontFamily: 'monospace'
+                        }}>
+                          {asset.error}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
