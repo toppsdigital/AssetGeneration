@@ -424,20 +424,20 @@ export default function JobsPage() {
               >
                 ➕ New Job
               </button>
-              <button
-                onClick={fetchJobs}
-                style={{
-                  padding: '8px 16px',
-                  background: 'rgba(59, 130, 246, 0.1)',
-                  border: '1px solid rgba(59, 130, 246, 0.3)',
-                  borderRadius: 8,
-                  color: '#60a5fa',
-                  cursor: 'pointer',
-                  fontSize: 14
-                }}
-              >
-                🔄 Refresh All
-              </button>
+            <button
+              onClick={fetchJobs}
+              style={{
+                padding: '8px 16px',
+                background: 'rgba(59, 130, 246, 0.1)',
+                border: '1px solid rgba(59, 130, 246, 0.3)',
+                borderRadius: 8,
+                color: '#60a5fa',
+                cursor: 'pointer',
+                fontSize: 14
+              }}
+            >
+              🔄 Refresh All
+            </button>
             </div>
           </div>
 

@@ -23,11 +23,7 @@ export default function NewJobPage() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Partial<NewJobFormData>>({});
-  const [uploadProgress, setUploadProgress] = useState<{
-    current: number;
-    total: number;
-    currentFile: string;
-  } | null>(null);
+  const [jobCreated, setJobCreated] = useState<any>(null);
 
   // Handle input changes
   const handleInputChange = (field: keyof NewJobFormData, value: string) => {
@@ -67,6 +63,8 @@ export default function NewJobPage() {
         uploadFolder: folderPath,
         selectedFiles: dataTransfer.files
       }));
+
+
       
       // Clear error when folder is selected
       if (errors.uploadFolder) {
@@ -114,66 +112,49 @@ export default function NewJobPage() {
     return Object.keys(newErrors).length === 0;
   };
 
-  // Upload files to S3 using existing infrastructure
-  const uploadFilesToS3 = async (files: FileList): Promise<string[]> => {
-    const uploadedPaths: string[] = [];
-    const totalFiles = files.length;
-
-    setUploadProgress({ current: 0, total: totalFiles, currentFile: '' });
-
-    // Upload files sequentially to show progress
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      
-      setUploadProgress({ current: i, total: totalFiles, currentFile: file.name });
-      
-      // Generate S3 path: temp/{appName}/{releaseName}/{subsetName}/{filename}
-      const s3Path = `temp/${formData.appName}/${formData.releaseName}/${formData.subsetName}/${file.name}`;
-      
-      console.log(`Getting presigned URL for: ${s3Path}`);
-      
-      // Step 1: Get presigned URL for this file
+  // Create job JSON with initial status
+  const createJobJSON = async (jobData: any): Promise<void> => {
+    try {
+      // Get presigned URL for job JSON
       const presignedResponse = await fetch('/api/s3-proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           client_method: 'put',
-          filename: s3Path,
+          filename: jobData.job_path,
           upload: true
         }),
       });
 
       if (!presignedResponse.ok) {
-        throw new Error(`Failed to get presigned URL for ${file.name}`);
+        throw new Error('Failed to get presigned URL for job JSON');
       }
 
       const { presignedUrl } = await presignedResponse.json();
       
-      console.log(`Uploading ${file.name} to S3...`);
-      
-      // Step 2: Upload file using the existing s3-upload endpoint
-      const uploadFormData = new FormData();
-      uploadFormData.append('file', file);
-      uploadFormData.append('presignedUrl', presignedUrl);
+      // Create and upload job JSON
+      const jobJsonBlob = new Blob([JSON.stringify(jobData, null, 2)], { type: 'application/json' });
+      const jobFormData = new FormData();
+      jobFormData.append('file', jobJsonBlob, `${jobData.job_id}.json`);
+      jobFormData.append('presignedUrl', presignedUrl);
 
       const uploadResponse = await fetch('/api/s3-upload', {
         method: 'POST',
-        body: uploadFormData,
+        body: jobFormData,
       });
 
       if (!uploadResponse.ok) {
-        const errorData = await uploadResponse.json();
-        throw new Error(`Failed to upload ${file.name}: ${errorData.error}`);
+        throw new Error('Failed to upload job JSON');
       }
 
-      console.log(`Successfully uploaded: ${file.name}`);
-      uploadedPaths.push(s3Path);
+      console.log('Job JSON created successfully at:', jobData.job_path);
+    } catch (error) {
+      console.error('Error creating job JSON:', error);
+      throw error;
     }
-
-    setUploadProgress({ current: totalFiles, total: totalFiles, currentFile: 'Complete!' });
-    
-    return uploadedPaths;
   };
+
+
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
@@ -192,35 +173,115 @@ export default function NewJobPage() {
         throw new Error('No files selected for upload');
       }
 
-      // Step 1: Upload all PDF files to S3
-      console.log(`Uploading ${formData.selectedFiles.length} PDF files to S3...`);
-      const uploadedPaths = await uploadFilesToS3(formData.selectedFiles);
-      console.log('All files uploaded successfully:', uploadedPaths);
+      // Step 1: Create job data structure and job JSON
+      const now = new Date().toISOString();
+      const jobId = `job_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Group PDF files by base name (assuming _FR/_BK pattern)
+      const fileGroups = new Map<string, { front?: string, back?: string }>();
+      
+      Array.from(formData.selectedFiles!).forEach(file => {
+        const fileName = file.name.replace('.pdf', '');
+        let baseName = fileName;
+        let cardType: 'front' | 'back' = 'front';
+        
+        // Check for _FR (front) or _BK (back) pattern
+        if (fileName.endsWith('_FR')) {
+          baseName = fileName.replace('_FR', '');
+          cardType = 'front';
+        } else if (fileName.endsWith('_BK')) {
+          baseName = fileName.replace('_BK', '');
+          cardType = 'back';
+        }
+        
+        if (!fileGroups.has(baseName)) {
+          fileGroups.set(baseName, {});
+        }
+        
+        fileGroups.get(baseName)![cardType] = file.name;
+      });
+      
+      // Create files array in the expected format
+      const files = Array.from(fileGroups.entries()).map(([baseName, files]) => {
+        const originalFiles = [];
+        
+        if (files.front) {
+          originalFiles.push({
+            filename: files.front,
+            card_type: "front"
+          });
+        }
+        
+        if (files.back) {
+          originalFiles.push({
+            filename: files.back,
+            card_type: "back"
+          });
+        }
+        
+        // If no _FR/_BK pattern, treat as single file
+        if (originalFiles.length === 0) {
+          originalFiles.push({
+            filename: baseName + '.pdf',
+            card_type: "front"
+          });
+        }
+        
+        return {
+          filename: baseName,
+          extracted: "PENDING" as const,
+          digital_assets: "PENDING" as const,
+          last_updated: now,
+          original_files: originalFiles
+        };
+      });
 
-      // Step 2: Create job data with uploaded file paths
-      const jobData = {
+      const initialJobData = {
+        job_id: jobId,
+        created_at: now,
+        last_updated: now,
+        app_name: formData.appName,
+        release_name: formData.releaseName,
+        Subset_name: formData.subsetName, // Note: Capital S to match schema
+        job_status: "Upload started" as const,
+        files: files,
+        job_path: `temp/jobs/${jobId}.json`,
+        source_folder: `temp/${formData.appName}/${formData.releaseName}/${formData.subsetName}`,
+        total_files: files.length
+      };
+
+      console.log('Creating job with initial status:', initialJobData);
+
+      // Create job JSON with "Upload started" status
+      await createJobJSON(initialJobData);
+      setJobCreated(initialJobData);
+
+      console.log('Job created successfully, navigating to job details page...');
+      
+      // Step 2: Navigate to job details page and start upload there
+      const jobPath = initialJobData.job_path;
+      
+      // Store the form data in sessionStorage so the job details page can access it
+      const uploadSession = {
+        jobId: initialJobData.job_id,
         appName: formData.appName,
         releaseName: formData.releaseName,
         subsetName: formData.subsetName,
-        uploadFolder: formData.uploadFolder,
-        fileCount: uploadedPaths.length,
-        uploadedFiles: uploadedPaths,
-        sourceFolder: `temp/${formData.appName}/${formData.releaseName}/${formData.subsetName}`,
-        createdAt: new Date().toISOString()
+        files: Array.from(formData.selectedFiles!).map(file => ({
+          name: file.name,
+          size: file.size,
+          type: file.type
+        }))
       };
-
-      console.log('Creating job with data:', jobData);
-
-      // Step 3: Save job metadata (you can implement this API endpoint)
-      // For now, we'll just log the job data
-      console.log('Job created successfully with uploaded files');
       
-      // Navigate back to jobs page
-      router.push('/jobs');
+      sessionStorage.setItem(`upload_${initialJobData.job_id}`, JSON.stringify(uploadSession));
+      
+      // Navigate to job details page
+      router.push(`/job/details?jobPath=${encodeURIComponent(jobPath)}&startUpload=true`);
+      
     } catch (error) {
       console.error('Error creating job:', error);
       alert('Failed to create job: ' + (error as Error).message);
-    } finally {
       setIsSubmitting(false);
     }
   };
@@ -562,6 +623,62 @@ export default function NewJobPage() {
                   )}
                 </div>
 
+                {/* File List with Upload Status */}
+                {formData.selectedFiles && formData.selectedFiles.length > 0 && (
+                  <div>
+                    <label style={{
+                      display: 'block',
+                      fontSize: 14,
+                      fontWeight: 600,
+                      color: '#f3f4f6',
+                      marginBottom: 12
+                    }}>
+                      Selected Files ({formData.selectedFiles.length})
+                    </label>
+                    <div style={{
+                      maxHeight: '300px',
+                      overflowY: 'auto',
+                      background: 'rgba(255, 255, 255, 0.03)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      borderRadius: 8,
+                      padding: 12
+                    }}>
+                      {Array.from(formData.selectedFiles).map((file, index) => (
+                        <div
+                          key={index}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '8px 12px',
+                            marginBottom: index < formData.selectedFiles!.length - 1 ? 4 : 0,
+                            background: 'rgba(255, 255, 255, 0.03)',
+                            borderRadius: 4,
+                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            transition: 'all 0.2s'
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 16 }}>📄</span>
+                            <span style={{
+                              color: '#f8f8f8',
+                              fontSize: 14,
+                              fontFamily: 'monospace'
+                            }}>
+                              {file.name}
+                            </span>
+                          </div>
+                          <span style={{
+                            color: '#9ca3af',
+                            fontSize: 12
+                          }}>
+                            {(file.size / 1024).toFixed(1)} KB
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 
               </div>
             </div>
@@ -644,70 +761,33 @@ export default function NewJobPage() {
                     animation: 'spin 1s linear infinite'
                   }} />
                 )}
-                {isSubmitting 
-                  ? (uploadProgress 
-                      ? `Uploading ${uploadProgress.current}/${uploadProgress.total}...` 
-                      : 'Creating Job...'
-                    )
-                  : '✨ Create Job'
-                }
+                {isSubmitting ? 'Creating Job...' : '✨ Create Job'}
               </button>
             </div>
             
-            {/* Upload Progress Indicator */}
-            {uploadProgress && (
+            {/* Job Creation Status */}
+            {isSubmitting && (
               <div style={{ 
                 marginTop: 16,
                 padding: 16,
                 background: 'rgba(59, 130, 246, 0.1)',
                 border: '1px solid rgba(59, 130, 246, 0.3)',
-                borderRadius: 8
+                borderRadius: 8,
+                display: 'flex', 
+                alignItems: 'center',
+                gap: 8
               }}>
-                <div style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
-                  alignItems: 'center',
-                  marginBottom: 8
-                }}>
-                  <span style={{ color: '#60a5fa', fontSize: 14, fontWeight: 500 }}>
-                    Upload Progress
-                  </span>
-                  <span style={{ color: '#60a5fa', fontSize: 12 }}>
-                    {uploadProgress.current}/{uploadProgress.total}
-                  </span>
-                </div>
-                
-                {/* Progress Bar */}
                 <div style={{
-                  width: '100%',
-                  height: 8,
-                  background: 'rgba(59, 130, 246, 0.2)',
-                  borderRadius: 4,
-                  overflow: 'hidden',
-                  marginBottom: 8
-                }}>
-                  <div style={{
-                    width: `${(uploadProgress.current / uploadProgress.total) * 100}%`,
-                    height: '100%',
-                    background: 'linear-gradient(90deg, #3b82f6, #60a5fa)',
-                    borderRadius: 4,
-                    transition: 'width 0.3s ease'
-                  }} />
-                </div>
-                
-                {/* Current File */}
-                {uploadProgress.currentFile && (
-                  <div style={{ 
-                    color: '#9ca3af', 
-                    fontSize: 12,
-                    fontStyle: 'italic'
-                  }}>
-                    {uploadProgress.current < uploadProgress.total 
-                      ? `Uploading: ${uploadProgress.currentFile}`
-                      : `✅ Upload complete!`
-                    }
-                  </div>
-                )}
+                  width: '16px',
+                  height: '16px',
+                  border: '2px solid rgba(96, 165, 250, 0.3)',
+                  borderTop: '2px solid #60a5fa',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite'
+                }} />
+                <span style={{ color: '#60a5fa', fontSize: 14, fontWeight: 500 }}>
+                  Creating job...
+                </span>
               </div>
             )}
           </form>

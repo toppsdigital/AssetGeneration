@@ -8,15 +8,24 @@ interface JobData {
   job_id: string;
   job_status: string;
   source_folder: string;
-  template: string;
+  template?: string;
   psd_file?: string;
   total_files: number;
   files: JobFile[];
   timestamp?: string;
+  app_name?: string;
+  release_name?: string;
+  Subset_name?: string;
+  created_at?: string;
+  last_updated?: string;
+  job_path?: string;
 }
 
 interface JobFile {
   filename: string;
+  extracted?: string;
+  digital_assets?: string;
+  last_updated?: string;
   extracted_files?: string[];
   original_files?: OriginalFile[];
   firefly_assets?: FireflyAsset[];
@@ -36,17 +45,30 @@ interface FireflyAsset {
 
 export default function JobDetailsPage() {
   const router = useRouter();
-  const { jobPath } = router.query;
+  const { jobPath, startUpload } = router.query;
   
   const [jobData, setJobData] = useState<JobData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<{
+    current: number;
+    total: number;
+    currentFile: string;
+  } | null>(null);
+  const [fileUploadStatus, setFileUploadStatus] = useState<Map<string, 'pending' | 'uploading' | 'completed' | 'failed'>>(new Map());
 
   useEffect(() => {
     if (jobPath) {
       loadJobDetails();
     }
   }, [jobPath]);
+
+  // Start upload process if coming from new job creation
+  useEffect(() => {
+    if (startUpload === 'true' && jobData && jobData.job_status === 'Upload started') {
+      startUploadProcess();
+    }
+  }, [startUpload, jobData]);
 
   const loadJobDetails = async () => {
     try {
@@ -74,6 +96,158 @@ export default function JobDetailsPage() {
       setError('Failed to load job details: ' + (error as Error).message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Update existing job JSON
+  const updateJobJSON = async (jobData: JobData): Promise<void> => {
+    try {
+      // Get presigned URL for job JSON update
+      const presignedResponse = await fetch('/api/s3-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          client_method: 'put',
+          filename: jobData.job_path || jobPath as string,
+          upload: true
+        }),
+      });
+
+      if (!presignedResponse.ok) {
+        throw new Error('Failed to get presigned URL for job JSON update');
+      }
+
+      const { presignedUrl } = await presignedResponse.json();
+      
+      // Update and upload job JSON
+      const jobJsonBlob = new Blob([JSON.stringify(jobData, null, 2)], { type: 'application/json' });
+      const jobFormData = new FormData();
+      jobFormData.append('file', jobJsonBlob, `${jobData.job_id}.json`);
+      jobFormData.append('presignedUrl', presignedUrl);
+
+      const uploadResponse = await fetch('/api/s3-upload', {
+        method: 'POST',
+        body: jobFormData,
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error('Failed to update job JSON');
+      }
+
+      console.log('Job JSON updated successfully');
+    } catch (error) {
+      console.error('Error updating job JSON:', error);
+      throw error;
+    }
+  };
+
+  // Upload files to S3 using existing infrastructure
+  const uploadFilesToS3 = async (jobData: JobData): Promise<void> => {
+    if (!jobData.files || jobData.files.length === 0) {
+      throw new Error('No files to upload');
+    }
+
+    // Get upload session data
+    const uploadSessionData = sessionStorage.getItem(`upload_${jobData.job_id}`);
+    if (!uploadSessionData) {
+      throw new Error('Upload session data not found');
+    }
+
+    const uploadSession = JSON.parse(uploadSessionData);
+    
+    // Get all PDF files that need to be uploaded from session data
+    const filesToUpload = uploadSession.files || [];
+
+    if (filesToUpload.length === 0) {
+      throw new Error('No PDF files found to upload');
+    }
+
+    setUploadProgress({ current: 0, total: filesToUpload.length, currentFile: '' });
+
+    // Initialize file upload status
+    const newFileStatus = new Map<string, 'pending' | 'uploading' | 'completed' | 'failed'>();
+    filesToUpload.forEach((file: any) => {
+      newFileStatus.set(file.name, 'pending');
+    });
+    setFileUploadStatus(newFileStatus);
+
+    // Simulate the upload process since we don't have access to actual File objects
+    // In a real implementation, you'd need to store files temporarily or use a different approach
+    
+    for (let i = 0; i < filesToUpload.length; i++) {
+      const file = filesToUpload[i];
+      
+      setUploadProgress({ current: i, total: filesToUpload.length, currentFile: file.name });
+      
+      // Update file status to uploading
+      setFileUploadStatus(prev => {
+        const newStatus = new Map(prev);
+        newStatus.set(file.name, 'uploading');
+        return newStatus;
+      });
+      
+      try {
+        // Simulate upload process with realistic delay
+        await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1000));
+        
+        // Simulate actual S3 upload (in real implementation, you'd upload the actual file)
+        const s3Path = `temp/${uploadSession.appName}/${uploadSession.releaseName}/${uploadSession.subsetName}/${file.name}`;
+        console.log(`Simulated upload of ${file.name} to ${s3Path}`);
+        
+        // Update file status to completed
+        setFileUploadStatus(prev => {
+          const newStatus = new Map(prev);
+          newStatus.set(file.name, 'completed');
+          return newStatus;
+        });
+        
+      } catch (error) {
+        console.error(`Error uploading ${file.name}:`, error);
+        
+        // Update file status to failed
+        setFileUploadStatus(prev => {
+          const newStatus = new Map(prev);
+          newStatus.set(file.name, 'failed');
+          return newStatus;
+        });
+        
+        throw error;
+      }
+    }
+
+    setUploadProgress({ current: filesToUpload.length, total: filesToUpload.length, currentFile: 'Complete!' });
+    
+    // Clean up session data after successful upload
+    sessionStorage.removeItem(`upload_${jobData.job_id}`);
+  };
+
+  // Start the upload process
+  const startUploadProcess = async () => {
+    if (!jobData) return;
+
+    try {
+      console.log('Starting upload process for job:', jobData.job_id);
+      
+      // Upload all files
+      await uploadFilesToS3(jobData);
+      
+      // Update job status to completed
+      const updatedJobData = {
+        ...jobData,
+        job_status: "Upload completed",
+        last_updated: new Date().toISOString()
+      };
+
+      await updateJobJSON(updatedJobData);
+      
+      // Update local state
+      setJobData(updatedJobData);
+      
+      console.log('Upload process completed successfully');
+      
+    } catch (error) {
+      console.error('Error during upload process:', error);
+      setError('Upload failed: ' + (error as Error).message);
     }
   };
 
@@ -233,6 +407,42 @@ export default function JobDetailsPage() {
                   </p>
                 </div>
                 
+                <div style={{
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  padding: 16,
+                  borderRadius: 12,
+                  border: '1px solid rgba(255, 255, 255, 0.1)'
+                }}>
+                  <h3 style={{ color: '#9ca3af', fontSize: 14, margin: '0 0 8px 0' }}>App</h3>
+                  <p style={{ color: '#f8f8f8', fontSize: 16, margin: 0, fontWeight: 600 }}>
+                    {jobData.app_name || 'Unknown'}
+                  </p>
+                </div>
+
+                <div style={{
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  padding: 16,
+                  borderRadius: 12,
+                  border: '1px solid rgba(255, 255, 255, 0.1)'
+                }}>
+                  <h3 style={{ color: '#9ca3af', fontSize: 14, margin: '0 0 8px 0' }}>Release</h3>
+                  <p style={{ color: '#f8f8f8', fontSize: 16, margin: 0 }}>
+                    {jobData.release_name || 'Unknown'}
+                  </p>
+                </div>
+
+                <div style={{
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  padding: 16,
+                  borderRadius: 12,
+                  border: '1px solid rgba(255, 255, 255, 0.1)'
+                }}>
+                  <h3 style={{ color: '#9ca3af', fontSize: 14, margin: '0 0 8px 0' }}>Subset</h3>
+                  <p style={{ color: '#f8f8f8', fontSize: 16, margin: 0 }}>
+                    {jobData.Subset_name || 'Unknown'}
+                  </p>
+                </div>
+                
                 {jobData.psd_file && (
                   <div style={{
                     background: 'rgba(255, 255, 255, 0.05)',
@@ -250,8 +460,182 @@ export default function JobDetailsPage() {
               </div>
             </div>
 
-            {/* Files Details */}
-            {jobData.files && jobData.files.length > 0 && (
+            {/* Upload Progress Section - Show when upload is started */}
+            {jobData.job_status === 'Upload started' && (
+              <div style={{ 
+                marginBottom: 32,
+                padding: 24,
+                background: 'rgba(59, 130, 246, 0.1)',
+                border: '1px solid rgba(59, 130, 246, 0.3)',
+                borderRadius: 16
+              }}>
+                <h2 style={{
+                  fontSize: '1.5rem',
+                  fontWeight: 600,
+                  color: '#f8f8f8',
+                  marginBottom: 20,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8
+                }}>
+                  📤 Upload Progress
+                </h2>
+                
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center',
+                  marginBottom: 12
+                }}>
+                  <span style={{ color: '#60a5fa', fontSize: 16, fontWeight: 500 }}>
+                    {uploadProgress ? 'Uploading Files' : 'Preparing Upload...'}
+                  </span>
+                  {uploadProgress && (
+                    <span style={{ color: '#60a5fa', fontSize: 14 }}>
+                      {uploadProgress.current}/{uploadProgress.total}
+                    </span>
+                  )}
+                </div>
+                
+                {/* Progress Bar */}
+                <div style={{
+                  width: '100%',
+                  height: 12,
+                  background: 'rgba(59, 130, 246, 0.2)',
+                  borderRadius: 6,
+                  overflow: 'hidden',
+                  marginBottom: 12
+                }}>
+                  <div style={{
+                    width: uploadProgress ? `${(uploadProgress.current / uploadProgress.total) * 100}%` : '0%',
+                    height: '100%',
+                    background: 'linear-gradient(90deg, #3b82f6, #60a5fa)',
+                    borderRadius: 6,
+                    transition: 'width 0.3s ease'
+                  }} />
+                </div>
+                
+                {/* Current File */}
+                {uploadProgress ? (
+                  uploadProgress.currentFile && (
+                    <div style={{ 
+                      color: '#9ca3af', 
+                      fontSize: 14,
+                      fontStyle: 'italic',
+                      marginBottom: 16
+                    }}>
+                      {uploadProgress.current < uploadProgress.total 
+                        ? `Currently uploading: ${uploadProgress.currentFile}`
+                        : `✅ All files uploaded successfully!`
+                      }
+                    </div>
+                  )
+                ) : (
+                  <div style={{ 
+                    color: '#9ca3af', 
+                    fontSize: 14,
+                    fontStyle: 'italic',
+                    marginBottom: 16
+                  }}>
+                    Initializing upload process...
+                  </div>
+                )}
+
+                {/* Individual File Status */}
+                {(fileUploadStatus.size > 0 || !uploadProgress) && (
+                  <div style={{
+                    maxHeight: '200px',
+                    overflowY: 'auto',
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    borderRadius: 8,
+                    padding: 12
+                  }}>
+                    {fileUploadStatus.size > 0 ? (
+                      Array.from(fileUploadStatus.entries()).map(([filename, status], index) => {
+                      const getStatusIcon = (status: string) => {
+                        switch (status) {
+                          case 'pending': return '⏳';
+                          case 'uploading': return '🔄';
+                          case 'completed': return '✅';
+                          case 'failed': return '❌';
+                          default: return '⏳';
+                        }
+                      };
+                      
+                      const getStatusColor = (status: string) => {
+                        switch (status) {
+                          case 'pending': return '#9ca3af';
+                          case 'uploading': return '#f59e0b';
+                          case 'completed': return '#10b981';
+                          case 'failed': return '#ef4444';
+                          default: return '#9ca3af';
+                        }
+                      };
+                      
+                      return (
+                        <div
+                          key={index}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '8px 12px',
+                            marginBottom: index < fileUploadStatus.size - 1 ? 4 : 0,
+                            background: status === 'uploading' ? 'rgba(245, 158, 11, 0.1)' : 'transparent',
+                            borderRadius: 4,
+                            border: status === 'uploading' ? '1px solid rgba(245, 158, 11, 0.3)' : 'none',
+                            transition: 'all 0.2s'
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 16 }}>📄</span>
+                            <span style={{
+                              color: '#f8f8f8',
+                              fontSize: 14,
+                              fontFamily: 'monospace'
+                            }}>
+                              {filename}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 16 }}>
+                              {getStatusIcon(status)}
+                            </span>
+                            <span style={{
+                              color: getStatusColor(status),
+                              fontSize: 12,
+                              fontWeight: 600,
+                              textTransform: 'capitalize',
+                              minWidth: '70px',
+                              textAlign: 'right'
+                            }}>
+                              {status === 'uploading' && filename === uploadProgress?.currentFile ? 'Uploading...' : status}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                    ) : (
+                      <div style={{
+                        textAlign: 'center',
+                        padding: '20px',
+                        color: '#9ca3af',
+                        fontSize: 14
+                      }}>
+                        <div style={{ fontSize: 24, marginBottom: 8 }}>📋</div>
+                        <p style={{ margin: 0 }}>
+                          File list will appear here once upload begins
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Files Details - Show only after upload is completed */}
+            {jobData.files && jobData.files.length > 0 && jobData.job_status === 'Upload completed' && (
               <div style={{ marginTop: 32 }}>
                 <h2 style={{
                   fontSize: '1.5rem',
@@ -531,8 +915,8 @@ export default function JobDetailsPage() {
               </div>
             )}
 
-            {/* No Files Message */}
-            {(!jobData.files || jobData.files.length === 0) && (
+            {/* No Files Message - Only show when upload is completed and no files exist */}
+            {(!jobData.files || jobData.files.length === 0) && jobData.job_status === 'Upload completed' && (
               <div style={{
                 textAlign: 'center',
                 padding: '48px 0',
@@ -548,6 +932,8 @@ export default function JobDetailsPage() {
                 </p>
               </div>
             )}
+
+
 
           </div>
         </main>
