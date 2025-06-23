@@ -401,20 +401,44 @@ export default function JobsPage() {
             <h1 style={{ fontSize: '2rem', fontWeight: 600, color: '#f8f8f8' }}>
               All Jobs ({jobs.length})
             </h1>
-            <button
-              onClick={fetchJobs}
-              style={{
-                padding: '8px 16px',
-                background: 'rgba(59, 130, 246, 0.1)',
-                border: '1px solid rgba(59, 130, 246, 0.3)',
-                borderRadius: 8,
-                color: '#60a5fa',
-                cursor: 'pointer',
-                fontSize: 14
-              }}
-            >
-              🔄 Refresh All
-            </button>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button
+                onClick={() => router.push('/new-job')}
+                style={{
+                  padding: '10px 20px',
+                  background: 'linear-gradient(135deg, #10b981, #059669)',
+                  border: 'none',
+                  borderRadius: 8,
+                  color: 'white',
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'scale(1.05)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'scale(1)';
+                }}
+              >
+                ➕ New Job
+              </button>
+              <button
+                onClick={fetchJobs}
+                style={{
+                  padding: '8px 16px',
+                  background: 'rgba(59, 130, 246, 0.1)',
+                  border: '1px solid rgba(59, 130, 246, 0.3)',
+                  borderRadius: 8,
+                  color: '#60a5fa',
+                  cursor: 'pointer',
+                  fontSize: 14
+                }}
+              >
+                🔄 Refresh All
+              </button>
+            </div>
           </div>
 
           {jobs.length === 0 ? (
