@@ -21,12 +21,19 @@ interface JobData {
   job_path?: string;
 }
 
+interface ExtractedFile {
+  filename: string;
+  file_path?: string;
+  uploaded?: boolean;
+  layer_type?: string;
+}
+
 interface JobFile {
   filename: string;
   extracted?: string;
   digital_assets?: string;
   last_updated?: string;
-  extracted_files?: string[];
+  extracted_files?: (string | ExtractedFile)[];
   original_files?: OriginalFile[];
   firefly_assets?: FireflyAsset[];
 }
@@ -41,6 +48,7 @@ interface FireflyAsset {
   status: string;
   spot_number?: string;
   color_variant?: string;
+  file_path?: string;
 }
 
 export default function JobDetailsPage() {
@@ -760,8 +768,8 @@ export default function JobDetailsPage() {
               </div>
             )}
 
-            {/* Files Details - Show only after upload is completed */}
-            {jobData.job_status === 'Upload completed' && (
+            {/* Files Details - Show when there are files to display but not during upload */}
+            {(jobData.files && jobData.files.length > 0) && !uploadProgress && (
               <div style={{ marginTop: 32 }}>
                 <h2 style={{
                   fontSize: '1.5rem',
@@ -870,33 +878,41 @@ export default function JobDetailsPage() {
                               }}>
                                 🖼️ Extracted Layers ({file.extracted_files.length})
                               </h4>
-                              <button
-                                onClick={() => {
-                                  // Navigate to preview page for extracted layers
-                                  const baseName = file.filename.replace('.pdf', '').replace('.PDF', '');
-                                  const fullJobPath = router.query.jobPath as string;
-                                  router.push(`/job/preview?jobPath=${encodeURIComponent(fullJobPath)}&fileName=${encodeURIComponent(baseName)}&type=extracted`);
-                                }}
-                                style={{
-                                  background: 'rgba(59, 130, 246, 0.2)',
-                                  border: '1px solid rgba(59, 130, 246, 0.4)',
-                                  borderRadius: 6,
-                                  color: '#60a5fa',
-                                  cursor: 'pointer',
-                                  fontSize: 12,
-                                  padding: '6px 12px',
-                                  transition: 'all 0.2s',
-                                  fontWeight: 500
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.background = 'rgba(59, 130, 246, 0.3)';
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)';
-                                }}
-                              >
-                                👁️ Preview Layers
-                              </button>
+                                                          <button
+                              onClick={() => {
+                                // Collect file paths from extracted files
+                                const filePaths = file.extracted_files?.map(extractedFile => {
+                                  const isObject = typeof extractedFile !== 'string';
+                                  return isObject ? (extractedFile as ExtractedFile).file_path : extractedFile;
+                                }).filter(path => path) || [];
+                                
+                                const baseName = file.filename.replace('.pdf', '').replace('.PDF', '');
+                                const fullJobPath = router.query.jobPath as string;
+                                
+                                // Pass the file paths as a query parameter
+                                const filePathsParam = encodeURIComponent(JSON.stringify(filePaths));
+                                router.push(`/job/preview?jobPath=${encodeURIComponent(fullJobPath)}&fileName=${encodeURIComponent(baseName)}&type=extracted&filePaths=${filePathsParam}`);
+                              }}
+                              style={{
+                                background: 'rgba(59, 130, 246, 0.2)',
+                                border: '1px solid rgba(59, 130, 246, 0.4)',
+                                borderRadius: 6,
+                                color: '#60a5fa',
+                                cursor: 'pointer',
+                                fontSize: 12,
+                                padding: '6px 12px',
+                                transition: 'all 0.2s',
+                                fontWeight: 500
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = 'rgba(59, 130, 246, 0.3)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)';
+                              }}
+                            >
+                              👁️ Preview Layers
+                            </button>
                             </div>
                             <div style={{
                               background: 'rgba(59, 130, 246, 0.1)',
@@ -906,19 +922,38 @@ export default function JobDetailsPage() {
                               maxHeight: 200,
                               overflowY: 'auto'
                             }}>
-                              {file.extracted_files.map((extractedFile, extIndex) => (
-                                <div key={extIndex} style={{
-                                  marginBottom: 8,
-                                  fontSize: 13,
-                                  color: '#bfdbfe',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 6
-                                }}>
-                                  <span>🖼️</span>
-                                  <span>{extractedFile}</span>
-                                </div>
-                              ))}
+                              {file.extracted_files.map((extractedFile, extIndex) => {
+                                const isObject = typeof extractedFile !== 'string';
+                                const fileObj = isObject ? extractedFile as ExtractedFile : null;
+                                const fileName = isObject ? fileObj?.filename || 'Unknown file' : extractedFile;
+                                
+                                return (
+                                  <div key={extIndex} style={{
+                                    marginBottom: 8,
+                                    fontSize: 13,
+                                    color: '#bfdbfe',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center'
+                                  }}>
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                      <span>🖼️</span>
+                                      <span>{fileName}</span>
+                                    </span>
+                                    {isObject && fileObj && fileObj.layer_type && (
+                                      <span style={{ 
+                                        background: 'rgba(59, 130, 246, 0.2)', 
+                                        padding: '2px 6px', 
+                                        borderRadius: 4,
+                                        color: '#60a5fa',
+                                        fontSize: 11
+                                      }}>
+                                        {fileObj.layer_type}
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
                         )}
@@ -943,10 +978,15 @@ export default function JobDetailsPage() {
                             </h4>
                             <button
                               onClick={() => {
-                                // Navigate to preview page for firefly assets
+                                // Use the actual file paths from firefly assets
+                                const filePaths = file.firefly_assets?.map(asset => asset.file_path || asset.filename).filter(path => path) || [];
+                                
                                 const baseName = file.filename.replace('.pdf', '').replace('.PDF', '');
                                 const fullJobPath = router.query.jobPath as string;
-                                router.push(`/job/preview?jobPath=${encodeURIComponent(fullJobPath)}&fileName=${encodeURIComponent(baseName)}&type=firefly`);
+                                
+                                // Pass the file paths as a query parameter
+                                const filePathsParam = encodeURIComponent(JSON.stringify(filePaths));
+                                router.push(`/job/preview?jobPath=${encodeURIComponent(fullJobPath)}&fileName=${encodeURIComponent(baseName)}&type=firefly&filePaths=${filePathsParam}`);
                               }}
                               style={{
                                 background: 'rgba(16, 185, 129, 0.2)',

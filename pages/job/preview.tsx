@@ -369,7 +369,7 @@ function TiffViewer({ src, alt, style, onError }: {
 
 export default function JobPreviewPage() {
   const router = useRouter();
-  const { jobPath, fileName, type } = router.query;
+  const { jobPath, fileName, type, filePaths } = router.query;
   
   const [assets, setAssets] = useState<AssetItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -380,7 +380,7 @@ export default function JobPreviewPage() {
     if (jobPath && fileName && type) {
       loadAssets();
     }
-  }, [jobPath, fileName, type]);
+  }, [jobPath, fileName, type, filePaths]);
 
   // Preload UTIF library when component mounts
   useEffect(() => {
@@ -397,178 +397,78 @@ export default function JobPreviewPage() {
       }
 
       setDisplayName(fileName as string);
-      
-      // Load job data to get the file information
-      const jobResponse = await fetch('/api/s3-proxy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          client_method: 'get',
-          filename: jobPath as string,
-          download: true 
-        }),
-      });
 
-      if (!jobResponse.ok) {
-        setError('Failed to load job data');
+      // Parse the actual file paths passed from details page
+      if (!filePaths) {
+        setError('No file paths provided');
         return;
       }
 
-      const jobData = await jobResponse.json();
-      
-      if (!jobData.files || jobData.files.length === 0) {
-        setError('No files found in job data');
+      let actualFilePaths: string[] = [];
+      try {
+        actualFilePaths = JSON.parse(decodeURIComponent(filePaths as string));
+        console.log(`🎯 Using actual file paths:`, actualFilePaths);
+      } catch (error) {
+        console.error(`❌ Failed to parse filePaths parameter:`, error);
+        setError('Invalid file paths parameter');
         return;
       }
-
-      // Find the specific file that matches our fileName parameter
-      const targetFileName = fileName as string;
-      const matchingFile = jobData.files.find((file: any) => {
-        // The fileName parameter is the base name without .pdf extension
-        // So we need to match against the file.filename without .pdf/.PDF
-        const fileBaseName = file.filename.replace(/\.pdf$/i, '');
-        return fileBaseName.toLowerCase() === targetFileName.toLowerCase();
-      });
-
-      if (!matchingFile) {
-        console.error(`No matching file found for fileName: ${targetFileName}`);
-        console.log('Available files:', jobData.files.map((f: any) => f.filename));
-        setError(`No matching file found for: ${targetFileName}`);
-        return;
-      }
-
-      console.log(`✅ Found matching file for ${targetFileName}:`, matchingFile.filename);
-
-      let filesToPreview: string[] = [];
       
-      if (type === 'extracted') {
-        // Get extracted files (layers) from the matching file
-        filesToPreview = matchingFile.extracted_files || [];
-        console.log(`📄 Using extracted files from ${matchingFile.filename}:`, filesToPreview);
-      } else if (type === 'firefly') {
-        // Get firefly assets from the matching file
-        const fireflyAssets = matchingFile.firefly_assets || [];
-        filesToPreview = fireflyAssets.map((asset: any) => asset.filename);
-        console.log(`🎨 Using firefly assets from ${matchingFile.filename}:`, filesToPreview);
-      }
-      
-      if (filesToPreview.length === 0) {
+      if (actualFilePaths.length === 0) {
         setError(`No ${type} files found`);
         return;
       }
 
-      console.log(`🔍 Loading ${filesToPreview.length} ${type} files:`, filesToPreview);
+      console.log(`🔍 Loading ${actualFilePaths.length} ${type} files:`, actualFilePaths);
       
-      // Generate presigned URLs for each file
+      // Generate presigned URLs for each file using the actual file paths
       const assetsWithUrls = await Promise.all(
-        filesToPreview.map(async (filename: string) => {
+        actualFilePaths.map(async (filePath: string) => {
           try {
-            let possiblePaths: string[] = [];
+            // Extract filename from the full path for display
+            const filename = filePath.split('/').pop() || filePath;
             
-            if (type === 'extracted') {
-              // Try multiple possible path formats for extracted layers
-              const baseNameLower = (fileName as string).toLowerCase();
-              const baseNameUpper = (fileName as string).toUpperCase();
-              const baseNameOriginal = fileName as string;
-              
-              possiblePaths = [
-                `PDFs/Assets/${baseNameLower}/${filename}`,
-                `PDFs/Assets/${baseNameUpper}/${filename}`,
-                `PDFs/Assets/${baseNameOriginal}/${filename}`,
-                `PDFs/Extracted/${baseNameLower}/${filename}`,
-                `PDFs/Extracted/${baseNameUpper}/${filename}`,
-                `PDFs/Extracted/${baseNameOriginal}/${filename}`,
-                `Assets/${baseNameLower}/${filename}`,
-                `Assets/${baseNameUpper}/${filename}`,
-                `Assets/${baseNameOriginal}/${filename}`,
-                `${baseNameLower}/${filename}`,
-                `${baseNameUpper}/${filename}`,
-                `${baseNameOriginal}/${filename}`
-              ];
-              
-              console.log(`🔍 Extracted path variations for fileName="${fileName}", filename="${filename}":`, possiblePaths);
-            } else if (type === 'firefly') {
-              // Try multiple possible path formats for firefly assets
-              const baseNameNoSuffix = (fileName as string).replace(/_[A-Z]{2}$/, '');
-              const baseNameLower = baseNameNoSuffix.toLowerCase();
-              const baseNameUpper = baseNameNoSuffix.toUpperCase();
-              const baseNameOriginal = baseNameNoSuffix;
-              
-              possiblePaths = [
-                `PDFs/Output/${baseNameUpper}/${filename}`,
-                `PDFs/Output/${baseNameLower}/${filename}`,
-                `PDFs/Output/${baseNameOriginal}/${filename}`,
-                `PDFs/Generated/${baseNameUpper}/${filename}`,
-                `PDFs/Generated/${baseNameLower}/${filename}`,
-                `PDFs/Generated/${baseNameOriginal}/${filename}`,
-                `Output/${baseNameUpper}/${filename}`,
-                `Output/${baseNameLower}/${filename}`,
-                `Output/${baseNameOriginal}/${filename}`,
-                `${baseNameUpper}/${filename}`,
-                `${baseNameLower}/${filename}`,
-                `${baseNameOriginal}/${filename}`
-              ];
-              
-              console.log(`🔍 Firefly path variations for fileName="${fileName}", filename="${filename}":`, possiblePaths);
-            }
+            console.log(`🔗 Getting presigned URL for: ${filePath}`);
             
-            // Try each path until one works
-            let successfulUrl: string | null = null;
-            let lastError: string = '';
-            
-            for (const relativeAssetPath of possiblePaths) {
-              console.log(`🔗 Trying presigned URL for: ${relativeAssetPath}`);
-              
-              try {
-                const response = await fetch('/api/s3-proxy', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ 
-                    client_method: 'get',
-                    filename: relativeAssetPath
-                  }),
-                });
+            const response = await fetch('/api/s3-proxy', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                client_method: 'get',
+                filename: filePath
+              }),
+            });
 
-                if (response.ok) {
-                  const data = await response.json();
-                  console.log(`✅ Found working path for ${filename}: ${relativeAssetPath}`);
-                  console.log(`✅ Got presigned URL: ${data.url}`);
-                  successfulUrl = data.url;
-                  break;
-                } else {
-                  const errorText = await response.text().catch(() => 'Unknown error');
-                  lastError = `${response.status} ${response.statusText}: ${errorText}`;
-                  console.warn(`❌ Path ${relativeAssetPath} failed:`, lastError);
-                }
-              } catch (pathError) {
-                lastError = (pathError as Error).message;
-                console.warn(`❌ Path ${relativeAssetPath} errored:`, lastError);
-              }
-            }
-            
-            if (successfulUrl) {
+            if (response.ok) {
+              const data = await response.json();
+              console.log(`✅ Got presigned URL for ${filename}: ${data.url}`);
+              
               return {
                 filename,
-                job_id: jobData.job_id || '',
+                job_id: '',
                 status: 'succeeded',
-                presignedUrl: successfulUrl,
+                presignedUrl: data.url,
                 isTiff: filename.toLowerCase().endsWith('.tif') || filename.toLowerCase().endsWith('.tiff')
               };
             } else {
-              console.error(`❌ All paths failed for ${filename}. Last error:`, lastError);
+              const errorText = await response.text().catch(() => 'Unknown error');
+              const errorMessage = `${response.status} ${response.statusText}: ${errorText}`;
+              console.error(`❌ Failed to get presigned URL for ${filePath}:`, errorMessage);
+              
               return {
                 filename,
-                job_id: jobData.job_id || '',
+                job_id: '',
                 status: 'failed',
                 isTiff: filename.toLowerCase().endsWith('.tif') || filename.toLowerCase().endsWith('.tiff'),
-                error: `All paths failed. Last error: ${lastError}`
+                error: errorMessage
               };
             }
           } catch (error) {
-            console.error(`Error getting presigned URL for ${filename}:`, error);
+            const filename = filePath.split('/').pop() || filePath;
+            console.error(`Error getting presigned URL for ${filePath}:`, error);
             return {
               filename,
-              job_id: jobData.job_id || '',
+              job_id: '',
               status: 'failed',
               isTiff: filename.toLowerCase().endsWith('.tif') || filename.toLowerCase().endsWith('.tiff'),
               error: (error as Error).message
