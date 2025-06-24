@@ -14,6 +14,17 @@ interface NewJobFormData {
 
 export default function NewJobPage() {
   const router = useRouter();
+  
+  // Helper function to generate S3 file paths based on app and optional filename
+  const generateFilePath = (appName: string, filename?: string): string => {
+    // Sanitize path components to ensure they are URL-safe and consistent
+    // Replace spaces and special characters with hyphens, keep alphanumeric, hyphens, and underscores
+    const sanitize = (str: string) => str.trim().replace(/[^a-zA-Z0-9\-_]/g, '-').replace(/-+/g, '-');
+    
+    const basePath = `${sanitize(appName)}/PDFs`;
+    return filename ? `${basePath}/${filename}` : basePath;
+  };
+  
   const [formData, setFormData] = useState<NewJobFormData>({
     appName: '',
     releaseName: '',
@@ -202,33 +213,42 @@ export default function NewJobPage() {
       });
       
       // Create files array in the expected format
+      // Note: All upload statuses start as PENDING since the actual upload happens on the job details page
       const files = Array.from(fileGroups.entries()).map(([baseName, files]) => {
         const originalFiles = [];
         
         if (files.front) {
           originalFiles.push({
             filename: files.front,
-            card_type: "front"
+            card_type: "front",
+            file_path: generateFilePath(formData.appName, files.front),
+            uploaded: "PENDING" as const  // Upload will start after job creation
           });
         }
         
         if (files.back) {
           originalFiles.push({
             filename: files.back,
-            card_type: "back"
+            card_type: "back",
+            file_path: generateFilePath(formData.appName, files.back),
+            uploaded: "PENDING" as const  // Upload will start after job creation
           });
         }
         
         // If no _FR/_BK pattern, treat as single file
         if (originalFiles.length === 0) {
+          const singleFileName = baseName + '.pdf';
           originalFiles.push({
-            filename: baseName + '.pdf',
-            card_type: "front"
+            filename: singleFileName,
+            card_type: "front",
+            file_path: generateFilePath(formData.appName, singleFileName),
+            uploaded: "PENDING" as const  // Upload will start after job creation
           });
         }
         
         return {
           filename: baseName,
+          uploaded: "PENDING" as const,    // Upload will start after job creation
           extracted: "PENDING" as const,
           digital_assets: "PENDING" as const,
           last_updated: now,
@@ -245,8 +265,8 @@ export default function NewJobPage() {
         Subset_name: formData.subsetName, // Note: Capital S to match schema
         job_status: "Upload started" as const,
         files: files,
-        job_path: `temp/jobs/${jobId}.json`,
-        source_folder: `temp/${formData.appName}/${formData.releaseName}/${formData.subsetName}`,
+        job_path: `Jobs/${jobId}.json`,
+        source_folder: generateFilePath(formData.appName),
         total_files: files.length
       };
 
@@ -292,47 +312,17 @@ export default function NewJobPage() {
         showHome
         onHome={() => router.push('/')}
         title="Create New Job"
+        showBackToJobs
+        onBackToJobs={() => router.push('/jobs')}
       />
       <div className={styles.content}>
         <div style={{ maxWidth: 800, margin: '0 auto', padding: '24px' }}>
-          <div style={{ marginBottom: 32 }}>
-            <button
-              onClick={() => router.push('/jobs')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                background: 'none',
-                border: 'none',
-                color: '#60a5fa',
-                cursor: 'pointer',
-                fontSize: 14,
-                marginBottom: 16,
-                padding: '8px 0',
-                transition: 'color 0.2s'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = '#93c5fd';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = '#60a5fa';
-              }}
-            >
-              ← Back to Jobs
-            </button>
-            <h1 style={{ 
-              fontSize: '2.5rem', 
-              fontWeight: 700, 
-              color: '#f8f8f8',
-              margin: 0,
-              marginBottom: 8
-            }}>
-              Create New Job
-            </h1>
+          <div style={{ marginBottom: 32, marginTop: 16 }}>
             <p style={{ 
               color: '#9ca3af', 
               fontSize: 16,
-              margin: 0
+              margin: 0,
+              textAlign: 'center'
             }}>
               Set up a new job for processing PDFs into digital assets
             </p>
@@ -761,35 +751,11 @@ export default function NewJobPage() {
                     animation: 'spin 1s linear infinite'
                   }} />
                 )}
-                {isSubmitting ? 'Creating Job...' : '✨ Create Job'}
+                {isSubmitting ? 'Creating Job...' : 'Create Job'}
               </button>
             </div>
             
-            {/* Job Creation Status */}
-            {isSubmitting && (
-              <div style={{ 
-                marginTop: 16,
-                padding: 16,
-                background: 'rgba(59, 130, 246, 0.1)',
-                border: '1px solid rgba(59, 130, 246, 0.3)',
-                borderRadius: 8,
-                display: 'flex', 
-                alignItems: 'center',
-                gap: 8
-              }}>
-                <div style={{
-                  width: '16px',
-                  height: '16px',
-                  border: '2px solid rgba(96, 165, 250, 0.3)',
-                  borderTop: '2px solid #60a5fa',
-                  borderRadius: '50%',
-                  animation: 'spin 1s linear infinite'
-                }} />
-                <span style={{ color: '#60a5fa', fontSize: 14, fontWeight: 500 }}>
-                  Creating job...
-                </span>
-              </div>
-            )}
+
           </form>
         </div>
       </div>

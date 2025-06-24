@@ -177,6 +177,7 @@ export default function JobDetailsPage() {
     for (let i = 0; i < filesToUpload.length; i++) {
       const file = filesToUpload[i];
       
+      // Update progress to show current file being uploaded
       setUploadProgress({ current: i, total: filesToUpload.length, currentFile: file.name });
       
       // Update file status to uploading
@@ -191,7 +192,7 @@ export default function JobDetailsPage() {
         await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1000));
         
         // Simulate actual S3 upload (in real implementation, you'd upload the actual file)
-        const s3Path = `temp/${uploadSession.appName}/${uploadSession.releaseName}/${uploadSession.subsetName}/${file.name}`;
+        const s3Path = `${uploadSession.appName}/PDFs/${file.name}`;
         console.log(`Simulated upload of ${file.name} to ${s3Path}`);
         
         // Update file status to completed
@@ -200,6 +201,12 @@ export default function JobDetailsPage() {
           newStatus.set(file.name, 'completed');
           return newStatus;
         });
+        
+        // Small delay to ensure state update order
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
+        // Update progress to show this file is completed (increment progress count)
+        setUploadProgress({ current: i + 1, total: filesToUpload.length, currentFile: file.name });
         
       } catch (error) {
         console.error(`Error uploading ${file.name}:`, error);
@@ -211,10 +218,17 @@ export default function JobDetailsPage() {
           return newStatus;
         });
         
+        // Small delay to ensure state update order
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
+        // Still increment progress even on failure
+        setUploadProgress({ current: i + 1, total: filesToUpload.length, currentFile: file.name });
+        
         throw error;
       }
     }
 
+    // Final completion state
     setUploadProgress({ current: filesToUpload.length, total: filesToUpload.length, currentFile: 'Complete!' });
     
     // Clean up session data after successful upload
@@ -524,9 +538,9 @@ export default function JobDetailsPage() {
                       fontStyle: 'italic',
                       marginBottom: 16
                     }}>
-                      {uploadProgress.current < uploadProgress.total 
-                        ? `Currently uploading: ${uploadProgress.currentFile}`
-                        : `✅ All files uploaded successfully!`
+                      {uploadProgress.current >= uploadProgress.total 
+                        ? `✅ All files uploaded successfully!`
+                        : `Currently uploading: ${uploadProgress.currentFile}`
                       }
                     </div>
                   )
@@ -610,7 +624,7 @@ export default function JobDetailsPage() {
                               minWidth: '70px',
                               textAlign: 'right'
                             }}>
-                              {status === 'uploading' && filename === uploadProgress?.currentFile ? 'Uploading...' : status}
+                              {status === 'uploading' ? 'Uploading...' : status}
                             </span>
                           </div>
                         </div>

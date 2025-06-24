@@ -62,6 +62,8 @@ export type AppName =
 interface OriginalFile {
   filename: string;      // Full filename including extension (e.g., "25XMEN_1087_FR.pdf")
   card_type: CardType;   // Whether this is front or back of the card
+  file_path: string;     // Full S3 path to the file (e.g., "MARVEL/PDFs/25XMEN_1087_FR.pdf")
+  uploaded: ProcessStatus;    // Status of file upload process
 }
 
 /**
@@ -70,10 +72,11 @@ interface OriginalFile {
  */
 interface JobFile {
   filename: string;           // Base filename without extension (e.g., "25XMEN_1087")
+  uploaded: ProcessStatus;    // Status of file upload process
   extracted: ProcessStatus;   // Status of PDF extraction process
   digital_assets: ProcessStatus; // Status of digital asset generation
   last_updated: string;       // ISO 8601 timestamp of last status change
-  original_files: OriginalFile[]; // Array of actual PDF files for this card
+  original_files: OriginalFile[]; // Array of actual PDF files for this card, Front and back PDFs are captured under the same file name based on the prefix
 }
 
 /**
@@ -113,35 +116,43 @@ export const exampleJobUploadCompleted: JobTracking = {
   files: [
     {
       filename: "25XMEN_1087",
+      uploaded: "DONE",        // Upload completed for this job
       extracted: "PENDING",
       digital_assets: "PENDING",
       last_updated: "2024-12-30T14:45:30.123Z",
       original_files: [
         {
           filename: "25XMEN_1087_FR.pdf",
-          card_type: "front"
+          card_type: "front",
+          file_path: "MARVEL/PDFs/25XMEN_1087_FR.pdf",
+          uploaded: "DONE"
         },
         {
           filename: "25XMEN_1087_BK.pdf",
-          card_type: "back"
+          card_type: "back",
+          file_path: "MARVEL/PDFs/25XMEN_1087_BK.pdf",
+          uploaded: "DONE"
         }
       ]
     },
     {
       filename: "25XMEN_1088",
+      uploaded: "DONE",        // Upload completed for this job
       extracted: "PENDING",
       digital_assets: "PENDING",
       last_updated: "2024-12-30T14:45:30.123Z",
       original_files: [
         {
           filename: "25XMEN_1088_FR.pdf",
-          card_type: "front"
+          card_type: "front",
+          file_path: "MARVEL/PDFs/25XMEN_1088_FR.pdf",
+          uploaded: "DONE"
         }
       ]
     }
   ],
-  job_path: "temp/jobs/job_1735567890123_k7x9m2p4q.json",
-  source_folder: "temp/MARVEL/2024-X-Men-Series/Base-Cards",
+  job_path: "Jobs/job_1735567890123_k7x9m2p4q.json",
+  source_folder: "MARVEL/PDFs",
   total_files: 2
 };
 
@@ -160,51 +171,64 @@ export const exampleJobExtractionInProgress: JobTracking = {
   files: [
     {
       filename: "24NBA_ROOKIE_001",
+      uploaded: "DONE",        // Upload completed, now extracted
       extracted: "DONE",        // This file has been extracted
       digital_assets: "PENDING",
       last_updated: "2024-12-30T15:10:22.456Z",
       original_files: [
         {
           filename: "24NBA_ROOKIE_001_FR.pdf",
-          card_type: "front"
+          card_type: "front",
+          file_path: "NBA/PDFs/24NBA_ROOKIE_001_FR.pdf",
+          uploaded: "DONE"
         },
         {
           filename: "24NBA_ROOKIE_001_BK.pdf",
-          card_type: "back"
+          card_type: "back",
+          file_path: "NBA/PDFs/24NBA_ROOKIE_001_BK.pdf",
+          uploaded: "DONE"
         }
       ]
     },
     {
       filename: "24NBA_ROOKIE_002",
+      uploaded: "DONE",        // Upload completed, waiting for extraction
       extracted: "PENDING",     // Still waiting for extraction
       digital_assets: "PENDING",
       last_updated: "2024-12-30T15:00:00.000Z",
       original_files: [
         {
           filename: "24NBA_ROOKIE_002_FR.pdf",
-          card_type: "front"
+          card_type: "front",
+          file_path: "NBA/PDFs/24NBA_ROOKIE_002_FR.pdf",
+          uploaded: "DONE"
         }
       ]
     },
     {
       filename: "24NBA_ROOKIE_003",
+      uploaded: "DONE",        // Upload completed, but extraction failed
       extracted: "FAILED",      // Extraction failed for this file
       digital_assets: "PENDING",
       last_updated: "2024-12-30T15:12:15.789Z",
       original_files: [
         {
           filename: "24NBA_ROOKIE_003_FR.pdf",
-          card_type: "front"
+          card_type: "front",
+          file_path: "NBA/PDFs/24NBA_ROOKIE_003_FR.pdf",
+          uploaded: "DONE"
         },
         {
           filename: "24NBA_ROOKIE_003_BK.pdf",
-          card_type: "back"
+          card_type: "back",
+          file_path: "NBA/PDFs/24NBA_ROOKIE_003_BK.pdf",
+          uploaded: "DONE"
         }
       ]
     }
   ],
-  job_path: "temp/jobs/job_1735567890456_p2m4k9x7s.json",
-  source_folder: "temp/NBA/2024-Playoff-Series/Rookie-Cards",
+  job_path: "Jobs/job_1735567890456_p2m4k9x7s.json",
+  source_folder: "NBA/PDFs",
   total_files: 3
 };
 
@@ -223,35 +247,43 @@ export const exampleJobCompleted: JobTracking = {
   files: [
     {
       filename: "24DISNEY_PRINCESS_001",
+      uploaded: "DONE",        // All processing stages completed
       extracted: "DONE",
       digital_assets: "DONE",   // All processing completed
       last_updated: "2024-12-30T16:30:15.555Z",
       original_files: [
         {
           filename: "24DISNEY_PRINCESS_001_FR.pdf",
-          card_type: "front"
+          card_type: "front",
+          file_path: "DISNEY/PDFs/24DISNEY_PRINCESS_001_FR.pdf",
+          uploaded: "DONE"
         },
         {
           filename: "24DISNEY_PRINCESS_001_BK.pdf",
-          card_type: "back"
+          card_type: "back",
+          file_path: "DISNEY/PDFs/24DISNEY_PRINCESS_001_BK.pdf",
+          uploaded: "DONE"
         }
       ]
     },
     {
       filename: "24DISNEY_PRINCESS_002",
+      uploaded: "DONE",        // All processing stages completed
       extracted: "DONE",
       digital_assets: "DONE",
       last_updated: "2024-12-30T16:35:22.777Z",
       original_files: [
         {
           filename: "24DISNEY_PRINCESS_002_FR.pdf",
-          card_type: "front"
+          card_type: "front",
+          file_path: "DISNEY/PDFs/24DISNEY_PRINCESS_002_FR.pdf",
+          uploaded: "DONE"
         }
       ]
     }
   ],
-  job_path: "temp/jobs/job_1735567890789_x5n8q3r7w.json",
-  source_folder: "temp/DISNEY/2024-Princess-Collection/Rare-Cards",
+  job_path: "Jobs/job_1735567890789_x5n8q3r7w.json",
+  source_folder: "DISNEY/PDFs",
   total_files: 2
 };
 
@@ -280,6 +312,12 @@ export const exampleJobCompleted: JobTracking = {
  *   Any step can transition to failed state:
  *   Upload failed, Extraction failed, Digital Assets failed
  * 
+ * process status tracking:
+ *   - uploaded: Tracks individual file upload status (PENDING → DONE/FAILED)
+ *   - extracted: Tracks PDF extraction status (PENDING → DONE/FAILED)
+ *   - digital_assets: Tracks digital asset generation (PENDING → DONE/FAILED)
+ *   - Each file and original_file tracks its own process statuses independently
+ * 
  * file naming patterns:
  *   - Base name: Card identifier without extension (e.g., "25XMEN_1087")
  *   - Front files: Usually end with "_FR.pdf"
@@ -289,7 +327,9 @@ export const exampleJobCompleted: JobTracking = {
  * file paths:
  *   - job_path: Where the job JSON is stored in S3
  *   - source_folder: Where the original PDF files are stored
- *   - Both use forward slashes as separators
+ *   - file_path (in original_files): Full S3 path to individual PDF files
+ *   - All paths use forward slashes as separators
+ *   - file_path format: "{source_folder}/{filename}"
  * 
  * total_files:
  *   - Count of logical cards (not individual PDF files)
