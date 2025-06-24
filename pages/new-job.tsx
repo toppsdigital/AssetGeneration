@@ -296,6 +296,15 @@ export default function NewJobPage() {
       
       sessionStorage.setItem(`upload_${initialJobData.job_id}`, JSON.stringify(uploadSession));
       
+      // Store actual File objects in global variable (sessionStorage can't store File objects)
+      (window as any).pendingUploadFiles = {
+        jobId: initialJobData.job_id,
+        files: Array.from(formData.selectedFiles!)
+      };
+      
+      console.log('Stored upload session data and files for job:', initialJobData.job_id);
+      console.log('File count:', formData.selectedFiles!.length);
+      
       // Navigate to job details page
       router.push(`/job/details?jobPath=${encodeURIComponent(jobPath)}&startUpload=true`);
       

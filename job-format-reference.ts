@@ -14,13 +14,13 @@
  * Represents the overall status of the entire job
  */
 export type JobStatus = 
-  | "Upload started"           // Job creation initiated, files being uploaded
+  | "Upload in progress"           // Job creation initiated, files being uploaded
   | "Upload completed"         // All files successfully uploaded to S3
   | "Upload failed"           // One or more file uploads failed
-  | "Extraction started"      // PDF extraction process has begun
+  | "Extraction in progress"      // PDF extraction process has begun
   | "Extraction completed"    // All PDFs have been successfully extracted
   | "Extraction failed"       // One or more PDF extractions failed
-  | "Digital Assets started"  // Digital asset generation has begun
+  | "Digital Assets in progress"  // Digital asset generation has begun
   | "Digital Assets completed" // All digital assets have been generated
   | "Digital Assets failed";   // One or more digital asset generations failed
 
@@ -167,7 +167,7 @@ export const exampleJobExtractionInProgress: JobTracking = {
   app_name: "NBA",
   release_name: "2024-Playoff-Series",
   Subset_name: "Rookie-Cards",
-  job_status: "Extraction started",
+  job_status: "Extraction in progress",
   files: [
     {
       filename: "24NBA_ROOKIE_001",
@@ -306,8 +306,8 @@ export const exampleJobCompleted: JobTracking = {
  *   - Individual file last_updated: Updated when file status changes
  * 
  * job_status progression:
- *   Upload started → Upload completed → Extraction started → 
- *   Extraction completed → Digital Assets started → Digital Assets completed
+ *   Upload in progress → Upload completed → Extraction in progress → 
+ *   Extraction completed → Digital Assets in progress → Digital Assets completed
  *   
  *   Any step can transition to failed state:
  *   Upload failed, Extraction failed, Digital Assets failed

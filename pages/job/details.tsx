@@ -142,43 +142,28 @@ export default function JobDetailsPage() {
   };
 
   // Upload files to S3 using existing infrastructure
-  const uploadFilesToS3 = async (jobData: JobData): Promise<void> => {
-    if (!jobData.files || jobData.files.length === 0) {
-      throw new Error('No files to upload');
+  const uploadFilesToS3 = async (jobData: JobData, selectedFiles: File[]): Promise<void> => {
+    if (!selectedFiles || selectedFiles.length === 0) {
+      throw new Error('No files selected for upload');
     }
 
-    // Get upload session data
-    const uploadSessionData = sessionStorage.getItem(`upload_${jobData.job_id}`);
-    if (!uploadSessionData) {
-      throw new Error('Upload session data not found');
-    }
+    console.log(`Starting upload of ${selectedFiles.length} files for job:`, jobData.job_id);
 
-    const uploadSession = JSON.parse(uploadSessionData);
-    
-    // Get all PDF files that need to be uploaded from session data
-    const filesToUpload = uploadSession.files || [];
-
-    if (filesToUpload.length === 0) {
-      throw new Error('No PDF files found to upload');
-    }
-
-    setUploadProgress({ current: 0, total: filesToUpload.length, currentFile: '' });
+    setUploadProgress({ current: 0, total: selectedFiles.length, currentFile: '' });
 
     // Initialize file upload status
     const newFileStatus = new Map<string, 'pending' | 'uploading' | 'completed' | 'failed'>();
-    filesToUpload.forEach((file: any) => {
+    selectedFiles.forEach((file) => {
       newFileStatus.set(file.name, 'pending');
     });
     setFileUploadStatus(newFileStatus);
 
-    // Simulate the upload process since we don't have access to actual File objects
-    // In a real implementation, you'd need to store files temporarily or use a different approach
-    
-    for (let i = 0; i < filesToUpload.length; i++) {
-      const file = filesToUpload[i];
+    // Upload each file to S3
+    for (let i = 0; i < selectedFiles.length; i++) {
+      const file = selectedFiles[i];
       
       // Update progress to show current file being uploaded
-      setUploadProgress({ current: i, total: filesToUpload.length, currentFile: file.name });
+      setUploadProgress({ current: i, total: selectedFiles.length, currentFile: file.name });
       
       // Update file status to uploading
       setFileUploadStatus(prev => {
@@ -188,12 +173,47 @@ export default function JobDetailsPage() {
       });
       
       try {
-        // Simulate upload process with realistic delay
-        await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1000));
+        // Generate S3 path - using the same pattern as job JSON uploads
+        const s3Path = `${jobData.app_name}/PDFs/${file.name}`;
+        console.log(`Uploading ${file.name} to S3 path: ${s3Path}`);
         
-        // Simulate actual S3 upload (in real implementation, you'd upload the actual file)
-        const s3Path = `${uploadSession.appName}/PDFs/${file.name}`;
-        console.log(`Simulated upload of ${file.name} to ${s3Path}`);
+        // Get presigned URL for file upload - EXACTLY like job JSON upload
+        const presignedResponse = await fetch('/api/s3-proxy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            client_method: 'put',
+            filename: s3Path,
+            upload: true
+          }),
+        });
+
+        if (!presignedResponse.ok) {
+          throw new Error(`Failed to get presigned URL for ${file.name}`);
+        }
+
+        const { presignedUrl } = await presignedResponse.json();
+        console.log(`Got presigned URL for ${file.name}`);
+        
+        // Upload file to S3 - EXACTLY like job JSON upload
+        const formData = new FormData();
+        formData.append('file', file, file.name);
+        formData.append('presignedUrl', presignedUrl);
+
+        console.log(`Uploading ${file.name} using s3-upload API...`);
+        const uploadResponse = await fetch('/api/s3-upload', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!uploadResponse.ok) {
+          const errorText = await uploadResponse.text();
+          console.error(`Upload failed for ${file.name}:`, uploadResponse.status, errorText);
+          throw new Error(`Failed to upload ${file.name} to S3: ${uploadResponse.status} ${errorText}`);
+        }
+
+        const uploadResult = await uploadResponse.json();
+        console.log(`Successfully uploaded ${file.name} to ${s3Path}`, uploadResult);
         
         // Update file status to completed
         setFileUploadStatus(prev => {
@@ -203,10 +223,10 @@ export default function JobDetailsPage() {
         });
         
         // Small delay to ensure state update order
-        await new Promise(resolve => setTimeout(resolve, 50));
+        await new Promise(resolve => setTimeout(resolve, 100));
         
-        // Update progress to show this file is completed (increment progress count)
-        setUploadProgress({ current: i + 1, total: filesToUpload.length, currentFile: file.name });
+        // Update progress to show this file is completed
+        setUploadProgress({ current: i + 1, total: selectedFiles.length, currentFile: file.name });
         
       } catch (error) {
         console.error(`Error uploading ${file.name}:`, error);
@@ -219,49 +239,112 @@ export default function JobDetailsPage() {
         });
         
         // Small delay to ensure state update order
-        await new Promise(resolve => setTimeout(resolve, 50));
+        await new Promise(resolve => setTimeout(resolve, 100));
         
         // Still increment progress even on failure
-        setUploadProgress({ current: i + 1, total: filesToUpload.length, currentFile: file.name });
+        setUploadProgress({ current: i + 1, total: selectedFiles.length, currentFile: file.name });
         
         throw error;
       }
     }
 
     // Final completion state
-    setUploadProgress({ current: filesToUpload.length, total: filesToUpload.length, currentFile: 'Complete!' });
-    
-    // Clean up session data after successful upload
-    sessionStorage.removeItem(`upload_${jobData.job_id}`);
+    setUploadProgress({ current: selectedFiles.length, total: selectedFiles.length, currentFile: 'Complete!' });
+    console.log('All files uploaded successfully!');
   };
 
-  // Start the upload process
+  // Handle file selection and start upload process
+  const handleFileUpload = async () => {
+    if (!jobData) return;
+
+    // Create file input element
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.multiple = true;
+    fileInput.accept = '.pdf';
+    
+    fileInput.onchange = async (e) => {
+      const files = (e.target as HTMLInputElement).files;
+      if (!files || files.length === 0) return;
+      
+      const selectedFiles = Array.from(files);
+      console.log(`Selected ${selectedFiles.length} files for upload`);
+      
+      try {
+        // Upload all selected files
+        await uploadFilesToS3(jobData, selectedFiles);
+        
+        // Update job status to completed
+        const updatedJobData = {
+          ...jobData,
+          job_status: "Upload completed",
+          last_updated: new Date().toISOString()
+        };
+
+        await updateJobJSON(updatedJobData);
+        
+        // Update local state
+        setJobData(updatedJobData);
+        
+        console.log('Upload process completed successfully');
+        
+      } catch (error) {
+        console.error('Error during upload process:', error);
+        setError('Upload failed: ' + (error as Error).message);
+      }
+    };
+    
+    fileInput.click();
+  };
+
+  // Start the upload process (for compatibility with existing code)
   const startUploadProcess = async () => {
     if (!jobData) return;
 
-    try {
-      console.log('Starting upload process for job:', jobData.job_id);
-      
-      // Upload all files
-      await uploadFilesToS3(jobData);
-      
-      // Update job status to completed
-      const updatedJobData = {
-        ...jobData,
-        job_status: "Upload completed",
-        last_updated: new Date().toISOString()
-      };
+    // Check if files were passed from the new job page
+    const uploadSessionData = sessionStorage.getItem(`upload_${jobData.job_id}`);
+    const pendingFiles = (window as any).pendingUploadFiles;
+    
+    console.log('Auto-upload check:', {
+      hasSessionData: !!uploadSessionData,
+      hasPendingFiles: !!pendingFiles,
+      jobIdMatch: pendingFiles?.jobId === jobData.job_id
+    });
 
-      await updateJobJSON(updatedJobData);
+    if (uploadSessionData && pendingFiles && pendingFiles.jobId === jobData.job_id) {
+      console.log('Files available from new job page, starting automatic upload...');
+      const actualFiles = pendingFiles.files || [];
       
-      // Update local state
-      setJobData(updatedJobData);
-      
-      console.log('Upload process completed successfully');
-      
-    } catch (error) {
-      console.error('Error during upload process:', error);
-      setError('Upload failed: ' + (error as Error).message);
+      if (actualFiles.length > 0) {
+        try {
+          // Upload all files that were selected on the new job page
+          await uploadFilesToS3(jobData, actualFiles);
+          
+          // Update job status to completed
+          const updatedJobData = {
+            ...jobData,
+            job_status: "Upload completed",
+            last_updated: new Date().toISOString()
+          };
+
+          await updateJobJSON(updatedJobData);
+          
+          // Update local state
+          setJobData(updatedJobData);
+          
+          // Clean up stored data
+          sessionStorage.removeItem(`upload_${jobData.job_id}`);
+          delete (window as any).pendingUploadFiles;
+          
+          console.log('Automatic upload completed successfully');
+          
+        } catch (error) {
+          console.error('Error during automatic upload:', error);
+          setError('Upload failed: ' + (error as Error).message);
+        }
+      }
+    } else {
+      console.log('No files available from new job page. User needs to select files manually.');
     }
   };
 
@@ -474,8 +557,8 @@ export default function JobDetailsPage() {
               </div>
             </div>
 
-            {/* Upload Progress Section - Show when upload is started */}
-            {jobData.job_status === 'Upload started' && (
+            {/* Upload Section - Show only when upload is in progress or needs to start */}
+            {(jobData.job_status === 'Upload started' || jobData.job_status === 'Created' || uploadProgress) && jobData.job_status !== 'Upload completed' && (
               <div style={{ 
                 marginBottom: 32,
                 padding: 24,
@@ -483,31 +566,48 @@ export default function JobDetailsPage() {
                 border: '1px solid rgba(59, 130, 246, 0.3)',
                 borderRadius: 16
               }}>
-                <h2 style={{
-                  fontSize: '1.5rem',
-                  fontWeight: 600,
-                  color: '#f8f8f8',
-                  marginBottom: 20,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8
-                }}>
-                  📤 Upload Progress
-                </h2>
-                
                 <div style={{ 
                   display: 'flex', 
                   justifyContent: 'space-between', 
                   alignItems: 'center',
-                  marginBottom: 12
+                  marginBottom: 20
                 }}>
-                  <span style={{ color: '#60a5fa', fontSize: 16, fontWeight: 500 }}>
-                    {uploadProgress ? 'Uploading Files' : 'Preparing Upload...'}
-                  </span>
-                  {uploadProgress && (
-                    <span style={{ color: '#60a5fa', fontSize: 14 }}>
-                      {uploadProgress.current}/{uploadProgress.total}
-                    </span>
+                  <h2 style={{
+                    fontSize: '1.5rem',
+                    fontWeight: 600,
+                    color: '#f8f8f8',
+                    margin: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8
+                  }}>
+                    📤 Uploading Files
+                  </h2>
+                  
+                  {/* Upload Button - Show when no upload is in progress and no files from new job page */}
+                  {!uploadProgress && !sessionStorage.getItem(`upload_${jobData.job_id}`) && (
+                    <button
+                      onClick={handleFileUpload}
+                      style={{
+                        background: 'rgba(16, 185, 129, 0.2)',
+                        border: '1px solid rgba(16, 185, 129, 0.4)',
+                        borderRadius: 8,
+                        color: '#34d399',
+                        cursor: 'pointer',
+                        fontSize: 14,
+                        padding: '8px 16px',
+                        fontWeight: 500,
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'rgba(16, 185, 129, 0.3)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'rgba(16, 185, 129, 0.2)';
+                      }}
+                    >
+                      📁 Select PDF Files
+                    </button>
                   )}
                 </div>
                 
@@ -518,8 +618,20 @@ export default function JobDetailsPage() {
                   background: 'rgba(59, 130, 246, 0.2)',
                   borderRadius: 6,
                   overflow: 'hidden',
-                  marginBottom: 12
+                  marginBottom: 12,
+                  position: 'relative'
                 }}>
+                  {uploadProgress && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '-24px',
+                      right: '0px',
+                      color: '#60a5fa',
+                      fontSize: 14
+                    }}>
+                      {uploadProgress.current}/{uploadProgress.total}
+                    </div>
+                  )}
                   <div style={{
                     width: uploadProgress ? `${(uploadProgress.current / uploadProgress.total) * 100}%` : '0%',
                     height: '100%',
@@ -551,7 +663,7 @@ export default function JobDetailsPage() {
                     fontStyle: 'italic',
                     marginBottom: 16
                   }}>
-                    Initializing upload process...
+                    Click "Select PDF Files" to choose files for upload
                   </div>
                 )}
 
@@ -649,7 +761,7 @@ export default function JobDetailsPage() {
             )}
 
             {/* Files Details - Show only after upload is completed */}
-            {jobData.files && jobData.files.length > 0 && jobData.job_status === 'Upload completed' && (
+            {jobData.job_status === 'Upload completed' && (
               <div style={{ marginTop: 32 }}>
                 <h2 style={{
                   fontSize: '1.5rem',
@@ -657,11 +769,12 @@ export default function JobDetailsPage() {
                   color: '#f8f8f8',
                   marginBottom: 24
                 }}>
-                  📁 File Details ({jobData.files.length})
+                  📁 File Details ({jobData.files?.length || 0})
                 </h2>
                 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-                  {jobData.files.map((file, index) => (
+                {jobData.files && jobData.files.length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                    {jobData.files.map((file, index) => (
                     <div key={index} style={{
                       background: 'rgba(255, 255, 255, 0.05)',
                       border: '1px solid rgba(255, 255, 255, 0.1)',
@@ -925,25 +1038,22 @@ export default function JobDetailsPage() {
                       )}
                     </div>
                   ))}
-                </div>
-              </div>
-            )}
-
-            {/* No Files Message - Only show when upload is completed and no files exist */}
-            {(!jobData.files || jobData.files.length === 0) && jobData.job_status === 'Upload completed' && (
-              <div style={{
-                textAlign: 'center',
-                padding: '48px 0',
-                background: 'rgba(255, 255, 255, 0.05)',
-                borderRadius: 12,
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                marginTop: 32
-              }}>
-                <div style={{ fontSize: 48, marginBottom: 16 }}>📁</div>
-                <h3 style={{ color: '#9ca3af', fontSize: 18, marginBottom: 8 }}>No Files Found</h3>
-                <p style={{ color: '#6b7280', fontSize: 14 }}>
-                  This job doesn't have any file details yet.
-                </p>
+                  </div>
+                ) : (
+                  <div style={{
+                    textAlign: 'center',
+                    padding: '48px 0',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    borderRadius: 12,
+                    border: '1px solid rgba(255, 255, 255, 0.1)'
+                  }}>
+                    <div style={{ fontSize: 48, marginBottom: 16 }}>📁</div>
+                    <h3 style={{ color: '#9ca3af', fontSize: 18, marginBottom: 8 }}>No Files Found</h3>
+                    <p style={{ color: '#6b7280', fontSize: 14 }}>
+                      This job doesn't have any file details yet.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
