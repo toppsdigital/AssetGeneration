@@ -166,6 +166,9 @@ export default function JobDetailsPage() {
     });
     setFileUploadStatus(newFileStatus);
 
+    // Adaptive delay - starts at 0.5 seconds, increases by 1 second if rate limited
+    let currentDelay = 500; // Start with 0.5 seconds
+
     // Upload each file to S3
     for (let i = 0; i < selectedFiles.length; i++) {
       const file = selectedFiles[i];
@@ -209,14 +212,48 @@ export default function JobDetailsPage() {
         formData.append('presignedUrl', presignedUrl);
 
         console.log(`Uploading ${file.name} using s3-upload API...`);
-        const uploadResponse = await fetch('/api/s3-upload', {
-          method: 'POST',
-          body: formData,
-        });
+        
+        // Retry logic with exponential backoff for S3 rate limiting
+        let uploadResponse;
+        let retryCount = 0;
+        const maxRetries = 3;
+        
+        while (retryCount <= maxRetries) {
+          try {
+            uploadResponse = await fetch('/api/s3-upload', {
+              method: 'POST',
+              body: formData,
+            });
+
+            // If successful or not a rate limit error, break out of retry loop
+            if (uploadResponse.ok || (uploadResponse.status !== 503 && uploadResponse.status !== 429)) {
+              break;
+            }
+
+                         // If it's a rate limit error (503 or 429), retry with exponential backoff
+             if (uploadResponse.status === 503 || uploadResponse.status === 429) {
+               retryCount++;
+               if (retryCount <= maxRetries) {
+                 const backoffDelay = Math.pow(2, retryCount) * 1000; // 2s, 4s, 8s
+                 console.warn(`Rate limit hit for ${file.name}, retrying in ${backoffDelay}ms (attempt ${retryCount}/${maxRetries})`);
+                 
+                 // Increase the delay for future uploads when rate limited
+                 currentDelay += 1000; // Add 1 second to delay
+                 console.log(`Increasing delay for future uploads to ${currentDelay}ms due to rate limiting`);
+                 
+                 await new Promise(resolve => setTimeout(resolve, backoffDelay));
+                 continue;
+               }
+             }
+          } catch (fetchError) {
+            console.error(`Network error uploading ${file.name}:`, fetchError);
+            throw fetchError;
+          }
+        }
 
         if (!uploadResponse.ok) {
           const errorText = await uploadResponse.text();
-          console.error(`Upload failed for ${file.name}:`, uploadResponse.status, errorText);
+          console.error(`Upload failed for ${file.name} after ${retryCount} retries:`, uploadResponse.status, errorText);
           throw new Error(`Failed to upload ${file.name} to S3: ${uploadResponse.status} ${errorText}`);
         }
 
@@ -230,8 +267,9 @@ export default function JobDetailsPage() {
           return newStatus;
         });
         
-        // Small delay to ensure state update order
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Adaptive delay between uploads - starts at 0.5s, increases if rate limited
+        console.log(`Waiting ${currentDelay}ms before next upload...`);
+        await new Promise(resolve => setTimeout(resolve, currentDelay));
         
         // Update progress to show this file is completed
         setUploadProgress({ current: i + 1, total: selectedFiles.length, currentFile: file.name });
@@ -246,8 +284,8 @@ export default function JobDetailsPage() {
           return newStatus;
         });
         
-        // Small delay to ensure state update order
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Add delay even on failure to prevent rapid retry attempts
+        await new Promise(resolve => setTimeout(resolve, 500));
         
         // Still increment progress even on failure
         setUploadProgress({ current: i + 1, total: selectedFiles.length, currentFile: file.name });
@@ -294,6 +332,10 @@ export default function JobDetailsPage() {
         // Update local state
         setJobData(updatedJobData);
         
+        // Clear upload progress to show file details section
+        setUploadProgress(null);
+        setFileUploadStatus(new Map());
+        
         console.log('Upload process completed successfully');
         
       } catch (error) {
@@ -339,6 +381,10 @@ export default function JobDetailsPage() {
           
           // Update local state
           setJobData(updatedJobData);
+          
+          // Clear upload progress to show file details section
+          setUploadProgress(null);
+          setFileUploadStatus(new Map());
           
           // Clean up stored data
           sessionStorage.removeItem(`upload_${jobData.job_id}`);
@@ -619,34 +665,43 @@ export default function JobDetailsPage() {
                   )}
                 </div>
                 
-                {/* Progress Bar */}
+                {/* Progress Bar with File Count */}
                 <div style={{
-                  width: '100%',
-                  height: 12,
-                  background: 'rgba(59, 130, 246, 0.2)',
-                  borderRadius: 6,
-                  overflow: 'hidden',
-                  marginBottom: 12,
-                  position: 'relative'
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 16,
+                  marginBottom: 12
                 }}>
+                  <div style={{
+                    flex: 1,
+                    height: 12,
+                    background: 'rgba(59, 130, 246, 0.2)',
+                    borderRadius: 6,
+                    overflow: 'hidden',
+                    position: 'relative'
+                  }}>
+                    <div style={{
+                      width: uploadProgress ? `${(uploadProgress.current / uploadProgress.total) * 100}%` : '0%',
+                      height: '100%',
+                      background: 'linear-gradient(90deg, #3b82f6, #60a5fa)',
+                      borderRadius: 6,
+                      transition: 'width 0.3s ease'
+                    }} />
+                  </div>
+                  
+                  {/* File Count Indicator */}
                   {uploadProgress && (
                     <div style={{
-                      position: 'absolute',
-                      top: '-24px',
-                      right: '0px',
                       color: '#60a5fa',
-                      fontSize: 14
+                      fontSize: 16,
+                      fontWeight: 600,
+                      minWidth: '80px',
+                      textAlign: 'right',
+                      fontFamily: 'monospace'
                     }}>
-                      {uploadProgress.current}/{uploadProgress.total}
+                      {uploadProgress.current} / {uploadProgress.total}
                     </div>
                   )}
-                  <div style={{
-                    width: uploadProgress ? `${(uploadProgress.current / uploadProgress.total) * 100}%` : '0%',
-                    height: '100%',
-                    background: 'linear-gradient(90deg, #3b82f6, #60a5fa)',
-                    borderRadius: 6,
-                    transition: 'width 0.3s ease'
-                  }} />
                 </div>
                 
                 {/* Current File */}
@@ -686,7 +741,18 @@ export default function JobDetailsPage() {
                     padding: 12
                   }}>
                     {fileUploadStatus.size > 0 ? (
-                      Array.from(fileUploadStatus.entries()).map(([filename, status], index) => {
+                      Array.from(fileUploadStatus.entries())
+                        .sort(([, statusA], [, statusB]) => {
+                          // Define priority order: uploading -> pending -> failed -> completed
+                          const statusPriority = {
+                            'uploading': 0,
+                            'pending': 1,
+                            'failed': 2,
+                            'completed': 3
+                          };
+                          return (statusPriority[statusA] || 1) - (statusPriority[statusB] || 1);
+                        })
+                        .map(([filename, status], index) => {
                       const getStatusIcon = (status: string) => {
                         switch (status) {
                           case 'pending': return '⏳';
@@ -715,7 +781,7 @@ export default function JobDetailsPage() {
                             alignItems: 'center',
                             justifyContent: 'space-between',
                             padding: '8px 12px',
-                            marginBottom: index < fileUploadStatus.size - 1 ? 4 : 0,
+                            marginBottom: index < Array.from(fileUploadStatus.entries()).length - 1 ? 4 : 0,
                             background: status === 'uploading' ? 'rgba(245, 158, 11, 0.1)' : 'transparent',
                             borderRadius: 4,
                             border: status === 'uploading' ? '1px solid rgba(245, 158, 11, 0.3)' : 'none',
