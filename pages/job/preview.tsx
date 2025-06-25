@@ -375,6 +375,11 @@ export default function JobPreviewPage() {
   const [loading, setLoading] = useState(true);
   const [displayName, setDisplayName] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+  const [expandedImage, setExpandedImage] = useState<{
+    src: string;
+    alt: string;
+    isTiff: boolean;
+  } | null>(null);
 
   useEffect(() => {
     if (jobPath && fileName && type) {
@@ -613,41 +618,80 @@ export default function JobPreviewPage() {
                             overflow: 'hidden',
                             background: 'rgba(0, 0, 0, 0.2)'
                           }}>
-                            {asset.isTiff ? (
-                              <TiffViewer
-                                src={asset.presignedUrl}
-                                alt={asset.filename}
-                                style={{
-                                  width: '100%',
-                                  height: 'auto',
-                                  maxHeight: '400px',
-                                  objectFit: 'contain',
-                                  display: 'block'
-                                }}
-                                onError={() => {
-                                  console.warn(`Failed to load TIFF: ${asset.filename}`);
-                                }}
-                              />
-                            ) : (
-                              <img
-                                src={asset.presignedUrl}
-                                alt={asset.filename}
-                                style={{
-                                  width: '100%',
-                                  height: 'auto',
-                                  maxHeight: '400px',
-                                  objectFit: 'contain',
-                                  display: 'block'
-                                }}
-                                onLoad={() => {
-                                  console.log(`✅ Image loaded successfully: ${asset.filename}`);
-                                }}
-                                onError={(e) => {
-                                  console.error(`❌ Image failed to load: ${asset.filename}`, asset.presignedUrl);
-                                  e.currentTarget.style.display = 'none';
-                                }}
-                              />
-                            )}
+                            <div 
+                              onClick={() => setExpandedImage({
+                                src: asset.presignedUrl,
+                                alt: asset.filename,
+                                isTiff: asset.isTiff || false
+                              })}
+                              style={{
+                                cursor: 'pointer',
+                                position: 'relative'
+                              }}
+                            >
+                              {asset.isTiff ? (
+                                <TiffViewer
+                                  src={asset.presignedUrl}
+                                  alt={asset.filename}
+                                  style={{
+                                    width: '100%',
+                                    height: 'auto',
+                                    maxHeight: '400px',
+                                    objectFit: 'contain',
+                                    display: 'block'
+                                  }}
+                                  onError={() => {
+                                    console.warn(`Failed to load TIFF: ${asset.filename}`);
+                                  }}
+                                />
+                              ) : (
+                                <img
+                                  src={asset.presignedUrl}
+                                  alt={asset.filename}
+                                  style={{
+                                    width: '100%',
+                                    height: 'auto',
+                                    maxHeight: '400px',
+                                    objectFit: 'contain',
+                                    display: 'block'
+                                  }}
+                                  onLoad={() => {
+                                    console.log(`✅ Image loaded successfully: ${asset.filename}`);
+                                  }}
+                                  onError={(e) => {
+                                    console.error(`❌ Image failed to load: ${asset.filename}`, asset.presignedUrl);
+                                    e.currentTarget.style.display = 'none';
+                                  }}
+                                />
+                              )}
+                              
+                              {/* Hover overlay to indicate clickable */}
+                              <div style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                background: 'rgba(0, 0, 0, 0.1)',
+                                opacity: 0,
+                                transition: 'opacity 0.2s',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                color: 'white',
+                                fontSize: '24px',
+                                borderRadius: 8
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.opacity = '1';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.opacity = '0';
+                              }}
+                              >
+                                🔍
+                              </div>
+                            </div>
                           </div>
                         );
                       } else {
@@ -670,12 +714,17 @@ export default function JobPreviewPage() {
                     })()}
                     
                     <h3 style={{
-                      fontSize: '1rem',
+                      fontSize: '0.85rem',
                       fontWeight: 600,
                       color: '#f8f8f8',
                       marginBottom: 8,
-                      wordBreak: 'break-all'
-                    }}>
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      width: '100%'
+                    }}
+                    title={asset.filename}
+                    >
                       {asset.filename}
                     </h3>
                     
@@ -759,6 +808,119 @@ export default function JobPreviewPage() {
           </div>
         </main>
       </div>
+
+      {/* Image Expansion Modal */}
+      {expandedImage && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.9)',
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px'
+          }}
+          onClick={() => setExpandedImage(null)}
+        >
+          <div
+            style={{
+              position: 'relative',
+              maxWidth: '90vw',
+              maxHeight: '90vh',
+              background: 'rgba(255, 255, 255, 0.1)',
+              borderRadius: 12,
+              overflow: 'hidden',
+              boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close Button */}
+            <button
+              onClick={() => setExpandedImage(null)}
+              style={{
+                position: 'absolute',
+                top: 16,
+                right: 16,
+                background: 'rgba(0, 0, 0, 0.7)',
+                border: 'none',
+                borderRadius: '50%',
+                width: 40,
+                height: 40,
+                color: 'white',
+                fontSize: '20px',
+                cursor: 'pointer',
+                zIndex: 1001,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'background 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(0, 0, 0, 0.9)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(0, 0, 0, 0.7)';
+              }}
+            >
+              ✕
+            </button>
+
+            {/* Image Content */}
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              padding: '20px'
+            }}>
+              {expandedImage.isTiff ? (
+                <TiffViewer
+                  src={expandedImage.src}
+                  alt={expandedImage.alt}
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: '80vh',
+                    objectFit: 'contain'
+                  }}
+                  onError={() => {
+                    console.warn(`Failed to load expanded TIFF: ${expandedImage.alt}`);
+                  }}
+                />
+              ) : (
+                <img
+                  src={expandedImage.src}
+                  alt={expandedImage.alt}
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: '80vh',
+                    objectFit: 'contain',
+                    display: 'block'
+                  }}
+                  onError={() => {
+                    console.error(`❌ Expanded image failed to load: ${expandedImage.alt}`);
+                  }}
+                />
+              )}
+              
+              {/* Image Title */}
+              <h3 style={{
+                color: '#f8f8f8',
+                fontSize: '1rem',
+                fontWeight: 600,
+                marginTop: 16,
+                textAlign: 'center',
+                wordBreak: 'break-word'
+              }}>
+                {expandedImage.alt}
+              </h3>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
     </>
   );
