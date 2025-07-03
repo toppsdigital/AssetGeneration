@@ -77,7 +77,7 @@ interface FireflyAsset {
 
 export default function JobDetailsPage() {
   const router = useRouter();
-  const { jobId, startUpload } = router.query;
+  const { jobId, startUpload, appName, releaseName, sourceFolder, status, createdAt, files, description } = router.query;
   
   const [jobData, setJobData] = useState<JobData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -87,9 +87,14 @@ export default function JobDetailsPage() {
 
   useEffect(() => {
     if (jobId) {
-      loadJobDetails();
+      // Check if we have job data from query params to avoid API call
+      if (appName && releaseName && sourceFolder && status) {
+        loadJobDetailsFromParams();
+      } else {
+        loadJobDetails();
+      }
     }
-  }, [jobId]);
+  }, [jobId, appName, releaseName, sourceFolder, status]);
 
   // Load file objects after job details are loaded
   useEffect(() => {
@@ -105,6 +110,49 @@ export default function JobDetailsPage() {
   }, [jobData, filesLoaded]);
 
 
+
+  // Load job details from query parameters (to avoid API call)
+  const loadJobDetailsFromParams = async () => {
+    try {
+      setLoading(true);
+      // Reset file-related state when loading a new job
+      setFilesLoaded(false);
+      setLoadingFiles(false);
+      
+      console.log('Loading job details from query params (avoiding API call)');
+      
+      // Parse files from query params
+      let parsedFiles: string[] = [];
+      try {
+        parsedFiles = files ? JSON.parse(files as string) : [];
+      } catch (e) {
+        console.warn('Failed to parse files from query params:', e);
+      }
+      
+      // Create job data from query parameters
+      const mappedJobData: JobData = {
+        job_id: jobId as string,
+        app_name: appName as string,
+        release_name: releaseName as string,
+        source_folder: sourceFolder as string,
+        job_status: status as string,
+        created_at: createdAt as string,
+        description: description as string,
+        api_files: parsedFiles,
+        files: [], // Initialize empty legacy files array
+        content_pipeline_files: [], // Initialize empty Content Pipeline files array
+        Subset_name: sourceFolder as string // Map source_folder to Subset_name for UI compatibility
+      };
+      
+      setJobData(mappedJobData);
+      
+    } catch (error) {
+      console.error('Error loading job details from params:', error);
+      setError('Failed to load job details: ' + (error as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const loadJobDetails = async () => {
     try {

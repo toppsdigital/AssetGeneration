@@ -35,9 +35,22 @@ export default function JobsPage() {
   };
 
   // Navigate to job details page
-  const viewJobDetails = (jobId: string | undefined) => {
-    if (!jobId) return;
-    router.push(`/job/details?jobId=${encodeURIComponent(jobId)}`);
+  const viewJobDetails = (job: JobData) => {
+    if (!job.job_id) return;
+    
+    // Pass job data to reduce API calls in details page
+    const queryParams = new URLSearchParams({
+      jobId: job.job_id,
+      appName: job.app_name || '',
+      releaseName: job.release_name || '',
+      sourceFolder: job.source_folder || '',
+      status: job.job_status || '',
+      createdAt: job.created_at || '',
+      files: JSON.stringify(job.files || []),
+      description: job.description || ''
+    });
+    
+    router.push(`/job/details?${queryParams.toString()}`);
   };
 
   // Execute appropriate action based on job status
@@ -55,7 +68,7 @@ export default function JobsPage() {
       previewAssets(job);
     } else {
       // Default to viewing details
-      viewJobDetails(job.job_id);
+      viewJobDetails(job);
     }
   };
 
@@ -145,10 +158,19 @@ export default function JobsPage() {
   }, [jobs]);
 
   const getJobDisplayName = (job: JobData) => {
-    if (job.app_name && job.release_name) {
-      return `${job.app_name} - ${job.release_name}`;
+    const parts = [];
+    
+    if (job.app_name) parts.push(job.app_name);
+    if (job.release_name) parts.push(job.release_name);
+    if (job.source_folder) {
+      // Extract subset from source_folder (e.g., "MARVEL/PDFs" -> "MARVEL")
+      const subset = job.source_folder.split('/')[0];
+      if (subset && subset !== job.app_name) {
+        parts.push(subset);
+      }
     }
-    return job.app_name || job.release_name || 'Untitled Job';
+    
+    return parts.length > 0 ? parts.join(' - ') : 'Untitled Job';
   };
 
   const getStatusColor = (status: string | undefined) => {
@@ -394,12 +416,6 @@ export default function JobsPage() {
                           })()} {job.job_status || 'Unknown Status'}
                         </span>
                         <span style={{ color: '#9ca3af', fontSize: 12 }}>
-                          🏢 {job.app_name}
-                        </span>
-                        <span style={{ color: '#9ca3af', fontSize: 12 }}>
-                          🚀 {job.release_name}
-                        </span>
-                        <span style={{ color: '#9ca3af', fontSize: 12 }}>
                           📁 {job.files.length} files
                         </span>
                       </div>
@@ -417,101 +433,28 @@ export default function JobsPage() {
                     </div>
                     
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      {(() => {
-                        const status = job.job_status?.toLowerCase() || '';
-                        const isInProgress = status.includes('progress') || 
-                                           status.includes('running') || 
-                                           status.includes('processing') || 
-                                           status.includes('started');
-                        
-                        // Show buttons for in-progress jobs too
-                        if (isInProgress) {
-                          return (
-                            <>
-                              <button
-                                onClick={() => viewJobDetails(job.job_id)}
-                                style={{
-                                  padding: '8px 16px',
-                                  background: 'rgba(255, 255, 255, 0.1)',
-                                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                                  borderRadius: 6,
-                                  color: '#e5e7eb',
-                                  cursor: 'pointer',
-                                  fontSize: 14,
-                                  fontWeight: 500,
-                                  transition: 'all 0.2s'
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
-                                }}
-                              >
-                                📋 View Details
-                              </button>
-                            </>
-                          );
-                        }
-                        
-                        // Show action buttons when not in progress
-                        return (
-                          <>
-                            <button
-                              onClick={() => viewJobDetails(job.job_id)}
-                              style={{
-                                padding: '8px 16px',
-                                background: 'rgba(255, 255, 255, 0.1)',
-                                border: '1px solid rgba(255, 255, 255, 0.2)',
-                                borderRadius: 6,
-                                color: '#e5e7eb',
-                                cursor: 'pointer',
-                                fontSize: 14,
-                                fontWeight: 500,
-                                transition: 'all 0.2s'
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
-                              }}
-                            >
-                              📋 View Details
-                            </button>
-                            {!status.includes('digital assets succeeded') && (
-                              <button
-                                onClick={() => executeJobAction(job)}
-                                style={{
-                                  padding: '8px 16px',
-                                  background: status.includes('digital assets completed') || 
-                                             status.includes('digital assets succeeded')
-                                    ? 'linear-gradient(135deg, #10b981, #059669)'
-                                    : status.includes('upload completed') ||
-                                      status.includes('extraction completed')
-                                    ? 'linear-gradient(135deg, #f59e0b, #d97706)'
-                                    : 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: 6,
-                                  cursor: 'pointer',
-                                  fontSize: 14,
-                                  fontWeight: 600,
-                                  transition: 'all 0.2s'
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.transform = 'scale(1.05)';
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.transform = 'scale(1)';
-                                }}
-                              >
-                                {getActionButtonText(job.job_status)}
-                              </button>
-                            )}
-                          </>
-                        );
-                      })()}
+                      <button
+                        onClick={() => viewJobDetails(job)}
+                        style={{
+                          padding: '8px 16px',
+                          background: 'rgba(255, 255, 255, 0.1)',
+                          border: '1px solid rgba(255, 255, 255, 0.2)',
+                          borderRadius: 6,
+                          color: '#e5e7eb',
+                          cursor: 'pointer',
+                          fontSize: 14,
+                          fontWeight: 500,
+                          transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                        }}
+                      >
+                        📋 View Details
+                      </button>
                     </div>
                   </div>
                 </div>

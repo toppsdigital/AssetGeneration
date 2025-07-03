@@ -402,7 +402,7 @@ export default function JobPreviewPage() {
       }
 
       setDisplayName(fileName as string);
-
+      
       // Parse the actual file paths passed from details page
       if (!filePaths) {
         setError('No file paths provided');
@@ -418,7 +418,7 @@ export default function JobPreviewPage() {
         setError('Invalid file paths parameter');
         return;
       }
-      
+
       if (actualFilePaths.length === 0) {
         setError(`No ${type} files found`);
         return;
@@ -432,20 +432,20 @@ export default function JobPreviewPage() {
           try {
             // Extract filename from the full path for display
             const filename = filePath.split('/').pop() || filePath;
-            
+              
             console.log(`🔗 Getting presigned URL for: ${filePath}`);
-            
-            const response = await fetch('/api/s3-proxy', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ 
-                client_method: 'get',
+              
+                const response = await fetch('/api/s3-proxy', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ 
+                    client_method: 'get',
                 filename: filePath
-              }),
-            });
+                  }),
+                });
 
-            if (response.ok) {
-              const data = await response.json();
+                if (response.ok) {
+                  const data = await response.json();
               console.log(`✅ Got presigned URL for ${filename}: ${data.url}`);
               
               return {
@@ -629,41 +629,41 @@ export default function JobPreviewPage() {
                                 position: 'relative'
                               }}
                             >
-                              {asset.isTiff ? (
-                                <TiffViewer
-                                  src={asset.presignedUrl}
-                                  alt={asset.filename}
-                                  style={{
-                                    width: '100%',
-                                    height: 'auto',
-                                    maxHeight: '400px',
-                                    objectFit: 'contain',
-                                    display: 'block'
-                                  }}
-                                  onError={() => {
-                                    console.warn(`Failed to load TIFF: ${asset.filename}`);
-                                  }}
-                                />
-                              ) : (
-                                <img
-                                  src={asset.presignedUrl}
-                                  alt={asset.filename}
-                                  style={{
-                                    width: '100%',
-                                    height: 'auto',
-                                    maxHeight: '400px',
-                                    objectFit: 'contain',
-                                    display: 'block'
-                                  }}
-                                  onLoad={() => {
-                                    console.log(`✅ Image loaded successfully: ${asset.filename}`);
-                                  }}
-                                  onError={(e) => {
-                                    console.error(`❌ Image failed to load: ${asset.filename}`, asset.presignedUrl);
-                                    e.currentTarget.style.display = 'none';
-                                  }}
-                                />
-                              )}
+                            {asset.isTiff ? (
+                              <TiffViewer
+                                src={asset.presignedUrl}
+                                alt={asset.filename}
+                                style={{
+                                  width: '100%',
+                                  height: 'auto',
+                                  maxHeight: '400px',
+                                  objectFit: 'contain',
+                                  display: 'block'
+                                }}
+                                onError={() => {
+                                  console.warn(`Failed to load TIFF: ${asset.filename}`);
+                                }}
+                              />
+                            ) : (
+                              <img
+                                src={asset.presignedUrl}
+                                alt={asset.filename}
+                                style={{
+                                  width: '100%',
+                                  height: 'auto',
+                                  maxHeight: '400px',
+                                  objectFit: 'contain',
+                                  display: 'block'
+                                }}
+                                onLoad={() => {
+                                  console.log(`✅ Image loaded successfully: ${asset.filename}`);
+                                }}
+                                onError={(e) => {
+                                  console.error(`❌ Image failed to load: ${asset.filename}`, asset.presignedUrl);
+                                  e.currentTarget.style.display = 'none';
+                                }}
+                              />
+                            )}
                               
                               {/* Hover overlay to indicate clickable */}
                               <div style={{

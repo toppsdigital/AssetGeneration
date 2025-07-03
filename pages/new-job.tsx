@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import styles from '../styles/Home.module.css';
 import NavBar from '../components/NavBar';
 import Spinner from '../components/Spinner';
+import contentPipelineApi from '../web/utils/contentPipelineApi';
 
 interface NewJobFormData {
   appName: string;
@@ -123,44 +124,27 @@ export default function NewJobPage() {
     return Object.keys(newErrors).length === 0;
   };
 
-  // Create job JSON with initial status
-  const createJobJSON = async (jobData: any): Promise<void> => {
+  // Create job using Content Pipeline API
+  const createJob = async (jobData: {
+    appName: string;
+    releaseName: string;
+    sourceFolder: string;
+    files: string[];
+    description?: string;
+  }) => {
     try {
-      // Get presigned URL for job JSON
-      const presignedResponse = await fetch('/api/s3-proxy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          client_method: 'put',
-          filename: jobData.job_path,
-          upload: true
-        }),
+      const response = await contentPipelineApi.createJob({
+        app_name: jobData.appName,
+        release_name: jobData.releaseName,
+        source_folder: jobData.sourceFolder,
+        files: jobData.files,
+        description: jobData.description
       });
 
-      if (!presignedResponse.ok) {
-        throw new Error('Failed to get presigned URL for job JSON');
-      }
-
-      const { presignedUrl } = await presignedResponse.json();
-      
-      // Create and upload job JSON
-      const jobJsonBlob = new Blob([JSON.stringify(jobData, null, 2)], { type: 'application/json' });
-      const jobFormData = new FormData();
-      jobFormData.append('file', jobJsonBlob, `${jobData.job_id}.json`);
-      jobFormData.append('presignedUrl', presignedUrl);
-
-      const uploadResponse = await fetch('/api/s3-upload', {
-        method: 'POST',
-        body: jobFormData,
-      });
-
-      if (!uploadResponse.ok) {
-        throw new Error('Failed to upload job JSON');
-      }
-
-      console.log('Job JSON created successfully at:', jobData.job_path);
+      console.log('Job created successfully via Content Pipeline API:', response.job.job_id);
+      return response.job;
     } catch (error) {
-      console.error('Error creating job JSON:', error);
+      console.error('Error creating job via API:', error);
       throw error;
     }
   };
@@ -184,106 +168,44 @@ export default function NewJobPage() {
         throw new Error('No files selected for upload');
       }
 
-      // Step 1: Create job data structure and job JSON
-      const now = new Date().toISOString();
-      const jobId = `job_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      // Group files by prefix (removing _FR/_BK suffixes)
+      const fileGroups = new Set<string>();
       
-      // Group PDF files by base name (assuming _FR/_BK pattern)
-      const fileGroups = new Map<string, { front?: string, back?: string }>();
-      
-      Array.from(formData.selectedFiles!).forEach(file => {
-        const fileName = file.name.replace('.pdf', '');
-        let baseName = fileName;
-        let cardType: 'front' | 'back' = 'front';
+      Array.from(formData.selectedFiles).forEach(file => {
+        let fileName = file.name.replace('.pdf', ''); // Remove .pdf extension
         
-        // Check for _FR (front) or _BK (back) pattern
+        // Check for _FR (front) or _BK (back) pattern and extract prefix
         if (fileName.endsWith('_FR')) {
-          baseName = fileName.replace('_FR', '');
-          cardType = 'front';
+          fileName = fileName.replace('_FR', '');
         } else if (fileName.endsWith('_BK')) {
-          baseName = fileName.replace('_BK', '');
-          cardType = 'back';
+          fileName = fileName.replace('_BK', '');
         }
         
-        if (!fileGroups.has(baseName)) {
-          fileGroups.set(baseName, {});
-        }
-        
-        fileGroups.get(baseName)![cardType] = file.name;
+        // Add the prefix to our set (Set automatically handles duplicates)
+        fileGroups.add(fileName);
       });
       
-      // Create files array in the expected format
-      // Note: All upload statuses start as PENDING since the actual upload happens on the job details page
-      const files = Array.from(fileGroups.entries()).map(([baseName, files]) => {
-        const originalFiles = [];
-        
-        if (files.front) {
-          originalFiles.push({
-            filename: files.front,
-            card_type: "front",
-            file_path: generateFilePath(formData.appName, files.front),
-            uploaded: "PENDING" as const  // Upload will start after job creation
-          });
-        }
-        
-        if (files.back) {
-          originalFiles.push({
-            filename: files.back,
-            card_type: "back",
-            file_path: generateFilePath(formData.appName, files.back),
-            uploaded: "PENDING" as const  // Upload will start after job creation
-          });
-        }
-        
-        // If no _FR/_BK pattern, treat as single file
-        if (originalFiles.length === 0) {
-          const singleFileName = baseName + '.pdf';
-          originalFiles.push({
-            filename: singleFileName,
-            card_type: "front",
-            file_path: generateFilePath(formData.appName, singleFileName),
-            uploaded: "PENDING" as const  // Upload will start after job creation
-          });
-        }
-        
-        return {
-          filename: baseName,
-          uploaded: "PENDING" as const,    // Upload will start after job creation
-          extracted: "PENDING" as const,
-          digital_assets: "PENDING" as const,
-          last_updated: now,
-          original_files: originalFiles
-        };
+      // Convert set to array for the API
+      const filenames = Array.from(fileGroups);
+      
+      console.log('Original files:', Array.from(formData.selectedFiles).map(f => f.name));
+      console.log('Grouped file prefixes:', filenames);
+      
+      // Create job using Content Pipeline API
+      const createdJob = await createJob({
+        appName: formData.appName,
+        releaseName: formData.releaseName,
+        sourceFolder: generateFilePath(formData.appName),
+        files: filenames,
+        description: `${formData.subsetName} - Processing PDFs into digital assets`
       });
 
-      const initialJobData = {
-        job_id: jobId,
-        created_at: now,
-        last_updated: now,
-        app_name: formData.appName,
-        release_name: formData.releaseName,
-        Subset_name: formData.subsetName, // Note: Capital S to match schema
-        job_status: "Upload started" as const,
-        files: files,
-        job_path: `Jobs/${jobId}.json`,
-        source_folder: generateFilePath(formData.appName),
-        total_files: files.length
-      };
-
-      console.log('Creating job with initial status:', initialJobData);
-
-      // Create job JSON with "Upload started" status
-      await createJobJSON(initialJobData);
-      setJobCreated(initialJobData);
-
+      setJobCreated(createdJob);
       console.log('Job created successfully, navigating to job details page...');
-      
-      // Step 2: Navigate to job details page and start upload there
-      const jobPath = initialJobData.job_path;
       
       // Store the form data in sessionStorage so the job details page can access it
       const uploadSession = {
-        jobId: initialJobData.job_id,
+        jobId: createdJob.job_id,
         appName: formData.appName,
         releaseName: formData.releaseName,
         subsetName: formData.subsetName,
@@ -294,19 +216,31 @@ export default function NewJobPage() {
         }))
       };
       
-      sessionStorage.setItem(`upload_${initialJobData.job_id}`, JSON.stringify(uploadSession));
+      sessionStorage.setItem(`upload_${createdJob.job_id}`, JSON.stringify(uploadSession));
       
       // Store actual File objects in global variable (sessionStorage can't store File objects)
       (window as any).pendingUploadFiles = {
-        jobId: initialJobData.job_id,
+        jobId: createdJob.job_id,
         files: Array.from(formData.selectedFiles!)
       };
       
-      console.log('Stored upload session data and files for job:', initialJobData.job_id);
+      console.log('Stored upload session data and files for job:', createdJob.job_id);
       console.log('File count:', formData.selectedFiles!.length);
       
-      // Navigate to job details page
-      router.push(`/job/details?jobPath=${encodeURIComponent(jobPath)}&startUpload=true`);
+      // Navigate to job details page with job data to avoid API call
+      const queryParams = new URLSearchParams({
+        jobId: createdJob.job_id!,
+        appName: createdJob.app_name || formData.appName,
+        releaseName: createdJob.release_name || formData.releaseName,
+        sourceFolder: createdJob.source_folder || generateFilePath(formData.appName),
+        status: createdJob.job_status || 'Upload started',
+        createdAt: createdJob.created_at || new Date().toISOString(),
+        files: JSON.stringify(createdJob.files || filenames),
+        description: createdJob.description || `${formData.subsetName} - Processing PDFs into digital assets`,
+        startUpload: 'true'
+      });
+      
+      router.push(`/job/details?${queryParams.toString()}`);
       
     } catch (error) {
       console.error('Error creating job:', error);
