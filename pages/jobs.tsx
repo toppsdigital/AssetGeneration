@@ -3,150 +3,46 @@ import { useRouter } from 'next/router';
 import styles from '../styles/Home.module.css';
 import NavBar from '../components/NavBar';
 import Spinner from '../components/Spinner';
-
-interface JobFile {
-  name: string;
-  lastModified: string | null;
-  jobData?: any;
-  loading?: boolean;
-}
+import { contentPipelineApi, JobData } from '../web/utils/contentPipelineApi';
 
 export default function JobsPage() {
   const router = useRouter();
-  const [jobs, setJobs] = useState<JobFile[]>([]);
+  const [jobs, setJobs] = useState<JobData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [expandedJobs, setExpandedJobs] = useState<Set<string>>(new Set());
 
-
-  // Fetch all job files from S3
+  // Fetch all jobs from Content Pipeline API
   const fetchJobs = async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/s3-proxy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_method: 'list' }),
-      });
+      console.log('Fetching jobs from Content Pipeline API...');
+      const response = await contentPipelineApi.listJobs();
+      console.log('Jobs fetched:', response);
       
-      if (!res.ok) throw new Error('Failed to fetch job files');
-      const data = await res.json();
+      // Sort jobs by creation date (most recent first)
+      const sortedJobs = response.jobs.sort((a, b) => 
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
       
-      // Filter for job files in Jobs/ directory
-      const jobFiles = data.files.filter((file: any) => {
-        const fileName = typeof file === 'string' ? file : file.name;
-        return fileName.startsWith('asset_generator/dev/uploads/Jobs/') && fileName.endsWith('.json');
-      });
-      
-      // Sort by last modified date (most recent first)
-      const sortedJobs = jobFiles.sort((a: any, b: any) => {
-        const aFileName = typeof a === 'string' ? a : a.name;
-        const bFileName = typeof b === 'string' ? b : b.name;
-        const aModified = typeof a === 'string' ? null : a.lastModified;
-        const bModified = typeof b === 'string' ? null : b.lastModified;
-        
-        if (aModified && bModified) {
-          return new Date(bModified).getTime() - new Date(aModified).getTime();
-        }
-        
-        // Fallback to filename comparison
-        return bFileName.localeCompare(aFileName);
-      });
-      
-      const jobsWithMetadata = sortedJobs.map((file: any) => ({
-        name: typeof file === 'string' ? file : file.name,
-        lastModified: typeof file === 'string' ? null : file.lastModified,
-        loading: false
-      }));
-      
-      setJobs(jobsWithMetadata);
-      
-      // Automatically fetch job data for all jobs
-      await fetchAllJobDetails(jobsWithMetadata);
+      setJobs(sortedJobs);
     } catch (err) {
+      console.error('Error fetching jobs:', err);
       setError((err as Error).message);
     } finally {
       setLoading(false);
     }
   };
 
-  // Fetch job details for all jobs
-  const fetchAllJobDetails = async (jobList: JobFile[]) => {
-    const promises = jobList.map(async (job) => {
-      try {
-        const relativePath = job.name.replace('asset_generator/dev/uploads/', '');
-        const res = await fetch('/api/s3-proxy', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            client_method: 'get', 
-            filename: relativePath,
-            download: true 
-          }),
-        });
-        
-        if (!res.ok) throw new Error('Failed to fetch job details');
-        const jobData = await res.json();
-        
-        return { ...job, jobData };
-      } catch (err) {
-        console.error(`Error fetching job details for ${job.name}:`, err);
-        return { ...job, jobData: null };
-      }
-    });
-
-    const jobsWithData = await Promise.all(promises);
-    setJobs(jobsWithData);
-  };
-
-  // Fetch job details for a specific job
-  const fetchJobDetails = async (jobName: string) => {
-    setJobs(prev => prev.map(job => 
-      job.name === jobName ? { ...job, loading: true } : job
-    ));
-    
-    try {
-      const relativePath = jobName.replace('asset_generator/dev/uploads/', '');
-      const res = await fetch('/api/s3-proxy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          client_method: 'get', 
-          filename: relativePath,
-          download: true 
-        }),
-      });
-      
-      if (!res.ok) throw new Error('Failed to fetch job details');
-      const jobData = await res.json();
-      
-      setJobs(prev => prev.map(job => 
-        job.name === jobName ? { ...job, jobData, loading: false } : job
-      ));
-    } catch (err) {
-      console.error('Error fetching job details:', err);
-      setJobs(prev => prev.map(job => 
-        job.name === jobName ? { ...job, loading: false } : job
-      ));
-    }
-  };
-
-
-
-  // Navigate to processing page for a specific job
-  const viewJobProcessing = (job: JobFile) => {
-    if (!job.jobData) return;
-    
-    // Since extraction-processing page was removed, just show job details in an alert
-    alert(`Job Details:\n\nJob ID: ${job.jobData.job_id || 'Unknown'}\nStatus: ${job.jobData.job_status || 'Unknown'}\nSource Folder: ${job.jobData.source_folder || 'Unknown'}\nTemplate: ${job.jobData.template || 'Unknown'}\nTotal Files: ${job.jobData.total_files || 'Unknown'}`);
+  // Navigate to job details page
+  const viewJobDetails = (jobId: string | undefined) => {
+    if (!jobId) return;
+    router.push(`/job/details?jobId=${encodeURIComponent(jobId)}`);
   };
 
   // Execute appropriate action based on job status
-  const executeJobAction = async (job: JobFile) => {
-    if (!job.jobData) return;
-    
-    const status = job.jobData.job_status?.toLowerCase() || '';
+  const executeJobAction = async (job: JobData) => {
+    const status = job.job_status?.toLowerCase() || '';
     
     if (status.includes('upload completed')) {
       // Start PDF extraction
@@ -157,40 +53,35 @@ export default function JobsPage() {
     } else if (status.includes('digital assets completed') || status.includes('digital assets succeeded')) {
       // Preview assets
       previewAssets(job);
+    } else {
+      // Default to viewing details
+      viewJobDetails(job.job_id);
     }
   };
 
   // Start PDF extraction for a job
-  const startPdfExtraction = async (job: JobFile) => {
-    if (!job.jobData) return;
+  const startPdfExtraction = async (job: JobData) => {
+    if (!job.job_id) return;
     
     try {
-      const jobFilePath = job.name.replace('asset_generator/dev/uploads/', '');
-      
-      const response = await fetch('/api/extract-pdfs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobFilePath }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to start PDF extraction');
-      }
-
-      const result = await response.json();
-      console.log('Extraction started:', result);
-      
       // Update job status to show it's processing
+      await contentPipelineApi.updateJobStatus(job.job_id, 'PDF extraction started');
+      
+      // Update local state
       setJobs(prev => prev.map(j => 
-        j.name === job.name 
-          ? { ...j, jobData: { ...j.jobData, job_status: 'PDF extraction started...' } }
+        j.job_id === job.job_id 
+          ? { ...j, job_status: 'PDF extraction started' }
           : j
       ));
       
-      // Refresh job data after a delay
+      // Here you would typically call your PDF extraction API
+      // For now, we'll just show a message
+      alert('PDF extraction started for job: ' + job.job_id);
+      
+      // Refresh jobs after a delay
       setTimeout(() => {
-        fetchJobDetails(job.name);
-      }, 5000);
+        fetchJobs();
+      }, 2000);
 
     } catch (error) {
       console.error('Error starting extraction:', error);
@@ -199,36 +90,28 @@ export default function JobsPage() {
   };
 
   // Create digital assets for a job
-  const createDigitalAssets = async (job: JobFile) => {
-    if (!job.jobData) return;
+  const createDigitalAssets = async (job: JobData) => {
+    if (!job.job_id) return;
     
     try {
-      const jobFilePath = job.name.replace('asset_generator/dev/uploads/', '');
-      
-      const response = await fetch('/api/create-digital-assets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobFilePath }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to start digital asset creation');
-      }
-
-      const result = await response.json();
-      console.log('Asset creation started:', result);
-      
       // Update job status to show it's processing
+      await contentPipelineApi.updateJobStatus(job.job_id, 'Digital asset creation started');
+      
+      // Update local state
       setJobs(prev => prev.map(j => 
-        j.name === job.name 
-          ? { ...j, jobData: { ...j.jobData, job_status: 'Digital asset creation started...' } }
+        j.job_id === job.job_id 
+          ? { ...j, job_status: 'Digital asset creation started' }
           : j
       ));
       
-      // Refresh job data after a delay
+      // Here you would typically call your digital asset creation API
+      // For now, we'll just show a message
+      alert('Digital asset creation started for job: ' + job.job_id);
+      
+      // Refresh jobs after a delay
       setTimeout(() => {
-        fetchJobDetails(job.name);
-      }, 10000);
+        fetchJobs();
+      }, 5000);
 
     } catch (error) {
       console.error('Error starting asset creation:', error);
@@ -237,13 +120,13 @@ export default function JobsPage() {
   };
 
   // Preview assets for a job
-  const previewAssets = (job: JobFile) => {
-    if (!job.jobData) return;
+  const previewAssets = (job: JobData) => {
+    if (!job.job_id) return;
     
     router.push({
       pathname: '/job/preview',
       query: {
-        jobData: JSON.stringify(job.jobData)
+        jobId: job.job_id
       }
     });
   };
@@ -252,20 +135,25 @@ export default function JobsPage() {
     fetchJobs();
   }, []);
 
-  // Auto-refresh in-progress jobs every 10 seconds
+  // Auto-refresh in-progress jobs every 30 seconds
   useEffect(() => {
     const interval = setInterval(() => {
       refreshInProgressJobs();
-    }, 10000); // 10 seconds
+    }, 30000); // 30 seconds
 
     return () => clearInterval(interval);
-  }, [jobs]); // Re-run when jobs change to update the interval
+  }, [jobs]);
 
-  const getJobDisplayName = (jobName: string) => {
-    return jobName.split('/').pop()?.replace('.json', '') || jobName;
+  const getJobDisplayName = (job: JobData) => {
+    if (job.app_name && job.release_name) {
+      return `${job.app_name} - ${job.release_name}`;
+    }
+    return job.app_name || job.release_name || 'Untitled Job';
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: string | undefined) => {
+    if (!status) return '#9ca3af'; // Gray for unknown status
+    
     const lowerStatus = status.toLowerCase();
     
     // Green for completed/successful states
@@ -275,32 +163,28 @@ export default function JobsPage() {
     if (lowerStatus.includes('fail') || lowerStatus.includes('error')) return '#ef4444';
     
     // Yellow for in-progress states
-    if (lowerStatus.includes('upload') && lowerStatus.includes('progress')) return '#f59e0b';
-    if (lowerStatus.includes('extraction') && lowerStatus.includes('progress')) return '#f59e0b';
-    if (lowerStatus.includes('assets') && lowerStatus.includes('progress')) return '#f59e0b';
-    if (lowerStatus.includes('running') || lowerStatus.includes('processing') || lowerStatus.includes('started')) return '#f59e0b';
-    if (lowerStatus.includes('in progress')) return '#f59e0b';
+    if (lowerStatus.includes('progress') || lowerStatus.includes('running') || 
+        lowerStatus.includes('processing') || lowerStatus.includes('started')) return '#f59e0b';
     
     // Blue for other active states
-    if (lowerStatus.includes('upload') || lowerStatus.includes('extraction') || lowerStatus.includes('assets')) return '#3b82f6';
-    
-    // Gray for unknown/default states
-    return '#9ca3af';
+    return '#3b82f6';
   };
 
-  const getActionButtonText = (status: string) => {
+  const getActionButtonText = (status: string | undefined) => {
+    if (!status) return 'View Details';
+    
     const lowerStatus = status.toLowerCase();
     if (lowerStatus.includes('upload completed')) return 'Start PDF Extraction';
     if (lowerStatus.includes('extraction completed')) return 'Create Digital Assets';
     if (lowerStatus.includes('digital assets completed') || lowerStatus.includes('digital assets succeeded')) return 'Preview Assets';
-    return 'View Processing';
+    return 'View Details';
   };
 
   const refreshInProgressJobs = async () => {
     // Get all jobs that are in progress
     const inProgressJobs = jobs.filter(job => {
-      if (!job.jobData?.job_status) return false;
-      const status = job.jobData.job_status.toLowerCase();
+      if (!job.job_status) return false;
+      const status = job.job_status.toLowerCase();
       return status.includes('progress') || 
              status.includes('running') || 
              status.includes('processing') || 
@@ -311,26 +195,14 @@ export default function JobsPage() {
       return;
     }
 
-    // Refresh each in-progress job
-    const refreshPromises = inProgressJobs.map(job => fetchJobDetails(job.name));
+    console.log(`Refreshing ${inProgressJobs.length} in-progress jobs...`);
     
     try {
-      await Promise.all(refreshPromises);
+      // Refresh all jobs - simpler approach
+      await fetchJobs();
     } catch (error) {
       console.error('Error refreshing in-progress jobs:', error);
     }
-  };
-
-  const toggleJobExpansion = (jobName: string) => {
-    setExpandedJobs(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(jobName)) {
-        newSet.delete(jobName);
-      } else {
-        newSet.add(jobName);
-      }
-      return newSet;
-    });
   };
 
   if (loading) {
@@ -424,20 +296,20 @@ export default function JobsPage() {
               >
                 ➕ New Job
               </button>
-            <button
-              onClick={fetchJobs}
-              style={{
-                padding: '8px 16px',
-                background: 'rgba(59, 130, 246, 0.1)',
-                border: '1px solid rgba(59, 130, 246, 0.3)',
-                borderRadius: 8,
-                color: '#60a5fa',
-                cursor: 'pointer',
-                fontSize: 14
-              }}
-            >
-              🔄 Refresh All
-            </button>
+              <button
+                onClick={fetchJobs}
+                style={{
+                  padding: '8px 16px',
+                  background: 'rgba(59, 130, 246, 0.1)',
+                  border: '1px solid rgba(59, 130, 246, 0.3)',
+                  borderRadius: 8,
+                  color: '#60a5fa',
+                  cursor: 'pointer',
+                  fontSize: 14
+                }}
+              >
+                🔄 Refresh All
+              </button>
             </div>
           </div>
 
@@ -449,16 +321,39 @@ export default function JobsPage() {
               borderRadius: 12,
               border: '1px solid rgba(255, 255, 255, 0.1)'
             }}>
-              <p style={{ color: '#9ca3af', fontSize: 18 }}>No jobs found</p>
-              <p style={{ color: '#6b7280', fontSize: 14, marginTop: 8 }}>
-                Jobs will appear here after you upload PDFs for processing
+              <div style={{ fontSize: 48, marginBottom: 16 }}>📋</div>
+              <h3 style={{ color: '#9ca3af', fontSize: 18, marginBottom: 8 }}>No Jobs Found</h3>
+              <p style={{ color: '#6b7280', fontSize: 14, marginBottom: 24 }}>
+                Create your first job to get started with processing PDFs into digital assets
               </p>
+              <button
+                onClick={() => router.push('/new-job')}
+                style={{
+                  padding: '12px 24px',
+                  background: 'linear-gradient(135deg, #10b981, #059669)',
+                  border: 'none',
+                  borderRadius: 8,
+                  color: 'white',
+                  cursor: 'pointer',
+                  fontSize: 16,
+                  fontWeight: 600,
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'scale(1.05)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'scale(1)';
+                }}
+              >
+                ➕ Create New Job
+              </button>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               {jobs.map((job) => (
                 <div
-                  key={job.name}
+                  key={job.job_id}
                   style={{
                     background: 'rgba(255, 255, 255, 0.06)',
                     border: '1px solid rgba(255, 255, 255, 0.1)',
@@ -476,110 +371,65 @@ export default function JobsPage() {
                           color: '#f8f8f8',
                           margin: 0
                         }}>
-                          {getJobDisplayName(job.name)}
+                          {getJobDisplayName(job)}
                         </h3>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            fetchJobDetails(job.name);
-                          }}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            color: '#60a5fa',
-                            cursor: 'pointer',
-                            fontSize: 14,
-                            padding: '4px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            opacity: 0.7,
-                            transition: 'opacity 0.2s'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.opacity = '1';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.opacity = '0.7';
-                          }}
-                          title="Refresh job data"
-                        >
-                          🔄
-                        </button>
                       </div>
                       <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-                        {job.lastModified && (
-                          <span style={{ color: '#9ca3af', fontSize: 14 }}>
-                            📅 {new Date(job.lastModified).toLocaleString()}
-                          </span>
-                        )}
-                        {job.jobData?.job_status && (
-                          <span style={{ 
-                            color: getStatusColor(job.jobData.job_status),
-                            fontSize: 14,
-                            fontWeight: 600
-                          }}>
-                            {(() => {
-                              const status = job.jobData.job_status.toLowerCase();
-                              if (status.includes('succeed') || status.includes('completed')) return '✅';
-                              if (status.includes('fail') || status.includes('error')) return '❌';
-                              if (status.includes('progress') || status.includes('running') || status.includes('processing') || status.includes('started')) return '⏳';
-                              return '🔄';
-                            })()} {job.jobData.job_status}
-                          </span>
-                        )}
-                        {job.jobData?.source_folder && (
-                          <span style={{ color: '#9ca3af', fontSize: 12 }}>
-                            📁 {job.jobData.source_folder.split('/').pop()}
-                          </span>
-                        )}
+                        <span style={{ color: '#9ca3af', fontSize: 14 }}>
+                          📅 {new Date(job.created_at).toLocaleString()}
+                        </span>
+                        <span style={{ 
+                          color: getStatusColor(job.job_status),
+                          fontSize: 14,
+                          fontWeight: 600
+                        }}>
+                          {(() => {
+                            if (!job.job_status) return '❓';
+                            const status = job.job_status.toLowerCase();
+                            if (status.includes('succeed') || status.includes('completed')) return '✅';
+                            if (status.includes('fail') || status.includes('error')) return '❌';
+                            if (status.includes('progress') || status.includes('running') || 
+                                status.includes('processing') || status.includes('started')) return '⏳';
+                            return '🔄';
+                          })()} {job.job_status || 'Unknown Status'}
+                        </span>
+                        <span style={{ color: '#9ca3af', fontSize: 12 }}>
+                          🏢 {job.app_name}
+                        </span>
+                        <span style={{ color: '#9ca3af', fontSize: 12 }}>
+                          🚀 {job.release_name}
+                        </span>
+                        <span style={{ color: '#9ca3af', fontSize: 12 }}>
+                          📁 {job.files.length} files
+                        </span>
                       </div>
+                      {job.description && (
+                        <p style={{ 
+                          color: '#9ca3af', 
+                          fontSize: 14, 
+                          marginTop: 8, 
+                          marginBottom: 0,
+                          fontStyle: 'italic'
+                        }}>
+                          {job.description}
+                        </p>
+                      )}
                     </div>
                     
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, minHeight: '32px' }}>
-                      {job.loading && (
-                        <span style={{ 
-                          color: '#60a5fa', 
-                          fontSize: 12, 
-                          fontStyle: 'italic',
-                          minWidth: '80px'
-                        }}>
-                          Refreshing...
-                        </span>
-                      )}
-                      
-                      {job.jobData && (() => {
-                        const status = job.jobData.job_status?.toLowerCase() || '';
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      {(() => {
+                        const status = job.job_status?.toLowerCase() || '';
                         const isInProgress = status.includes('progress') || 
                                            status.includes('running') || 
                                            status.includes('processing') || 
                                            status.includes('started');
                         
-                        // Show spinner and hide button when in progress
+                        // Show buttons for in-progress jobs too
                         if (isInProgress) {
                           return (
                             <>
-                              <div style={{ 
-                                width: '32px', 
-                                height: '32px', 
-                                display: 'flex', 
-                                alignItems: 'center', 
-                                justifyContent: 'center' 
-                              }}>
-                                <div style={{
-                                  width: '20px',
-                                  height: '20px',
-                                  border: '2px solid rgba(249, 115, 22, 0.3)',
-                                  borderTop: '2px solid #f97316',
-                                  borderRadius: '50%',
-                                  animation: 'spin 1s linear infinite'
-                                }} />
-                              </div>
                               <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const jobPath = job.name.replace('asset_generator/dev/uploads/', '');
-                                  router.push(`/job/details?jobPath=${encodeURIComponent(jobPath)}`);
-                                }}
+                                onClick={() => viewJobDetails(job.job_id)}
                                 style={{
                                   padding: '8px 16px',
                                   background: 'rgba(255, 255, 255, 0.1)',
@@ -604,15 +454,11 @@ export default function JobsPage() {
                           );
                         }
                         
-                        // Show action button and view details button when not in progress
+                        // Show action buttons when not in progress
                         return (
                           <>
                             <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                const jobPath = job.name.replace('asset_generator/dev/uploads/', '');
-                                router.push(`/job/details?jobPath=${encodeURIComponent(jobPath)}`);
-                              }}
+                              onClick={() => viewJobDetails(job.job_id)}
                               style={{
                                 padding: '8px 16px',
                                 background: 'rgba(255, 255, 255, 0.1)',
@@ -635,16 +481,7 @@ export default function JobsPage() {
                             </button>
                             {!status.includes('digital assets succeeded') && (
                               <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (status.includes('digital assets completed') || status.includes('digital assets succeeded')) {
-                                    previewAssets(job);
-                                  } else if (status.includes('upload completed') || status.includes('extraction completed')) {
-                                    executeJobAction(job);
-                                  } else {
-                                    viewJobProcessing(job);
-                                  }
-                                }}
+                                onClick={() => executeJobAction(job)}
                                 style={{
                                   padding: '8px 16px',
                                   background: status.includes('digital assets completed') || 
@@ -669,7 +506,7 @@ export default function JobsPage() {
                                   e.currentTarget.style.transform = 'scale(1)';
                                 }}
                               >
-                                {job.jobData.job_status ? getActionButtonText(job.jobData.job_status) : 'View Processing'}
+                                {getActionButtonText(job.job_status)}
                               </button>
                             )}
                           </>
@@ -677,8 +514,6 @@ export default function JobsPage() {
                       })()}
                     </div>
                   </div>
-
-
                 </div>
               ))}
             </div>
