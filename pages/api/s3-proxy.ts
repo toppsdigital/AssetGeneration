@@ -57,8 +57,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   if (client_method === 'put') {
-    const { filename, upload } = req.body;
-    console.log('S3 Proxy: PUT - filename:', filename, 'upload:', upload);
+    const { filename, upload, expires_in = 720 } = req.body;
+    console.log('S3 Proxy: PUT - filename:', filename, 'upload:', upload, 'expires_in:', expires_in);
     const backendEndpoint = 'https://devops-dev.services.toppsapps.com/s3/presigned-url';
     const putRes = await fetch(backendEndpoint, {
       method: 'POST',
@@ -66,11 +66,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       body: JSON.stringify({
         client_method: 'put',
         filename,
+        expires_in,
       }),
     });
     console.log('S3 Proxy: PUT - Backend response status:', putRes.status);
     if (!putRes.ok) {
-      return res.status(500).json({ error: 'Failed to get presigned S3 PUT URL' });
+      const errorData = await putRes.json().catch(() => ({}));
+      console.error('S3 Proxy: PUT - Backend error:', errorData);
+      return res.status(500).json({ error: 'Failed to get presigned S3 PUT URL', details: errorData });
     }
     const { url } = await putRes.json();
     

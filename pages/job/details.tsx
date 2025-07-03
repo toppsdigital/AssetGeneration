@@ -1,5 +1,5 @@
 import { useRouter } from 'next/router';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import NavBar from '../../components/NavBar';
 import styles from '../../styles/Edit.module.css';
 import Spinner from '../../components/Spinner';
@@ -84,9 +84,22 @@ export default function JobDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const [filesLoaded, setFilesLoaded] = useState(false);
   const [loadingFiles, setLoadingFiles] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
+  const [uploadingFiles, setUploadingFiles] = useState<Set<string>>(new Set());
+  const [uploadStarted, setUploadStarted] = useState(false);
 
   useEffect(() => {
     if (jobId) {
+      // Debug: Check if pending files are available
+      console.log('🔍 Initial page load - checking pending files:', {
+        jobId,
+        pendingFiles: (window as any).pendingUploadFiles ? {
+          jobId: (window as any).pendingUploadFiles.jobId,
+          filesCount: (window as any).pendingUploadFiles.files?.length || 0,
+          fileNames: (window as any).pendingUploadFiles.files?.map((f: File) => f.name) || []
+        } : null
+      });
+      
       // Check if we have job data from query params to avoid API call
       if (appName && releaseName && sourceFolder && status) {
         loadJobDetailsFromParams();
@@ -98,18 +111,108 @@ export default function JobDetailsPage() {
 
   // Load file objects after job details are loaded
   useEffect(() => {
+    console.log('🔄 useEffect[jobData, filesLoaded] triggered at', new Date().toISOString(), ':', { 
+      hasJobData: !!jobData, 
+      hasApiFiles: !!jobData?.api_files?.length, 
+      filesLoaded, 
+      jobStatus: jobData?.job_status,
+      uploadStarted
+    });
+    
+    // Don't reload files if upload has started - this prevents overwriting status updates
+    if (uploadStarted) {
+      console.log('🔄 Skipping file loading - upload in progress, avoiding status overwrites');
+      return;
+    }
+    
     if (jobData && jobData.api_files && jobData.api_files.length > 0 && !filesLoaded) {
+      console.log('🔄 Loading files - condition met');
       if (jobData.job_status === 'Upload in progress' || jobData.job_status === 'Upload started') {
         // Create new file objects for jobs that are starting upload
+        console.log('🔄 Calling createNewFiles');
         createNewFiles();
       } else {
         // Load existing file objects for jobs that already have them
+        console.log('🔄 Calling loadExistingFiles');
         loadExistingFiles();
       }
+    } else {
+      console.log('🔄 Skipping file loading - condition not met');
     }
   }, [jobData, filesLoaded]);
 
+  // Trigger upload check when files are loaded
+  useEffect(() => {
+    if (!filesLoaded || !jobData?.content_pipeline_files || uploadStarted) {
+      return;
+    }
 
+    console.log('✅ Files loaded, checking for uploads...');
+    console.log('🔍 Checking for files that need uploading...');
+    
+    // Collect all files with "Uploading" status
+    const filesToUpload: { filename: string; filePath: string }[] = [];
+    
+    jobData.content_pipeline_files.forEach(fileGroup => {
+      if (fileGroup.original_files) {
+        Object.entries(fileGroup.original_files).forEach(([filename, fileInfo]) => {
+          if (fileInfo.status === 'Uploading') {
+            filesToUpload.push({
+              filename: filename,
+              filePath: fileInfo.file_path
+            });
+          }
+        });
+      }
+    });
+
+    if (filesToUpload.length === 0) {
+      console.log('ℹ️ No files need uploading');
+      return;
+    }
+
+    console.log(`📁 Found ${filesToUpload.length} files that need uploading:`, filesToUpload.map(f => f.filename));
+
+    // Check if we have actual File objects (for new jobs)
+    const pendingFiles = (window as any).pendingUploadFiles;
+    if (pendingFiles && pendingFiles.jobId === jobData.job_id && pendingFiles.files) {
+      console.log('🚀 Starting upload with files from new job creation...');
+      
+      // Filter the pending files to only upload what's needed
+      const matchedFiles = pendingFiles.files.filter((file: File) =>
+        filesToUpload.some(needed => needed.filename === file.name)
+      );
+      
+      if (matchedFiles.length > 0) {
+        console.log('Starting upload for:', matchedFiles.map((f: File) => f.name));
+        
+        // Set flag to prevent re-triggering
+        setUploadStarted(true);
+        
+        // Start upload process (defined below)
+        const doUpload = async () => {
+          try {
+            await startUploadProcess(matchedFiles);
+          } catch (error) {
+            console.error('Upload process failed:', error);
+          }
+        };
+        
+        doUpload();
+      }
+    } else {
+      console.log('⚠️ Files need uploading but no File objects available');
+      console.log('📋 Required files:', filesToUpload.map(f => f.filename));
+      console.log('ℹ️ User will need to upload these files manually');
+    }
+  }, [filesLoaded, uploadStarted]);
+
+  // Reset upload state when job changes
+  useEffect(() => {
+    setUploadStarted(false);
+    setUploadProgress({});
+    setUploadingFiles(new Set());
+  }, [jobData?.job_id]);
 
   // Load job details from query parameters (to avoid API call)
   const loadJobDetailsFromParams = async () => {
@@ -144,6 +247,7 @@ export default function JobDetailsPage() {
         Subset_name: sourceFolder as string // Map source_folder to Subset_name for UI compatibility
       };
       
+      console.log('🔄 setJobData called from: loadJobDetailsFromParams at', new Date().toISOString());
       setJobData(mappedJobData);
       
     } catch (error) {
@@ -175,6 +279,7 @@ export default function JobDetailsPage() {
         Subset_name: response.job.source_folder // Map source_folder to Subset_name for UI compatibility
       };
       
+      console.log('🔄 setJobData called from: loadJobDetails at', new Date().toISOString());
       setJobData(mappedJobData);
       
     } catch (error) {
@@ -213,6 +318,11 @@ export default function JobDetailsPage() {
         content_pipeline_files: fileObjects
       };
       
+      console.log('✅ Loaded existing files successfully, checking if upload should start...');
+      console.log('Job status:', jobData.job_status);
+      console.log('Files loaded:', fileObjects.length);
+      
+      console.log('🔄 setJobData called from: loadExistingFiles at', new Date().toISOString());
       setJobData(updatedJobData);
       setFilesLoaded(true);
       setLoadingFiles(false);
@@ -226,11 +336,15 @@ export default function JobDetailsPage() {
 
   // Create new file objects using batch create
   const createNewFiles = async () => {
-    if (!jobData || !jobData.api_files || jobData.api_files.length === 0) return;
+    if (!jobData || !jobData.api_files || jobData.api_files.length === 0) {
+      console.log('createNewFiles: No job data or api_files found');
+      return;
+    }
     
     try {
       setLoadingFiles(true);
       console.log('Creating file objects for:', jobData.api_files);
+      console.log('Job data:', { job_id: jobData.job_id, app_name: jobData.app_name });
       
       // Create file objects based on the grouped filenames
       const fileObjects: ContentPipelineFile[] = jobData.api_files.map(filename => {
@@ -278,15 +392,92 @@ export default function JobDetailsPage() {
       
       console.log('Batch create response:', batchResponse);
       
-      // Update job data with created files
+      // Handle the response - some files may already exist
+      let finalFileObjects: ContentPipelineFile[] = [];
+      
+      // Add successfully created files
+      if (batchResponse.created_files && batchResponse.created_files.length > 0) {
+        console.log('✅ Successfully created files:', batchResponse.created_files.length);
+        finalFileObjects = batchResponse.created_files.map((apiFile: any) => ({
+          filename: apiFile.filename,
+          last_updated: new Date().toISOString(),
+          original_files: apiFile.metadata?.original_files || {},
+          extracted_files: apiFile.metadata?.extracted_files || [],
+          firefly_assets: apiFile.metadata?.firefly_assets || []
+        }));
+      }
+      
+      // Handle failed files - check if they already exist
+      if (batchResponse.failed_files && batchResponse.failed_files.length > 0) {
+        console.log('⚠️ Some files failed to create:', batchResponse.failed_files.length);
+        
+        // Separate files that already exist from other errors
+        const alreadyExistFiles = batchResponse.failed_files.filter((failedFile: any) => 
+          failedFile.error && failedFile.error.includes('already exists')
+        );
+        
+        const otherErrors = batchResponse.failed_files.filter((failedFile: any) => 
+          !failedFile.error || !failedFile.error.includes('already exists')
+        );
+        
+        if (otherErrors.length > 0) {
+          console.error('❌ Files with non-recoverable errors:', otherErrors);
+          // Continue processing but log the errors
+        }
+        
+        if (alreadyExistFiles.length > 0) {
+          console.log('🔄 Files already exist, loading existing files:', alreadyExistFiles.map((f: any) => f.file_data.filename));
+          
+          // Load existing files using batch read
+          const existingFilenames = alreadyExistFiles.map((f: any) => f.file_data.filename);
+          try {
+            const existingFilesResponse = await contentPipelineApi.batchGetFiles(existingFilenames);
+            
+            console.log('✅ Loaded existing files:', existingFilesResponse.files.length);
+            
+            // Add existing files to our final list
+            const existingFileObjects = existingFilesResponse.files.map((apiFile: any) => ({
+              filename: apiFile.filename,
+              last_updated: new Date().toISOString(),
+              original_files: apiFile.metadata?.original_files || {},
+              extracted_files: apiFile.metadata?.extracted_files || [],
+              firefly_assets: apiFile.metadata?.firefly_assets || []
+            }));
+            
+            finalFileObjects = [...finalFileObjects, ...existingFileObjects];
+            
+          } catch (loadError) {
+            console.error('❌ Error loading existing files:', loadError);
+            // If we can't load existing files, create them manually from our local data
+            const manualFileObjects = alreadyExistFiles.map((failedFile: any) => {
+              const originalFileData = fileObjects.find(f => f.filename === failedFile.file_data.filename);
+              return originalFileData || {
+                filename: failedFile.file_data.filename,
+                last_updated: new Date().toISOString(),
+                original_files: failedFile.file_data.metadata?.original_files || {}
+              };
+            });
+            
+            finalFileObjects = [...finalFileObjects, ...manualFileObjects];
+          }
+        }
+      }
+      
+      console.log('📁 Final file objects count:', finalFileObjects.length);
+      
+      // Update job data with all files (created + existing)
       const updatedJobData = {
         ...jobData,
-        content_pipeline_files: fileObjects
+        content_pipeline_files: finalFileObjects
       };
       
+      console.log('Setting job data with file objects:', updatedJobData);
+      console.log('🔄 setJobData called from: createNewFiles at', new Date().toISOString());
       setJobData(updatedJobData);
       setFilesLoaded(true);
       setLoadingFiles(false);
+      
+      console.log('createNewFiles completed successfully, filesLoaded set to true');
       
     } catch (error) {
       console.error('Error creating file objects:', error);
@@ -310,20 +501,296 @@ export default function JobDetailsPage() {
       
       console.log('Job status updated successfully:', response.job);
       
-      // Map API response to our local interface
-      const mappedJobData: JobData = {
-        ...response.job,
-        api_files: response.job.files, // Store API files separately
-        files: jobData?.files || [], // Preserve existing legacy files
-        content_pipeline_files: jobData?.content_pipeline_files || [], // Preserve existing Content Pipeline files
-        Subset_name: response.job.source_folder // Map source_folder to Subset_name for UI compatibility
-      };
-      
-      setJobData(mappedJobData);
+      // Use functional update to preserve current file statuses
+      console.log('🔄 setJobData called from: updateJobStatus (preserving file statuses) at', new Date().toISOString());
+      setJobData(prevJobData => {
+        if (!prevJobData) return prevJobData;
+        
+        return {
+          ...response.job,
+          api_files: response.job.files, // Store API files separately
+          files: prevJobData.files || [], // Preserve existing legacy files
+          content_pipeline_files: prevJobData.content_pipeline_files || [], // Preserve current Content Pipeline files with updated statuses
+          Subset_name: response.job.source_folder // Map source_folder to Subset_name for UI compatibility
+        };
+      });
     } catch (error) {
       console.error('Error updating job status:', error);
       throw error;
     }
+  };
+
+  // Get pre-signed URL for uploading files
+  const getPresignedUrl = async (filePath: string): Promise<string> => {
+    try {
+      console.log('🔗 Getting presigned URL for:', filePath);
+      
+      const requestBody = { 
+        filename: filePath,
+        client_method: 'put',
+        expires_in: 720
+      };
+      
+      console.log('📤 Request body:', requestBody);
+      
+      const response = await fetch('/api/s3-proxy', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+      
+      console.log('📥 Response status:', response.status);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('❌ Error response:', errorData);
+        throw new Error(`Failed to get pre-signed URL: ${response.statusText} - ${JSON.stringify(errorData)}`);
+      }
+      
+      const data = await response.json();
+      console.log('✅ Got presigned URL response:', data);
+      return data.url;
+    } catch (error) {
+      console.error('❌ Error getting pre-signed URL:', error);
+      throw error;
+    }
+  };
+
+  // Upload file using pre-signed URL
+  const uploadFileToS3 = async (file: File, uploadUrl: string, onProgress?: (progress: number) => void): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      console.log('📤 Starting upload for:', file.name, 'Size:', file.size, 'Type:', file.type);
+      
+      const xhr = new XMLHttpRequest();
+      
+      xhr.upload.addEventListener('progress', (event) => {
+        if (event.lengthComputable) {
+          const progress = (event.loaded / event.total) * 100;
+          console.log(`📊 Upload progress for ${file.name}: ${Math.round(progress)}%`);
+          onProgress?.(progress);
+        }
+      });
+      
+      xhr.addEventListener('load', () => {
+        console.log(`📤 Upload completed for ${file.name}, status: ${xhr.status}`);
+        if (xhr.status === 200) {
+          resolve();
+        } else {
+          const errorMsg = `Upload failed with status ${xhr.status}: ${xhr.responseText}`;
+          console.error(`❌ ${errorMsg}`);
+          reject(new Error(errorMsg));
+        }
+      });
+      
+      xhr.addEventListener('error', () => {
+        const errorMsg = `Upload failed for ${file.name}: Network error`;
+        console.error(`❌ ${errorMsg}`);
+        reject(new Error(errorMsg));
+      });
+      
+      xhr.addEventListener('timeout', () => {
+        const errorMsg = `Upload failed for ${file.name}: Timeout`;
+        console.error(`❌ ${errorMsg}`);
+        reject(new Error(errorMsg));
+      });
+      
+      xhr.open('PUT', uploadUrl);
+      xhr.setRequestHeader('Content-Type', file.type || 'application/pdf');
+      xhr.timeout = 300000; // 5 minutes timeout
+      xhr.send(file);
+    });
+  };
+
+  // Update file status in the job data
+  const updateFileStatus = (filename: string, status: 'Uploading' | 'Uploaded' | 'Failed'): void => {
+    if (!jobData?.content_pipeline_files) return;
+    
+    console.log(`🔄 Updating file status: ${filename} -> ${status}`);
+    
+    const updatedFiles = jobData.content_pipeline_files.map(file => {
+      if (file.original_files) {
+        const updatedOriginalFiles = { ...file.original_files };
+        
+        // Update the specific file's status
+        Object.keys(updatedOriginalFiles).forEach(key => {
+          if (key === filename) {
+            console.log(`✅ Found file ${filename}, updating status from ${updatedOriginalFiles[key].status} to ${status}`);
+            updatedOriginalFiles[key] = {
+              ...updatedOriginalFiles[key],
+              status
+            };
+          }
+        });
+        
+        return {
+          ...file,
+          original_files: updatedOriginalFiles
+        };
+      }
+      return file;
+    });
+    
+    console.log(`🔄 setJobData called from: updateFileStatus (${filename} -> ${status}) at`, new Date().toISOString());
+    setJobData(prev => {
+      const newJobData = prev ? {
+        ...prev,
+        content_pipeline_files: updatedFiles
+      } : null;
+      
+      console.log(`📊 File status update completed for ${filename}. New statuses:`, 
+        newJobData?.content_pipeline_files?.map(f => ({
+          filename: f.filename,
+          statuses: Object.entries(f.original_files || {}).map(([name, info]) => `${name}: ${info.status}`).join(', ')
+        }))
+      );
+      return newJobData;
+    });
+  };
+
+  // Helper function to wait for a specified time
+  const wait = (ms: number): Promise<void> => {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  };
+
+  // Upload a single file with retry logic
+  const uploadSingleFile = async (filename: string, file: File, fileInfo: any, maxRetries: number = 3): Promise<void> => {
+    let retryCount = 0;
+    
+    while (retryCount < maxRetries) {
+      try {
+        // Track this file as actively uploading (for UI progress)
+        setUploadingFiles(prev => {
+          const newSet = new Set(prev).add(filename);
+          console.log(`📤 Added ${filename} to uploadingFiles set. Current files:`, Array.from(newSet));
+          return newSet;
+        });
+        
+        console.log(`🔄 Uploading ${filename} (attempt ${retryCount + 1}/${maxRetries})`);
+        console.log(`📁 File path: ${fileInfo.file_path}`);
+        
+        // Get pre-signed URL
+        const uploadUrl = await getPresignedUrl(fileInfo.file_path);
+        
+        // Upload file with progress tracking
+        await uploadFileToS3(file, uploadUrl, (progress) => {
+          setUploadProgress(prev => ({
+            ...prev,
+            [filename]: progress
+          }));
+        });
+        
+        // Skip backend update for now - let's focus on local state persistence
+        console.log(`🔄 Marking ${filename} as uploaded in local state only`);
+        // TODO: Add proper backend update that doesn't overwrite other files' data
+        
+        // Mark as uploaded in local state
+        updateFileStatus(filename, 'Uploaded');
+        setUploadingFiles(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(filename);
+          console.log(`🗑️ Removed ${filename} from uploadingFiles set. Remaining files:`, Array.from(newSet));
+          return newSet;
+        });
+        
+        // Clear upload progress for this file
+        setUploadProgress(prev => {
+          const newProgress = { ...prev };
+          delete newProgress[filename];
+          console.log(`🧹 Cleared upload progress for ${filename}`);
+          return newProgress;
+        });
+        
+        console.log(`✅ Successfully uploaded ${filename}`);
+        return; // Success, exit the retry loop
+        
+      } catch (error) {
+        retryCount++;
+        console.error(`Failed to upload ${filename} (attempt ${retryCount}/${maxRetries}):`, error);
+        
+        if (retryCount < maxRetries) {
+          console.log(`Retrying upload of ${filename} in 1 second...`);
+          // Update status to show retry
+          updateFileStatus(filename, 'Uploading');
+          // Wait 1 second before retry
+          await wait(1000);
+        } else {
+          // All retries failed
+          console.error(`All retry attempts failed for ${filename}`);
+          
+          // Mark as failed in local state only
+          updateFileStatus(filename, 'Failed');
+          setUploadingFiles(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(filename);
+            return newSet;
+          });
+          throw error; // Re-throw to let the caller handle the final failure
+        }
+      }
+    }
+  };
+
+  // Start the upload process for all files (sequential)
+  const startUploadProcess = async (files: File[]): Promise<void> => {
+    if (!jobData?.content_pipeline_files) {
+      console.log('startUploadProcess: No content_pipeline_files found');
+      return;
+    }
+    
+    console.log('🚀 Starting sequential upload process for files:', files.map(f => f.name));
+    console.log('Job data for upload:', { job_id: jobData.job_id, content_pipeline_files_count: jobData.content_pipeline_files.length });
+    
+    // Create a mapping of file names to File objects
+    const fileMap = new Map<string, File>();
+    files.forEach(file => {
+      fileMap.set(file.name, file);
+    });
+    
+    // Collect all files to upload in order
+    const filesToUpload: Array<{filename: string, file: File, fileInfo: any}> = [];
+    
+    jobData.content_pipeline_files.forEach((fileObj) => {
+      if (!fileObj.original_files) return;
+      
+      Object.entries(fileObj.original_files).forEach(([filename, fileInfo]) => {
+        const file = fileMap.get(filename);
+        if (file) {
+          filesToUpload.push({ filename, file, fileInfo });
+        } else {
+          console.warn(`File ${filename} not found in uploaded files`);
+        }
+      });
+    });
+    
+    let uploadedCount = 0;
+    let failedCount = 0;
+    
+    // Upload files sequentially
+    for (const { filename, file, fileInfo } of filesToUpload) {
+      try {
+        await uploadSingleFile(filename, file, fileInfo);
+        uploadedCount++;
+        
+        // Update overall progress
+        const overallProgress = (uploadedCount / filesToUpload.length) * 100;
+        console.log(`Overall progress: ${Math.round(overallProgress)}% (${uploadedCount}/${filesToUpload.length})`);
+        
+      } catch (error) {
+        failedCount++;
+        console.error(`Failed to upload ${filename} after all retries:`, error);
+      }
+    }
+    
+         // Log results without updating job status (to avoid overwriting file statuses)
+     if (failedCount === 0) {
+       console.log('✅ All files uploaded successfully');
+     } else if (uploadedCount > 0) {
+       console.log(`⚠️ Upload completed with ${failedCount} failures out of ${filesToUpload.length} files`);
+     } else {
+       console.log('❌ All file uploads failed');
+     }
   };
 
 
@@ -537,7 +1004,7 @@ export default function JobDetailsPage() {
               </div>
             </div>
 
-            
+
 
             {/* Files Details - Always show */}
             <div style={{ marginTop: 32 }}>
@@ -571,7 +1038,6 @@ export default function JobDetailsPage() {
                     {jobData.content_pipeline_files && jobData.content_pipeline_files.length > 0 ? (
                       jobData.content_pipeline_files.map((file, index) => (
                         <div key={index} style={{
-                          background: 'rgba(255, 255, 255, 0.05)',
                           border: '1px solid rgba(255, 255, 255, 0.1)',
                           borderRadius: 12,
                           padding: 20
@@ -636,7 +1102,32 @@ export default function JobDetailsPage() {
                                     }}>
                                       <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                         <span>📋</span>
-                                        <span>{filename}</span>
+                                        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                          <span>{filename}</span>
+                                          {/* Show loading spinner when upload is actively happening */}
+                                          {uploadingFiles.has(filename) && (
+                                            <div style={{
+                                              width: 12,
+                                              height: 12,
+                                              border: '1.5px solid rgba(245, 158, 11, 0.3)',
+                                              borderTop: '1.5px solid #f59e0b',
+                                              borderRadius: '50%',
+                                              animation: 'spin 1s linear infinite',
+                                              marginLeft: 4
+                                            }} />
+                                          )}
+                                        </span>
+                                        {/* Show animated uploading text for files being uploaded */}
+                                        {uploadingFiles.has(filename) && (
+                                          <span style={{
+                                            fontSize: 11,
+                                            color: '#f59e0b',
+                                            animation: 'pulse 2s infinite',
+                                            marginLeft: 4
+                                          }}>
+                                            Uploading...
+                                          </span>
+                                        )}
                                       </span>
                                       <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                                         <span style={{
@@ -910,6 +1401,26 @@ export default function JobDetailsPage() {
           </div>
         </main>
       </div>
+
+      <style jsx>{`
+        @keyframes pulse {
+          0%, 100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.5;
+          }
+        }
+        
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        
+        .uploading-text {
+          animation: pulse 2s infinite;
+        }
+      `}</style>
     </div>
   );
 } 
