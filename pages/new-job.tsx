@@ -321,8 +321,8 @@ export default function NewJobPage() {
         showHome
         onHome={() => router.push('/')}
         title="Create New Job"
-        showBackToJobs
-        onBackToJobs={() => router.push('/jobs')}
+        showViewJobs
+        onViewJobs={() => router.push('/jobs')}
       />
       <div className={styles.content}>
         <div style={{ maxWidth: 800, margin: '0 auto', padding: '24px' }}>
