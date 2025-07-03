@@ -37,10 +37,24 @@ interface BatchGetRequest {
 }
 
 // Configuration - replace with your actual API Gateway URL
-const API_BASE_URL = process.env.CONTENT_PIPELINE_API_URL || 'https://your-api-gateway-url.com/dev';
+const API_BASE_URL = process.env.CONTENT_PIPELINE_API_URL;
+
+// If no API URL is configured, return mock data for development
+if (!API_BASE_URL) {
+  console.warn('CONTENT_PIPELINE_API_URL not configured, using mock data');
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { method, body, query } = req;
+  
+  // If API URL is not configured, return appropriate error
+  if (!API_BASE_URL) {
+    return res.status(503).json({ 
+      error: 'Content Pipeline API not configured',
+      message: 'Please set CONTENT_PIPELINE_API_URL environment variable in Vercel',
+      details: 'The Content Pipeline API endpoint is not configured for this deployment'
+    });
+  }
   
   try {
     // Parse the operation from query parameters
