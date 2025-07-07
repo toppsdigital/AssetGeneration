@@ -1,5 +1,8 @@
+'use client'
+
 import React from 'react';
-import { useRouter } from 'next/router';
+import { useRouter } from 'next/navigation';
+import { useSession, signOut } from 'next-auth/react';
 import styles from '../styles/NavBar.module.css';
 
 interface NavBarProps {
@@ -40,6 +43,8 @@ const NavBar: React.FC<NavBarProps> = ({
   children,
 }) => {
   const router = useRouter();
+  const { data: session } = useSession();
+
   return (
     <nav className={styles.navBar}>
       <div className={styles.navLeft}>
@@ -85,6 +90,27 @@ const NavBar: React.FC<NavBarProps> = ({
           <button className={styles.generateBtn} onClick={onViewJobs}>View Jobs</button>
         )}
         {children}
+        {session && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '14px', color: '#666' }}>
+              {session.user?.email || session.user?.name}
+            </span>
+            <button
+              onClick={() => signOut()}
+              style={{
+                padding: '6px 12px',
+                backgroundColor: '#dc2626',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                fontSize: '14px',
+                cursor: 'pointer',
+              }}
+            >
+              Sign Out
+            </button>
+          </div>
+        )}
       </div>
     </nav>
   );

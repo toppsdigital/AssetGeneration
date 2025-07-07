@@ -1,7 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  swcMinify: true,
   
   // Ensure UTIF library is properly bundled for client-side usage
   webpack: (config, { buildId, dev, isServer, defaultLoaders, webpack }) => {
@@ -15,11 +14,6 @@ const nextConfig = {
     }
     
     return config;
-  },
-  
-  // Ensure proper handling of ES modules
-  experimental: {
-    esmExternals: 'loose',
   },
   
   // Optimize for Vercel deployment
