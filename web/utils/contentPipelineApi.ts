@@ -28,13 +28,27 @@ export interface FileData {
   metadata?: Record<string, any>;
   extracted_layers?: Record<string, any>;
   job_id?: string;
+  last_updated?: string;
   original_files?: Record<string, {
     card_type: 'front' | 'back';
     file_path: string;
-    status: 'Uploading' | 'Uploaded' | 'Failed';
+    status: 'Uploading' | 'Uploaded' | 'Failed' | 'Extracted';
   }>;
-  extracted_files?: (string | any)[];
-  firefly_assets?: any[];
+  extracted_files?: Record<string, {
+    file_path: string;
+    layer_type: string;
+    status: string;
+  }>;
+  firefly_assets?: Record<string, {
+    file_path: string;
+    color_variant?: string;
+    job_id?: string | null;
+    spot_file?: string;
+    source_file?: string;
+    card_type?: string;
+    job_url?: string;
+    status: string;
+  }>;
 }
 
 export interface JobResponse {

@@ -39,10 +39,23 @@ interface ContentPipelineFile {
   original_files?: Record<string, {
     card_type: 'front' | 'back';
     file_path: string;
-    status: 'Uploading' | 'Uploaded' | 'Failed';
+    status: 'Uploading' | 'Uploaded' | 'Failed' | 'Extracted';
   }>;
-  extracted_files?: (string | ExtractedFile)[];
-  firefly_assets?: FireflyAsset[];
+  extracted_files?: Record<string, {
+    file_path: string;
+    layer_type: string;
+    status: string;
+  }>;
+  firefly_assets?: Record<string, {
+    file_path: string;
+    color_variant?: string;
+    job_id?: string | null;
+    spot_file?: string;
+    source_file?: string;
+    card_type?: string;
+    job_url?: string;
+    status: string;
+  }>;
 }
 
 interface ExtractedFile {
@@ -306,10 +319,10 @@ export default function JobDetailsPage() {
       // Map API response to our ContentPipelineFile format
       const fileObjects: ContentPipelineFile[] = batchResponse.files.map(apiFile => ({
         filename: apiFile.filename,
-        last_updated: new Date().toISOString(), // Use current time since API doesn't provide last_updated
+        last_updated: apiFile.last_updated || new Date().toISOString(),
         original_files: apiFile.original_files || apiFile.metadata?.original_files || {},
-        extracted_files: apiFile.extracted_files || apiFile.metadata?.extracted_files || [],
-        firefly_assets: apiFile.firefly_assets || apiFile.metadata?.firefly_assets || []
+        extracted_files: apiFile.extracted_files || apiFile.metadata?.extracted_files || {},
+        firefly_assets: apiFile.firefly_assets || apiFile.metadata?.firefly_assets || {}
       }));
       
       // Update job data with fetched files
@@ -392,17 +405,17 @@ export default function JobDetailsPage() {
       // Handle the response - some files may already exist
       let finalFileObjects: ContentPipelineFile[] = [];
       
-      // Add successfully created files
-      if (batchResponse.created_files && batchResponse.created_files.length > 0) {
-        console.log('✅ Successfully created files:', batchResponse.created_files.length);
-        finalFileObjects = batchResponse.created_files.map((apiFile: any) => ({
-          filename: apiFile.filename,
-          last_updated: new Date().toISOString(),
-          original_files: apiFile.original_files || apiFile.metadata?.original_files || {},
-          extracted_files: apiFile.extracted_files || apiFile.metadata?.extracted_files || [],
-          firefly_assets: apiFile.firefly_assets || apiFile.metadata?.firefly_assets || []
-        }));
-      }
+              // Add successfully created files
+        if (batchResponse.created_files && batchResponse.created_files.length > 0) {
+          console.log('✅ Successfully created files:', batchResponse.created_files.length);
+          finalFileObjects = batchResponse.created_files.map((apiFile: any) => ({
+            filename: apiFile.filename,
+            last_updated: apiFile.last_updated || new Date().toISOString(),
+            original_files: apiFile.original_files || apiFile.metadata?.original_files || {},
+            extracted_files: apiFile.extracted_files || apiFile.metadata?.extracted_files || {},
+            firefly_assets: apiFile.firefly_assets || apiFile.metadata?.firefly_assets || {}
+          }));
+        }
       
       // Handle failed files - check if they already exist
       if (batchResponse.failed_files && batchResponse.failed_files.length > 0) {
@@ -435,10 +448,10 @@ export default function JobDetailsPage() {
             // Add existing files to our final list
             const existingFileObjects = existingFilesResponse.files.map((apiFile: any) => ({
               filename: apiFile.filename,
-              last_updated: new Date().toISOString(),
+              last_updated: apiFile.last_updated || new Date().toISOString(),
               original_files: apiFile.original_files || apiFile.metadata?.original_files || {},
-              extracted_files: apiFile.extracted_files || apiFile.metadata?.extracted_files || [],
-              firefly_assets: apiFile.firefly_assets || apiFile.metadata?.firefly_assets || []
+              extracted_files: apiFile.extracted_files || apiFile.metadata?.extracted_files || {},
+              firefly_assets: apiFile.firefly_assets || apiFile.metadata?.firefly_assets || {}
             }));
             
             finalFileObjects = [...finalFileObjects, ...existingFileObjects];
@@ -450,8 +463,10 @@ export default function JobDetailsPage() {
               const originalFileData = fileObjects.find(f => f.filename === failedFile.file_data.filename);
               return originalFileData || {
                 filename: failedFile.file_data.filename,
-                last_updated: new Date().toISOString(),
-                original_files: failedFile.file_data.original_files || failedFile.file_data.metadata?.original_files || {}
+                last_updated: failedFile.file_data.last_updated || new Date().toISOString(),
+                original_files: failedFile.file_data.original_files || failedFile.file_data.metadata?.original_files || {},
+                extracted_files: failedFile.file_data.extracted_files || failedFile.file_data.metadata?.extracted_files || {},
+                firefly_assets: failedFile.file_data.firefly_assets || failedFile.file_data.metadata?.firefly_assets || {}
               };
             });
             
@@ -1182,7 +1197,7 @@ export default function JobDetailsPage() {
                             </div>
 
                             {/* Extracted Layers - Only show if there are extracted files */}
-                            {file.extracted_files && file.extracted_files.length > 0 && (
+                            {file.extracted_files && Object.keys(file.extracted_files).length > 0 && (
                               <div>
                                 <div style={{
                                   display: 'flex',
@@ -1196,43 +1211,62 @@ export default function JobDetailsPage() {
                                     fontWeight: 600,
                                     margin: 0
                                   }}>
-                                    🖼️ Extracted Layers ({file.extracted_files.length})
+                                    🖼️ Extracted Layers ({Object.keys(file.extracted_files).length})
                                   </h4>
-                                  <button
-                                    onClick={() => {
-                                      // Collect file paths from extracted files
-                                      const filePaths = file.extracted_files?.map(extractedFile => {
-                                        const isObject = typeof extractedFile !== 'string';
-                                        return isObject ? (extractedFile as ExtractedFile).file_path : extractedFile;
-                                      }).filter(path => path) || [];
-                                      
-                                      const baseName = file.filename.replace('.pdf', '').replace('.PDF', '');
-                                      const fullJobPath = router.query.jobPath as string;
-                                      
-                                      // Pass the file paths as a query parameter
-                                      const filePathsParam = encodeURIComponent(JSON.stringify(filePaths));
-                                      router.push(`/job/preview?jobPath=${encodeURIComponent(fullJobPath)}&fileName=${encodeURIComponent(baseName)}&type=extracted&filePaths=${filePathsParam}`);
-                                    }}
-                                    style={{
-                                      background: 'rgba(59, 130, 246, 0.2)',
-                                      border: '1px solid rgba(59, 130, 246, 0.4)',
-                                      borderRadius: 6,
-                                      color: '#60a5fa',
-                                      cursor: 'pointer',
-                                      fontSize: 12,
-                                      padding: '6px 12px',
-                                      transition: 'all 0.2s',
-                                      fontWeight: 500
-                                    }}
-                                    onMouseEnter={(e) => {
-                                      e.currentTarget.style.background = 'rgba(59, 130, 246, 0.3)';
-                                    }}
-                                    onMouseLeave={(e) => {
-                                      e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)';
-                                    }}
-                                  >
-                                    👁️ Preview Layers
-                                  </button>
+                                  {(() => {
+                                    // Check if all extracted files have "Uploaded" status
+                                    const allUploaded = Object.values(file.extracted_files || {}).every(
+                                      extractedFile => extractedFile.status === 'Uploaded'
+                                    );
+                                    
+                                    return allUploaded ? (
+                                      <button
+                                        onClick={() => {
+                                          // Collect file paths from extracted files
+                                          const filePaths = Object.values(file.extracted_files || {}).map(extractedFile => 
+                                            extractedFile.file_path
+                                          ).filter(path => path);
+                                          
+                                          const baseName = file.filename.replace('.pdf', '').replace('.PDF', '');
+                                          const fullJobPath = router.query.jobPath as string;
+                                          
+                                          // Pass the file paths as a query parameter
+                                          const filePathsParam = encodeURIComponent(JSON.stringify(filePaths));
+                                          router.push(`/job/preview?jobPath=${encodeURIComponent(fullJobPath)}&fileName=${encodeURIComponent(baseName)}&type=extracted&filePaths=${filePathsParam}`);
+                                        }}
+                                        style={{
+                                          background: 'rgba(59, 130, 246, 0.2)',
+                                          border: '1px solid rgba(59, 130, 246, 0.4)',
+                                          borderRadius: 6,
+                                          color: '#60a5fa',
+                                          cursor: 'pointer',
+                                          fontSize: 12,
+                                          padding: '6px 12px',
+                                          transition: 'all 0.2s',
+                                          fontWeight: 500
+                                        }}
+                                        onMouseEnter={(e) => {
+                                          e.currentTarget.style.background = 'rgba(59, 130, 246, 0.3)';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                          e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)';
+                                        }}
+                                      >
+                                        👁️ Preview Layers
+                                      </button>
+                                    ) : (
+                                      <span style={{
+                                        fontSize: 12,
+                                        color: '#9ca3af',
+                                        padding: '6px 12px',
+                                        border: '1px solid rgba(156, 163, 175, 0.3)',
+                                        borderRadius: 6,
+                                        background: 'rgba(156, 163, 175, 0.1)'
+                                      }}>
+                                        ⏳ Waiting for all layers to upload
+                                      </span>
+                                    );
+                                  })()}
                                 </div>
                                 <div style={{
                                   background: 'rgba(59, 130, 246, 0.1)',
@@ -1242,45 +1276,52 @@ export default function JobDetailsPage() {
                                   maxHeight: 200,
                                   overflowY: 'auto'
                                 }}>
-                                  {file.extracted_files.map((extractedFile, extIndex) => {
-                                    const isObject = typeof extractedFile !== 'string';
-                                    const fileObj = isObject ? extractedFile as ExtractedFile : null;
-                                    const fileName = isObject ? fileObj?.filename || 'Unknown file' : extractedFile;
-                                    
-                                    return (
-                                      <div key={extIndex} style={{
-                                        marginBottom: 8,
-                                        fontSize: 13,
-                                        color: '#bfdbfe',
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center'
-                                      }}>
-                                        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                          <span>🖼️</span>
-                                          <span>{fileName}</span>
+                                  {Object.entries(file.extracted_files).map(([filename, extractedFile], extIndex) => (
+                                    <div key={extIndex} style={{
+                                      marginBottom: 8,
+                                      fontSize: 13,
+                                      color: '#bfdbfe',
+                                      display: 'flex',
+                                      justifyContent: 'space-between',
+                                      alignItems: 'center'
+                                    }}>
+                                      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        <span>🖼️</span>
+                                        <span>{filename}</span>
+                                      </span>
+                                      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                                        <span style={{ 
+                                          background: 'rgba(59, 130, 246, 0.2)', 
+                                          padding: '2px 6px', 
+                                          borderRadius: 4,
+                                          color: '#60a5fa',
+                                          fontSize: 11
+                                        }}>
+                                          {extractedFile.layer_type}
                                         </span>
-                                        {isObject && fileObj && fileObj.layer_type && (
-                                          <span style={{ 
-                                            background: 'rgba(59, 130, 246, 0.2)', 
-                                            padding: '2px 6px', 
-                                            borderRadius: 4,
-                                            color: '#60a5fa',
-                                            fontSize: 11
-                                          }}>
-                                            {fileObj.layer_type}
-                                          </span>
-                                        )}
+                                        <span style={{
+                                          fontSize: 11,
+                                          padding: '2px 6px',
+                                          borderRadius: 4,
+                                          background: extractedFile.status === 'Uploaded' 
+                                            ? 'rgba(16, 185, 129, 0.2)' 
+                                            : 'rgba(249, 115, 22, 0.2)',
+                                          color: extractedFile.status === 'Uploaded' 
+                                            ? '#34d399' 
+                                            : '#fdba74'
+                                        }}>
+                                          {extractedFile.status}
+                                        </span>
                                       </div>
-                                    );
-                                  })}
+                                    </div>
+                                  ))}
                                 </div>
                               </div>
                             )}
                           </div>
 
                           {/* Firefly Assets - Only show if there are firefly assets */}
-                          {file.firefly_assets && file.firefly_assets.length > 0 && (
+                          {file.firefly_assets && Object.keys(file.firefly_assets).length > 0 && (
                             <div>
                               <div style={{
                                 display: 'flex',
@@ -1294,40 +1335,62 @@ export default function JobDetailsPage() {
                                   fontWeight: 600,
                                   margin: 0
                                 }}>
-                                  🎨 Firefly Assets ({file.firefly_assets.length})
+                                  🎨 Firefly Assets ({Object.keys(file.firefly_assets).length})
                                 </h4>
-                                <button
-                                  onClick={() => {
-                                    // Use the actual file paths from firefly assets
-                                    const filePaths = file.firefly_assets?.map(asset => asset.file_path || asset.filename).filter(path => path) || [];
-                                    
-                                    const baseName = file.filename.replace('.pdf', '').replace('.PDF', '');
-                                    const fullJobPath = router.query.jobPath as string;
-                                    
-                                    // Pass the file paths as a query parameter
-                                    const filePathsParam = encodeURIComponent(JSON.stringify(filePaths));
-                                    router.push(`/job/preview?jobPath=${encodeURIComponent(fullJobPath)}&fileName=${encodeURIComponent(baseName)}&type=firefly&filePaths=${filePathsParam}`);
-                                  }}
-                                  style={{
-                                    background: 'rgba(16, 185, 129, 0.2)',
-                                    border: '1px solid rgba(16, 185, 129, 0.4)',
-                                    borderRadius: 6,
-                                    color: '#34d399',
-                                    cursor: 'pointer',
-                                    fontSize: 12,
-                                    padding: '6px 12px',
-                                    transition: 'all 0.2s',
-                                    fontWeight: 500
-                                  }}
-                                  onMouseEnter={(e) => {
-                                    e.currentTarget.style.background = 'rgba(16, 185, 129, 0.3)';
-                                  }}
-                                  onMouseLeave={(e) => {
-                                    e.currentTarget.style.background = 'rgba(16, 185, 129, 0.2)';
-                                  }}
-                                >
-                                  👁️ Preview Final Assets
-                                </button>
+                                {(() => {
+                                  // Check if all firefly assets have "succeeded" status
+                                  const allSucceeded = Object.values(file.firefly_assets || {}).every(
+                                    asset => asset.status === 'succeeded'
+                                  );
+                                  
+                                  return allSucceeded ? (
+                                    <button
+                                      onClick={() => {
+                                        // Use the actual file paths from firefly assets
+                                        const filePaths = Object.values(file.firefly_assets || {}).map(asset => 
+                                          asset.file_path
+                                        ).filter(path => path);
+                                        
+                                        const baseName = file.filename.replace('.pdf', '').replace('.PDF', '');
+                                        const fullJobPath = router.query.jobPath as string;
+                                        
+                                        // Pass the file paths as a query parameter
+                                        const filePathsParam = encodeURIComponent(JSON.stringify(filePaths));
+                                        router.push(`/job/preview?jobPath=${encodeURIComponent(fullJobPath)}&fileName=${encodeURIComponent(baseName)}&type=firefly&filePaths=${filePathsParam}`);
+                                      }}
+                                      style={{
+                                        background: 'rgba(16, 185, 129, 0.2)',
+                                        border: '1px solid rgba(16, 185, 129, 0.4)',
+                                        borderRadius: 6,
+                                        color: '#34d399',
+                                        cursor: 'pointer',
+                                        fontSize: 12,
+                                        padding: '6px 12px',
+                                        transition: 'all 0.2s',
+                                        fontWeight: 500
+                                      }}
+                                      onMouseEnter={(e) => {
+                                        e.currentTarget.style.background = 'rgba(16, 185, 129, 0.3)';
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        e.currentTarget.style.background = 'rgba(16, 185, 129, 0.2)';
+                                      }}
+                                    >
+                                      👁️ Preview Final Assets
+                                    </button>
+                                  ) : (
+                                    <span style={{
+                                      fontSize: 12,
+                                      color: '#9ca3af',
+                                      padding: '6px 12px',
+                                      border: '1px solid rgba(156, 163, 175, 0.3)',
+                                      borderRadius: 6,
+                                      background: 'rgba(156, 163, 175, 0.1)'
+                                    }}>
+                                      ⏳ Waiting for all assets to complete
+                                    </span>
+                                  );
+                                })()}
                               </div>
                               <div style={{
                                 background: 'rgba(16, 185, 129, 0.1)',
@@ -1335,7 +1398,7 @@ export default function JobDetailsPage() {
                                 borderRadius: 8,
                                 padding: 12
                               }}>
-                                {file.firefly_assets.map((asset, assetIndex) => (
+                                {Object.entries(file.firefly_assets).map(([filename, asset], assetIndex) => (
                                   <div key={assetIndex} style={{
                                     marginBottom: 8,
                                     fontSize: 13,
@@ -1346,49 +1409,36 @@ export default function JobDetailsPage() {
                                   }}>
                                     <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                       <span>🎨</span>
-                                      <span>{asset.filename}</span>
+                                      <span>{filename}</span>
                                     </span>
                                     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                                      {asset.status && (
-                                        <span style={{
-                                          fontSize: 11,
-                                          padding: '2px 6px',
+                                      <span style={{
+                                        fontSize: 11,
+                                        padding: '2px 6px',
+                                        borderRadius: 4,
+                                        background: asset.status.toLowerCase().includes('succeed') || asset.status === 'created'
+                                          ? 'rgba(16, 185, 129, 0.2)' 
+                                          : asset.status.toLowerCase().includes('fail')
+                                          ? 'rgba(239, 68, 68, 0.2)'
+                                          : 'rgba(249, 115, 22, 0.2)',
+                                        color: asset.status.toLowerCase().includes('succeed') || asset.status === 'created'
+                                          ? '#34d399' 
+                                          : asset.status.toLowerCase().includes('fail')
+                                          ? '#fca5a5'
+                                          : '#fdba74'
+                                      }}>
+                                        {asset.status}
+                                      </span>
+                                      {asset.card_type && (
+                                        <span style={{ 
+                                          background: 'rgba(16, 185, 129, 0.2)', 
+                                          padding: '2px 6px', 
                                           borderRadius: 4,
-                                          background: asset.status.toLowerCase().includes('succeed') 
-                                            ? 'rgba(16, 185, 129, 0.2)' 
-                                            : asset.status.toLowerCase().includes('fail')
-                                            ? 'rgba(239, 68, 68, 0.2)'
-                                            : 'rgba(249, 115, 22, 0.2)',
-                                          color: asset.status.toLowerCase().includes('succeed') 
-                                            ? '#34d399' 
-                                            : asset.status.toLowerCase().includes('fail')
-                                            ? '#fca5a5'
-                                            : '#fdba74'
+                                          fontSize: 11,
+                                          color: '#34d399'
                                         }}>
-                                          {asset.status}
+                                          {asset.card_type}
                                         </span>
-                                      )}
-                                      {(asset.spot_number || asset.color_variant) && (
-                                        <div style={{ display: 'flex', gap: 4, fontSize: 11 }}>
-                                          {asset.spot_number && (
-                                            <span style={{ 
-                                              background: 'rgba(16, 185, 129, 0.2)', 
-                                              padding: '2px 6px', 
-                                              borderRadius: 4 
-                                            }}>
-                                              Spot {asset.spot_number}
-                                            </span>
-                                          )}
-                                          {asset.color_variant && (
-                                            <span style={{ 
-                                              background: 'rgba(16, 185, 129, 0.2)', 
-                                              padding: '2px 6px', 
-                                              borderRadius: 4 
-                                            }}>
-                                              {asset.color_variant}
-                                            </span>
-                                          )}
-                                        </div>
                                       )}
                                     </div>
                                   </div>
