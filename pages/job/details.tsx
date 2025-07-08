@@ -558,49 +558,33 @@ export default function JobDetailsPage() {
     }
   };
 
-  // Upload file using pre-signed URL
+  // Upload file using pre-signed URL by proxying through our backend
   const uploadFileToS3 = async (file: File, uploadUrl: string, onProgress?: (progress: number) => void): Promise<void> => {
-    return new Promise((resolve, reject) => {
-      console.log('📤 Starting upload for:', file.name, 'Size:', file.size, 'Type:', file.type);
-      
-      const xhr = new XMLHttpRequest();
-      
-      xhr.upload.addEventListener('progress', (event) => {
-        if (event.lengthComputable) {
-          const progress = (event.loaded / event.total) * 100;
-          console.log(`📊 Upload progress for ${file.name}: ${Math.round(progress)}%`);
-          onProgress?.(progress);
-        }
+    try {
+      console.log('📤 Starting proxied upload for:', file.name, 'to /api/s3-upload');
+
+      const response = await fetch('/api/s3-upload', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': file.type || 'application/pdf',
+          'x-presigned-url': uploadUrl, // Pass the presigned URL in a header
+        },
+        body: file,
       });
-      
-      xhr.addEventListener('load', () => {
-        console.log(`📤 Upload completed for ${file.name}, status: ${xhr.status}`);
-        if (xhr.status === 200) {
-          resolve();
-        } else {
-          const errorMsg = `Upload failed with status ${xhr.status}: ${xhr.responseText}`;
-          console.error(`❌ ${errorMsg}`);
-          reject(new Error(errorMsg));
-        }
-      });
-      
-      xhr.addEventListener('error', () => {
-        const errorMsg = `Upload failed for ${file.name}: Network error`;
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        const errorMsg = `Upload failed with status ${response.status}: ${errorText}`;
         console.error(`❌ ${errorMsg}`);
-        reject(new Error(errorMsg));
-      });
-      
-      xhr.addEventListener('timeout', () => {
-        const errorMsg = `Upload failed for ${file.name}: Timeout`;
-        console.error(`❌ ${errorMsg}`);
-        reject(new Error(errorMsg));
-      });
-      
-      xhr.open('PUT', uploadUrl);
-      xhr.setRequestHeader('Content-Type', file.type || 'application/pdf');
-      xhr.timeout = 300000; // 5 minutes timeout
-      xhr.send(file);
-    });
+        throw new Error(errorMsg);
+      }
+
+      console.log(`✅ Proxied upload completed for ${file.name}, status: ${response.status}`);
+      onProgress?.(100);
+    } catch (error) {
+      console.error(`❌ Proxied upload failed for ${file.name}:`, error);
+      throw error;
+    }
   };
 
   // Update file status in the job data

@@ -1,59 +1,47 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import formidable from 'formidable';
+import fetch from 'node-fetch';
 
 export const config = {
   api: {
-    bodyParser: false,
+    bodyParser: false, // Disable body parsing to handle streams
   },
 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method !== 'PUT') {
+    return res.status(405).json({ error: 'Method Not Allowed' });
+  }
+
+  const presignedUrl = req.headers['x-presigned-url'] as string;
+
+  if (!presignedUrl) {
+    return res.status(400).json({ error: 'Missing x-presigned-url header' });
   }
 
   try {
-    const form = formidable({});
-    const [fields, files] = await form.parse(req);
-    
-    const presignedUrl = Array.isArray(fields.presignedUrl) ? fields.presignedUrl[0] : fields.presignedUrl;
-    const file = Array.isArray(files.file) ? files.file[0] : files.file;
+    console.log('--- s3-upload: Forwarding file to S3 ---');
+    console.log('Presigned URL:', presignedUrl);
 
-    if (!presignedUrl || !file) {
-      return res.status(400).json({ error: 'Missing presignedUrl or file' });
-    }
-
-    console.log('S3 Upload: Uploading file to S3 via presigned URL...');
-    console.log('File size:', file.size);
-    console.log('File type:', file.mimetype);
-
-    // Read the file data
-    const fs = require('fs');
-    const fileData = fs.readFileSync(file.filepath);
-
-    // Upload to S3 using the presigned URL
-    const uploadResponse = await fetch(presignedUrl, {
+    const response = await fetch(presignedUrl, {
       method: 'PUT',
       headers: {
-        'Content-Type': file.mimetype || 'application/octet-stream',
+        'Content-Type': req.headers['content-type'] || 'application/octet-stream',
+        'Content-Length': req.headers['content-length'] || '0',
       },
-      body: fileData,
+      body: req, // Forward the raw request body stream
     });
 
-    if (!uploadResponse.ok) {
-      const errorText = await uploadResponse.text();
-      console.error('S3 Upload failed:', uploadResponse.status, errorText);
-      return res.status(500).json({ 
-        error: `S3 upload failed: ${uploadResponse.status} ${uploadResponse.statusText}`,
-        details: errorText
-      });
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('s3-upload: Error from S3:', response.status, errorText);
+      return res.status(response.status).json({ error: 'Failed to upload to S3', details: errorText });
     }
 
-    console.log('S3 Upload: Successfully uploaded to S3');
+    console.log('--- s3-upload: File successfully uploaded to S3 ---');
     return res.status(200).json({ success: true });
 
   } catch (error) {
-    console.error('S3 Upload error:', error);
-    return res.status(500).json({ error: 'Upload failed', details: error.message });
+    console.error('s3-upload: Internal server error:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
   }
 } 
