@@ -3,96 +3,28 @@ import { useEffect, useState, useCallback } from 'react';
 import NavBar from '../../components/NavBar';
 import styles from '../../styles/Edit.module.css';
 import Spinner from '../../components/Spinner';
-import { contentPipelineApi, JobData as APIJobData, FileData } from '../../web/utils/contentPipelineApi';
+import { contentPipelineApi, JobData, FileData } from '../../web/utils/contentPipelineApi';
 
-interface JobData {
-  // Core API fields
-  job_id?: string;
-  job_status?: string;
-  app_name: string;
-  release_name: string;
-  source_folder: string;
-  description?: string;
-  progress_percentage?: number;
-  current_step?: string;
-  created_at?: string;
-  last_updated?: string;
-  
+// Extend the API JobData interface with UI-specific fields for backward compatibility
+interface UIJobData extends JobData {
   // Legacy UI fields for backward compatibility
   psd_file?: string;
   template?: string;
   total_files?: number;
-  files?: JobFile[];
   timestamp?: string;
   Subset_name?: string;
   job_path?: string;
   
   // API files as separate property
   api_files?: string[];
-  content_pipeline_files?: ContentPipelineFile[];
-}
-
-// Custom file structure for the Content Pipeline API
-interface ContentPipelineFile {
-  filename: string;
-  last_updated?: string;
-  original_files?: Record<string, {
-    card_type: 'front' | 'back';
-    file_path: string;
-    status: 'Uploading' | 'Uploaded' | 'Failed' | 'Extracted';
-  }>;
-  extracted_files?: Record<string, {
-    file_path: string;
-    layer_type: string;
-    status: string;
-  }>;
-  firefly_assets?: Record<string, {
-    file_path: string;
-    color_variant?: string;
-    job_id?: string | null;
-    spot_file?: string;
-    source_file?: string;
-    card_type?: string;
-    job_url?: string;
-    status: string;
-  }>;
-}
-
-interface ExtractedFile {
-  filename: string;
-  file_path?: string;
-  uploaded?: boolean;
-  layer_type?: string;
-}
-
-interface JobFile {
-  filename: string;
-  extracted?: string;
-  digital_assets?: string;
-  last_updated?: string;
-  extracted_files?: (string | ExtractedFile)[];
-  original_files?: OriginalFile[];
-  firefly_assets?: FireflyAsset[];
-}
-
-interface OriginalFile {
-  filename: string;
-  card_type: string;
-}
-
-interface FireflyAsset {
-  filename: string;
-  status: string;
-  spot_number?: string;
-  color_variant?: string;
-  file_path?: string;
+  content_pipeline_files?: FileData[];
 }
 
 export default function JobDetailsPage() {
   const router = useRouter();
-  const { jobId, startUpload, appName, releaseName, sourceFolder, status, createdAt, files, description } = router.query;
+  const { jobId, startUpload, appName, releaseName, subsetName, sourceFolder, status, createdAt, files, description } = router.query;
   
-  const [jobData, setJobData] = useState<JobData | null>(null);
+  const [jobData, setJobData] = useState<UIJobData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filesLoaded, setFilesLoaded] = useState(false);
@@ -114,13 +46,13 @@ export default function JobDetailsPage() {
       });
       
       // Check if we have job data from query params to avoid API call
-      if (appName && releaseName && sourceFolder && status) {
+      if (appName && releaseName && subsetName && sourceFolder && status) {
         loadJobDetailsFromParams();
       } else {
         loadJobDetails();
       }
     }
-  }, [jobId, appName, releaseName, sourceFolder, status]);
+  }, [jobId, appName, releaseName, subsetName, sourceFolder, status]);
 
   // Load file objects after job details are loaded
   useEffect(() => {
@@ -140,7 +72,7 @@ export default function JobDetailsPage() {
     
     if (jobData && jobData.api_files && jobData.api_files.length > 0 && !filesLoaded) {
       console.log('🔄 Loading files - condition met');
-      if (jobData.job_status === 'Upload in progress' || jobData.job_status === 'Upload started') {
+      if (jobData.job_status === 'uploading') {
         // Create new file objects for jobs that are starting upload
         console.log('🔄 Calling createNewFiles');
         createNewFiles();
@@ -169,7 +101,7 @@ export default function JobDetailsPage() {
     jobData.content_pipeline_files.forEach(fileGroup => {
       if (fileGroup.original_files) {
         Object.entries(fileGroup.original_files).forEach(([filename, fileInfo]) => {
-          if (fileInfo.status === 'Uploading') {
+          if (fileInfo.status === 'uploading') {
             filesToUpload.push({
               filename: filename,
               filePath: fileInfo.file_path
@@ -246,18 +178,19 @@ export default function JobDetailsPage() {
       }
       
       // Create job data from query parameters
-      const mappedJobData: JobData = {
+      const mappedJobData: UIJobData = {
         job_id: jobId as string,
         app_name: appName as string,
         release_name: releaseName as string,
+        subset_name: subsetName as string,
         source_folder: sourceFolder as string,
-        job_status: status as string,
+        job_status: status as JobData['job_status'],
         created_at: createdAt as string,
         description: description as string,
         api_files: parsedFiles,
         files: [], // Initialize empty legacy files array
         content_pipeline_files: [], // Initialize empty Content Pipeline files array
-        Subset_name: sourceFolder as string // Map source_folder to Subset_name for UI compatibility
+        Subset_name: subsetName as string // Map subsetName to Subset_name for UI compatibility
       };
       
       console.log('🔄 setJobData called from: loadJobDetailsFromParams at', new Date().toISOString());
@@ -284,12 +217,12 @@ export default function JobDetailsPage() {
       console.log('Job details loaded:', response.job);
       
       // Map API response to our local interface
-      const mappedJobData: JobData = {
+      const mappedJobData: UIJobData = {
         ...response.job,
         api_files: response.job.files, // Store API files separately
         files: [], // Initialize empty legacy files array
         content_pipeline_files: [], // Initialize empty Content Pipeline files array
-        Subset_name: response.job.source_folder // Map source_folder to Subset_name for UI compatibility
+        Subset_name: response.job.subset_name || response.job.source_folder // Map subset_name to Subset_name for UI compatibility
       };
       
       console.log('🔄 setJobData called from: loadJobDetails at', new Date().toISOString());
@@ -317,12 +250,13 @@ export default function JobDetailsPage() {
       console.log('Batch read response:', batchResponse);
       
       // Map API response to our ContentPipelineFile format
-      const fileObjects: ContentPipelineFile[] = batchResponse.files.map(apiFile => ({
+      const fileObjects: FileData[] = batchResponse.files.map(apiFile => ({
         filename: apiFile.filename,
+        job_id: apiFile.job_id,
         last_updated: apiFile.last_updated || new Date().toISOString(),
-        original_files: apiFile.original_files || apiFile.metadata?.original_files || {},
-        extracted_files: apiFile.extracted_files || apiFile.metadata?.extracted_files || {},
-        firefly_assets: apiFile.firefly_assets || apiFile.metadata?.firefly_assets || {}
+        original_files: apiFile.original_files || {},
+        extracted_files: apiFile.extracted_files || {},
+        firefly_assets: apiFile.firefly_assets || {}
       }));
       
       // Update job data with fetched files
@@ -359,12 +293,18 @@ export default function JobDetailsPage() {
       console.log('Creating file objects for:', jobData.api_files);
       console.log('Job data:', { job_id: jobData.job_id, app_name: jobData.app_name });
       
+      // Sanitize app name to ensure it's URL-safe and consistent with S3 paths
+      const sanitizeAppName = (str: string) => str.trim().replace(/[^a-zA-Z0-9\-_]/g, '-').replace(/-+/g, '-');
+      const sanitizedAppName = sanitizeAppName(jobData.app_name || '');
+      
+      console.log('Sanitized app name:', sanitizedAppName, 'from original:', jobData.app_name);
+      
       // Create file objects based on the grouped filenames
-      const fileObjects: ContentPipelineFile[] = jobData.api_files.map(filename => {
+      const fileObjects: FileData[] = jobData.api_files.map(filename => {
         const originalFiles: Record<string, {
           card_type: 'front' | 'back';
           file_path: string;
-          status: 'Uploading' | 'Uploaded' | 'Failed';
+          status: 'uploading' | 'uploaded' | 'upload-failed';
         }> = {};
         
         // Add front and back PDF files
@@ -373,14 +313,14 @@ export default function JobDetailsPage() {
         
         originalFiles[frontFilename] = {
           card_type: 'front',
-          file_path: `${jobData.app_name}/PDFs/${frontFilename}`,
-          status: 'Uploading'
+          file_path: `${sanitizedAppName}/PDFs/${frontFilename}`,
+          status: 'uploading'
         };
         
         originalFiles[backFilename] = {
           card_type: 'back',
-          file_path: `${jobData.app_name}/PDFs/${backFilename}`,
-          status: 'Uploading'
+          file_path: `${sanitizedAppName}/PDFs/${backFilename}`,
+          status: 'uploading'
         };
         
         return {
@@ -403,7 +343,7 @@ export default function JobDetailsPage() {
       console.log('Batch create response:', batchResponse);
       
       // Handle the response - some files may already exist
-      let finalFileObjects: ContentPipelineFile[] = [];
+      let finalFileObjects: FileData[] = [];
       
               // Add successfully created files
         if (batchResponse.created_files && batchResponse.created_files.length > 0) {
@@ -446,12 +386,13 @@ export default function JobDetailsPage() {
             console.log('✅ Loaded existing files:', existingFilesResponse.files.length);
             
             // Add existing files to our final list
-            const existingFileObjects = existingFilesResponse.files.map((apiFile: any) => ({
+            const existingFileObjects = existingFilesResponse.files.map((apiFile: FileData) => ({
               filename: apiFile.filename,
+              job_id: apiFile.job_id,
               last_updated: apiFile.last_updated || new Date().toISOString(),
-              original_files: apiFile.original_files || apiFile.metadata?.original_files || {},
-              extracted_files: apiFile.extracted_files || apiFile.metadata?.extracted_files || {},
-              firefly_assets: apiFile.firefly_assets || apiFile.metadata?.firefly_assets || {}
+              original_files: apiFile.original_files || {},
+              extracted_files: apiFile.extracted_files || {},
+              firefly_assets: apiFile.firefly_assets || {}
             }));
             
             finalFileObjects = [...finalFileObjects, ...existingFileObjects];
@@ -463,10 +404,11 @@ export default function JobDetailsPage() {
               const originalFileData = fileObjects.find(f => f.filename === failedFile.file_data.filename);
               return originalFileData || {
                 filename: failedFile.file_data.filename,
+                job_id: failedFile.file_data.job_id,
                 last_updated: failedFile.file_data.last_updated || new Date().toISOString(),
-                original_files: failedFile.file_data.original_files || failedFile.file_data.metadata?.original_files || {},
-                extracted_files: failedFile.file_data.extracted_files || failedFile.file_data.metadata?.extracted_files || {},
-                firefly_assets: failedFile.file_data.firefly_assets || failedFile.file_data.metadata?.firefly_assets || {}
+                original_files: failedFile.file_data.original_files || {},
+                extracted_files: failedFile.file_data.extracted_files || {},
+                firefly_assets: failedFile.file_data.firefly_assets || {}
               };
             });
             
@@ -499,16 +441,14 @@ export default function JobDetailsPage() {
   };
 
     // Update job status using Content Pipeline API
-  const updateJobStatus = async (status: string, progressPercentage?: number, currentStep?: string): Promise<void> => {
+  const updateJobStatus = async (status: JobData['job_status']): Promise<void> => {
     if (!jobData?.job_id) return;
     
     try {
-      console.log('Updating job status:', { status, progressPercentage, currentStep });
+      console.log('Updating job status:', { status });
       const response = await contentPipelineApi.updateJobStatus(
         jobData.job_id,
-        status,
-        progressPercentage,
-        currentStep
+        status
       );
       
       console.log('Job status updated successfully:', response.job);
@@ -603,7 +543,7 @@ export default function JobDetailsPage() {
   const updateFileStatus = async (
     groupFilename: string,
     pdfFilename: string,
-    status: 'Uploading' | 'Uploaded' | 'Failed'
+    status: 'uploading' | 'uploaded' | 'upload-failed'
   ): Promise<void> => {
     if (!jobData?.content_pipeline_files) return;
 
@@ -651,9 +591,9 @@ export default function JobDetailsPage() {
             file.filename === groupFilename
               ? {
                   ...file,
-                  original_files: updatedFileFromBackend.original_files || updatedFileFromBackend.metadata?.original_files || file.original_files,
-                  extracted_files: updatedFileFromBackend.extracted_files || updatedFileFromBackend.metadata?.extracted_files || file.extracted_files,
-                  firefly_assets: updatedFileFromBackend.firefly_assets || updatedFileFromBackend.metadata?.firefly_assets || file.firefly_assets,
+                  original_files: updatedFileFromBackend.original_files || file.original_files,
+                  extracted_files: updatedFileFromBackend.extracted_files || file.extracted_files,
+                  firefly_assets: updatedFileFromBackend.firefly_assets || file.firefly_assets,
                   last_updated: new Date().toISOString()
                 }
               : file
@@ -714,7 +654,7 @@ export default function JobDetailsPage() {
         });
         
         // Mark as uploaded in local state and sync to backend
-        await updateFileStatus(groupFilename, filename, 'Uploaded');
+        await updateFileStatus(groupFilename, filename, 'uploaded');
 
         setUploadingFiles(prev => {
           const newSet = new Set(prev);
@@ -741,7 +681,7 @@ export default function JobDetailsPage() {
         if (retryCount < maxRetries) {
           console.log(`Retrying upload of ${filename} in 1 second...`);
           // Update status to show retry (and sync to backend)
-          await updateFileStatus(groupFilename, filename, 'Uploading');
+          await updateFileStatus(groupFilename, filename, 'uploading');
           // Wait 1 second before retry
           await wait(1000);
         } else {
@@ -749,7 +689,7 @@ export default function JobDetailsPage() {
           console.error(`All retry attempts failed for ${filename}`);
           
           // Mark as failed and sync to backend
-          await updateFileStatus(groupFilename, filename, 'Failed');
+          await updateFileStatus(groupFilename, filename, 'upload-failed');
           setUploadingFiles(prev => {
             const newSet = new Set(prev);
             newSet.delete(filename);
@@ -812,7 +752,7 @@ export default function JobDetailsPage() {
       }
     }
     
-         // Log results without updating job status (to avoid overwriting file statuses)
+     // Log results without updating job status (to avoid overwriting file statuses)
      if (failedCount === 0) {
        console.log('✅ All files uploaded successfully');
      } else if (uploadedCount > 0) {
@@ -830,6 +770,11 @@ export default function JobDetailsPage() {
     if (lowerStatus.includes('fail') || lowerStatus.includes('error')) return '#ef4444';
     if (lowerStatus.includes('progress') || lowerStatus.includes('running') || lowerStatus.includes('processing') || lowerStatus.includes('started')) return '#f59e0b';
     return '#3b82f6';
+  };
+
+  const capitalizeStatus = (status: string) => {
+    if (!status) return '';
+    return status.charAt(0).toUpperCase() + status.slice(1);
   };
 
   const getJobDisplayName = () => {
@@ -976,7 +921,7 @@ export default function JobDetailsPage() {
                     margin: 0,
                     fontWeight: 600 
                   }}>
-                    {jobData.job_status || 'Unknown'}
+                    {capitalizeStatus(jobData.job_status || 'Unknown')}
                   </p>
                 </div>
                 
@@ -1012,7 +957,7 @@ export default function JobDetailsPage() {
                 }}>
                   <h3 style={{ color: '#9ca3af', fontSize: 14, margin: '0 0 8px 0' }}>Subset</h3>
                   <p style={{ color: '#f8f8f8', fontSize: 16, margin: 0 }}>
-                    {jobData.Subset_name || 'Unknown'}
+                    {jobData.subset_name || jobData.Subset_name || 'Unknown'}
                   </p>
                 </div>
                 
@@ -1031,6 +976,7 @@ export default function JobDetailsPage() {
                   </div>
                 )}
               </div>
+
             </div>
 
 
@@ -1045,6 +991,7 @@ export default function JobDetailsPage() {
                 }}>
                   📁 Files ({jobData.content_pipeline_files?.length || 0})
                 </h2>
+
                 
                 {loadingFiles ? (
                   <div style={{
@@ -1057,9 +1004,9 @@ export default function JobDetailsPage() {
                     <div style={{ fontSize: 48, marginBottom: 16 }}>⏳</div>
                     <h3 style={{ color: '#9ca3af', fontSize: 18, marginBottom: 8 }}>Loading Files...</h3>
                     <p style={{ color: '#6b7280', fontSize: 14 }}>
-                      {jobData.job_status === 'Upload in progress' || jobData.job_status === 'Upload started' 
-                        ? 'Creating file objects...' 
-                        : 'Fetching file objects...'}
+                                          {jobData.job_status === 'uploading' 
+                      ? 'Creating file objects...' 
+                      : 'Fetching file objects...'}
                     </p>
                   </div>
                 ) : (
@@ -1172,18 +1119,18 @@ export default function JobDetailsPage() {
                                           fontSize: 11,
                                           padding: '2px 6px',
                                           borderRadius: 4,
-                                          background: fileInfo.status === 'Uploaded' 
+                                          background: fileInfo.status.toLowerCase() === 'uploaded' 
                                             ? 'rgba(16, 185, 129, 0.2)' 
-                                            : fileInfo.status === 'Failed'
+                                            : fileInfo.status.toLowerCase() === 'upload-failed'
                                             ? 'rgba(239, 68, 68, 0.2)'
                                             : 'rgba(249, 115, 22, 0.2)',
-                                          color: fileInfo.status === 'Uploaded' 
+                                          color: fileInfo.status.toLowerCase() === 'uploaded' 
                                             ? '#34d399' 
-                                            : fileInfo.status === 'Failed'
+                                            : fileInfo.status.toLowerCase() === 'upload-failed'
                                             ? '#fca5a5'
                                             : '#fdba74'
                                         }}>
-                                          {fileInfo.status}
+                                          {capitalizeStatus(fileInfo.status)}
                                         </span>
                                       </div>
                                     </div>
@@ -1214,10 +1161,12 @@ export default function JobDetailsPage() {
                                     🖼️ Extracted Layers ({Object.keys(file.extracted_files).length})
                                   </h4>
                                   {(() => {
-                                    // Check if all extracted files have "Uploaded" status
+                                    // Check if all extracted files have "uploaded" status (case insensitive)
                                     const allUploaded = Object.values(file.extracted_files || {}).every(
-                                      extractedFile => extractedFile.status === 'Uploaded'
+                                      extractedFile => extractedFile.status.toLowerCase() === 'uploaded'
                                     );
+                                    
+
                                     
                                     return allUploaded ? (
                                       <button
@@ -1228,11 +1177,14 @@ export default function JobDetailsPage() {
                                           ).filter(path => path);
                                           
                                           const baseName = file.filename.replace('.pdf', '').replace('.PDF', '');
-                                          const fullJobPath = router.query.jobPath as string;
+                                          // Use jobId since jobPath is not available
+                                          const jobPath = jobData?.job_id || '';
+                                          
+
                                           
                                           // Pass the file paths as a query parameter
                                           const filePathsParam = encodeURIComponent(JSON.stringify(filePaths));
-                                          router.push(`/job/preview?jobPath=${encodeURIComponent(fullJobPath)}&fileName=${encodeURIComponent(baseName)}&type=extracted&filePaths=${filePathsParam}`);
+                                          router.push(`/job/preview?jobPath=${encodeURIComponent(jobPath)}&fileName=${encodeURIComponent(baseName)}&type=extracted&filePaths=${filePathsParam}`);
                                         }}
                                         style={{
                                           background: 'rgba(59, 130, 246, 0.2)',
@@ -1263,7 +1215,7 @@ export default function JobDetailsPage() {
                                         borderRadius: 6,
                                         background: 'rgba(156, 163, 175, 0.1)'
                                       }}>
-                                        ⏳ Waiting for all layers to upload
+                                        ⏳ Waiting for all layers to be uploaded
                                       </span>
                                     );
                                   })()}
@@ -1303,14 +1255,14 @@ export default function JobDetailsPage() {
                                           fontSize: 11,
                                           padding: '2px 6px',
                                           borderRadius: 4,
-                                          background: extractedFile.status === 'Uploaded' 
+                                          background: extractedFile.status.toLowerCase() === 'uploaded' 
                                             ? 'rgba(16, 185, 129, 0.2)' 
                                             : 'rgba(249, 115, 22, 0.2)',
-                                          color: extractedFile.status === 'Uploaded' 
+                                          color: extractedFile.status.toLowerCase() === 'uploaded' 
                                             ? '#34d399' 
                                             : '#fdba74'
                                         }}>
-                                          {extractedFile.status}
+                                          {capitalizeStatus(extractedFile.status)}
                                         </span>
                                       </div>
                                     </div>
@@ -1338,10 +1290,12 @@ export default function JobDetailsPage() {
                                   🎨 Firefly Assets ({Object.keys(file.firefly_assets).length})
                                 </h4>
                                 {(() => {
-                                  // Check if all firefly assets have "succeeded" status
+                                  // Check if all firefly assets have "succeeded" status (case insensitive)
                                   const allSucceeded = Object.values(file.firefly_assets || {}).every(
-                                    asset => asset.status === 'succeeded'
+                                    asset => asset.status.toLowerCase() === 'succeeded'
                                   );
+                                  
+
                                   
                                   return allSucceeded ? (
                                     <button
@@ -1352,11 +1306,14 @@ export default function JobDetailsPage() {
                                         ).filter(path => path);
                                         
                                         const baseName = file.filename.replace('.pdf', '').replace('.PDF', '');
-                                        const fullJobPath = router.query.jobPath as string;
+                                        // Use jobId since jobPath is not available
+                                        const jobPath = jobData?.job_id || '';
+                                        
+
                                         
                                         // Pass the file paths as a query parameter
                                         const filePathsParam = encodeURIComponent(JSON.stringify(filePaths));
-                                        router.push(`/job/preview?jobPath=${encodeURIComponent(fullJobPath)}&fileName=${encodeURIComponent(baseName)}&type=firefly&filePaths=${filePathsParam}`);
+                                        router.push(`/job/preview?jobPath=${encodeURIComponent(jobPath)}&fileName=${encodeURIComponent(baseName)}&type=firefly&filePaths=${filePathsParam}`);
                                       }}
                                       style={{
                                         background: 'rgba(16, 185, 129, 0.2)',
@@ -1387,7 +1344,7 @@ export default function JobDetailsPage() {
                                       borderRadius: 6,
                                       background: 'rgba(156, 163, 175, 0.1)'
                                     }}>
-                                      ⏳ Waiting for all assets to complete
+                                                                              ⏳ Waiting for all assets to succeed
                                     </span>
                                   );
                                 })()}
@@ -1416,18 +1373,18 @@ export default function JobDetailsPage() {
                                         fontSize: 11,
                                         padding: '2px 6px',
                                         borderRadius: 4,
-                                        background: asset.status.toLowerCase().includes('succeed') || asset.status === 'created'
+                                        background: asset.status.toLowerCase().includes('succeed') || asset.status.toLowerCase() === 'created'
                                           ? 'rgba(16, 185, 129, 0.2)' 
                                           : asset.status.toLowerCase().includes('fail')
                                           ? 'rgba(239, 68, 68, 0.2)'
                                           : 'rgba(249, 115, 22, 0.2)',
-                                        color: asset.status.toLowerCase().includes('succeed') || asset.status === 'created'
+                                        color: asset.status.toLowerCase().includes('succeed') || asset.status.toLowerCase() === 'created'
                                           ? '#34d399' 
                                           : asset.status.toLowerCase().includes('fail')
                                           ? '#fca5a5'
                                           : '#fdba74'
                                       }}>
-                                        {asset.status}
+                                        {capitalizeStatus(asset.status)}
                                       </span>
                                       {asset.card_type && (
                                         <span style={{ 

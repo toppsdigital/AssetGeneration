@@ -5,49 +5,42 @@ export interface JobData {
   job_id?: string;
   app_name: string;
   release_name: string;
+  subset_name: string;
   source_folder: string;
   files?: string[];
   description?: string;
-  priority?: 'low' | 'medium' | 'high';
-  job_status?: string;
-  progress_percentage?: number;
-  current_step?: string;
-  metadata?: Record<string, any>;
+  job_status?:  'uploading' | 'uploaded' | 'upload-failed' | 'extracting' | 'extracted' | 'extraction-failed' | 'generating' | 'generated' | 'generation-failed' | 'completed' ;
   created_at?: string;
   last_updated?: string;
+  pdf_files?: {
+    total_files: number;
+    completed_files: number;
+    failed_files: number;
+  }
 }
 
 export interface FileData {
   filename: string;
-  file_type?: string;
-  size_bytes?: number;
-  source_path?: string;
-  extracted?: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
-  status?: string;
-  processing_time_ms?: number;
-  metadata?: Record<string, any>;
-  extracted_layers?: Record<string, any>;
   job_id?: string;
   last_updated?: string;
   original_files?: Record<string, {
     card_type: 'front' | 'back';
     file_path: string;
-    status: 'Uploading' | 'Uploaded' | 'Failed' | 'Extracted';
+    status: 'uploading' | 'uploaded' | 'upload-failed' | 'extracting' | 'extracted' | 'extraction-failed';
   }>;
   extracted_files?: Record<string, {
     file_path: string;
     layer_type: string;
-    status: string;
+    status: 'uploading' | 'uploaded' | 'upload-failed';
   }>;
   firefly_assets?: Record<string, {
     file_path: string;
     color_variant?: string;
-    job_id?: string | null;
     spot_file?: string;
     source_file?: string;
     card_type?: string;
     job_url?: string;
-    status: string;
+    status: 'created' | 'succeeded' | 'failed';
   }>;
 }
 
@@ -103,10 +96,19 @@ class ContentPipelineAPI {
 
   // Job operations
   async createJob(jobData: Omit<JobData, 'job_id' | 'created_at' | 'last_updated' | 'priority' | 'metadata' | 'job_status'>): Promise<JobResponse> {
+    // Calculate total PDF files based on grouped filenames
+    // Each grouped filename represents 2 PDF files (front and back)
+    const totalPdfFiles = (jobData.files || []).length * 2;
+    
     const jobPayload = {
       ...jobData,
-      job_status: 'Upload in progress',
-      files: jobData.files || []
+      job_status: 'uploading',
+      files: jobData.files || [],
+      pdf_files: {
+        total_files: totalPdfFiles,
+        completed_files: 0,
+        failed_files: 0
+      }
     };
 
     const response = await fetch(`${this.baseUrl}?operation=create_job`, {
@@ -287,40 +289,22 @@ class ContentPipelineAPI {
   }
 
   // Helper methods for common operations
-  async updateJobStatus(jobId: string, status: string, progressPercentage?: number, currentStep?: string): Promise<JobResponse> {
+  async updateJobStatus(jobId: string, status: JobData['job_status']): Promise<JobResponse> {
     const updates: Partial<JobData> = {
       job_status: status,
       last_updated: new Date().toISOString(),
     };
 
-    if (progressPercentage !== undefined) {
-      updates.progress_percentage = progressPercentage;
-    }
-
-    if (currentStep) {
-      updates.current_step = currentStep;
-    }
-
     return this.updateJob(jobId, updates);
   }
 
-  async updateFileStatus(filename: string, extracted: FileData['extracted'], status?: string): Promise<FileResponse> {
-    const updates: Partial<FileData> = {
-      extracted,
-    };
 
-    if (status) {
-      updates.status = status;
-    }
-
-    return this.updateFile(filename, updates);
-  }
 
   // Update a specific PDF file status within original_files
   async updatePdfFileStatus(
     groupFilename: string, 
     pdfFilename: string, 
-    status: 'Uploading' | 'Uploaded' | 'Failed'
+    status: 'uploading' | 'uploaded' | 'upload-failed'
   ): Promise<FileResponse> {
     const response = await fetch(`${this.baseUrl}?operation=update_pdf_status&id=${encodeURIComponent(groupFilename)}`, {
       method: 'PUT',

@@ -22,7 +22,7 @@ export default function JobsPage() {
       
       // Sort jobs by creation date (most recent first)
       const sortedJobs = response.jobs.sort((a, b) => 
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
       );
       
       setJobs(sortedJobs);
@@ -53,121 +53,26 @@ export default function JobsPage() {
     router.push(`/job/details?${queryParams.toString()}`);
   };
 
-  // Execute appropriate action based on job status
-  const executeJobAction = async (job: JobData) => {
-    const status = job.job_status?.toLowerCase() || '';
-    
-    if (status.includes('upload completed')) {
-      // Start PDF extraction
-      await startPdfExtraction(job);
-    } else if (status.includes('extraction completed')) {
-      // Create digital assets
-      await createDigitalAssets(job);
-    } else if (status.includes('digital assets completed') || status.includes('digital assets succeeded')) {
-      // Preview assets
-      previewAssets(job);
-    } else {
-      // Default to viewing details
-      viewJobDetails(job);
-    }
-  };
-
-  // Start PDF extraction for a job
-  const startPdfExtraction = async (job: JobData) => {
-    if (!job.job_id) return;
-    
-    try {
-      // Update job status to show it's processing
-      await contentPipelineApi.updateJobStatus(job.job_id, 'PDF extraction started');
-      
-      // Update local state
-      setJobs(prev => prev.map(j => 
-        j.job_id === job.job_id 
-          ? { ...j, job_status: 'PDF extraction started' }
-          : j
-      ));
-      
-      // Here you would typically call your PDF extraction API
-      // For now, we'll just show a message
-      alert('PDF extraction started for job: ' + job.job_id);
-      
-      // Refresh jobs after a delay
-      setTimeout(() => {
-        fetchJobs();
-      }, 2000);
-
-    } catch (error) {
-      console.error('Error starting extraction:', error);
-      alert('Failed to start PDF extraction: ' + (error as Error).message);
-    }
-  };
-
-  // Create digital assets for a job
-  const createDigitalAssets = async (job: JobData) => {
-    if (!job.job_id) return;
-    
-    try {
-      // Update job status to show it's processing
-      await contentPipelineApi.updateJobStatus(job.job_id, 'Digital asset creation started');
-      
-      // Update local state
-      setJobs(prev => prev.map(j => 
-        j.job_id === job.job_id 
-          ? { ...j, job_status: 'Digital asset creation started' }
-          : j
-      ));
-      
-      // Here you would typically call your digital asset creation API
-      // For now, we'll just show a message
-      alert('Digital asset creation started for job: ' + job.job_id);
-      
-      // Refresh jobs after a delay
-      setTimeout(() => {
-        fetchJobs();
-      }, 5000);
-
-    } catch (error) {
-      console.error('Error starting asset creation:', error);
-      alert('Failed to start digital asset creation: ' + (error as Error).message);
-    }
-  };
-
-  // Preview assets for a job
-  const previewAssets = (job: JobData) => {
-    if (!job.job_id) return;
-    
-    router.push({
-      pathname: '/job/preview',
-      query: {
-        jobId: job.job_id
-      }
-    });
-  };
-
   useEffect(() => {
     fetchJobs();
   }, []);
 
-  // Auto-refresh in-progress jobs every 30 seconds
-  useEffect(() => {
-    const interval = setInterval(() => {
-      refreshInProgressJobs();
-    }, 30000); // 30 seconds
-
-    return () => clearInterval(interval);
-  }, [jobs]);
+  const getSubsetName = (job: JobData) => {
+    if (!job.source_folder) return 'Unknown';
+    const parts = job.source_folder.split('/');
+    return parts.length > 0 ? parts[0] : 'Unknown';
+  };
 
   const getJobDisplayName = (job: JobData) => {
     const parts = [];
     
     if (job.app_name) parts.push(job.app_name);
     if (job.release_name) parts.push(job.release_name);
-    if (job.source_folder) {
-      // Extract subset from source_folder (e.g., "MARVEL/PDFs" -> "MARVEL")
-      const subset = job.source_folder.split('/')[0];
-      if (subset && subset !== job.app_name) {
-        parts.push(subset);
-      }
+    
+    // Add subset name from source_folder
+    const subsetName = getSubsetName(job);
+    if (subsetName && subsetName !== 'Unknown' && subsetName !== job.app_name) {
+      parts.push(subsetName);
     }
     
     return parts.length > 0 ? parts.join(' - ') : 'Untitled Job';
@@ -179,52 +84,39 @@ export default function JobsPage() {
     const lowerStatus = status.toLowerCase();
     
     // Green for completed/successful states
-    if (lowerStatus.includes('succeed') || lowerStatus.includes('completed')) return '#10b981';
+    if (lowerStatus.includes('completed') || lowerStatus.includes('generated')) return '#10b981';
     
     // Red for failed/error states
-    if (lowerStatus.includes('fail') || lowerStatus.includes('error')) return '#ef4444';
+    if (lowerStatus.includes('failed') || lowerStatus.includes('error')) return '#ef4444';
     
     // Yellow for in-progress states
-    if (lowerStatus.includes('progress') || lowerStatus.includes('running') || 
-        lowerStatus.includes('processing') || lowerStatus.includes('started')) return '#f59e0b';
+    if (lowerStatus.includes('uploading') || lowerStatus.includes('extracting') || 
+        lowerStatus.includes('generating')) return '#f59e0b';
     
-    // Blue for other active states
-    return '#3b82f6';
+    // Blue for uploaded state
+    if (lowerStatus.includes('uploaded') || lowerStatus.includes('extracted')) return '#3b82f6';
+    
+    // Default gray
+    return '#9ca3af';
   };
 
-  const getActionButtonText = (status: string | undefined) => {
-    if (!status) return 'View Details';
+  const getStatusIcon = (status: string | undefined) => {
+    if (!status) return '❓';
     
     const lowerStatus = status.toLowerCase();
-    if (lowerStatus.includes('upload completed')) return 'Start PDF Extraction';
-    if (lowerStatus.includes('extraction completed')) return 'Create Digital Assets';
-    if (lowerStatus.includes('digital assets completed') || lowerStatus.includes('digital assets succeeded')) return 'Preview Assets';
-    return 'View Details';
+    
+    if (lowerStatus.includes('completed') || lowerStatus.includes('generated')) return '✅';
+    if (lowerStatus.includes('failed') || lowerStatus.includes('error')) return '❌';
+    if (lowerStatus.includes('uploading') || lowerStatus.includes('extracting') || 
+        lowerStatus.includes('generating')) return '⏳';
+    if (lowerStatus.includes('uploaded') || lowerStatus.includes('extracted')) return '🔄';
+    
+    return '📋';
   };
 
-  const refreshInProgressJobs = async () => {
-    // Get all jobs that are in progress
-    const inProgressJobs = jobs.filter(job => {
-      if (!job.job_status) return false;
-      const status = job.job_status.toLowerCase();
-      return status.includes('progress') || 
-             status.includes('running') || 
-             status.includes('processing') || 
-             status.includes('started');
-    });
-
-    if (inProgressJobs.length === 0) {
-      return;
-    }
-
-    console.log(`Refreshing ${inProgressJobs.length} in-progress jobs...`);
-    
-    try {
-      // Refresh all jobs - simpler approach
-      await fetchJobs();
-    } catch (error) {
-      console.error('Error refreshing in-progress jobs:', error);
-    }
+  const capitalizeStatus = (status: string) => {
+    if (!status) return '';
+    return status.charAt(0).toUpperCase() + status.slice(1);
   };
 
   if (loading) {
@@ -398,25 +290,20 @@ export default function JobsPage() {
                       </div>
                       <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
                         <span style={{ color: '#9ca3af', fontSize: 14 }}>
-                          📅 {new Date(job.created_at).toLocaleString()}
+                          📅 {new Date(job.created_at || '').toLocaleString()}
+                        </span>
+                        <span style={{ color: '#9ca3af', fontSize: 14 }}>
+                          📂 {getSubsetName(job)}
                         </span>
                         <span style={{ 
                           color: getStatusColor(job.job_status),
                           fontSize: 14,
                           fontWeight: 600
                         }}>
-                          {(() => {
-                            if (!job.job_status) return '❓';
-                            const status = job.job_status.toLowerCase();
-                            if (status.includes('succeed') || status.includes('completed')) return '✅';
-                            if (status.includes('fail') || status.includes('error')) return '❌';
-                            if (status.includes('progress') || status.includes('running') || 
-                                status.includes('processing') || status.includes('started')) return '⏳';
-                            return '🔄';
-                          })()} {job.job_status || 'Unknown Status'}
+                          {getStatusIcon(job.job_status)} {capitalizeStatus(job.job_status || 'Unknown Status')}
                         </span>
                         <span style={{ color: '#9ca3af', fontSize: 12 }}>
-                          📁 {job.files.length} files
+                          📁 {job.files?.length || 0} files
                         </span>
                       </div>
                       {job.description && (
