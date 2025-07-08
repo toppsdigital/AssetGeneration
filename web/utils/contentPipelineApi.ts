@@ -27,6 +27,14 @@ export interface FileData {
   processing_time_ms?: number;
   metadata?: Record<string, any>;
   extracted_layers?: Record<string, any>;
+  job_id?: string;
+  original_files?: Record<string, {
+    card_type: 'front' | 'back';
+    file_path: string;
+    status: 'Uploading' | 'Uploaded' | 'Failed';
+  }>;
+  extracted_files?: (string | any)[];
+  firefly_assets?: any[];
 }
 
 export interface JobResponse {
@@ -292,6 +300,31 @@ class ContentPipelineAPI {
     }
 
     return this.updateFile(filename, updates);
+  }
+
+  // Update a specific PDF file status within original_files
+  async updatePdfFileStatus(
+    groupFilename: string, 
+    pdfFilename: string, 
+    status: 'Uploading' | 'Uploaded' | 'Failed'
+  ): Promise<FileResponse> {
+    const response = await fetch(`${this.baseUrl}?operation=update_pdf_status&id=${encodeURIComponent(groupFilename)}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        pdf_filename: pdfFilename,
+        status: status
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || `Failed to update PDF status: ${response.status}`);
+    }
+
+    return response.json();
   }
 
   // Get recent jobs for dashboard

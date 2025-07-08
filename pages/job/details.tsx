@@ -307,9 +307,9 @@ export default function JobDetailsPage() {
       const fileObjects: ContentPipelineFile[] = batchResponse.files.map(apiFile => ({
         filename: apiFile.filename,
         last_updated: new Date().toISOString(), // Use current time since API doesn't provide last_updated
-        original_files: apiFile.metadata?.original_files || {},
-        extracted_files: apiFile.metadata?.extracted_files || [],
-        firefly_assets: apiFile.metadata?.firefly_assets || []
+        original_files: apiFile.original_files || apiFile.metadata?.original_files || {},
+        extracted_files: apiFile.extracted_files || apiFile.metadata?.extracted_files || [],
+        firefly_assets: apiFile.firefly_assets || apiFile.metadata?.firefly_assets || []
       }));
       
       // Update job data with fetched files
@@ -377,14 +377,11 @@ export default function JobDetailsPage() {
         };
       });
       
-      // Create FileData objects for the API
+      // Create FileData objects for the API with flattened structure
       const apiFileData: FileData[] = fileObjects.map(fileObj => ({
         filename: fileObj.filename,
-        status: 'Uploading',
-        metadata: {
-          job_id: jobData.job_id,
-          original_files: fileObj.original_files
-        }
+        job_id: jobData.job_id,
+        original_files: fileObj.original_files
       }));
       
       // Batch create files
@@ -401,9 +398,9 @@ export default function JobDetailsPage() {
         finalFileObjects = batchResponse.created_files.map((apiFile: any) => ({
           filename: apiFile.filename,
           last_updated: new Date().toISOString(),
-          original_files: apiFile.metadata?.original_files || {},
-          extracted_files: apiFile.metadata?.extracted_files || [],
-          firefly_assets: apiFile.metadata?.firefly_assets || []
+          original_files: apiFile.original_files || apiFile.metadata?.original_files || {},
+          extracted_files: apiFile.extracted_files || apiFile.metadata?.extracted_files || [],
+          firefly_assets: apiFile.firefly_assets || apiFile.metadata?.firefly_assets || []
         }));
       }
       
@@ -439,9 +436,9 @@ export default function JobDetailsPage() {
             const existingFileObjects = existingFilesResponse.files.map((apiFile: any) => ({
               filename: apiFile.filename,
               last_updated: new Date().toISOString(),
-              original_files: apiFile.metadata?.original_files || {},
-              extracted_files: apiFile.metadata?.extracted_files || [],
-              firefly_assets: apiFile.metadata?.firefly_assets || []
+              original_files: apiFile.original_files || apiFile.metadata?.original_files || {},
+              extracted_files: apiFile.extracted_files || apiFile.metadata?.extracted_files || [],
+              firefly_assets: apiFile.firefly_assets || apiFile.metadata?.firefly_assets || []
             }));
             
             finalFileObjects = [...finalFileObjects, ...existingFileObjects];
@@ -454,7 +451,7 @@ export default function JobDetailsPage() {
               return originalFileData || {
                 filename: failedFile.file_data.filename,
                 last_updated: new Date().toISOString(),
-                original_files: failedFile.file_data.metadata?.original_files || {}
+                original_files: failedFile.file_data.original_files || failedFile.file_data.metadata?.original_files || {}
               };
             });
             
@@ -587,50 +584,86 @@ export default function JobDetailsPage() {
     }
   };
 
-  // Update file status in the job data
-  const updateFileStatus = (filename: string, status: 'Uploading' | 'Uploaded' | 'Failed'): void => {
+  // Update file status in the job data and sync with backend
+  const updateFileStatus = async (
+    groupFilename: string,
+    pdfFilename: string,
+    status: 'Uploading' | 'Uploaded' | 'Failed'
+  ): Promise<void> => {
     if (!jobData?.content_pipeline_files) return;
-    
-    console.log(`🔄 Updating file status: ${filename} -> ${status}`);
-    
-    const updatedFiles = jobData.content_pipeline_files.map(file => {
-      if (file.original_files) {
-        const updatedOriginalFiles = { ...file.original_files };
+
+    console.log(`🔄 Updating status for ${pdfFilename} in group ${groupFilename} to ${status}`);
+
+    const fileGroup = jobData.content_pipeline_files.find(f => f.filename === groupFilename);
+    if (!fileGroup) {
+      console.error(`File group ${groupFilename} not found in job data`);
+      return;
+    }
+
+    const originalFileInfo = fileGroup.original_files?.[pdfFilename];
+    if (!originalFileInfo) {
+      console.error(`Original file info for ${pdfFilename} not found in file group ${groupFilename}`);
+      return;
+    }
+
+    // Create a new copy of original_files with the updated status
+    const updatedOriginalFiles = {
+      ...(fileGroup.original_files || {}),
+      [pdfFilename]: {
+        ...originalFileInfo,
+        status: status,
+      },
+    };
+
+    // Now, update the backend - send only the specific status that changed
+    try {
+      console.log(`📡 Syncing status for ${pdfFilename} to backend (status only)...`, { pdf_filename: pdfFilename, status });
+
+      const response = await contentPipelineApi.updatePdfFileStatus(groupFilename, pdfFilename, status);
+
+      console.log(`✅ Successfully synced status for ${pdfFilename} to backend.`, response);
+
+      // Update local state ONLY with the response from the backend (no optimistic updates)
+      if (response.file) {
+        const updatedFileFromBackend = response.file;
         
-        // Update the specific file's status
-        Object.keys(updatedOriginalFiles).forEach(key => {
-          if (key === filename) {
-            console.log(`✅ Found file ${filename}, updating status from ${updatedOriginalFiles[key].status} to ${status}`);
-            updatedOriginalFiles[key] = {
-              ...updatedOriginalFiles[key],
-              status
-            };
-          }
+        console.log(`🔄 Updating local state with backend response for ${groupFilename}:`, updatedFileFromBackend);
+        
+        setJobData(prev => {
+          if (!prev?.content_pipeline_files) return prev;
+          
+          const syncedContentPipelineFiles = prev.content_pipeline_files.map(file =>
+            file.filename === groupFilename
+              ? {
+                  ...file,
+                  original_files: updatedFileFromBackend.original_files || updatedFileFromBackend.metadata?.original_files || file.original_files,
+                  extracted_files: updatedFileFromBackend.extracted_files || updatedFileFromBackend.metadata?.extracted_files || file.extracted_files,
+                  firefly_assets: updatedFileFromBackend.firefly_assets || updatedFileFromBackend.metadata?.firefly_assets || file.firefly_assets,
+                  last_updated: new Date().toISOString()
+                }
+              : file
+          );
+          
+          return { ...prev, content_pipeline_files: syncedContentPipelineFiles };
         });
         
-        return {
-          ...file,
-          original_files: updatedOriginalFiles
-        };
+        console.log(`✅ Local state updated with backend response for ${groupFilename}`);
+      } else {
+        console.warn(`⚠️ No file data in response for ${groupFilename}, updating local state directly`);
+        
+        // Fallback: update local state directly if no backend response
+        const updatedContentPipelineFiles = jobData.content_pipeline_files.map(file =>
+          file.filename === groupFilename
+            ? { ...file, original_files: updatedOriginalFiles }
+            : file
+        );
+
+        setJobData(prev => (prev ? { ...prev, content_pipeline_files: updatedContentPipelineFiles } : null));
       }
-      return file;
-    });
-    
-    console.log(`🔄 setJobData called from: updateFileStatus (${filename} -> ${status}) at`, new Date().toISOString());
-    setJobData(prev => {
-      const newJobData = prev ? {
-        ...prev,
-        content_pipeline_files: updatedFiles
-      } : null;
-      
-      console.log(`📊 File status update completed for ${filename}. New statuses:`, 
-        newJobData?.content_pipeline_files?.map(f => ({
-          filename: f.filename,
-          statuses: Object.entries(f.original_files || {}).map(([name, info]) => `${name}: ${info.status}`).join(', ')
-        }))
-      );
-      return newJobData;
-    });
+    } catch (error) {
+      console.error(`❌ Failed to sync status for ${pdfFilename} to backend:`, error);
+      // Don't update local state if backend update failed
+    }
   };
 
   // Helper function to wait for a specified time
@@ -639,7 +672,7 @@ export default function JobDetailsPage() {
   };
 
   // Upload a single file with retry logic
-  const uploadSingleFile = async (filename: string, file: File, fileInfo: any, maxRetries: number = 3): Promise<void> => {
+  const uploadSingleFile = async (groupFilename: string, filename: string, file: File, fileInfo: any, maxRetries: number = 3): Promise<void> => {
     let retryCount = 0;
     
     while (retryCount < maxRetries) {
@@ -665,12 +698,9 @@ export default function JobDetailsPage() {
           }));
         });
         
-        // Skip backend update for now - let's focus on local state persistence
-        console.log(`🔄 Marking ${filename} as uploaded in local state only`);
-        // TODO: Add proper backend update that doesn't overwrite other files' data
-        
-        // Mark as uploaded in local state
-        updateFileStatus(filename, 'Uploaded');
+        // Mark as uploaded in local state and sync to backend
+        await updateFileStatus(groupFilename, filename, 'Uploaded');
+
         setUploadingFiles(prev => {
           const newSet = new Set(prev);
           newSet.delete(filename);
@@ -695,16 +725,16 @@ export default function JobDetailsPage() {
         
         if (retryCount < maxRetries) {
           console.log(`Retrying upload of ${filename} in 1 second...`);
-          // Update status to show retry
-          updateFileStatus(filename, 'Uploading');
+          // Update status to show retry (and sync to backend)
+          await updateFileStatus(groupFilename, filename, 'Uploading');
           // Wait 1 second before retry
           await wait(1000);
         } else {
           // All retries failed
           console.error(`All retry attempts failed for ${filename}`);
           
-          // Mark as failed in local state only
-          updateFileStatus(filename, 'Failed');
+          // Mark as failed and sync to backend
+          await updateFileStatus(groupFilename, filename, 'Failed');
           setUploadingFiles(prev => {
             const newSet = new Set(prev);
             newSet.delete(filename);
@@ -733,7 +763,7 @@ export default function JobDetailsPage() {
     });
     
     // Collect all files to upload in order
-    const filesToUpload: Array<{filename: string, file: File, fileInfo: any}> = [];
+    const filesToUpload: Array<{groupFilename: string, filename: string, file: File, fileInfo: any}> = [];
     
     jobData.content_pipeline_files.forEach((fileObj) => {
       if (!fileObj.original_files) return;
@@ -741,7 +771,7 @@ export default function JobDetailsPage() {
       Object.entries(fileObj.original_files).forEach(([filename, fileInfo]) => {
         const file = fileMap.get(filename);
         if (file) {
-          filesToUpload.push({ filename, file, fileInfo });
+          filesToUpload.push({ groupFilename: fileObj.filename, filename, file, fileInfo });
         } else {
           console.warn(`File ${filename} not found in uploaded files`);
         }
@@ -752,9 +782,9 @@ export default function JobDetailsPage() {
     let failedCount = 0;
     
     // Upload files sequentially
-    for (const { filename, file, fileInfo } of filesToUpload) {
+    for (const { groupFilename, filename, file, fileInfo } of filesToUpload) {
       try {
-        await uploadSingleFile(filename, file, fileInfo);
+        await uploadSingleFile(groupFilename, filename, file, fileInfo);
         uploadedCount++;
         
         // Update overall progress

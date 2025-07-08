@@ -147,13 +147,88 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         apiMethod = 'POST';
         break;
         
+      case 'update_pdf_status':
+        if (!id) {
+          return res.status(400).json({ error: 'Group filename is required' });
+        }
+        if (!body.pdf_filename || !body.status) {
+          return res.status(400).json({ error: 'pdf_filename and status are required' });
+        }
+        
+        try {
+          // First, get the current file data using the existing get_file operation
+          const getFileUrl = `${API_BASE_URL}/files/${encodeURIComponent(id as string)}`;
+          const getHeaders: Record<string, string> = {
+            'Content-Type': 'application/json',
+          };
+          if (process.env.CONTENT_PIPELINE_API_KEY) {
+            getHeaders['Authorization'] = `Bearer ${process.env.CONTENT_PIPELINE_API_KEY}`;
+          }
+          
+          const getResponse = await fetch(getFileUrl, {
+            method: 'GET',
+            headers: getHeaders,
+          });
+          
+          if (!getResponse.ok) {
+            const errorData = await getResponse.json();
+            return res.status(getResponse.status).json(errorData);
+          }
+          
+          const fileData = await getResponse.json();
+          
+          // Update only the specific PDF file status
+          const currentOriginalFiles = { ...(fileData.file.original_files || fileData.file.metadata?.original_files || {}) };
+          const pdfFilename = body.pdf_filename;
+          
+          if (currentOriginalFiles[pdfFilename]) {
+            currentOriginalFiles[pdfFilename] = {
+              ...currentOriginalFiles[pdfFilename],
+              status: body.status
+            };
+          } else {
+            return res.status(404).json({ error: `PDF file ${pdfFilename} not found in original_files` });
+          }
+          
+          // Now update the file using the existing update_file operation
+          const updateFileUrl = `${API_BASE_URL}/files/${encodeURIComponent(id as string)}`;
+          const updateHeaders: Record<string, string> = {
+            'Content-Type': 'application/json',
+          };
+          if (process.env.CONTENT_PIPELINE_API_KEY) {
+            updateHeaders['Authorization'] = `Bearer ${process.env.CONTENT_PIPELINE_API_KEY}`;
+          }
+          
+          const updateResponse = await fetch(updateFileUrl, {
+            method: 'PUT',
+            headers: updateHeaders,
+            body: JSON.stringify({
+              original_files: currentOriginalFiles
+            })
+          });
+          
+          const updateData = await updateResponse.json();
+          
+          console.log(`PDF status update completed for ${pdfFilename}: ${body.status}`);
+          
+          // Return the response from the update_file operation
+          return res.status(updateResponse.status).json(updateData);
+          
+        } catch (error) {
+          console.error('Error in update_pdf_status:', error);
+          return res.status(500).json({ 
+            error: 'Failed to update PDF status',
+            details: error instanceof Error ? error.message : 'Unknown error'
+          });
+        }
+        
       default:
         return res.status(400).json({ 
           error: 'Invalid operation',
           available_operations: [
             'create_job', 'get_job', 'update_job', 'list_jobs',
             'create_file', 'get_file', 'update_file', 'list_files',
-            'batch_create_files', 'batch_get_files'
+            'batch_create_files', 'batch_get_files', 'update_pdf_status'
           ]
         });
     }
