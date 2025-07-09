@@ -1,31 +1,42 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 
-// Types based on the Postman collection structure
+// Types matching the contentPipelineApi.ts structure
 interface JobData {
   job_id?: string;
   app_name: string;
   release_name: string;
+  subset_name: string;
   source_folder: string;
+  files?: string[];
   description?: string;
-  priority?: 'low' | 'medium' | 'high';
-  job_status?: string;
-  progress_percentage?: number;
-  current_step?: string;
-  metadata?: Record<string, any>;
+  job_status?: 'uploading' | 'uploaded' | 'upload-failed' | 'extracting' | 'extracted' | 'extraction-failed' | 'generating' | 'generated' | 'generation-failed' | 'completed';
   created_at?: string;
   last_updated?: string;
 }
 
 interface FileData {
   filename: string;
-  file_type?: string;
-  size_bytes?: number;
-  source_path?: string;
-  extracted?: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
-  status?: string;
-  processing_time_ms?: number;
-  metadata?: Record<string, any>;
-  extracted_layers?: Record<string, any>;
+  job_id?: string;
+  last_updated?: string;
+  original_files?: Record<string, {
+    card_type: 'front' | 'back';
+    file_path: string;
+    status: 'uploading' | 'uploaded' | 'upload-failed' | 'extracting' | 'extracted' | 'extraction-failed';
+  }>;
+  extracted_files?: Record<string, {
+    file_path: string;
+    layer_type: string;
+    status: 'uploading' | 'uploaded' | 'upload-failed';
+  }>;
+  firefly_assets?: Record<string, {
+    file_path: string;
+    color_variant?: string;
+    spot_file?: string;
+    source_file?: string;
+    card_type?: string;
+    job_url?: string;
+    status: 'created' | 'succeeded' | 'failed';
+  }>;
 }
 
 interface BatchCreateRequest {
@@ -178,7 +189,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const fileData = await getResponse.json();
           
           // Update only the specific PDF file status
-          const currentOriginalFiles = { ...(fileData.file.original_files || fileData.file.metadata?.original_files || {}) };
+          // Check both direct property and metadata fallback for backward compatibility
+          const currentOriginalFiles = { 
+            ...(fileData.file.original_files || fileData.file.metadata?.original_files || {}) 
+          };
           const pdfFilename = body.pdf_filename;
           
           if (currentOriginalFiles[pdfFilename]) {
@@ -203,7 +217,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             method: 'PUT',
             headers: updateHeaders,
             body: JSON.stringify({
-              original_files: currentOriginalFiles
+              original_files: currentOriginalFiles,
+              last_updated: new Date().toISOString()
             })
           });
           

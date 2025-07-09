@@ -7,6 +7,7 @@ import contentPipelineApi, { JobData, FileData } from './contentPipelineApi';
 export async function createNewJob(jobData: {
   appName: string;
   releaseName: string;
+  subsetName: string;
   sourceFolder: string;
   files: string[]; // Array of grouped filenames (e.g., ["25TCBB_3800", "25TCBB_3060"])
   description?: string;
@@ -15,6 +16,7 @@ export async function createNewJob(jobData: {
     const response = await contentPipelineApi.createJob({
       app_name: jobData.appName,
       release_name: jobData.releaseName,
+      subset_name: jobData.subsetName,
       source_folder: jobData.sourceFolder,
       files: jobData.files,
       description: jobData.description
@@ -54,6 +56,7 @@ export function groupPdfFilenames(fileList: FileList): string[] {
 export async function createNewJobFromFileList(jobData: {
   appName: string;
   releaseName: string;
+  subsetName: string;
   sourceFolder: string;
   selectedFiles: FileList;
   description?: string;
@@ -64,6 +67,7 @@ export async function createNewJobFromFileList(jobData: {
     const response = await contentPipelineApi.createJob({
       app_name: jobData.appName,
       release_name: jobData.releaseName,
+      subset_name: jobData.subsetName,
       source_folder: jobData.sourceFolder,
       files: groupedFilenames,
       description: jobData.description
@@ -90,9 +94,9 @@ export async function getJobDetails(jobId: string) {
 }
 
 // Example 3: Update job status (use this during upload/processing)
-export async function updateJobProgress(jobId: string, status: string, progress: number, step: string) {
+export async function updateJobProgress(jobId: string, status: JobData['job_status']) {
   try {
-    const response = await contentPipelineApi.updateJobStatus(jobId, status, progress, step);
+    const response = await contentPipelineApi.updateJobStatus(jobId, status);
     return response.job;
   } catch (error) {
     console.error('Failed to update job status:', error);
@@ -130,12 +134,12 @@ export async function createFileObjects(jobData: {
         [`${filename}_FR.pdf`]: {
           card_type: 'front' as const,
           file_path: `${jobData.appName}/PDFs/${filename}_FR.pdf`,
-          status: 'Uploading' as const
+          status: 'uploading' as const
         },
         [`${filename}_BK.pdf`]: {
           card_type: 'back' as const,
           file_path: `${jobData.appName}/PDFs/${filename}_BK.pdf`,
-          status: 'Uploading' as const
+          status: 'uploading' as const
         }
       };
       
@@ -149,11 +153,9 @@ export async function createFileObjects(jobData: {
     // Create FileData objects for the API
     const apiFileData: FileData[] = fileObjects.map(fileObj => ({
       filename: fileObj.filename,
-      status: 'Uploading',
-      metadata: {
-        job_id: jobData.jobId,
-        original_files: fileObj.original_files
-      }
+      job_id: jobData.jobId,
+      last_updated: fileObj.last_updated,
+      original_files: fileObj.original_files
     }));
     
     // Batch create files
@@ -175,25 +177,11 @@ export async function createFileObjects(jobData: {
 export async function updatePdfFileStatus(
   filename: string, // The grouped filename (e.g., "25TCBB_3800")
   pdfFilename: string, // The actual PDF filename (e.g., "25TCBB_3800_FR.pdf")
-  status: 'Uploading' | 'Uploaded' | 'Failed',
-  originalFiles: Record<string, any>
+  status: 'uploading' | 'uploaded' | 'upload-failed'
 ) {
   try {
-    // Update the file in the API
-    const updates = {
-      status: status,
-      metadata: {
-        original_files: {
-          ...originalFiles,
-          [pdfFilename]: {
-            ...originalFiles[pdfFilename],
-            status: status
-          }
-        }
-      }
-    };
-    
-    const response = await contentPipelineApi.updateFile(filename, updates);
+    // Use the dedicated PDF status update method
+    const response = await contentPipelineApi.updatePdfFileStatus(filename, pdfFilename, status);
     
     console.log(`Updated ${pdfFilename} status to ${status} for file ${filename}`);
     return response.file;
@@ -203,15 +191,15 @@ export async function updatePdfFileStatus(
   }
 }
 
-// Example 7: Get files for a specific job using metadata filtering
+// Example 7: Get files for a specific job using job_id filtering
 export async function getJobFiles(jobId: string) {
   try {
-    // Get all files and filter by job_id in metadata
+    // Get all files and filter by job_id
     const response = await contentPipelineApi.listFiles({ limit: 100 });
     
     // Filter files that belong to this job
     const jobFiles = response.files.filter(file => 
-      file.metadata?.job_id === jobId
+      file.job_id === jobId
     );
     
     return jobFiles;
@@ -272,12 +260,11 @@ export function useJobWithFileCreation(jobId: string, pollInterval: number = 500
 export async function updateMultiplePdfStatuses(updates: Array<{
   filename: string; // Grouped filename
   pdfFilename: string; // Actual PDF filename
-  status: 'Uploading' | 'Uploaded' | 'Failed';
-  originalFiles: Record<string, any>;
+  status: 'uploading' | 'uploaded' | 'upload-failed';
 }>) {
   try {
     const promises = updates.map(update => 
-      updatePdfFileStatus(update.filename, update.pdfFilename, update.status, update.originalFiles)
+      updatePdfFileStatus(update.filename, update.pdfFilename, update.status)
     );
     
     const results = await Promise.allSettled(promises);
@@ -302,30 +289,29 @@ export async function updateMultiplePdfStatuses(updates: Array<{
 export async function completeUploadWorkflow(jobId: string, uploadedFiles: File[]) {
   try {
     // 1. Update job status to uploading
-    await updateJobProgress(jobId, 'Upload in progress', 0, 'Starting file upload');
+    await updateJobProgress(jobId, 'uploading');
     
     // 2. Upload each file and update status
     for (let i = 0; i < uploadedFiles.length; i++) {
       const file = uploadedFiles[i];
-      const progress = Math.round(((i + 1) / uploadedFiles.length) * 100);
       
       // Update job progress
-      await updateJobProgress(jobId, 'Upload in progress', progress, `Uploading ${file.name}`);
+      await updateJobProgress(jobId, 'uploading');
       
       // Here you would do the actual S3 upload
       // await uploadToS3(file);
       
       // Update individual file status
-      // await updatePdfFileStatus(groupedFilename, file.name, 'Uploaded', originalFiles);
+      // await updatePdfFileStatus(groupedFilename, file.name, 'uploaded');
     }
     
     // 3. Complete the upload
-    await updateJobProgress(jobId, 'Upload completed', 100, 'All files uploaded successfully');
+    await updateJobProgress(jobId, 'uploaded');
     
     console.log('Upload workflow completed successfully');
   } catch (error) {
     console.error('Upload workflow failed:', error);
-    await updateJobProgress(jobId, 'Upload failed', undefined, 'Upload process failed');
+    await updateJobProgress(jobId, 'upload-failed');
     throw error;
   }
 }

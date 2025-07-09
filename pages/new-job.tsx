@@ -128,6 +128,7 @@ export default function NewJobPage() {
   const createJob = async (jobData: {
     appName: string;
     releaseName: string;
+    subsetName: string;
     sourceFolder: string;
     files: string[];
     description?: string;
@@ -136,6 +137,7 @@ export default function NewJobPage() {
       const response = await contentPipelineApi.createJob({
         app_name: jobData.appName,
         release_name: jobData.releaseName,
+        subset_name: jobData.subsetName,
         source_folder: jobData.sourceFolder,
         files: jobData.files,
         description: jobData.description
@@ -195,6 +197,7 @@ export default function NewJobPage() {
       const createdJob = await createJob({
         appName: formData.appName,
         releaseName: formData.releaseName,
+        subsetName: formData.subsetName,
         sourceFolder: generateFilePath(formData.appName),
         files: filenames,
         description: `${formData.subsetName} - Processing PDFs into digital assets`
@@ -232,6 +235,7 @@ export default function NewJobPage() {
         jobId: createdJob.job_id!,
         appName: createdJob.app_name || formData.appName,
         releaseName: createdJob.release_name || formData.releaseName,
+        subsetName: createdJob.subset_name || formData.subsetName,
         sourceFolder: createdJob.source_folder || generateFilePath(formData.appName),
         status: createdJob.job_status || 'Upload started',
         createdAt: createdJob.created_at || new Date().toISOString(),
