@@ -12,11 +12,9 @@ export interface JobData {
   job_status?:  'uploading' | 'uploaded' | 'upload-failed' | 'extracting' | 'extracted' | 'extraction-failed' | 'generating' | 'generated' | 'generation-failed' | 'completed' ;
   created_at?: string;
   last_updated?: string;
-  pdf_files?: {
-    total_files: number;
-    completed_files: number;
-    failed_files: number;
-  }
+  original_files_total_count?: number;
+  original_files_completed_count?: number;
+  original_files_failed_count?: number;
 }
 
 export interface FileData {
@@ -104,11 +102,9 @@ class ContentPipelineAPI {
       ...jobData,
       job_status: 'uploading',
       files: jobData.files || [],
-      pdf_files: {
-        total_files: totalPdfFiles,
-        completed_files: 0,
-        failed_files: 0
-      }
+      original_files_total_count: totalPdfFiles,
+      original_files_completed_count: 0,
+      original_files_failed_count: 0
     };
 
     const response = await fetch(`${this.baseUrl}?operation=create_job`, {
@@ -247,10 +243,6 @@ class ContentPipelineAPI {
 
   // Batch operations
   async batchCreateFiles(files: FileData[]): Promise<BatchCreateResponse> {
-    if (files.length > 25) {
-      throw new Error('Maximum 25 files per batch create request');
-    }
-
     const response = await fetch(`${this.baseUrl}?operation=batch_create_files`, {
       method: 'POST',
       headers: {
