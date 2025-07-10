@@ -38,7 +38,7 @@ export default function JobDetailsPage() {
   const [jsonData, setJsonData] = useState<any>(null);
   const [loadingJsonData, setLoadingJsonData] = useState(false);
   const [selectedLayers, setSelectedLayers] = useState<Set<string>>(new Set());
-  const [selectedExtractedLayers, setSelectedExtractedLayers] = useState<Set<string>>(new Set());
+  const [creatingAssets, setCreatingAssets] = useState(false);
 
   useEffect(() => {
     if (jobId) {
@@ -252,7 +252,6 @@ export default function JobDetailsPage() {
     }
     // Clear selected layers when changing files
     setSelectedLayers(new Set());
-    setSelectedExtractedLayers(new Set());
   }, [selectedPhysicalFile]);
 
   // Load job details from query parameters (to avoid API call)
@@ -1072,15 +1071,15 @@ export default function JobDetailsPage() {
                   )}
                 </h2>
 
-                {/* PSD Selection, Color Variants, and Extracted Layers */}
+                {/* PSD Selection and Color Variants */}
                 <div style={{ 
                   display: 'flex', 
-                  gap: 24, 
+                  gap: 32, 
                   marginBottom: 24,
                   alignItems: 'flex-start'
                 }}>
                   {/* PSD File Selection */}
-                  <div style={{ flex: '0 0 280px' }}>
+                  <div style={{ flex: '0 0 300px' }}>
                     <label style={{
                       display: 'block',
                       fontSize: 16,
@@ -1134,7 +1133,7 @@ export default function JobDetailsPage() {
 
                   {/* Color Variants Selection */}
                   {selectedPhysicalFile && jsonData && (
-                    <div style={{ flex: '0 0 220px' }}>
+                    <div style={{ flex: '0 0 250px' }}>
                       <label style={{
                         display: 'block',
                         fontSize: 16,
@@ -1234,161 +1233,13 @@ export default function JobDetailsPage() {
                   )}
 
                   {/* Extracted Layers Selection */}
-                  {selectedPhysicalFile && jsonData && (
-                    <div style={{ flex: '0 0 220px' }}>
-                      <label style={{
-                        display: 'block',
-                        fontSize: 16,
-                        fontWeight: 600,
-                        color: '#f8f8f8',
-                        marginBottom: 12
-                      }}>
-                        Select Layers
-                      </label>
-                      {(() => {
-                        // Function to extract unique layer names from filenames
-                        const extractUniqueLayerNames = (filenames: string[]): string[] => {
-                          console.log('🔍 Extracting unique layer names from filenames:', filenames);
-                          
-                          if (filenames.length === 0) return [];
-                          
-                          const layerNames = new Set<string>();
-                          
-                          filenames.forEach(filename => {
-                            // Remove file extension
-                            const withoutExt = filename.replace(/\.(tif|png|jpg|jpeg)$/i, '');
-                            
-                            // Split into parts
-                            const parts = withoutExt.split('_').filter(part => part.length > 0);
-                            console.log(`📝 Processing ${filename} -> parts:`, parts);
-                            
-                            // Remove first two parts (app prefix and card number) and last part if it's 'tif'
-                            // Expected format: 25bwbb_3950_bk_superfractor_tif
-                            if (parts.length >= 3) {
-                              const layerParts = parts.slice(2); // Remove first two parts
-                              
-                              // Remove 'tif' from the end if it exists (sometimes filenames have _tif_tif)
-                              const filteredParts = layerParts.filter(part => part.toLowerCase() !== 'tif');
-                              
-                              if (filteredParts.length > 0) {
-                                const layerName = filteredParts.join('_');
-                                console.log(`✅ Extracted layer name: ${layerName}`);
-                                layerNames.add(layerName);
-                              }
-                            }
-                          });
-                          
-                          const uniqueLayerNames = Array.from(layerNames);
-                          console.log('🎯 Unique layer names found:', uniqueLayerNames);
-                          return uniqueLayerNames;
-                        };
 
-                        // Collect all extracted files from the content pipeline files
-                        const getAllExtractedFiles = (): string[] => {
-                          const extractedFilenames: string[] = [];
-                          
-                          console.log('🔍 Getting extracted files from jobData:', jobData?.content_pipeline_files);
-                          
-                          // Look through all content pipeline files for extracted files
-                          if (jobData?.content_pipeline_files) {
-                            jobData.content_pipeline_files.forEach((file, index) => {
-                              console.log(`📄 Processing file ${index + 1}:`, file.filename, 'extracted_files:', file.extracted_files);
-                              
-                              if (file.extracted_files) {
-                                Object.keys(file.extracted_files).forEach(filename => {
-                                  const fileInfo = file.extracted_files![filename];
-                                  console.log(`🔍 Checking extracted file: ${filename}, status: ${fileInfo.status}`);
-                                  
-                                  // Only include successfully extracted files
-                                  if (fileInfo.status === 'uploaded') {
-                                    extractedFilenames.push(filename);
-                                    console.log(`✅ Added extracted file: ${filename}`);
-                                  }
-                                });
-                              }
-                            });
-                          }
-                          
-                          console.log('📋 Total extracted filenames found:', extractedFilenames);
-                          return extractedFilenames;
-                        };
-
-                        const filenames = getAllExtractedFiles();
-                        const uniqueLayerNames = extractUniqueLayerNames(filenames);
-
-                        const toggleExtractedLayer = (layerId: string) => {
-                          const newSelected = new Set(selectedExtractedLayers);
-                          if (newSelected.has(layerId)) {
-                            newSelected.delete(layerId);
-                          } else {
-                            newSelected.add(layerId);
-                          }
-                          setSelectedExtractedLayers(newSelected);
-                        };
-
-                        return uniqueLayerNames.length > 0 ? (
-                          <div style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 8
-                          }}>
-                            {uniqueLayerNames.map((layerName: string, index: number) => {
-                              const isSelected = selectedExtractedLayers.has(layerName);
-                              
-                              return (
-                                <label key={index} style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 8,
-                                  cursor: 'pointer',
-                                  fontSize: 14,
-                                  color: '#f8f8f8',
-                                  padding: '8px 12px',
-                                  background: 'rgba(255, 255, 255, 0.05)',
-                                  borderRadius: 6,
-                                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                                  transition: 'background-color 0.2s'
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                                }}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={isSelected}
-                                    onChange={() => toggleExtractedLayer(layerName)}
-                                    style={{
-                                      width: 16,
-                                      height: 16,
-                                      cursor: 'pointer'
-                                    }}
-                                  />
-                                  {layerName}
-                                </label>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <div style={{
-                            fontSize: 14,
-                            color: '#9ca3af',
-                            fontStyle: 'italic'
-                          }}>
-                            No extracted layers available
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  )}
                 </div>
 
 
 
                 {/* Generate Digital Assets Button */}
-                {selectedPhysicalFile && jsonData && (selectedLayers.size > 0 || selectedExtractedLayers.size > 0) && (
+                {selectedPhysicalFile && jsonData && selectedLayers.size > 0 && (
                   <div style={{ 
                     marginTop: 32, 
                     padding: 24, 
@@ -1409,28 +1260,61 @@ export default function JobDetailsPage() {
                           color: '#34d399',
                           margin: '0 0 8px 0'
                         }}>
-                          🚀 Ready to Generate Digital Assets
+                          🚀 Ready to Create Digital Assets
                         </h3>
                         <p style={{
                           fontSize: 14,
                           color: '#86efac',
                           margin: 0
                         }}>
-                          {selectedLayers.size} color variants{selectedLayers.size > 0 && selectedExtractedLayers.size > 0 ? ', ' : ''}
-                          {selectedExtractedLayers.size} layers selected
+                          {selectedLayers.size} color variants selected
                         </p>
                       </div>
                       <button
-                        onClick={() => {
-                          console.log('🎨 Generating digital assets with selected layers:', {
+                        onClick={async () => {
+                          console.log('🎨 Creating digital assets with selected options:', {
                             selectedFile: selectedPhysicalFile,
                             psdFile: jsonData?.psd_file,
                             selectedLayers: Array.from(selectedLayers),
-                            selectedExtractedLayers: Array.from(selectedExtractedLayers),
-                            totalSelected: selectedLayers.size + selectedExtractedLayers.size
+                            totalSelected: selectedLayers.size
                           });
-                          // TODO: Implement digital asset generation logic
-                          alert(`Ready to generate assets for ${selectedLayers.size} color variants and ${selectedExtractedLayers.size} layers!`);
+
+                          setCreatingAssets(true);
+
+                          try {
+                            // Map selected color variants to the required format
+                            const colors = Array.from(selectedLayers).map((layerId) => {
+                              const [id, name] = layerId.split('-'); // Extract actual ID and name from "id-name" format
+                              return {
+                                id: parseInt(id, 10), // Use actual layer ID from JSON
+                                name: name || layerId // Use extracted name or fallback to full layerId
+                              };
+                            });
+
+                            // Extract PSD filename from the selected physical file
+                            const psdFile = selectedPhysicalFile.split('/').pop()?.replace('.json', '.psd') || '';
+
+                            const payload = {
+                              colors,
+                              layers: ["cmyk", "spot", "foil", "etch"],
+                              psd_file: psdFile
+                            };
+
+                            console.log('📋 API Payload:', payload);
+
+                            // Make the API call
+                            const response = await contentPipelineApi.generateAssets(jobData!.job_id!, payload);
+                            
+                            console.log('✅ Assets creation response:', response);
+                            
+                            // Navigate back to jobs list after successful creation
+                            router.push('/jobs');
+                            
+                          } catch (error) {
+                            console.error('❌ Error creating assets:', error);
+                            alert(`Failed to create assets: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                            setCreatingAssets(false);
+                          }
                         }}
                         style={{
                           padding: '12px 24px',
@@ -1453,7 +1337,7 @@ export default function JobDetailsPage() {
                           e.currentTarget.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.3)';
                         }}
                       >
-                        🎨 Generate Assets
+                        🎨 Create Assets
                       </button>
                     </div>
                     
@@ -1464,7 +1348,6 @@ export default function JobDetailsPage() {
                       color: '#6ee7b7'
                     }}>
                       <span>🎨 Color Variants: {selectedLayers.size}</span>
-                      <span>📄 Layers: {selectedExtractedLayers.size}</span>
                       <span>📄 PSD: {jsonData?.psd_file || 'Unknown'}</span>
                     </div>
                   </div>
@@ -1913,6 +1796,82 @@ export default function JobDetailsPage() {
           </div>
         </main>
       </div>
+
+      {/* Blocking Loading Overlay for Asset Creation */}
+      {creatingAssets && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          backdropFilter: 'blur(4px)'
+        }}>
+          <div style={{
+            backgroundColor: '#1f2937',
+            borderRadius: 16,
+            padding: 48,
+            textAlign: 'center',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            maxWidth: 400,
+            width: '90%'
+          }}>
+            {/* Spinning loader */}
+            <div style={{
+              width: 64,
+              height: 64,
+              border: '4px solid rgba(16, 185, 129, 0.2)',
+              borderTop: '4px solid #10b981',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite',
+              margin: '0 auto 24px auto'
+            }} />
+            
+            <h2 style={{
+              color: '#f8f8f8',
+              fontSize: 24,
+              fontWeight: 600,
+              margin: '0 0 12px 0'
+            }}>
+              🎨 Creating Digital Assets
+            </h2>
+            
+            <p style={{
+              color: '#9ca3af',
+              fontSize: 16,
+              margin: '0 0 24px 0',
+              lineHeight: 1.5
+            }}>
+              Processing your selected colors and layers...
+            </p>
+            
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              color: '#10b981',
+              fontSize: 14
+            }}>
+              <div style={{
+                width: 8,
+                height: 8,
+                backgroundColor: '#10b981',
+                borderRadius: '50%',
+                animation: 'pulse 1.5s infinite'
+              }} />
+              <span>This may take a few moments</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style jsx>{`
         @keyframes pulse {

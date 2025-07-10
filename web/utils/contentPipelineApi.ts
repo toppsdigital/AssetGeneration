@@ -325,6 +325,31 @@ class ContentPipelineAPI {
       lastModifiedOnly: true,
     });
   }
+
+  // Generate assets for a job
+  async generateAssets(
+    jobId: string,
+    payload: {
+      colors: Array<{ id: number; name: string }>;
+      layers: string[];
+      psd_file: string;
+    }
+  ): Promise<any> {
+    const response = await fetch(`${this.baseUrl}?operation=generate_assets&id=${encodeURIComponent(jobId)}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || `Failed to generate assets: ${response.status}`);
+    }
+
+    return response.json();
+  }
 }
 
 // Export a singleton instance

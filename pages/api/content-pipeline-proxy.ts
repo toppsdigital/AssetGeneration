@@ -237,13 +237,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           });
         }
         
+      case 'generate_assets':
+        if (!id) {
+          return res.status(400).json({ error: 'Job ID is required' });
+        }
+        if (!body.colors || !body.layers || !body.psd_file) {
+          return res.status(400).json({ error: 'colors, layers, and psd_file are required' });
+        }
+        apiUrl += `/jobs/${id}/generate-assets`;
+        apiMethod = 'POST';
+        break;
+        
       default:
         return res.status(400).json({ 
           error: 'Invalid operation',
           available_operations: [
             'create_job', 'get_job', 'update_job', 'list_jobs',
             'create_file', 'get_file', 'update_file', 'list_files',
-            'batch_create_files', 'batch_get_files', 'update_pdf_status'
+            'batch_create_files', 'batch_get_files', 'update_pdf_status',
+            'generate_assets'
           ]
         });
     }
