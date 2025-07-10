@@ -241,7 +241,8 @@ export default function NewJobPage() {
         createdAt: createdJob.created_at || new Date().toISOString(),
         files: JSON.stringify(createdJob.files || filenames),
         description: createdJob.description || `${formData.subsetName} - Processing PDFs into digital assets`,
-        startUpload: 'true'
+        startUpload: 'true',
+        createFiles: 'true'
       });
       
       router.push(`/job/details?${queryParams.toString()}`);

@@ -526,7 +526,7 @@ export default function JobPreviewPage() {
           <h2>Error Loading Assets</h2>
           <p>{error}</p>
           <button 
-            onClick={() => router.push(`/job/details?jobPath=${encodeURIComponent(jobPath as string)}`)}
+            onClick={() => router.push(`/job/details?jobId=${encodeURIComponent(jobPath as string)}`)}
             style={{
               marginTop: 16,
               padding: '8px 16px',
@@ -554,7 +554,7 @@ export default function JobPreviewPage() {
           showHome
           onHome={() => router.push('/')}
           showBackToEdit
-          onBackToEdit={() => router.push(`/job/details?jobPath=${encodeURIComponent(jobPath as string)}`)}
+          onBackToEdit={() => router.push(`/job/details?jobId=${encodeURIComponent(jobPath as string)}`)}
           backLabel="Job Details"
           title={`${displayName} ${type === 'extracted' ? 'Extracted Layers' : 'Generated Assets'}`}
         />

@@ -22,7 +22,7 @@ interface UIJobData extends JobData {
 
 export default function JobDetailsPage() {
   const router = useRouter();
-  const { jobId, startUpload, appName, releaseName, subsetName, sourceFolder, status, createdAt, files, description } = router.query;
+  const { jobId, startUpload, appName, releaseName, subsetName, sourceFolder, status, createdAt, files, description, createFiles } = router.query;
   
   const [jobData, setJobData] = useState<UIJobData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -72,13 +72,13 @@ export default function JobDetailsPage() {
     
     if (jobData && jobData.api_files && jobData.api_files.length > 0 && !filesLoaded) {
       console.log('🔄 Loading files - condition met');
-      if (jobData.job_status === 'uploading') {
-        // Create new file objects for jobs that are starting upload
-        console.log('🔄 Calling createNewFiles');
+      if (createFiles === 'true') {
+        // Create new file objects for jobs that need file creation
+        console.log('🔄 Calling createNewFiles (createFiles=true)');
         createNewFiles();
       } else {
         // Load existing file objects for jobs that already have them
-        console.log('🔄 Calling loadExistingFiles');
+        console.log('🔄 Calling loadExistingFiles (createFiles=false or not set)');
         loadExistingFiles();
       }
     } else {
@@ -893,90 +893,62 @@ export default function JobDetailsPage() {
             
             {/* Job Overview */}
             <div style={{ marginBottom: 32 }}>
-              <h1 style={{
-                fontSize: '2rem',
-                fontWeight: 600,
-                color: '#f8f8f8',
-                marginBottom: 24
-              }}>
-                📋 Job Overview
-              </h1>
-              
               <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-                gap: 16,
-                marginBottom: 24
+                background: 'rgba(255, 255, 255, 0.05)',
+                padding: 24,
+                borderRadius: 12,
+                border: '1px solid rgba(255, 255, 255, 0.1)'
               }}>
                 <div style={{
-                  background: 'rgba(255, 255, 255, 0.05)',
-                  padding: 16,
-                  borderRadius: 12,
-                  border: '1px solid rgba(255, 255, 255, 0.1)'
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: 16
                 }}>
-                  <h3 style={{ color: '#9ca3af', fontSize: 14, margin: '0 0 8px 0' }}>Status</h3>
-                  <p style={{ 
-                    color: getStatusColor(jobData.job_status || ''), 
-                    fontSize: 16, 
-                    margin: 0,
-                    fontWeight: 600 
+                  <h1 style={{
+                    fontSize: '1.5rem',
+                    fontWeight: 600,
+                    color: '#f8f8f8',
+                    margin: 0
                   }}>
-                    {capitalizeStatus(jobData.job_status || 'Unknown')}
-                  </p>
-                </div>
-                
-                <div style={{
-                  background: 'rgba(255, 255, 255, 0.05)',
-                  padding: 16,
-                  borderRadius: 12,
-                  border: '1px solid rgba(255, 255, 255, 0.1)'
-                }}>
-                  <h3 style={{ color: '#9ca3af', fontSize: 14, margin: '0 0 8px 0' }}>App</h3>
-                  <p style={{ color: '#f8f8f8', fontSize: 16, margin: 0, fontWeight: 600 }}>
-                    {jobData.app_name || 'Unknown'}
-                  </p>
-                </div>
-
-                <div style={{
-                  background: 'rgba(255, 255, 255, 0.05)',
-                  padding: 16,
-                  borderRadius: 12,
-                  border: '1px solid rgba(255, 255, 255, 0.1)'
-                }}>
-                  <h3 style={{ color: '#9ca3af', fontSize: 14, margin: '0 0 8px 0' }}>Release</h3>
-                  <p style={{ color: '#f8f8f8', fontSize: 16, margin: 0 }}>
-                    {jobData.release_name || 'Unknown'}
-                  </p>
-                </div>
-
-                <div style={{
-                  background: 'rgba(255, 255, 255, 0.05)',
-                  padding: 16,
-                  borderRadius: 12,
-                  border: '1px solid rgba(255, 255, 255, 0.1)'
-                }}>
-                  <h3 style={{ color: '#9ca3af', fontSize: 14, margin: '0 0 8px 0' }}>Subset</h3>
-                  <p style={{ color: '#f8f8f8', fontSize: 16, margin: 0 }}>
-                    {jobData.subset_name || jobData.Subset_name || 'Unknown'}
-                  </p>
-                </div>
-                
-                {jobData.psd_file && (
+                    📋 {jobData.app_name} - {jobData.release_name} - {jobData.subset_name || jobData.Subset_name}
+                  </h1>
                   <div style={{
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    padding: 16,
-                    borderRadius: 12,
-                    border: '1px solid rgba(255, 255, 255, 0.1)'
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '10px 20px',
+                    borderRadius: 25,
+                    background: getStatusColor(jobData.job_status || ''),
+                    boxShadow: `0 4px 12px ${getStatusColor(jobData.job_status || '')}40`,
+                    border: '2px solid rgba(255, 255, 255, 0.2)'
                   }}>
-                    <h3 style={{ color: '#9ca3af', fontSize: 14, margin: '0 0 8px 0' }}>PSD Template</h3>
-                    <p style={{ color: '#f8f8f8', fontSize: 16, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span>🎨</span>
-                      <span>{jobData.psd_file}</span>
-                    </p>
+                    <span style={{ 
+                      color: 'white', 
+                      fontSize: 16, 
+                      fontWeight: 700,
+                      textShadow: '0 1px 3px rgba(0, 0, 0, 0.5)'
+                    }}>
+                      {capitalizeStatus(jobData.job_status || 'Unknown')}
+                    </span>
                   </div>
-                )}
+                </div>
+                
+                <div style={{
+                  display: 'flex',
+                  gap: 24,
+                  fontSize: 14,
+                  color: '#9ca3af'
+                }}>
+                  <span>Files: <span style={{ color: '#f8f8f8' }}>{jobData.content_pipeline_files?.length || 0}</span></span>
+                  {jobData.created_at && (
+                    <span>Created: <span style={{ color: '#f8f8f8' }}>{new Date(jobData.created_at).toLocaleDateString()}</span></span>
+                  )}
+                  {jobData.job_id && (
+                    <span>Job ID: <span style={{ color: '#f8f8f8', fontFamily: 'monospace' }}>{jobData.job_id}</span></span>
+                  )}
+                </div>
               </div>
-
             </div>
 
 
