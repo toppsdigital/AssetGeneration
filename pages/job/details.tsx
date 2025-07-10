@@ -216,26 +216,42 @@ export default function JobDetailsPage() {
     return `${baseUrl}${filenameWithoutExtension}/${filename}`;
   };
 
-  // Function to download and parse JSON file
+  // Function to download and parse JSON file via S3 proxy (to avoid CORS)
   const downloadJsonFile = async (filename: string) => {
     try {
       setLoadingJsonData(true);
       setJsonData(null);
       
-      const url = constructJsonUrl(filename);
-      console.log('🔍 Downloading JSON from:', url);
+      console.log('🔍 Downloading JSON via S3 proxy:', filename);
       
-      const response = await fetch(url);
+      // Use S3 proxy to avoid CORS issues
+      const response = await fetch('/api/s3-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          client_method: 'get',
+          filename: filename,
+          download: true  // This tells the proxy to fetch and return the content directly
+        }),
+      });
+      
       if (!response.ok) {
-        throw new Error(`Failed to download JSON: ${response.status}`);
+        throw new Error(`Failed to download JSON via proxy: ${response.status}`);
       }
       
-      const data = await response.json();
-      console.log('📋 JSON data loaded:', data);
-      setJsonData(data);
+      const proxyData = await response.json();
+      console.log('📋 S3 proxy response received');
+      
+      // With download=true, the S3 proxy returns the JSON content directly
+      if (proxyData && typeof proxyData === 'object') {
+        console.log('📋 JSON data loaded successfully');
+        setJsonData(proxyData);
+      } else {
+        throw new Error('Invalid JSON content received from S3 proxy');
+      }
       
     } catch (error) {
-      console.error('❌ Error downloading JSON:', error);
+      console.error('❌ Error downloading JSON via proxy:', error);
       setJsonData(null);
     } finally {
       setLoadingJsonData(false);
