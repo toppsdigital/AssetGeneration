@@ -412,32 +412,63 @@ export default function JobDetailsPage() {
       
       console.log('Sanitized app name:', sanitizedAppName, 'from original:', jobData.app_name);
       
-      // Create file objects based on the grouped filenames
-      const fileObjects: FileData[] = jobData.api_files.map(filename => {
+      // Get actual pending files to determine what files need to be created
+      const pendingFiles = (window as any).pendingUploadFiles;
+      const actualFiles = pendingFiles?.files || [];
+      
+      console.log('Actual files to be uploaded:', actualFiles.map((f: File) => f.name));
+      
+      // Create a mapping of actual file names to their base names (for grouping)
+      const fileNameToBaseMap = new Map<string, string>();
+      actualFiles.forEach((file: File) => {
+        const fileName = file.name;
+        // Extract base name by removing _FR.pdf, _BK.pdf, etc.
+        const baseName = fileName.replace(/_(FR|BK|FRONT|BACK)\.pdf$/i, '');
+        fileNameToBaseMap.set(fileName, baseName);
+      });
+      
+      // Group files by their base names
+      const fileGroups = new Map<string, {name: string, type: 'front' | 'back'}[]>();
+      actualFiles.forEach((file: File) => {
+        const fileName = file.name;
+        const baseName = fileNameToBaseMap.get(fileName);
+        if (!baseName) return;
+        
+        // Determine card type based on filename
+        let cardType: 'front' | 'back' = 'front';
+        if (fileName.match(/_(BK|BACK)\.pdf$/i)) {
+          cardType = 'back';
+        } else if (fileName.match(/_(FR|FRONT)\.pdf$/i)) {
+          cardType = 'front';
+        }
+        
+        if (!fileGroups.has(baseName)) {
+          fileGroups.set(baseName, []);
+        }
+        fileGroups.get(baseName)!.push({name: fileName, type: cardType});
+      });
+      
+      console.log('File groups created:', Array.from(fileGroups.entries()));
+      
+      // Create file objects based on the actual files being uploaded
+      const fileObjects: FileData[] = Array.from(fileGroups.entries()).map(([baseName, files]) => {
         const originalFiles: Record<string, {
           card_type: 'front' | 'back';
           file_path: string;
           status: 'uploading' | 'uploaded' | 'upload-failed';
         }> = {};
         
-        // Add front and back PDF files
-        const frontFilename = `${filename}_FR.pdf`;
-        const backFilename = `${filename}_BK.pdf`;
-        
-        originalFiles[frontFilename] = {
-          card_type: 'front',
-          file_path: `${sanitizedAppName}/PDFs/${frontFilename}`,
-          status: 'uploading'
-        };
-        
-        originalFiles[backFilename] = {
-          card_type: 'back',
-          file_path: `${sanitizedAppName}/PDFs/${backFilename}`,
-          status: 'uploading'
-        };
+        // Add each actual file to the original_files object
+        files.forEach(file => {
+          originalFiles[file.name] = {
+            card_type: file.type,
+            file_path: `${sanitizedAppName}/PDFs/${file.name}`,
+            status: 'uploading'
+          };
+        });
         
         return {
-          filename,
+          filename: baseName,
           last_updated: new Date().toISOString(),
           original_files: originalFiles
         };
