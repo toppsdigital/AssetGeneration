@@ -246,8 +246,8 @@ export default function JobDetailsPage() {
     // Check immediately
     checkUploadStatus();
 
-    // Set up interval to check every second
-    const interval = setInterval(checkUploadStatus, 1000);
+    // Set up interval to check every 500ms (faster checking)
+    const interval = setInterval(checkUploadStatus, 500);
 
     // Cleanup interval on unmount
     return () => clearInterval(interval);
@@ -917,6 +917,17 @@ export default function JobDetailsPage() {
           newSet.delete(filename);
           console.log(`🗑️ Removed ${filename} from uploadingFiles set. Remaining files:`, Array.from(newSet));
           console.log(`📊 Upload completion check: ${filename} finished, ${newSet.size} files still uploading`);
+          
+          // Trigger immediate check if this was the last file
+          if (newSet.size === 0) {
+            console.log('🚀 Last file finished uploading, scheduling immediate auto-navigate check...');
+            // Schedule immediate check after state updates propagate
+            setTimeout(() => {
+              console.log('🔍 Immediate auto-navigate check triggered by last file completion');
+              // The regular interval will handle the actual navigation
+            }, 100);
+          }
+          
           return newSet;
         });
         
