@@ -1083,6 +1083,13 @@ export default function JobDetailsPage() {
     return jobData.job_id;
   };
 
+  const isStatusActive = (status: string) => {
+    const lowerStatus = status.toLowerCase();
+    return lowerStatus.includes('uploading') || 
+           lowerStatus.includes('extracting') || 
+           lowerStatus.includes('generating');
+  };
+
   if (loading) {
     return (
       <div className={styles.pageContainer}>
@@ -1224,6 +1231,17 @@ export default function JobDetailsPage() {
                     boxShadow: `0 4px 12px ${getStatusColor(jobData.job_status || '')}40`,
                     border: '2px solid rgba(255, 255, 255, 0.2)'
                 }}>
+                    {/* Loading spinner for active statuses */}
+                    {isStatusActive(jobData.job_status || '') && (
+                      <div style={{
+                        width: 16,
+                        height: 16,
+                        border: '2px solid rgba(255, 255, 255, 0.3)',
+                        borderTop: '2px solid white',
+                        borderRadius: '50%',
+                        animation: 'spin 1s linear infinite'
+                      }} />
+                    )}
                     <span style={{ 
                       color: 'white', 
                     fontSize: 16, 
