@@ -1083,6 +1083,16 @@ export default function JobDetailsPage() {
     return jobData.job_id;
   };
 
+  const getJobTitle = () => {
+    if (!jobData) return 'Loading...';
+    const parts = [
+      jobData.app_name,
+      jobData.release_name,
+      jobData.subset_name || jobData.Subset_name
+    ].filter(Boolean);
+    return parts.join(' - ') || 'Unknown Job';
+  };
+
   const isStatusActive = (status: string) => {
     const lowerStatus = status.toLowerCase();
     return lowerStatus.includes('uploading') || 
@@ -1183,7 +1193,7 @@ export default function JobDetailsPage() {
         onHome={() => router.push('/')}
         onBackToEdit={() => router.push('/jobs')}
         backLabel="Back to Jobs"
-        title={`Job Details: ${getJobDisplayName()}`}
+        title={getJobTitle()}
       />
       
       <div className={styles.editContainer}>
@@ -1199,76 +1209,63 @@ export default function JobDetailsPage() {
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
           }}>
             
-            {/* Job Overview */}
-            <div style={{ marginBottom: 32 }}>
+            {/* Job Overview - Compact */}
+            <div style={{ 
+              marginBottom: 48,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingBottom: 16,
+              borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
+            }}>
+              {/* Status Badge */}
               <div style={{
-                background: 'rgba(255, 255, 255, 0.05)',
-                padding: 24,
-                borderRadius: 12,
-                border: '1px solid rgba(255, 255, 255, 0.1)'
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '8px 16px',
+                borderRadius: 20,
+                background: getStatusColor(jobData.job_status || ''),
+                boxShadow: `0 2px 8px ${getStatusColor(jobData.job_status || '')}30`,
+                border: '1px solid rgba(255, 255, 255, 0.2)'
               }}>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  marginBottom: 16
+                {/* Loading spinner for active statuses */}
+                {isStatusActive(jobData.job_status || '') && (
+                  <div style={{
+                    width: 14,
+                    height: 14,
+                    border: '2px solid rgba(255, 255, 255, 0.3)',
+                    borderTop: '2px solid white',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite'
+                  }} />
+                )}
+                <span style={{ 
+                  color: 'white', 
+                  fontSize: 14, 
+                  fontWeight: 600,
+                  textShadow: '0 1px 2px rgba(0, 0, 0, 0.5)'
                 }}>
-              <h1 style={{
-                    fontSize: '1.5rem',
-                fontWeight: 600,
-                color: '#f8f8f8',
-                    margin: 0
-              }}>
-                    📋 {jobData.app_name} - {jobData.release_name} - {jobData.subset_name || jobData.Subset_name}
-              </h1>
+                  {capitalizeStatus(jobData.job_status || 'Unknown')}
+                </span>
+              </div>
+              
+              {/* Metadata - Less prominent */}
               <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    padding: '10px 20px',
-                    borderRadius: 25,
-                    background: getStatusColor(jobData.job_status || ''),
-                    boxShadow: `0 4px 12px ${getStatusColor(jobData.job_status || '')}40`,
-                    border: '2px solid rgba(255, 255, 255, 0.2)'
-                }}>
-                    {/* Loading spinner for active statuses */}
-                    {isStatusActive(jobData.job_status || '') && (
-                      <div style={{
-                        width: 16,
-                        height: 16,
-                        border: '2px solid rgba(255, 255, 255, 0.3)',
-                        borderTop: '2px solid white',
-                        borderRadius: '50%',
-                        animation: 'spin 1s linear infinite'
-                      }} />
-                    )}
-                    <span style={{ 
-                      color: 'white', 
-                    fontSize: 16, 
-                      fontWeight: 700,
-                      textShadow: '0 1px 3px rgba(0, 0, 0, 0.5)'
-                  }}>
-                    {capitalizeStatus(jobData.job_status || 'Unknown')}
-                    </span>
-                  </div>
-                </div>
-                
-                <div style={{
-                  display: 'flex',
-                  gap: 24,
-                  fontSize: 14,
-                  color: '#9ca3af'
-                }}>
-                  <span>Files: <span style={{ color: '#f8f8f8' }}>{jobData.content_pipeline_files?.length || 0}</span></span>
-                  {jobData.created_at && (
-                    <span>Created: <span style={{ color: '#f8f8f8' }}>{new Date(jobData.created_at).toLocaleDateString()}</span></span>
-                  )}
-                  {jobData.job_id && (
-                    <span>Job ID: <span style={{ color: '#f8f8f8', fontFamily: 'monospace' }}>{jobData.job_id}</span></span>
-                  )}
-                </div>
-                              </div>
-                </div>
+                display: 'flex',
+                gap: 16,
+                fontSize: 12,
+                color: '#6b7280'
+              }}>
+                <span>Files: <span style={{ color: '#9ca3af' }}>{jobData.content_pipeline_files?.length || 0}</span></span>
+                {jobData.created_at && (
+                  <span>Created: <span style={{ color: '#9ca3af' }}>{new Date(jobData.created_at).toLocaleDateString()}</span></span>
+                )}
+                {jobData.job_id && (
+                  <span>ID: <span style={{ color: '#9ca3af', fontFamily: 'monospace', fontSize: 11 }}>{jobData.job_id}</span></span>
+                )}
+              </div>
+            </div>
 
 
 
