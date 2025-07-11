@@ -5,6 +5,18 @@ import styles from '../../styles/Edit.module.css';
 import Spinner from '../../components/Spinner';
 import { contentPipelineApi, JobData, FileData } from '../../web/utils/contentPipelineApi';
 
+// Add CSS animation for spinner
+if (typeof document !== 'undefined') {
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 // Extend the API JobData interface with UI-specific fields for backward compatibility
 interface UIJobData extends JobData {
   // Legacy UI fields for backward compatibility
@@ -1354,15 +1366,10 @@ export default function JobDetailsPage() {
                     </span>
                   </div>
 
-                {/* PSD Selection and Color Variants */}
-                <div style={{ 
-                  display: 'flex', 
-                  gap: 32, 
-                  marginBottom: 24,
-                  alignItems: 'flex-start'
-                }}>
+                {/* Configuration Sections */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                   {/* PSD File Selection */}
-                  <div style={{ flex: '0 0 300px' }}>
+                  <div>
                     <label style={{
                       display: 'block',
                       fontSize: 16,
@@ -1378,6 +1385,7 @@ export default function JobDetailsPage() {
                       disabled={loadingPhysicalFiles}
                       style={{
                         width: '100%',
+                        maxWidth: 400,
                         padding: '12px 16px',
                         background: 'rgba(255, 255, 255, 0.08)',
                         border: '1px solid rgba(255, 255, 255, 0.2)',
@@ -1412,353 +1420,362 @@ export default function JobDetailsPage() {
                         );
                       })}
                     </select>
-                </div>
+                  </div>
 
-                  {/* Color Variants Selection */}
+                  {/* Color Variants and Layers Selection - Side by Side */}
                   {selectedPhysicalFile && jsonData && (
-                    <div style={{ flex: '0 0 250px' }}>
-                      <label style={{
-                        display: 'block',
-                        fontSize: 16,
-                        fontWeight: 600,
-                        color: '#f8f8f8',
-                        marginBottom: 12
-                      }}>
-                        Select Color Variants
-                      </label>
-                      {(() => {
-                        const spotGroup = jsonData.layers?.find((layer: any) => 
-                          layer.name?.toLowerCase().includes('spot group')
-                        );
-                        
-                        const collectSolidColorLayers = (layer: any): any[] => {
-                          const layers: any[] = [];
-                          if (layer.type === 'solidcolorfill') {
-                            layers.push(layer);
-                          }
-                          if (layer.children) {
-                            layer.children.forEach((child: any) => {
-                              layers.push(...collectSolidColorLayers(child));
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {/* Color Variants Selection */}
+                      <div style={{ flex: 1 }}>
+                        <label style={{
+                          display: 'block',
+                          fontSize: 16,
+                          fontWeight: 600,
+                          color: '#f8f8f8',
+                          marginBottom: 12
+                        }}>
+                          Select Color Variants
+                        </label>
+                        {(() => {
+                          const spotGroup = jsonData.layers?.find((layer: any) => 
+                            layer.name?.toLowerCase().includes('spot group')
+                          );
+                          
+                          const collectSolidColorLayers = (layer: any): any[] => {
+                            const layers: any[] = [];
+                            if (layer.type === 'solidcolorfill') {
+                              layers.push(layer);
+                            }
+                            if (layer.children) {
+                              layer.children.forEach((child: any) => {
+                                layers.push(...collectSolidColorLayers(child));
+                              });
+                            }
+                            return layers;
+                          };
+                          
+                          const solidColorLayers = spotGroup ? collectSolidColorLayers(spotGroup) : [];
+                          
+                          const toggleLayer = (layerId: string) => {
+                            const newSelected = new Set(selectedLayers);
+                            if (newSelected.has(layerId)) {
+                              newSelected.delete(layerId);
+                            } else {
+                              newSelected.add(layerId);
+                            }
+                            setSelectedLayers(newSelected);
+                          };
+                          
+                          return solidColorLayers.length > 0 ? (
+                            <div style={{
+                              display: 'grid',
+                              gridTemplateColumns: 'repeat(2, 1fr)',
+                              gap: 4,
+                              maxWidth: 300
+                            }}>
+                              {solidColorLayers.map((layer: any, index: number) => {
+                                const layerId = `${layer.id}-${layer.name}`;
+                                const isSelected = selectedLayers.has(layerId);
+                                
+                                return (
+                                  <label key={index} style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    cursor: 'pointer',
+                                    fontSize: 13,
+                                    color: '#f8f8f8',
+                                    padding: '4px 8px',
+                                    background: 'rgba(255, 255, 255, 0.05)',
+                                    borderRadius: 6,
+                                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                                    transition: 'background-color 0.2s'
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                                  }}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={() => toggleLayer(layerId)}
+                                      style={{
+                                        width: 14,
+                                        height: 14,
+                                        cursor: 'pointer',
+                                        flexShrink: 0
+                                      }}
+                                    />
+                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      {layer.name || `Layer ${layer.id || index + 1}`}
+                                    </span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div style={{
+                              fontSize: 14,
+                              color: '#9ca3af',
+                              fontStyle: 'italic'
+                            }}>
+                              No color variants available
+                            </div>
+                          );
+                        })()}
+                      </div>
+
+                                            {/* Select Layers from Extracted Files */}
+                      <div style={{ flex: 1 }}>
+                        <label style={{
+                          display: 'block',
+                          fontSize: 16,
+                          fontWeight: 600,
+                          color: '#f8f8f8',
+                          marginBottom: 12
+                        }}>
+                          Select Layers
+                        </label>
+                        {(() => {
+                          // Extract unique layer names from all extracted files in the job
+                          const extractedLayerNames = new Set<string>();
+                          
+                          // Function to extract layer name from filename
+                          const extractLayerName = (filename: string): string | null => {
+                            // Remove file extension first
+                            const nameWithoutExt = filename.replace(/\.(tif|pdf|png|jpg|jpeg)$/i, '');
+                            
+                            // Split by underscore
+                            const parts = nameWithoutExt.split('_');
+                            
+                            // Need at least 3 parts: prefix, number, layer_name
+                            if (parts.length < 3) return null;
+                            
+                            // Remove first part (app prefix like "25dnyc")
+                            // Remove second part (card number like "4905")
+                            // Keep the rest joined with underscores
+                            const layerParts = parts.slice(2);
+                            const layerName = layerParts.join('_');
+                            
+                            return layerName;
+                          };
+                          
+                          // Collect layer names from all extracted files
+                          if (jobData?.content_pipeline_files) {
+                            jobData.content_pipeline_files.forEach(fileGroup => {
+                              if (fileGroup.extracted_files) {
+                                Object.keys(fileGroup.extracted_files).forEach(filename => {
+                                  const layerName = extractLayerName(filename);
+                                  if (layerName) {
+                                    extractedLayerNames.add(layerName);
+                                  }
+                                });
+                              }
                             });
                           }
-                          return layers;
-                        };
-                        
-                        const solidColorLayers = spotGroup ? collectSolidColorLayers(spotGroup) : [];
-                        
-                        const toggleLayer = (layerId: string) => {
-                          const newSelected = new Set(selectedLayers);
-                          if (newSelected.has(layerId)) {
-                            newSelected.delete(layerId);
-                          } else {
-                            newSelected.add(layerId);
-                          }
-                          setSelectedLayers(newSelected);
-                        };
-                        
-                        return solidColorLayers.length > 0 ? (
-                <div style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 8
-                          }}>
-                            {solidColorLayers.map((layer: any, index: number) => {
-                              const layerId = `${layer.id}-${layer.name}`;
-                              const isSelected = selectedLayers.has(layerId);
-                              
-                              return (
-                                <label key={index} style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 8,
-                                  cursor: 'pointer',
-                                  fontSize: 14,
-                                  color: '#f8f8f8',
-                                  padding: '8px 12px',
-                  background: 'rgba(255, 255, 255, 0.05)',
-                                  borderRadius: 6,
-                                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                                  transition: 'background-color 0.2s'
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                                }}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={isSelected}
-                                    onChange={() => toggleLayer(layerId)}
-                                    style={{
-                                      width: 16,
-                                      height: 16,
-                                      cursor: 'pointer'
-                                    }}
-                                  />
-                                  {layer.name || `Layer ${layer.id || index + 1}`}
-                                </label>
-                              );
-                            })}
-                          </div>
-                        ) : (
+                          
+                          const layerNamesArray = Array.from(extractedLayerNames).sort();
+                          
+                          const toggleExtractedLayer = (layerName: string) => {
+                            const newSelected = new Set(selectedExtractedLayers);
+                            if (newSelected.has(layerName)) {
+                              newSelected.delete(layerName);
+                            } else {
+                              newSelected.add(layerName);
+                            }
+                            setSelectedExtractedLayers(newSelected);
+                          };
+                          
+                          return layerNamesArray.length > 0 ? (
+                            <div style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 4,
+                              maxWidth: 200
+                            }}>
+                              {layerNamesArray.map((layerName, index) => {
+                                const isSelected = selectedExtractedLayers.has(layerName);
+                                
+                                return (
+                                  <label key={index} style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    cursor: 'pointer',
+                                    fontSize: 13,
+                                    color: '#f8f8f8',
+                                    padding: '4px 8px',
+                                    background: 'rgba(255, 255, 255, 0.05)',
+                                    borderRadius: 6,
+                                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                                    transition: 'background-color 0.2s'
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                                  }}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={() => toggleExtractedLayer(layerName)}
+                                      style={{
+                                        width: 14,
+                                        height: 14,
+                                        cursor: 'pointer',
+                                        flexShrink: 0
+                                      }}
+                                    />
+                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      {layerName}
+                                    </span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div style={{
+                              fontSize: 14,
+                              color: '#9ca3af',
+                              fontStyle: 'italic'
+                            }}>
+                              No extracted layers available
+                            </div>
+                          );
+                        })()}
+                      </div>
+
+                      {/* Create Assets Button */}
+                      {selectedLayers.size > 0 && selectedExtractedLayers.size > 0 && (
+                        <div style={{ 
+                          display: 'flex', 
+                          flexDirection: 'column', 
+                          justifyContent: 'center', 
+                          alignItems: 'center',
+                          minWidth: 200,
+                          marginLeft: 16
+                        }}>
+                          <button
+                            onClick={async () => {
+                              console.log('🎨 Creating digital assets with selected options:', {
+                                selectedFile: selectedPhysicalFile,
+                                psdFile: jsonData?.psd_file,
+                                selectedLayers: Array.from(selectedLayers),
+                                selectedExtractedLayers: Array.from(selectedExtractedLayers),
+                                totalColors: selectedLayers.size,
+                                totalLayers: selectedExtractedLayers.size
+                              });
+
+                              setCreatingAssets(true);
+
+                              try {
+                                // Map selected color variants to the required format
+                                const colors = Array.from(selectedLayers).map((layerId) => {
+                                  const [id, name] = layerId.split('-'); // Extract actual ID and name from "id-name" format
+                                  return {
+                                    id: parseInt(id, 10), // Use actual layer ID from JSON
+                                    name: name || layerId // Use extracted name or fallback to full layerId
+                                  };
+                                });
+
+                                // Extract PSD filename from the selected physical file
+                                const psdFile = selectedPhysicalFile.split('/').pop()?.replace('.json', '.psd') || '';
+
+                                // Use selected extracted layers instead of hardcoded layers
+                                const layers = Array.from(selectedExtractedLayers);
+
+                                const payload = {
+                                  colors,
+                                  layers,
+                                  psd_file: psdFile
+                                };
+
+                                console.log('📋 API Payload:', payload);
+
+                                // Make the API call
+                                const response = await contentPipelineApi.generateAssets(jobData!.job_id!, payload);
+                                
+                                console.log('✅ Assets creation response:', response);
+                                
+                                // Navigate back to jobs list after successful creation
+                                router.push('/jobs');
+                                
+                              } catch (error) {
+                                console.error('❌ Error creating assets:', error);
+                                alert(`Failed to create assets: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                                setCreatingAssets(false);
+                              }
+                            }}
+                            disabled={creatingAssets}
+                            style={{
+                              padding: '16px 32px',
+                              background: creatingAssets 
+                                ? 'rgba(156, 163, 175, 0.5)' 
+                                : 'linear-gradient(135deg, #10b981, #059669)',
+                              border: 'none',
+                              borderRadius: 12,
+                              color: 'white',
+                              fontSize: 16,
+                              fontWeight: 600,
+                              cursor: creatingAssets ? 'not-allowed' : 'pointer',
+                              transition: 'all 0.2s',
+                              boxShadow: creatingAssets 
+                                ? 'none' 
+                                : '0 8px 24px rgba(16, 185, 129, 0.3)',
+                              minHeight: 60
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!creatingAssets) {
+                                e.currentTarget.style.transform = 'scale(1.05)';
+                                e.currentTarget.style.boxShadow = '0 12px 32px rgba(16, 185, 129, 0.4)';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (!creatingAssets) {
+                                e.currentTarget.style.transform = 'scale(1)';
+                                e.currentTarget.style.boxShadow = '0 8px 24px rgba(16, 185, 129, 0.3)';
+                              }
+                            }}
+                          >
+                            {creatingAssets ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <div style={{
+                                  width: 16,
+                                  height: 16,
+                                  border: '2px solid rgba(255, 255, 255, 0.3)',
+                                  borderTop: '2px solid white',
+                                  borderRadius: '50%',
+                                  animation: 'spin 1s linear infinite'
+                                }} />
+                                Creating...
+                              </div>
+                            ) : (
+                              '🎨 Create Assets'
+                            )}
+                          </button>
                           <div style={{
-                            fontSize: 14,
+                            fontSize: 12,
                             color: '#9ca3af',
-                            fontStyle: 'italic'
+                            marginTop: 8,
+                            textAlign: 'center'
                           }}>
-                            No color variants available
-                </div>
-                        );
-                      })()}
+                            {selectedLayers.size} colors • {selectedExtractedLayers.size} layers
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
-                  {/* Select Layers from Extracted Files */}
-                  {selectedPhysicalFile && jsonData && (
-                    <div style={{ flex: '0 0 250px' }}>
-                      <label style={{
-                        display: 'block',
-                        fontSize: 16,
-                        fontWeight: 600,
-                        color: '#f8f8f8',
-                        marginBottom: 12
-                      }}>
-                        Select Layers
-                      </label>
-                      {(() => {
-                        // Extract unique layer names from all extracted files in the job
-                        const extractedLayerNames = new Set<string>();
-                        
-                        // Function to extract layer name from filename
-                        const extractLayerName = (filename: string): string | null => {
-                          // Remove file extension first
-                          const nameWithoutExt = filename.replace(/\.(tif|pdf|png|jpg|jpeg)$/i, '');
-                          
-                          // Split by underscore
-                          const parts = nameWithoutExt.split('_');
-                          
-                          // Need at least 3 parts: prefix, number, layer_name
-                          if (parts.length < 3) return null;
-                          
-                          // Remove first part (app prefix like "25dnyc")
-                          // Remove second part (card number like "4905")
-                          // Keep the rest joined with underscores
-                          const layerParts = parts.slice(2);
-                          const layerName = layerParts.join('_');
-                          
-                          return layerName;
-                        };
-                        
-                        // Collect layer names from all extracted files
-                        if (jobData?.content_pipeline_files) {
-                          jobData.content_pipeline_files.forEach(fileGroup => {
-                            if (fileGroup.extracted_files) {
-                              Object.keys(fileGroup.extracted_files).forEach(filename => {
-                                const layerName = extractLayerName(filename);
-                                if (layerName) {
-                                  extractedLayerNames.add(layerName);
-                                }
-                              });
-                            }
-                          });
-                        }
-                        
-                        const layerNamesArray = Array.from(extractedLayerNames).sort();
-                        
-                        const toggleExtractedLayer = (layerName: string) => {
-                          const newSelected = new Set(selectedExtractedLayers);
-                          if (newSelected.has(layerName)) {
-                            newSelected.delete(layerName);
-                          } else {
-                            newSelected.add(layerName);
-                          }
-                          setSelectedExtractedLayers(newSelected);
-                        };
-                        
-                        return layerNamesArray.length > 0 ? (
-                  <div style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 8
-                          }}>
-                            {layerNamesArray.map((layerName, index) => {
-                              const isSelected = selectedExtractedLayers.has(layerName);
-                              
-                              return (
-                                <label key={index} style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 8,
-                                  cursor: 'pointer',
-                                  fontSize: 14,
-                                  color: '#f8f8f8',
-                                  padding: '8px 12px',
-                    background: 'rgba(255, 255, 255, 0.05)',
-                                  borderRadius: 6,
-                                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                                  transition: 'background-color 0.2s'
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                                }}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={isSelected}
-                                    onChange={() => toggleExtractedLayer(layerName)}
-                                    style={{
-                                      width: 16,
-                                      height: 16,
-                                      cursor: 'pointer'
-                                    }}
-                                  />
-                                  {layerName}
-                                </label>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <div style={{
-                            fontSize: 14,
-                            color: '#9ca3af',
-                            fontStyle: 'italic'
-                          }}>
-                            No extracted layers available
-                          </div>
-                        );
-                      })()}
-                  </div>
-                )}
-
-              </div>
+                </div>
 
 
 
-                {/* Generate Digital Assets Button */}
-                {selectedPhysicalFile && jsonData && selectedLayers.size > 0 && selectedExtractedLayers.size > 0 && (
-                  <div style={{ 
-                    marginTop: 32, 
-                    padding: 24, 
-                    background: 'rgba(16, 185, 129, 0.1)', 
-                    border: '1px solid rgba(16, 185, 129, 0.3)', 
-                    borderRadius: 12 
-                  }}>
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      marginBottom: 16
-                    }}>
-                      <div>
-                        <h3 style={{
-                          fontSize: '1.1rem',
-                          fontWeight: 600,
-                          color: '#34d399',
-                          margin: '0 0 8px 0'
-                        }}>
-                          🚀 Ready to Create Digital Assets
-                        </h3>
-                        <p style={{
-                          fontSize: 14,
-                          color: '#86efac',
-                          margin: 0
-                        }}>
-                          {selectedLayers.size} color variants, {selectedExtractedLayers.size} layers selected
-                        </p>
-            </div>
-                      <button
-                        onClick={async () => {
-                          console.log('🎨 Creating digital assets with selected options:', {
-                            selectedFile: selectedPhysicalFile,
-                            psdFile: jsonData?.psd_file,
-                            selectedLayers: Array.from(selectedLayers),
-                            selectedExtractedLayers: Array.from(selectedExtractedLayers),
-                            totalColors: selectedLayers.size,
-                            totalLayers: selectedExtractedLayers.size
-                          });
 
-                          setCreatingAssets(true);
-
-                          try {
-                            // Map selected color variants to the required format
-                            const colors = Array.from(selectedLayers).map((layerId) => {
-                              const [id, name] = layerId.split('-'); // Extract actual ID and name from "id-name" format
-                              return {
-                                id: parseInt(id, 10), // Use actual layer ID from JSON
-                                name: name || layerId // Use extracted name or fallback to full layerId
-                              };
-                            });
-
-                            // Extract PSD filename from the selected physical file
-                            const psdFile = selectedPhysicalFile.split('/').pop()?.replace('.json', '.psd') || '';
-
-                            // Use selected extracted layers instead of hardcoded layers
-                            const layers = Array.from(selectedExtractedLayers);
-
-                            const payload = {
-                              colors,
-                              layers,
-                              psd_file: psdFile
-                            };
-
-                            console.log('📋 API Payload:', payload);
-
-                            // Make the API call
-                            const response = await contentPipelineApi.generateAssets(jobData!.job_id!, payload);
-                            
-                            console.log('✅ Assets creation response:', response);
-                            
-                            // Navigate back to jobs list after successful creation
-                            router.push('/jobs');
-                            
-                          } catch (error) {
-                            console.error('❌ Error creating assets:', error);
-                            alert(`Failed to create assets: ${error instanceof Error ? error.message : 'Unknown error'}`);
-                            setCreatingAssets(false);
-                          }
-                        }}
-                        style={{
-                          padding: '12px 24px',
-                          background: 'linear-gradient(135deg, #10b981, #059669)',
-                          border: 'none',
-                          borderRadius: 8,
-                          color: 'white',
-                          fontSize: 14,
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          transition: 'all 0.2s',
-                          boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.transform = 'scale(1.05)';
-                          e.currentTarget.style.boxShadow = '0 6px 16px rgba(16, 185, 129, 0.4)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.transform = 'scale(1)';
-                          e.currentTarget.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.3)';
-                        }}
-                      >
-                        🎨 Create Assets
-                      </button>
-                    </div>
-                    
-                    <div style={{
-                      display: 'flex',
-                      gap: 24,
-                      fontSize: 12,
-                      color: '#6ee7b7'
-                    }}>
-                      <span>🎨 Color Variants: {selectedLayers.size}</span>
-                      <span>🖼️ Layers: {selectedExtractedLayers.size}</span>
-                      <span>📄 PSD: {jsonData?.psd_file || 'Unknown'}</span>
-                    </div>
-                  </div>
-                )}
                 </div>
                </div>
              )}
