@@ -1337,7 +1337,8 @@ export default function JobDetailsPage() {
                     display: 'flex',
                     gap: 16,
                     fontSize: 14,
-                    color: '#93c5fd'
+                    color: '#93c5fd',
+                    marginBottom: 24
                   }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981' }} />
@@ -1352,36 +1353,6 @@ export default function JobDetailsPage() {
                       Step 3: Select Layers
                     </span>
                   </div>
-                </div>
-
-                {/* Configuration Section */}
-                <div style={{
-                  background: 'rgba(255, 255, 255, 0.03)',
-                  borderRadius: 12,
-                  padding: 24,
-                  border: '1px solid rgba(255, 255, 255, 0.08)'
-                }}>
-                  <h3 style={{
-                    fontSize: '1.2rem',
-                    fontWeight: 600,
-                    color: '#f8f8f8',
-                    marginBottom: 24,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8
-                  }}>
-                    ⚙️ Configure Digital Assets
-                    {loadingPhysicalFiles && (
-                      <div style={{
-                        width: '20px',
-                        height: '20px',
-                        border: '2px solid rgba(248, 248, 248, 0.3)',
-                        borderTop: '2px solid #f8f8f8',
-                        borderRadius: '50%',
-                        animation: 'spin 1s linear infinite'
-                      }} />
-                    )}
-                  </h3>
 
                 {/* PSD Selection and Color Variants */}
                 <div style={{ 
