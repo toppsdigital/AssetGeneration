@@ -1269,30 +1269,119 @@ export default function JobDetailsPage() {
 
 
 
-            {/* Configure Digital Assets - Only show when status is "extracted" */}
+            {/* Action Required Banner - Only show when status is "extracted" */}
             {jobData?.job_status?.toLowerCase() === 'extracted' && (
               <div style={{ marginBottom: 32 }}>
-                <h2 style={{
-                  fontSize: '1.5rem',
-                  fontWeight: 600,
-                  color: '#f8f8f8',
-                  marginBottom: 24,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8
-                }}>
-                  ⚙️ Configure Digital Assets
-                  {loadingPhysicalFiles && (
+                {/* Prominent Call-to-Action Banner */}
                 <div style={{
-                      width: '20px',
-                      height: '20px',
-                      border: '2px solid rgba(248, 248, 248, 0.3)',
-                      borderTop: '2px solid #f8f8f8',
+                  background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(147, 51, 234, 0.15))',
+                  border: '2px solid rgba(59, 130, 246, 0.3)',
+                  borderRadius: 16,
+                  padding: 24,
+                  marginBottom: 32,
+                  position: 'relative',
+                  overflow: 'hidden'
+                }}>
+                  {/* Animated background accent */}
+                  <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: '4px',
+                    background: 'linear-gradient(90deg, #3b82f6, #8b5cf6, #3b82f6)',
+                    backgroundSize: '200% 100%',
+                    animation: 'gradient-shift 3s ease-in-out infinite'
+                  }} />
+                  
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 16,
+                    marginBottom: 16
+                  }}>
+                    <div style={{
+                      width: 48,
+                      height: 48,
                       borderRadius: '50%',
-                      animation: 'spin 1s linear infinite'
-                    }} />
-                  )}
-                </h2>
+                      background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 24,
+                      flexShrink: 0
+                    }}>
+                      ⚡
+                    </div>
+                    <div>
+                      <h2 style={{
+                        fontSize: '1.4rem',
+                        fontWeight: 700,
+                        color: '#f8f8f8',
+                        margin: '0 0 8px 0'
+                      }}>
+                        🎯 Action Required: Configure Digital Assets
+                      </h2>
+                      <p style={{
+                        fontSize: '1rem',
+                        color: '#bfdbfe',
+                        margin: 0,
+                        lineHeight: 1.5
+                      }}>
+                        Your files have been successfully extracted! Now configure your digital assets by selecting a PSD template, color variants, and layers below.
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div style={{
+                    display: 'flex',
+                    gap: 16,
+                    fontSize: 14,
+                    color: '#93c5fd'
+                  }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981' }} />
+                      Step 1: Select PSD Template
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#f59e0b' }} />
+                      Step 2: Choose Color Variants
+                    </span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#8b5cf6' }} />
+                      Step 3: Select Layers
+                    </span>
+                  </div>
+                </div>
+
+                {/* Configuration Section */}
+                <div style={{
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  borderRadius: 12,
+                  padding: 24,
+                  border: '1px solid rgba(255, 255, 255, 0.08)'
+                }}>
+                  <h3 style={{
+                    fontSize: '1.2rem',
+                    fontWeight: 600,
+                    color: '#f8f8f8',
+                    marginBottom: 24,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8
+                  }}>
+                    ⚙️ Configure Digital Assets
+                    {loadingPhysicalFiles && (
+                      <div style={{
+                        width: '20px',
+                        height: '20px',
+                        border: '2px solid rgba(248, 248, 248, 0.3)',
+                        borderTop: '2px solid #f8f8f8',
+                        borderRadius: '50%',
+                        animation: 'spin 1s linear infinite'
+                      }} />
+                    )}
+                  </h3>
 
                 {/* PSD Selection and Color Variants */}
                 <div style={{ 
@@ -1699,6 +1788,7 @@ export default function JobDetailsPage() {
                     </div>
                   </div>
                 )}
+                </div>
                </div>
              )}
 
@@ -2237,6 +2327,18 @@ export default function JobDetailsPage() {
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
+        }
+        
+        @keyframes gradient-shift {
+          0% {
+            background-position: 0% 50%;
+          }
+          50% {
+            background-position: 100% 50%;
+          }
+          100% {
+            background-position: 0% 50%;
+          }
         }
         
         .uploading-text {
