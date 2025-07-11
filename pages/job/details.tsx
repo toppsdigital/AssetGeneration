@@ -70,12 +70,19 @@ export default function JobDetailsPage() {
       hasApiFiles: !!jobData?.api_files?.length, 
       filesLoaded, 
       jobStatus: jobData?.job_status,
-      uploadStarted
+      uploadStarted,
+      hasContentPipelineFiles: !!jobData?.content_pipeline_files?.length
     });
     
     // Don't reload files if upload has started - this prevents overwriting status updates
     if (uploadStarted) {
       console.log('🔄 Skipping file loading - upload in progress, avoiding status overwrites');
+      return;
+    }
+    
+    // Don't reload files if they're already loaded and we have content_pipeline_files
+    if (filesLoaded && jobData?.content_pipeline_files?.length > 0) {
+      console.log('🔄 Skipping file loading - files already loaded and present');
       return;
     }
     
@@ -93,7 +100,18 @@ export default function JobDetailsPage() {
     } else {
       console.log('🔄 Skipping file loading - condition not met');
     }
-  }, [jobData, filesLoaded]);
+  }, [jobData?.job_id, jobData?.api_files?.length, filesLoaded, uploadStarted, createFiles]);
+
+  // Reset file loading state when job ID changes (navigation to different job)
+  useEffect(() => {
+    console.log('🔄 Job ID changed, resetting file loading state');
+    setFilesLoaded(false);
+    setLoadingFiles(false);
+    setUploadStarted(false);
+    setUploadProgress({});
+    setUploadingFiles(new Set());
+    setAllFilesUploaded(false);
+  }, [jobData?.job_id]);
 
   // Trigger upload check when files are loaded
   useEffect(() => {
@@ -161,13 +179,7 @@ export default function JobDetailsPage() {
     }
   }, [filesLoaded, uploadStarted]);
 
-  // Reset upload state when job changes
-  useEffect(() => {
-    setUploadStarted(false);
-    setUploadProgress({});
-    setUploadingFiles(new Set());
-    setAllFilesUploaded(false);
-  }, [jobData?.job_id]);
+  // (Reset logic moved to dedicated useEffect above)
 
   // Monitor upload completion - runs every 1 second to check status
   useEffect(() => {
@@ -350,24 +362,27 @@ export default function JobDetailsPage() {
         console.warn('Failed to parse files from query params:', e);
       }
       
-      // Create job data from query parameters
-      const mappedJobData: UIJobData = {
-        job_id: jobId as string,
-        app_name: appName as string,
-        release_name: releaseName as string,
-        subset_name: subsetName as string,
-        source_folder: sourceFolder as string,
-        job_status: status as JobData['job_status'],
-        created_at: createdAt as string,
-        description: description as string,
-        api_files: parsedFiles,
-        files: [], // Initialize empty legacy files array
-        content_pipeline_files: [], // Initialize empty Content Pipeline files array
-        Subset_name: subsetName as string // Map subsetName to Subset_name for UI compatibility
-      };
-      
-      console.log('🔄 setJobData called from: loadJobDetailsFromParams at', new Date().toISOString());
-      setJobData(mappedJobData);
+      // Create job data from query parameters, preserving existing files
+      setJobData(prevJobData => {
+        const mappedJobData: UIJobData = {
+          job_id: jobId as string,
+          app_name: appName as string,
+          release_name: releaseName as string,
+          subset_name: subsetName as string,
+          source_folder: sourceFolder as string,
+          job_status: status as JobData['job_status'],
+          created_at: createdAt as string,
+          description: description as string,
+          api_files: parsedFiles,
+          files: prevJobData?.files || [], // Preserve existing legacy files
+          content_pipeline_files: prevJobData?.content_pipeline_files || [], // Preserve existing Content Pipeline files
+          Subset_name: subsetName as string // Map subsetName to Subset_name for UI compatibility
+        };
+        
+        console.log('🔄 setJobData called from: loadJobDetailsFromParams (preserving existing files) at', new Date().toISOString());
+        console.log('📊 Preserved files:', mappedJobData.content_pipeline_files?.length || 0);
+        return mappedJobData;
+      });
       
     } catch (error) {
       console.error('Error loading job details from params:', error);
@@ -389,17 +404,20 @@ export default function JobDetailsPage() {
       
       console.log('Job details loaded:', response.job);
       
-      // Map API response to our local interface
-      const mappedJobData: UIJobData = {
-        ...response.job,
-        api_files: response.job.files, // Store API files separately
-        files: [], // Initialize empty legacy files array
-        content_pipeline_files: [], // Initialize empty Content Pipeline files array
-        Subset_name: response.job.subset_name || response.job.source_folder // Map subset_name to Subset_name for UI compatibility
-      };
-      
-      console.log('🔄 setJobData called from: loadJobDetails at', new Date().toISOString());
-      setJobData(mappedJobData);
+      // Map API response to our local interface, preserving existing files
+      setJobData(prevJobData => {
+        const mappedJobData: UIJobData = {
+          ...response.job,
+          api_files: response.job.files, // Store API files separately
+          files: prevJobData?.files || [], // Preserve existing legacy files
+          content_pipeline_files: prevJobData?.content_pipeline_files || [], // Preserve existing Content Pipeline files
+          Subset_name: response.job.subset_name || response.job.source_folder // Map subset_name to Subset_name for UI compatibility
+        };
+        
+        console.log('🔄 setJobData called from: loadJobDetails (preserving existing files) at', new Date().toISOString());
+        console.log('📊 Preserved files:', mappedJobData.content_pipeline_files?.length || 0);
+        return mappedJobData;
+      });
       
     } catch (error) {
       console.error('Error loading job details:', error);
@@ -422,6 +440,12 @@ export default function JobDetailsPage() {
       
       console.log('Batch read response:', batchResponse);
       
+      // Validate response before processing
+      if (!batchResponse.files || !Array.isArray(batchResponse.files)) {
+        console.error('Invalid response format from batchGetFiles:', batchResponse);
+        throw new Error('Invalid response format from API');
+      }
+      
       // Map API response to our ContentPipelineFile format
       const fileObjects: FileData[] = batchResponse.files.map(apiFile => ({
         filename: apiFile.filename,
@@ -432,24 +456,31 @@ export default function JobDetailsPage() {
         firefly_assets: apiFile.firefly_assets || {}
       }));
       
-      // Update job data with fetched files
-      const updatedJobData = {
-        ...jobData,
-        content_pipeline_files: fileObjects
-      };
-      
-      console.log('✅ Loaded existing files successfully, checking if upload should start...');
-      console.log('Job status:', jobData.job_status);
-      console.log('Files loaded:', fileObjects.length);
-      
-      console.log('🔄 setJobData called from: loadExistingFiles at', new Date().toISOString());
-      setJobData(updatedJobData);
-      setFilesLoaded(true);
-      setLoadingFiles(false);
+      // Only update if we actually got files back
+      if (fileObjects.length > 0) {
+        // Update job data with fetched files
+        const updatedJobData = {
+          ...jobData,
+          content_pipeline_files: fileObjects
+        };
+        
+        console.log('✅ Loaded existing files successfully, checking if upload should start...');
+        console.log('Job status:', jobData.job_status);
+        console.log('Files loaded:', fileObjects.length);
+        
+        console.log('🔄 setJobData called from: loadExistingFiles at', new Date().toISOString());
+        setJobData(updatedJobData);
+        setFilesLoaded(true);
+      } else {
+        console.warn('⚠️ No files returned from API, keeping existing state');
+        setFilesLoaded(true); // Still mark as loaded to prevent retries
+      }
       
     } catch (error) {
       console.error('Error fetching file objects:', error);
       setError('Failed to fetch file objects: ' + (error as Error).message);
+      // Don't set filesLoaded to true on error to allow retries
+    } finally {
       setLoadingFiles(false);
     }
   };
@@ -623,23 +654,30 @@ export default function JobDetailsPage() {
       
       console.log('📁 Final file objects count:', finalFileObjects.length);
       
-      // Update job data with all files (created + existing)
-      const updatedJobData = {
-        ...jobData,
-        content_pipeline_files: finalFileObjects
-      };
-      
-      console.log('Setting job data with file objects:', updatedJobData);
-      console.log('🔄 setJobData called from: createNewFiles at', new Date().toISOString());
-      setJobData(updatedJobData);
-      setFilesLoaded(true);
-      setLoadingFiles(false);
-      
-      console.log('createNewFiles completed successfully, filesLoaded set to true');
+      // Only update if we actually got files back
+      if (finalFileObjects.length > 0) {
+        // Update job data with all files (created + existing)
+        const updatedJobData = {
+          ...jobData,
+          content_pipeline_files: finalFileObjects
+        };
+        
+        console.log('Setting job data with file objects:', updatedJobData);
+        console.log('🔄 setJobData called from: createNewFiles at', new Date().toISOString());
+        setJobData(updatedJobData);
+        setFilesLoaded(true);
+        
+        console.log('createNewFiles completed successfully, filesLoaded set to true');
+      } else {
+        console.warn('⚠️ No files created, keeping existing state');
+        setFilesLoaded(true); // Still mark as loaded to prevent retries
+      }
       
     } catch (error) {
       console.error('Error creating file objects:', error);
       setError('Failed to create file objects: ' + (error as Error).message);
+      // Don't set filesLoaded to true on error to allow retries
+    } finally {
       setLoadingFiles(false);
     }
   };
@@ -2021,7 +2059,11 @@ export default function JobDetailsPage() {
                         color: '#9ca3af',
                         fontSize: 14
                       }}>
-                        No files available yet.
+                        {!filesLoaded && !loadingFiles 
+                          ? 'Files not loaded yet.' 
+                          : filesLoaded && (!jobData.content_pipeline_files || jobData.content_pipeline_files.length === 0)
+                          ? 'No files available for this job.'
+                          : 'Loading files...'}
                       </div>
                     )}
                   </div>
