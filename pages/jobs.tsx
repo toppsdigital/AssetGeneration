@@ -12,11 +12,14 @@ export default function JobsPage() {
   const [error, setError] = useState<string | null>(null);
 
   // Fetch all jobs from Content Pipeline API
-  const fetchJobs = async () => {
-    setLoading(true);
-    setError(null);
+  const fetchJobs = async (isBackgroundUpdate = false) => {
+    if (!isBackgroundUpdate) {
+      setLoading(true);
+      setError(null);
+    }
+    
     try {
-      console.log('Fetching jobs from Content Pipeline API...');
+      console.log(`Fetching jobs from Content Pipeline API... ${isBackgroundUpdate ? '(background)' : ''}`);
       const response = await contentPipelineApi.listJobs();
       console.log('Jobs fetched:', response);
       
@@ -26,11 +29,21 @@ export default function JobsPage() {
       );
       
       setJobs(sortedJobs);
+      
+      // Clear any existing errors on successful fetch
+      if (error) {
+        setError(null);
+      }
     } catch (err) {
       console.error('Error fetching jobs:', err);
-      setError((err as Error).message);
+      // Only set error state for non-background updates to avoid disrupting UI
+      if (!isBackgroundUpdate) {
+        setError((err as Error).message);
+      }
     } finally {
-      setLoading(false);
+      if (!isBackgroundUpdate) {
+        setLoading(false);
+      }
     }
   };
 
@@ -55,6 +68,16 @@ export default function JobsPage() {
 
   useEffect(() => {
     fetchJobs();
+  }, []);
+
+  // Set up background refresh every 5 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchJobs(true); // Background update
+    }, 5000); // 5 seconds
+
+    // Cleanup interval on component unmount
+    return () => clearInterval(interval);
   }, []);
 
   const getSubsetName = (job: JobData) => {
@@ -150,7 +173,7 @@ export default function JobsPage() {
             <h2 style={{ color: '#ef4444', marginBottom: 16 }}>❌ Error Loading Jobs</h2>
             <p style={{ color: '#e0e0e0', marginBottom: 24 }}>{error}</p>
             <button
-              onClick={fetchJobs}
+              onClick={() => fetchJobs(false)}
               style={{
                 padding: '12px 24px',
                 background: '#3b82f6',
@@ -211,7 +234,7 @@ export default function JobsPage() {
                 ➕ New Job
               </button>
               <button
-                onClick={fetchJobs}
+                onClick={() => fetchJobs(false)}
                 style={{
                   padding: '8px 16px',
                   background: 'rgba(59, 130, 246, 0.1)',
