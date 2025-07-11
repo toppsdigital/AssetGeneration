@@ -463,8 +463,8 @@ export default function JobDetailsPage() {
           originalFiles[file.name] = {
             card_type: file.type,
             file_path: `${sanitizedAppName}/PDFs/${file.name}`,
-            status: 'uploading'
-          };
+          status: 'uploading'
+        };
         });
         
         return {
@@ -1049,15 +1049,15 @@ export default function JobDetailsPage() {
                   justifyContent: 'space-between',
                   marginBottom: 16
                 }}>
-                  <h1 style={{
+              <h1 style={{
                     fontSize: '1.5rem',
-                    fontWeight: 600,
-                    color: '#f8f8f8',
+                fontWeight: 600,
+                color: '#f8f8f8',
                     margin: 0
-                  }}>
+              }}>
                     📋 {jobData.app_name} - {jobData.release_name} - {jobData.subset_name || jobData.Subset_name}
-                  </h1>
-                  <div style={{
+              </h1>
+              <div style={{
                     display: 'flex',
                     alignItems: 'center',
                     gap: 8,
@@ -1066,14 +1066,14 @@ export default function JobDetailsPage() {
                     background: getStatusColor(jobData.job_status || ''),
                     boxShadow: `0 4px 12px ${getStatusColor(jobData.job_status || '')}40`,
                     border: '2px solid rgba(255, 255, 255, 0.2)'
-                  }}>
+                }}>
                     <span style={{ 
                       color: 'white', 
-                      fontSize: 16, 
+                    fontSize: 16, 
                       fontWeight: 700,
                       textShadow: '0 1px 3px rgba(0, 0, 0, 0.5)'
-                    }}>
-                      {capitalizeStatus(jobData.job_status || 'Unknown')}
+                  }}>
+                    {capitalizeStatus(jobData.job_status || 'Unknown')}
                     </span>
                   </div>
                 </div>
@@ -1093,7 +1093,7 @@ export default function JobDetailsPage() {
                   )}
                 </div>
               </div>
-            </div>
+                </div>
 
             {/* Configure Digital Assets - Only show when status is "extracted" */}
             {jobData?.job_status?.toLowerCase() === 'extracted' && (
@@ -1109,7 +1109,7 @@ export default function JobDetailsPage() {
                 }}>
                   ⚙️ Configure Digital Assets
                   {loadingPhysicalFiles && (
-                    <div style={{
+                <div style={{
                       width: '20px',
                       height: '20px',
                       border: '2px solid rgba(248, 248, 248, 0.3)',
@@ -1178,7 +1178,7 @@ export default function JobDetailsPage() {
                         );
                       })}
                     </select>
-                  </div>
+                </div>
 
                   {/* Color Variants Selection */}
                   {selectedPhysicalFile && jsonData && (
@@ -1223,7 +1223,7 @@ export default function JobDetailsPage() {
                         };
                         
                         return solidColorLayers.length > 0 ? (
-                          <div style={{
+                <div style={{
                             display: 'flex',
                             flexDirection: 'column',
                             gap: 8
@@ -1241,7 +1241,7 @@ export default function JobDetailsPage() {
                                   fontSize: 14,
                                   color: '#f8f8f8',
                                   padding: '8px 12px',
-                                  background: 'rgba(255, 255, 255, 0.05)',
+                  background: 'rgba(255, 255, 255, 0.05)',
                                   borderRadius: 6,
                                   border: '1px solid rgba(255, 255, 255, 0.1)',
                                   transition: 'background-color 0.2s'
@@ -1275,7 +1275,7 @@ export default function JobDetailsPage() {
                             fontStyle: 'italic'
                           }}>
                             No color variants available
-                          </div>
+                </div>
                         );
                       })()}
                     </div>
@@ -1344,7 +1344,7 @@ export default function JobDetailsPage() {
                         };
                         
                         return layerNamesArray.length > 0 ? (
-                          <div style={{
+                  <div style={{
                             display: 'flex',
                             flexDirection: 'column',
                             gap: 8
@@ -1361,7 +1361,7 @@ export default function JobDetailsPage() {
                                   fontSize: 14,
                                   color: '#f8f8f8',
                                   padding: '8px 12px',
-                                  background: 'rgba(255, 255, 255, 0.05)',
+                    background: 'rgba(255, 255, 255, 0.05)',
                                   borderRadius: 6,
                                   border: '1px solid rgba(255, 255, 255, 0.1)',
                                   transition: 'background-color 0.2s'
@@ -1398,10 +1398,10 @@ export default function JobDetailsPage() {
                           </div>
                         );
                       })()}
-                    </div>
-                  )}
+                  </div>
+                )}
 
-                </div>
+              </div>
 
 
 
@@ -1436,7 +1436,7 @@ export default function JobDetailsPage() {
                         }}>
                           {selectedLayers.size} color variants, {selectedExtractedLayers.size} layers selected
                         </p>
-                      </div>
+            </div>
                       <button
                         onClick={async () => {
                           console.log('🎨 Creating digital assets with selected options:', {
