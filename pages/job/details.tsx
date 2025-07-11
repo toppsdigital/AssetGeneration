@@ -38,6 +38,7 @@ export default function JobDetailsPage() {
   const [jsonData, setJsonData] = useState<any>(null);
   const [loadingJsonData, setLoadingJsonData] = useState(false);
   const [selectedLayers, setSelectedLayers] = useState<Set<string>>(new Set());
+  const [selectedExtractedLayers, setSelectedExtractedLayers] = useState<Set<string>>(new Set());
   const [creatingAssets, setCreatingAssets] = useState(false);
 
   useEffect(() => {
@@ -268,6 +269,7 @@ export default function JobDetailsPage() {
     }
     // Clear selected layers when changing files
     setSelectedLayers(new Set());
+    setSelectedExtractedLayers(new Set());
   }, [selectedPhysicalFile]);
 
   // Load job details from query parameters (to avoid API call)
@@ -1248,14 +1250,132 @@ export default function JobDetailsPage() {
                     </div>
                   )}
 
-                  {/* Extracted Layers Selection */}
+                  {/* Select Layers from Extracted Files */}
+                  {selectedPhysicalFile && jsonData && (
+                    <div style={{ flex: '0 0 250px' }}>
+                      <label style={{
+                        display: 'block',
+                        fontSize: 16,
+                        fontWeight: 600,
+                        color: '#f8f8f8',
+                        marginBottom: 12
+                      }}>
+                        Select Layers
+                      </label>
+                      {(() => {
+                        // Extract unique layer names from all extracted files in the job
+                        const extractedLayerNames = new Set<string>();
+                        
+                        // Function to extract layer name from filename
+                        const extractLayerName = (filename: string): string | null => {
+                          // Remove file extension first
+                          const nameWithoutExt = filename.replace(/\.(tif|pdf|png|jpg|jpeg)$/i, '');
+                          
+                          // Split by underscore
+                          const parts = nameWithoutExt.split('_');
+                          
+                          // Need at least 3 parts: prefix, number, layer_name
+                          if (parts.length < 3) return null;
+                          
+                          // Remove first part (app prefix like "25dnyc")
+                          // Remove second part (card number like "4905")
+                          // Keep the rest joined with underscores
+                          const layerParts = parts.slice(2);
+                          const layerName = layerParts.join('_');
+                          
+                          return layerName;
+                        };
+                        
+                        // Collect layer names from all extracted files
+                        if (jobData?.content_pipeline_files) {
+                          jobData.content_pipeline_files.forEach(fileGroup => {
+                            if (fileGroup.extracted_files) {
+                              Object.keys(fileGroup.extracted_files).forEach(filename => {
+                                const layerName = extractLayerName(filename);
+                                if (layerName) {
+                                  extractedLayerNames.add(layerName);
+                                }
+                              });
+                            }
+                          });
+                        }
+                        
+                        const layerNamesArray = Array.from(extractedLayerNames).sort();
+                        
+                        const toggleExtractedLayer = (layerName: string) => {
+                          const newSelected = new Set(selectedExtractedLayers);
+                          if (newSelected.has(layerName)) {
+                            newSelected.delete(layerName);
+                          } else {
+                            newSelected.add(layerName);
+                          }
+                          setSelectedExtractedLayers(newSelected);
+                        };
+                        
+                        return layerNamesArray.length > 0 ? (
+                          <div style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 8
+                          }}>
+                            {layerNamesArray.map((layerName, index) => {
+                              const isSelected = selectedExtractedLayers.has(layerName);
+                              
+                              return (
+                                <label key={index} style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 8,
+                                  cursor: 'pointer',
+                                  fontSize: 14,
+                                  color: '#f8f8f8',
+                                  padding: '8px 12px',
+                                  background: 'rgba(255, 255, 255, 0.05)',
+                                  borderRadius: 6,
+                                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                                  transition: 'background-color 0.2s'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                                }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() => toggleExtractedLayer(layerName)}
+                                    style={{
+                                      width: 16,
+                                      height: 16,
+                                      cursor: 'pointer'
+                                    }}
+                                  />
+                                  {layerName}
+                                </label>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div style={{
+                            fontSize: 14,
+                            color: '#9ca3af',
+                            fontStyle: 'italic'
+                          }}>
+                            No extracted layers available
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
 
                 </div>
 
 
 
                 {/* Generate Digital Assets Button */}
-                {selectedPhysicalFile && jsonData && selectedLayers.size > 0 && (
+                {selectedPhysicalFile && jsonData && selectedLayers.size > 0 && selectedExtractedLayers.size > 0 && (
                   <div style={{ 
                     marginTop: 32, 
                     padding: 24, 
@@ -1283,7 +1403,7 @@ export default function JobDetailsPage() {
                           color: '#86efac',
                           margin: 0
                         }}>
-                          {selectedLayers.size} color variants selected
+                          {selectedLayers.size} color variants, {selectedExtractedLayers.size} layers selected
                         </p>
                       </div>
                       <button
@@ -1292,7 +1412,9 @@ export default function JobDetailsPage() {
                             selectedFile: selectedPhysicalFile,
                             psdFile: jsonData?.psd_file,
                             selectedLayers: Array.from(selectedLayers),
-                            totalSelected: selectedLayers.size
+                            selectedExtractedLayers: Array.from(selectedExtractedLayers),
+                            totalColors: selectedLayers.size,
+                            totalLayers: selectedExtractedLayers.size
                           });
 
                           setCreatingAssets(true);
@@ -1310,9 +1432,12 @@ export default function JobDetailsPage() {
                             // Extract PSD filename from the selected physical file
                             const psdFile = selectedPhysicalFile.split('/').pop()?.replace('.json', '.psd') || '';
 
+                            // Use selected extracted layers instead of hardcoded layers
+                            const layers = Array.from(selectedExtractedLayers);
+
                             const payload = {
                               colors,
-                              layers: ["cmyk", "spot", "foil", "etch"],
+                              layers,
                               psd_file: psdFile
                             };
 
@@ -1364,6 +1489,7 @@ export default function JobDetailsPage() {
                       color: '#6ee7b7'
                     }}>
                       <span>🎨 Color Variants: {selectedLayers.size}</span>
+                      <span>🖼️ Layers: {selectedExtractedLayers.size}</span>
                       <span>📄 PSD: {jsonData?.psd_file || 'Unknown'}</span>
                     </div>
                   </div>
