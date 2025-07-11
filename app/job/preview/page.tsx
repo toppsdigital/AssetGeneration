@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, Suspense } from 'react';
 import Head from 'next/head';
 import NavBar from '../../../components/NavBar';
 import styles from '../../../styles/Edit.module.css';
@@ -369,7 +369,7 @@ function TiffViewer({ src, alt, style, onError }: {
   return null;
 }
 
-export default function JobPreviewPage() {
+function JobPreviewPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const jobPath = searchParams.get('jobPath');
@@ -929,5 +929,34 @@ export default function JobPreviewPage() {
       )}
     </div>
     </>
+  );
+}
+
+export default function JobPreviewPage() {
+  return (
+    <Suspense fallback={
+      <div style={{
+        minHeight: '100vh',
+        backgroundColor: '#0f172a',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            width: 64,
+            height: 64,
+            border: '4px solid rgba(16, 185, 129, 0.2)',
+            borderTop: '4px solid #10b981',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+            margin: '0 auto 16px auto'
+          }} />
+          <p style={{ color: '#e0e0e0' }}>Loading preview...</p>
+        </div>
+      </div>
+    }>
+      <JobPreviewPageContent />
+    </Suspense>
   );
 } 

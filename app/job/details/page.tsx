@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, Suspense } from 'react';
 import NavBar from '../../../components/NavBar';
 import styles from '../../../styles/Edit.module.css';
 import Spinner from '../../../components/Spinner';
@@ -34,7 +34,7 @@ interface UIJobData extends JobData {
   content_pipeline_files?: FileData[];
 }
 
-export default function JobDetailsPage() {
+function JobDetailsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
@@ -2349,5 +2349,26 @@ export default function JobDetailsPage() {
         }
       `}</style>
     </div>
+  );
+}
+
+export default function JobDetailsPage() {
+  return (
+    <Suspense fallback={
+      <div style={{
+        minHeight: '100vh',
+        backgroundColor: '#0f172a',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <Spinner />
+          <p style={{ marginTop: 16, color: '#e0e0e0' }}>Loading job details...</p>
+        </div>
+      </div>
+    }>
+      <JobDetailsPageContent />
+    </Suspense>
   );
 } 
