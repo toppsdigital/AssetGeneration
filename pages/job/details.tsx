@@ -40,6 +40,7 @@ export default function JobDetailsPage() {
   const [selectedLayers, setSelectedLayers] = useState<Set<string>>(new Set());
   const [selectedExtractedLayers, setSelectedExtractedLayers] = useState<Set<string>>(new Set());
   const [creatingAssets, setCreatingAssets] = useState(false);
+  const [allFilesUploaded, setAllFilesUploaded] = useState(false);
 
   useEffect(() => {
     if (jobId) {
@@ -165,7 +166,66 @@ export default function JobDetailsPage() {
     setUploadStarted(false);
     setUploadProgress({});
     setUploadingFiles(new Set());
+    setAllFilesUploaded(false);
   }, [jobData?.job_id]);
+
+  // Monitor upload completion - runs every 1 second to check status
+  useEffect(() => {
+    if (!jobData?.content_pipeline_files) {
+      return;
+    }
+
+    const checkUploadStatus = () => {
+      // Check if all files have been uploaded
+      let totalFiles = 0;
+      let uploadedFiles = 0;
+      let uploadingFilesCount = 0;
+      let failedFiles = 0;
+      
+      jobData.content_pipeline_files.forEach(fileGroup => {
+        if (fileGroup.original_files) {
+          Object.values(fileGroup.original_files).forEach(fileInfo => {
+            totalFiles++;
+            if (fileInfo.status === 'uploaded') {
+              uploadedFiles++;
+            } else if (fileInfo.status === 'uploading') {
+              uploadingFilesCount++;
+            } else if (fileInfo.status === 'upload-failed') {
+              failedFiles++;
+            }
+          });
+        }
+      });
+
+      console.log(`📊 Upload status check: ${uploadedFiles}/${totalFiles} uploaded, ${uploadingFilesCount} uploading, ${failedFiles} failed, uploadingFiles.size: ${uploadingFiles.size}, allFilesUploaded: ${allFilesUploaded}`);
+
+      // Check if all files are uploaded and no files are currently uploading
+      // OR if upload process has finished (no uploading files) and we have uploaded at least some files
+      const allUploaded = totalFiles > 0 && uploadedFiles === totalFiles && uploadingFiles.size === 0;
+      const uploadProcessComplete = totalFiles > 0 && uploadingFiles.size === 0 && uploadingFilesCount === 0 && uploadedFiles > 0;
+      
+      if ((allUploaded || uploadProcessComplete) && !allFilesUploaded) {
+        console.log('✅ Upload process completed! Auto-navigating to jobs list in 2 seconds...');
+        console.log(`📋 Final status: ${uploadedFiles}/${totalFiles} uploaded, allUploaded: ${allUploaded}, uploadProcessComplete: ${uploadProcessComplete}`);
+        setAllFilesUploaded(true);
+        
+        // Auto-navigate to jobs list after a short delay
+        setTimeout(() => {
+          console.log('🚀 Auto-navigating to jobs list now...');
+          router.push('/jobs');
+        }, 1000); // 1 second delay to let user see the final upload status
+      }
+    };
+
+    // Check immediately
+    checkUploadStatus();
+
+    // Set up interval to check every second
+    const interval = setInterval(checkUploadStatus, 1000);
+
+    // Cleanup interval on unmount
+    return () => clearInterval(interval);
+  }, [jobData?.content_pipeline_files, uploadingFiles, allFilesUploaded, router]);
 
   // Fetch physical JSON files when status is "extracted"
   useEffect(() => {
@@ -1092,8 +1152,10 @@ export default function JobDetailsPage() {
                     <span>Job ID: <span style={{ color: '#f8f8f8', fontFamily: 'monospace' }}>{jobData.job_id}</span></span>
                   )}
                 </div>
-              </div>
+                              </div>
                 </div>
+
+
 
             {/* Configure Digital Assets - Only show when status is "extracted" */}
             {jobData?.job_status?.toLowerCase() === 'extracted' && (
