@@ -36,6 +36,7 @@ export default function NewJobPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Partial<NewJobFormData>>({});
   const [jobCreated, setJobCreated] = useState<any>(null);
+  const [isFileListExpanded, setIsFileListExpanded] = useState(false);
 
   // Handle input changes
   const handleInputChange = (field: keyof NewJobFormData, value: string) => {
@@ -76,7 +77,8 @@ export default function NewJobPage() {
         selectedFiles: dataTransfer.files
       }));
 
-
+      // Collapse file list when new files are selected
+      setIsFileListExpanded(false);
       
       // Clear error when folder is selected
       if (errors.uploadFolder) {
@@ -85,6 +87,9 @@ export default function NewJobPage() {
           uploadFolder: ''
         }));
       }
+    } else {
+      // If no files selected, collapse the file list
+      setIsFileListExpanded(false);
     }
   };
 
@@ -561,62 +566,7 @@ export default function NewJobPage() {
                   )}
                 </div>
 
-                {/* File List with Upload Status */}
-                {formData.selectedFiles && formData.selectedFiles.length > 0 && (
-                  <div>
-                    <label style={{
-                      display: 'block',
-                      fontSize: 14,
-                      fontWeight: 600,
-                      color: '#f3f4f6',
-                      marginBottom: 12
-                    }}>
-                      Selected Files ({formData.selectedFiles.length})
-                    </label>
-                    <div style={{
-                      maxHeight: '300px',
-                      overflowY: 'auto',
-                      background: 'rgba(255, 255, 255, 0.03)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      borderRadius: 8,
-                      padding: 12
-                    }}>
-                      {Array.from(formData.selectedFiles).map((file, index) => (
-                        <div
-                          key={index}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            padding: '8px 12px',
-                            marginBottom: index < formData.selectedFiles!.length - 1 ? 4 : 0,
-                            background: 'rgba(255, 255, 255, 0.03)',
-                            borderRadius: 4,
-                            border: '1px solid rgba(255, 255, 255, 0.1)',
-                            transition: 'all 0.2s'
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ fontSize: 16 }}>📄</span>
-                            <span style={{
-                              color: '#f8f8f8',
-                              fontSize: 14,
-                              fontFamily: 'monospace'
-                            }}>
-                              {file.name}
-                            </span>
-                          </div>
-                          <span style={{
-                            color: '#9ca3af',
-                            fontSize: 12
-                          }}>
-                            {(file.size / 1024).toFixed(1)} KB
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+
                 
               </div>
             </div>
@@ -625,86 +575,254 @@ export default function NewJobPage() {
             <div style={{ 
               display: 'flex', 
               gap: 16, 
-              justifyContent: 'flex-end',
+              justifyContent: 'space-between',
               alignItems: 'center'
             }}>
-              <button
-                type="button"
-                onClick={() => router.push('/jobs')}
-                disabled={isSubmitting}
-                style={{
-                  padding: '12px 24px',
-                  background: 'rgba(255, 255, 255, 0.1)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  borderRadius: 8,
-                  color: '#e5e7eb',
-                  cursor: isSubmitting ? 'not-allowed' : 'pointer',
-                  fontSize: 14,
-                  fontWeight: 500,
-                  transition: 'all 0.2s',
-                  opacity: isSubmitting ? 0.5 : 1
-                }}
-                onMouseEnter={(e) => {
-                  if (!isSubmitting) {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!isSubmitting) {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
-                  }
-                }}
-              >
-                Cancel
-              </button>
-              
-              <button
-                type="submit"
-                disabled={isSubmitting || !isFormValid()}
-                style={{
-                  padding: '12px 32px',
-                  background: isSubmitting || !isFormValid()
-                    ? 'rgba(156, 163, 175, 0.5)' 
-                    : 'linear-gradient(135deg, #10b981, #059669)',
-                  border: 'none',
-                  borderRadius: 8,
-                  color: isSubmitting || !isFormValid() ? 'rgba(255, 255, 255, 0.5)' : 'white',
-                  cursor: isSubmitting || !isFormValid() ? 'not-allowed' : 'pointer',
-                  fontSize: 14,
-                  fontWeight: 600,
-                  transition: 'all 0.2s',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  opacity: isSubmitting || !isFormValid() ? 0.6 : 1
-                }}
-                onMouseEnter={(e) => {
-                  if (!isSubmitting && isFormValid()) {
-                    e.currentTarget.style.transform = 'scale(1.05)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!isSubmitting && isFormValid()) {
-                    e.currentTarget.style.transform = 'scale(1)';
-                  }
-                }}
-              >
-                {isSubmitting && (
-                  <div style={{
-                    width: '16px',
-                    height: '16px',
-                    border: '2px solid rgba(255, 255, 255, 0.3)',
-                    borderTop: '2px solid white',
-                    borderRadius: '50%',
-                    animation: 'spin 1s linear infinite'
-                  }} />
+              {/* File Count and Expand/Collapse Button */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                {formData.selectedFiles && formData.selectedFiles.length > 0 && (
+                  <>
+                    <span style={{
+                      color: '#9ca3af',
+                      fontSize: 14,
+                      fontWeight: 500
+                    }}>
+                      {formData.selectedFiles.length} PDF files selected
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setIsFileListExpanded(!isFileListExpanded)}
+                      style={{
+                        padding: '6px 12px',
+                        background: 'rgba(255, 255, 255, 0.08)',
+                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                        borderRadius: 6,
+                        color: '#60a5fa',
+                        cursor: 'pointer',
+                        fontSize: 12,
+                        fontWeight: 500,
+                        transition: 'all 0.2s',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.12)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+                      }}
+                    >
+                      {isFileListExpanded ? 'Hide Files' : 'Show Files'}
+                      <span style={{ 
+                        transform: isFileListExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                        transition: 'transform 0.2s'
+                      }}>
+                        ▼
+                      </span>
+                    </button>
+                  </>
                 )}
-                {isSubmitting ? 'Creating Job...' : 'Create Job'}
-              </button>
+              </div>
+
+              {/* Cancel and Create Job Buttons */}
+              <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                <button
+                  type="button"
+                  onClick={() => router.push('/jobs')}
+                  disabled={isSubmitting}
+                  style={{
+                    padding: '12px 24px',
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    borderRadius: 8,
+                    color: '#e5e7eb',
+                    cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                    fontSize: 14,
+                    fontWeight: 500,
+                    transition: 'all 0.2s',
+                    opacity: isSubmitting ? 0.5 : 1
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isSubmitting) {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSubmitting) {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                    }
+                  }}
+                >
+                  Cancel
+                </button>
+                
+                <button
+                  type="submit"
+                  disabled={isSubmitting || !isFormValid()}
+                  style={{
+                    padding: '12px 32px',
+                    background: isSubmitting || !isFormValid()
+                      ? 'rgba(156, 163, 175, 0.5)' 
+                      : 'linear-gradient(135deg, #10b981, #059669)',
+                    border: 'none',
+                    borderRadius: 8,
+                    color: isSubmitting || !isFormValid() ? 'rgba(255, 255, 255, 0.5)' : 'white',
+                    cursor: isSubmitting || !isFormValid() ? 'not-allowed' : 'pointer',
+                    fontSize: 14,
+                    fontWeight: 600,
+                    transition: 'all 0.2s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    opacity: isSubmitting || !isFormValid() ? 0.6 : 1
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isSubmitting && isFormValid()) {
+                      e.currentTarget.style.transform = 'scale(1.05)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSubmitting && isFormValid()) {
+                      e.currentTarget.style.transform = 'scale(1)';
+                    }
+                  }}
+                >
+                  {isSubmitting && (
+                    <div style={{
+                      width: '16px',
+                      height: '16px',
+                      border: '2px solid rgba(255, 255, 255, 0.3)',
+                      borderTop: '2px solid white',
+                      borderRadius: '50%',
+                      animation: 'spin 1s linear infinite'
+                    }} />
+                  )}
+                  {isSubmitting ? 'Creating Job...' : 'Create Job'}
+                </button>
+              </div>
             </div>
             
 
           </form>
+
+          {/* Collapsible File List */}
+          {formData.selectedFiles && formData.selectedFiles.length > 0 && isFileListExpanded && (
+            <div style={{
+              marginTop: 24,
+              background: 'rgba(255, 255, 255, 0.06)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              borderRadius: 16,
+              padding: 24,
+              animation: 'slideDown 0.3s ease-out'
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 16
+              }}>
+                <h3 style={{
+                  fontSize: 16,
+                  fontWeight: 600,
+                  color: '#f3f4f6',
+                  margin: 0
+                }}>
+                  📁 Selected PDF Files ({formData.selectedFiles.length})
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setIsFileListExpanded(false)}
+                  style={{
+                    padding: '4px 8px',
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    borderRadius: 4,
+                    color: '#9ca3af',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.12)';
+                    e.currentTarget.style.color = '#f3f4f6';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+                    e.currentTarget.style.color = '#9ca3af';
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+              
+              <div style={{
+                maxHeight: '400px',
+                overflowY: 'auto',
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: 12,
+                padding: 16
+              }}>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+                  gap: 8
+                }}>
+                  {Array.from(formData.selectedFiles).map((file, index) => (
+                    <div
+                      key={index}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '10px 14px',
+                        background: 'rgba(255, 255, 255, 0.05)',
+                        borderRadius: 8,
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+                        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                        <span style={{ fontSize: 18, flexShrink: 0 }}>📄</span>
+                        <span style={{
+                          color: '#f8f8f8',
+                          fontSize: 14,
+                          fontFamily: 'monospace',
+                          fontWeight: 500,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap'
+                        }}>
+                          {file.name}
+                        </span>
+                      </div>
+                      <span style={{
+                        color: '#9ca3af',
+                        fontSize: 12,
+                        fontWeight: 500,
+                        padding: '2px 8px',
+                        background: 'rgba(156, 163, 175, 0.2)',
+                        borderRadius: 4,
+                        flexShrink: 0,
+                        marginLeft: 8
+                      }}>
+                        {(file.size / 1024).toFixed(1)} KB
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -712,6 +830,17 @@ export default function NewJobPage() {
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
+        }
+        
+        @keyframes slideDown {
+          0% {
+            opacity: 0;
+            transform: translateY(-10px);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0);
+          }
         }
       `}</style>
     </div>
