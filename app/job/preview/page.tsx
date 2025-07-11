@@ -102,12 +102,12 @@ function TiffViewer({ src, alt, style, onError }: {
         setLoading(true);
         setError(false);
         
-        console.log(`🖼️ Loading TIFF: ${alt} from ${src}`);
+        console.log('🖼️ Loading TIFF:', alt, 'from', src);
 
         // Create proxy URL to avoid CORS issues
         const proxyUrl = `/api/tiff-proxy?url=${encodeURIComponent(src)}`;
-        console.log(`🔗 Original TIFF URL: ${src}`);
-        console.log(`🔗 Using proxy URL: ${proxyUrl}`);
+        console.log('🔗 Original TIFF URL:', src);
+        console.log('🔗 Using proxy URL:', proxyUrl);
         
         // First, try native browser support with proxy to avoid CORS
         const testImg = new Image();
@@ -115,11 +115,11 @@ function TiffViewer({ src, alt, style, onError }: {
         
         const nativeSupport = await new Promise<boolean>((resolve) => {
           testImg.onload = () => {
-            console.log(`✅ Native TIFF support via proxy for: ${alt}`);
+            console.log('✅ Native TIFF support via proxy for:', alt);
             resolve(true);
           };
           testImg.onerror = () => {
-            console.log(`❌ No native TIFF support for: ${alt}, trying UTIF conversion`);
+            console.log('❌ No native TIFF support for:', alt, ', trying UTIF conversion');
             resolve(false);
           };
           testImg.src = proxyUrl;
@@ -135,11 +135,11 @@ function TiffViewer({ src, alt, style, onError }: {
         }
 
         // Fetch TIFF data for conversion using proxy to avoid CORS issues
-        console.log(`📥 Fetching TIFF data for conversion: ${alt}`);
+        console.log('📥 Fetching TIFF data for conversion:', alt);
         
         const response = await fetch(proxyUrl);
         if (!response.ok) {
-          console.error(`❌ TIFF fetch failed for ${alt}:`, {
+          console.error('❌ TIFF fetch failed for', alt, ':', {
             status: response.status,
             statusText: response.statusText,
             url: src,
@@ -149,45 +149,45 @@ function TiffViewer({ src, alt, style, onError }: {
         }
 
         const arrayBuffer = await response.arrayBuffer();
-        console.log(`📊 TIFF data size: ${arrayBuffer.byteLength} bytes for ${alt}`);
+        console.log('📊 TIFF data size:', arrayBuffer.byteLength, 'bytes for', alt);
 
         // Try to decode with UTIF and create a blob URL
         if (typeof window !== 'undefined') {
           try {
             // Use preloaded UTIF or load dynamically with better error handling
-            console.log(`📦 Attempting to load UTIF library for: ${alt}`);
+            console.log('📦 Attempting to load UTIF library for:', alt);
             const UTIF = utifModule || await loadUTIF();
             
             if (!UTIF) {
               throw new Error('UTIF library not available - this might be a bundling issue on Vercel');
             }
             
-            console.log(`🔧 Decoding TIFF with UTIF: ${alt}`);
+            console.log('🔧 Decoding TIFF with UTIF:', alt);
             
             let ifds;
             try {
               ifds = UTIF.decode(arrayBuffer);
             } catch (decodeError) {
-              console.error(`❌ UTIF decode failed for ${alt}:`, decodeError);
+              console.error('❌ UTIF decode failed for', alt, ':', decodeError);
               throw new Error(`TIFF decode failed: ${decodeError.message}`);
             }
             
             if (ifds && ifds.length > 0) {
-              console.log(`📋 Found ${ifds.length} IFD(s) in TIFF: ${alt}`);
+              console.log('📋 Found', ifds.length, 'IFD(s) in TIFF:', alt);
               
               // Decode the first image
               try {
                 UTIF.decodeImage(arrayBuffer, ifds[0]);
               } catch (decodeImageError) {
-                console.error(`❌ UTIF decodeImage failed for ${alt}:`, decodeImageError);
+                console.error('❌ UTIF decodeImage failed for', alt, ':', decodeImageError);
                 throw new Error(`TIFF image decode failed: ${decodeImageError.message}`);
               }
               
               const ifd = ifds[0];
               
               if (ifd.width && ifd.height && ifd.data) {
-                console.log(`🎨 Converting TIFF to canvas: ${ifd.width}x${ifd.height} for ${alt}`);
-                console.log(`📊 TIFF info - Photometric: ${ifd.t262?.[0]}, BitsPerSample: ${ifd.t258}, SamplesPerPixel: ${ifd.t277?.[0]}`);
+                console.log('🎨 Converting TIFF to canvas:', ifd.width + 'x' + ifd.height, 'for', alt);
+                console.log('📊 TIFF info - Photometric:', ifd.t262?.[0], ', BitsPerSample:', ifd.t258, ', SamplesPerPixel:', ifd.t277?.[0]);
                 
                 // Create a temporary canvas to render the image
                 const canvas = document.createElement('canvas');
@@ -204,15 +204,15 @@ function TiffViewer({ src, alt, style, onError }: {
                   const samplesPerPixel = ifd.t277?.[0] || 4;
                   
                   if (photometric === 5 && samplesPerPixel >= 4) {
-                    console.log(`🎨 Converting CMYK to RGB for: ${alt}`);
+                    console.log('🎨 Converting CMYK to RGB for:', alt);
                     // Simple CMYK to RGB conversion
                     processedData = convertCMYKtoRGB(ifd.data, ifd.width * ifd.height);
                   } else if (samplesPerPixel === 3) {
-                    console.log(`🎨 Processing RGB data for: ${alt}`);
+                    console.log('🎨 Processing RGB data for:', alt);
                     // Convert RGB to RGBA
                     processedData = addAlphaChannel(ifd.data, ifd.width * ifd.height);
                   } else if (samplesPerPixel === 1) {
-                    console.log(`🎨 Converting grayscale to RGB for: ${alt}`);
+                    console.log('🎨 Converting grayscale to RGB for:', alt);
                     // Convert grayscale to RGBA
                     processedData = convertGrayscaleToRGBA(ifd.data, ifd.width * ifd.height);
                   }
@@ -229,7 +229,7 @@ function TiffViewer({ src, alt, style, onError }: {
                   canvas.toBlob((blob) => {
                     if (blob) {
                       const url = URL.createObjectURL(blob);
-                      console.log(`✅ TIFF successfully converted to blob URL with color correction: ${alt}`);
+                      console.log('✅ TIFF successfully converted to blob URL with color correction:', alt);
                       setImageUrl(url);
                       setLoading(false);
                     } else {
@@ -241,16 +241,16 @@ function TiffViewer({ src, alt, style, onError }: {
                   throw new Error('Failed to get canvas context');
                 }
               } else {
-                console.warn(`❌ IFD data missing for: ${alt}`);
+                console.warn('❌ IFD data missing for:', alt);
                 console.log('IFD dimensions:', ifd.width, 'x', ifd.height, 'Data length:', ifd.data?.length);
                 throw new Error('IFD data missing');
               }
             } else {
-              console.warn(`❌ No IFDs found in TIFF: ${alt}`);
+              console.warn('❌ No IFDs found in TIFF:', alt);
               throw new Error('No image data found in TIFF');
             }
           } catch (tiffError) {
-            console.error(`❌ UTIF conversion failed for ${alt}:`, tiffError);
+            console.error('❌ UTIF conversion failed for', alt, ':', tiffError);
             throw tiffError;
           }
         } else {
@@ -258,7 +258,7 @@ function TiffViewer({ src, alt, style, onError }: {
         }
         
       } catch (err) {
-        console.error(`❌ Failed to load TIFF ${alt}:`, err);
+        console.error('❌ Failed to load TIFF', alt, ':', err);
         setError(true);
         setLoading(false);
         onError();
@@ -313,7 +313,7 @@ function TiffViewer({ src, alt, style, onError }: {
         transition: 'all 0.2s'
       }}
       onClick={() => {
-        console.log(`🔗 Opening TIFF in new tab: ${src}`);
+        console.log('🔗 Opening TIFF in new tab:', src);
         window.open(src, '_blank');
       }}
       onMouseEnter={(e) => {
@@ -359,7 +359,7 @@ function TiffViewer({ src, alt, style, onError }: {
           display: 'block'
         }}
         onError={() => {
-          console.error(`❌ Converted image failed to display: ${alt}`);
+          console.error('❌ Converted image failed to display:', alt);
           setError(true);
         }}
       />
@@ -439,7 +439,7 @@ function JobPreviewPageContent() {
             // Extract filename from the full path for display
             const filename = filePath.split('/').pop() || filePath;
               
-            console.log(`🔗 Getting presigned URL for: ${filePath}`);
+            console.log('🔗 Getting presigned URL for:', filePath);
               
                 const response = await fetch('/api/s3-proxy', {
                   method: 'POST',
@@ -452,7 +452,7 @@ function JobPreviewPageContent() {
 
                 if (response.ok) {
                   const data = await response.json();
-              console.log(`✅ Got presigned URL for ${filename}: ${data.url}`);
+              console.log('✅ Got presigned URL for', filename, ':', data.url);
               
               return {
                 filename,
@@ -647,7 +647,7 @@ function JobPreviewPageContent() {
                                   display: 'block'
                                 }}
                                 onError={() => {
-                                  console.warn(`Failed to load TIFF: ${asset.filename}`);
+                                  console.warn('Failed to load TIFF:', asset.filename);
                                 }}
                               />
                             ) : (
@@ -662,10 +662,10 @@ function JobPreviewPageContent() {
                                   display: 'block'
                                 }}
                                 onLoad={() => {
-                                  console.log(`✅ Image loaded successfully: ${asset.filename}`);
+                                  console.log('✅ Image loaded successfully:', asset.filename);
                                 }}
                                 onError={(e) => {
-                                  console.error(`❌ Image failed to load: ${asset.filename}`, asset.presignedUrl);
+                                  console.error('❌ Image failed to load:', asset.filename, asset.presignedUrl);
                                   e.currentTarget.style.display = 'none';
                                 }}
                               />
@@ -893,7 +893,7 @@ function JobPreviewPageContent() {
                     objectFit: 'contain'
                   }}
                   onError={() => {
-                    console.warn(`Failed to load expanded TIFF: ${expandedImage.alt}`);
+                    console.warn('Failed to load expanded TIFF:', expandedImage.alt);
                   }}
                 />
               ) : (
@@ -907,7 +907,7 @@ function JobPreviewPageContent() {
                     display: 'block'
                   }}
                   onError={() => {
-                    console.error(`❌ Expanded image failed to load: ${expandedImage.alt}`);
+                    console.error('❌ Expanded image failed to load:', expandedImage.alt);
                   }}
                 />
               )}

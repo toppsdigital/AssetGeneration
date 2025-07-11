@@ -236,7 +236,7 @@ function JobDetailsPageContent() {
         }
       });
 
-      console.log(`📊 Upload status check: ${uploadedFiles}/${totalFiles} uploaded, ${uploadingFilesCount} uploading, ${failedFiles} failed, uploadingFiles.size: ${uploadingFiles.size}, allFilesUploaded: ${allFilesUploaded}`);
+      console.log('📊 Upload status check:', uploadedFiles + '/' + totalFiles, 'uploaded,', uploadingFilesCount, 'uploading,', failedFiles, 'failed, uploadingFiles.size:', uploadingFiles.size, ', allFilesUploaded:', allFilesUploaded);
 
       // Check if all files are uploaded and no files are currently uploading
       // OR if upload process has finished (no uploading files) and we have uploaded at least some files
@@ -259,7 +259,7 @@ function JobDetailsPageContent() {
       
       if ((allUploaded || uploadProcessComplete) && !allFilesUploaded) {
         console.log('✅ Upload process completed! Auto-navigating to jobs list in 1 second...');
-        console.log(`📋 Final status: ${uploadedFiles}/${totalFiles} uploaded, allUploaded: ${allUploaded}, uploadProcessComplete: ${uploadProcessComplete}`);
+        console.log('📋 Final status:', uploadedFiles + '/' + totalFiles, 'uploaded, allUploaded:', allUploaded, ', uploadProcessComplete:', uploadProcessComplete);
         setAllFilesUploaded(true);
         
         // Auto-navigate to jobs list after a short delay
@@ -810,11 +810,11 @@ function JobDetailsPageContent() {
       if (!response.ok) {
         const errorText = await response.text();
         const errorMsg = `Upload failed with status ${response.status}: ${errorText}`;
-        console.error(`❌ ${errorMsg}`);
+        console.error('❌', errorMsg);
         throw new Error(errorMsg);
       }
 
-      console.log(`✅ Proxied upload completed for ${file.name}, status: ${response.status}`);
+      console.log('✅ Proxied upload completed for', file.name, ', status:', response.status);
       onProgress?.(100);
     } catch (error) {
       console.error(`❌ Proxied upload failed for ${file.name}:`, error);
@@ -830,7 +830,7 @@ function JobDetailsPageContent() {
   ): Promise<void> => {
     if (!jobData?.content_pipeline_files) return;
 
-    console.log(`🔄 Updating status for ${pdfFilename} in group ${groupFilename} to ${status}`);
+    console.log('🔄 Updating status for', pdfFilename, 'in group', groupFilename, 'to', status);
 
     const fileGroup = jobData.content_pipeline_files.find(f => f.filename === groupFilename);
     if (!fileGroup) {
@@ -840,7 +840,7 @@ function JobDetailsPageContent() {
 
     const originalFileInfo = fileGroup.original_files?.[pdfFilename];
     if (!originalFileInfo) {
-      console.error(`Original file info for ${pdfFilename} not found in file group ${groupFilename}`);
+      console.error('Original file info for', pdfFilename, 'not found in file group', groupFilename);
       return;
     }
 
@@ -885,9 +885,9 @@ function JobDetailsPageContent() {
           return { ...prev, content_pipeline_files: syncedContentPipelineFiles };
         });
         
-        console.log(`✅ Local state updated with backend response for ${groupFilename}`);
+        console.log('✅ Local state updated with backend response for', groupFilename);
       } else {
-        console.warn(`⚠️ No file data in response for ${groupFilename}, updating local state directly`);
+        console.warn('⚠️ No file data in response for', groupFilename, ', updating local state directly');
         
         // Fallback: update local state directly if no backend response
         const updatedContentPipelineFiles = jobData.content_pipeline_files.map(file =>
@@ -922,8 +922,8 @@ function JobDetailsPageContent() {
           return newSet;
         });
         
-        console.log(`🔄 Uploading ${filename} (attempt ${retryCount + 1}/${maxRetries})`);
-        console.log(`📁 File path: ${fileInfo.file_path}`);
+        console.log('🔄 Uploading', filename, '(attempt', retryCount + 1 + '/' + maxRetries + ')');
+        console.log('📁 File path:', fileInfo.file_path);
         
         // Get pre-signed URL
         const uploadUrl = await getPresignedUrl(fileInfo.file_path);
@@ -962,11 +962,11 @@ function JobDetailsPageContent() {
         setUploadProgress(prev => {
           const newProgress = { ...prev };
           delete newProgress[filename];
-          console.log(`🧹 Cleared upload progress for ${filename}`);
+          console.log('🧹 Cleared upload progress for', filename);
           return newProgress;
         });
         
-        console.log(`✅ Successfully uploaded ${filename}`);
+        console.log('✅ Successfully uploaded', filename);
         return; // Success, exit the retry loop
         
       } catch (error) {
@@ -981,7 +981,7 @@ function JobDetailsPageContent() {
           await wait(1000);
         } else {
           // All retries failed
-          console.error(`All retry attempts failed for ${filename}`);
+          console.error('All retry attempts failed for', filename);
           
           // Mark as failed and sync to backend
           await updateFileStatus(groupFilename, filename, 'upload-failed');
@@ -1037,7 +1037,7 @@ function JobDetailsPageContent() {
     // Process files in batches of 2
     for (let i = 0; i < filesToUpload.length; i += batchSize) {
       const batch = filesToUpload.slice(i, i + batchSize);
-      console.log(`📦 Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(filesToUpload.length / batchSize)}: ${batch.map(b => b.filename).join(', ')}`);
+      console.log('📦 Processing batch', Math.floor(i / batchSize) + 1 + '/' + Math.ceil(filesToUpload.length / batchSize) + ':', batch.map(b => b.filename).join(', '));
       
       // Upload files in current batch in parallel
       const batchPromises = batch.map(async ({ groupFilename, filename, file, fileInfo }) => {
@@ -1058,21 +1058,21 @@ function JobDetailsPageContent() {
         if (result.status === 'fulfilled') {
           if (result.value.success) {
             uploadedCount++;
-            console.log(`✅ Batch upload success: ${result.value.filename}`);
+            console.log('✅ Batch upload success:', result.value.filename);
           } else {
             failedCount++;
-            console.error(`❌ Batch upload failed: ${result.value.filename}`, result.value.error);
+            console.error('❌ Batch upload failed:', result.value.filename, result.value.error);
           }
         } else {
           failedCount++;
           const filename = batch[index]?.filename || 'unknown';
-          console.error(`❌ Batch upload promise rejected: ${filename}`, result.reason);
+          console.error('❌ Batch upload promise rejected:', filename, result.reason);
         }
       });
       
       // Update overall progress after each batch
       const overallProgress = ((uploadedCount + failedCount) / filesToUpload.length) * 100;
-      console.log(`📊 Batch ${Math.floor(i / batchSize) + 1} completed. Overall progress: ${Math.round(overallProgress)}% (${uploadedCount} uploaded, ${failedCount} failed, ${filesToUpload.length - uploadedCount - failedCount} remaining)`);
+      console.log('📊 Batch', Math.floor(i / batchSize) + 1, 'completed. Overall progress:', Math.round(overallProgress) + '%', '(' + uploadedCount, 'uploaded,', failedCount, 'failed,', filesToUpload.length - uploadedCount - failedCount, 'remaining)');
       
       // Small delay between batches to avoid overwhelming the server
       if (i + batchSize < filesToUpload.length) {
@@ -1084,7 +1084,7 @@ function JobDetailsPageContent() {
      if (failedCount === 0) {
        console.log('✅ All files uploaded successfully in parallel batches');
      } else if (uploadedCount > 0) {
-       console.log(`⚠️ Parallel upload completed with ${failedCount} failures out of ${filesToUpload.length} files`);
+       console.log('⚠️ Parallel upload completed with', failedCount, 'failures out of', filesToUpload.length, 'files');
      } else {
        console.log('❌ All file uploads failed');
      }
