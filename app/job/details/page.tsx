@@ -1497,114 +1497,11 @@ function JobDetailsPageContent() {
                     </select>
                   </div>
 
-                  {/* Color Variants and Layers Selection - Side by Side */}
+                                                      {/* Layer and Color Selection */}
                   {selectedPhysicalFile && jsonData && (
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      {/* Color Variants Selection */}
-                      <div style={{ flex: 1 }}>
-                        <label style={{
-                          display: 'block',
-                          fontSize: 16,
-                          fontWeight: 600,
-                          color: '#f8f8f8',
-                          marginBottom: 12
-                        }}>
-                          Select Color Variants
-                        </label>
-                        {(() => {
-                          const spotGroup = jsonData.layers?.find((layer: any) => 
-                            layer.name?.toLowerCase().includes('spot group')
-                          );
-                          
-                          const collectSolidColorLayers = (layer: any): any[] => {
-                            const layers: any[] = [];
-                            if (layer.type === 'solidcolorfill') {
-                              layers.push(layer);
-                            }
-                            if (layer.children) {
-                              layer.children.forEach((child: any) => {
-                                layers.push(...collectSolidColorLayers(child));
-                              });
-                            }
-                            return layers;
-                          };
-                          
-                          const solidColorLayers = spotGroup ? collectSolidColorLayers(spotGroup) : [];
-                          
-                          const toggleLayer = (layerId: string) => {
-                            const newSelected = new Set(selectedLayers);
-                            if (newSelected.has(layerId)) {
-                              newSelected.delete(layerId);
-                            } else {
-                              newSelected.add(layerId);
-                            }
-                            setSelectedLayers(newSelected);
-                          };
-                          
-                          return solidColorLayers.length > 0 ? (
-                            <div style={{
-                              display: 'grid',
-                              gridTemplateColumns: 'repeat(2, 1fr)',
-                              gap: 4,
-                              maxWidth: 300
-                            }}>
-                              {solidColorLayers.map((layer: any, index: number) => {
-                                const layerId = `${layer.id}-${layer.name}`;
-                                const isSelected = selectedLayers.has(layerId);
-                                
-                                return (
-                                  <label key={index} style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 4,
-                                    cursor: 'pointer',
-                                    fontSize: 13,
-                                    color: '#f8f8f8',
-                                    padding: '4px 8px',
-                                    background: 'rgba(255, 255, 255, 0.05)',
-                                    borderRadius: 6,
-                                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                                    transition: 'background-color 0.2s'
-                                  }}
-                                  onMouseEnter={(e) => {
-                                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
-                                  }}
-                                  onMouseLeave={(e) => {
-                                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                                  }}
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      checked={isSelected}
-                                      onChange={() => toggleLayer(layerId)}
-                                      style={{
-                                        width: 14,
-                                        height: 14,
-                                        cursor: 'pointer',
-                                        flexShrink: 0
-                                      }}
-                                    />
-                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                      {layer.name || `Layer ${layer.id || index + 1}`}
-                                    </span>
-                                  </label>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            <div style={{
-                              fontSize: 14,
-                              color: '#9ca3af',
-                              fontStyle: 'italic'
-                            }}>
-                              No color variants available
-                            </div>
-                          );
-                        })()}
-                      </div>
-
-                                            {/* Select Layers from Extracted Files */}
-                      <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+                      {/* Select Layers from Extracted Files */}
+                      <div style={{ maxWidth: 250 }}>
                         <label style={{
                           display: 'block',
                           fontSize: 16,
@@ -1668,8 +1565,8 @@ function JobDetailsPageContent() {
                             <div style={{
                               display: 'flex',
                               flexDirection: 'column',
-                              gap: 4,
-                              maxWidth: 200
+                              gap: 6,
+                              maxWidth: 250
                             }}>
                               {layerNamesArray.map((layerName, index) => {
                                 const isSelected = selectedExtractedLayers.has(layerName);
@@ -1678,11 +1575,11 @@ function JobDetailsPageContent() {
                                   <label key={index} style={{
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: 4,
+                                    gap: 8,
                                     cursor: 'pointer',
                                     fontSize: 13,
                                     color: '#f8f8f8',
-                                    padding: '4px 8px',
+                                    padding: '8px 12px',
                                     background: 'rgba(255, 255, 255, 0.05)',
                                     borderRadius: 6,
                                     border: '1px solid rgba(255, 255, 255, 0.1)',
@@ -1725,124 +1622,265 @@ function JobDetailsPageContent() {
                         })()}
                       </div>
 
-                      {/* Create Assets Button */}
-                      {selectedLayers.size > 0 && selectedExtractedLayers.size > 0 && (
-                        <div style={{ 
-                          display: 'flex', 
-                          flexDirection: 'column', 
-                          justifyContent: 'center', 
-                          alignItems: 'center',
-                          minWidth: 200,
-                          marginLeft: 16
-                        }}>
-                          <button
-                            onClick={async () => {
-                              console.log('🎨 Creating digital assets with selected options:', {
-                                selectedFile: selectedPhysicalFile,
-                                psdFile: jsonData?.psd_file,
-                                selectedLayers: Array.from(selectedLayers),
-                                selectedExtractedLayers: Array.from(selectedExtractedLayers),
-                                totalColors: selectedLayers.size,
-                                totalLayers: selectedExtractedLayers.size
-                              });
-
-                              setCreatingAssets(true);
-
-                              try {
-                                // Map selected color variants to the required format
-                                const colors = Array.from(selectedLayers).map((layerId) => {
-                                  const [id, name] = layerId.split('-'); // Extract actual ID and name from "id-name" format
-                                  return {
-                                    id: parseInt(id, 10), // Use actual layer ID from JSON
-                                    name: name || layerId // Use extracted name or fallback to full layerId
-                                  };
-                                });
-
-                                // Extract PSD filename from the selected physical file
-                                const psdFile = selectedPhysicalFile.split('/').pop()?.replace('.json', '.psd') || '';
-
-                                // Use selected extracted layers instead of hardcoded layers
-                                const layers = Array.from(selectedExtractedLayers);
-
-                                const payload = {
-                                  colors,
-                                  layers,
-                                  psd_file: psdFile
-                                };
-
-                                console.log('📋 API Payload:', payload);
-
-                                // Make the API call
-                                const response = await contentPipelineApi.generateAssets(jobData!.job_id!, payload);
-                                
-                                console.log('✅ Assets creation response:', response);
-                                
-                                // Navigate back to jobs list after successful creation
-                                router.push('/jobs');
-                                
-                              } catch (error) {
-                                console.error('❌ Error creating assets:', error);
-                                alert(`Failed to create assets: ${error instanceof Error ? error.message : 'Unknown error'}`);
-                                setCreatingAssets(false);
-                              }
-                            }}
-                            disabled={creatingAssets}
-                            style={{
-                              padding: '16px 32px',
-                              background: creatingAssets 
-                                ? 'rgba(156, 163, 175, 0.5)' 
-                                : 'linear-gradient(135deg, #10b981, #059669)',
-                              border: 'none',
-                              borderRadius: 12,
-                              color: 'white',
+                      {/* Color Variants Selection - Only show if spot layer is selected */}
+                      {(() => {
+                        // Check if any selected layer contains "spot" (case-insensitive)
+                        const hasSpotLayer = Array.from(selectedExtractedLayers).some(layerName => 
+                          layerName.toLowerCase().includes('spot')
+                        );
+                        
+                        if (!hasSpotLayer) {
+                          return null;
+                        }
+                        
+                        return (
+                          <div style={{ maxWidth: 200 }}>
+                            <label style={{
+                              display: 'block',
                               fontSize: 16,
                               fontWeight: 600,
-                              cursor: creatingAssets ? 'not-allowed' : 'pointer',
-                              transition: 'all 0.2s',
-                              boxShadow: creatingAssets 
-                                ? 'none' 
-                                : '0 8px 24px rgba(16, 185, 129, 0.3)',
-                              minHeight: 60
-                            }}
-                            onMouseEnter={(e) => {
-                              if (!creatingAssets) {
-                                e.currentTarget.style.transform = 'scale(1.05)';
-                                e.currentTarget.style.boxShadow = '0 12px 32px rgba(16, 185, 129, 0.4)';
-                              }
-                            }}
-                            onMouseLeave={(e) => {
-                              if (!creatingAssets) {
-                                e.currentTarget.style.transform = 'scale(1)';
-                                e.currentTarget.style.boxShadow = '0 8px 24px rgba(16, 185, 129, 0.3)';
-                              }
-                            }}
-                          >
-                            {creatingAssets ? (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              color: '#f8f8f8',
+                              marginBottom: 12
+                            }}>
+                              Select Color Variants
+                            </label>
+                            {(() => {
+                              const spotGroup = jsonData.layers?.find((layer: any) => 
+                                layer.name?.toLowerCase().includes('spot group')
+                              );
+                              
+                              const collectSolidColorLayers = (layer: any): any[] => {
+                                const layers: any[] = [];
+                                if (layer.type === 'solidcolorfill') {
+                                  layers.push(layer);
+                                }
+                                if (layer.children) {
+                                  layer.children.forEach((child: any) => {
+                                    layers.push(...collectSolidColorLayers(child));
+                                  });
+                                }
+                                return layers;
+                              };
+                              
+                              const solidColorLayers = spotGroup ? collectSolidColorLayers(spotGroup) : [];
+                              
+                              const toggleLayer = (layerId: string) => {
+                                const newSelected = new Set(selectedLayers);
+                                if (newSelected.has(layerId)) {
+                                  newSelected.delete(layerId);
+                                } else {
+                                  newSelected.add(layerId);
+                                }
+                                setSelectedLayers(newSelected);
+                              };
+                              
+                              return solidColorLayers.length > 0 ? (
                                 <div style={{
-                                  width: 16,
-                                  height: 16,
-                                  border: '2px solid rgba(255, 255, 255, 0.3)',
-                                  borderTop: '2px solid white',
-                                  borderRadius: '50%',
-                                  animation: 'spin 1s linear infinite'
-                                }} />
-                                Creating...
-                              </div>
-                            ) : (
-                              '🎨 Create Assets'
-                            )}
-                          </button>
-                          <div style={{
-                            fontSize: 12,
-                            color: '#9ca3af',
-                            marginTop: 8,
-                            textAlign: 'center'
-                          }}>
-                            {selectedLayers.size} colors • {selectedExtractedLayers.size} layers
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: 6,
+                                  maxWidth: 200
+                                }}>
+                                  {solidColorLayers.map((layer: any, index: number) => {
+                                    const layerId = `${layer.id}-${layer.name}`;
+                                    const isSelected = selectedLayers.has(layerId);
+                                    
+                                    return (
+                                      <label key={index} style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 8,
+                                        cursor: 'pointer',
+                                        fontSize: 13,
+                                        color: '#f8f8f8',
+                                        padding: '8px 12px',
+                                        background: 'rgba(255, 255, 255, 0.05)',
+                                        borderRadius: 6,
+                                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                                        transition: 'background-color 0.2s'
+                                      }}
+                                      onMouseEnter={(e) => {
+                                        e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                                      }}
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          checked={isSelected}
+                                          onChange={() => toggleLayer(layerId)}
+                                          style={{
+                                            width: 14,
+                                            height: 14,
+                                            cursor: 'pointer',
+                                            flexShrink: 0
+                                          }}
+                                        />
+                                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                          {layer.name || `Layer ${layer.id || index + 1}`}
+                                        </span>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <div style={{
+                                  fontSize: 14,
+                                  color: '#9ca3af',
+                                  fontStyle: 'italic'
+                                }}>
+                                  No color variants available
+                                </div>
+                              );
+                            })()}
                           </div>
-                        </div>
-                      )}
+                        );
+                      })()}
+
+                      {/* Create Assets Button */}
+                      {(() => {
+                        // Check if any selected layer contains "spot" (case-insensitive)
+                        const hasSpotLayer = Array.from(selectedExtractedLayers).some(layerName => 
+                          layerName.toLowerCase().includes('spot')
+                        );
+                        
+                        // For spot layers, require both layers and colors
+                        // For non-spot layers, only require layers
+                        const canCreateAssets = selectedExtractedLayers.size > 0 && (
+                          !hasSpotLayer || (hasSpotLayer && selectedLayers.size > 0)
+                        );
+                        
+                        return (
+                          <div style={{ 
+                            display: 'flex', 
+                            flexDirection: 'column', 
+                            alignItems: 'flex-start',
+                            justifyContent: 'flex-start',
+                            marginTop: 32
+                          }}>
+                            <button
+                              onClick={async () => {
+                                if (!canCreateAssets) return;
+
+                                console.log('🎨 Creating digital assets with selected options:', {
+                                  selectedFile: selectedPhysicalFile,
+                                  psdFile: jsonData?.psd_file,
+                                  selectedLayers: Array.from(selectedLayers),
+                                  selectedExtractedLayers: Array.from(selectedExtractedLayers),
+                                  totalColors: selectedLayers.size,
+                                  totalLayers: selectedExtractedLayers.size,
+                                  hasSpotLayer
+                                });
+
+                                setCreatingAssets(true);
+
+                                try {
+                                  // Extract PSD filename from the selected physical file
+                                  const psdFile = selectedPhysicalFile.split('/').pop()?.replace('.json', '.psd') || '';
+
+                                  // Use selected extracted layers instead of hardcoded layers
+                                  const layers = Array.from(selectedExtractedLayers);
+
+                                  // Build payload - always include colors array (empty if no spot layers)
+                                  const colors = hasSpotLayer 
+                                    ? Array.from(selectedLayers).map((layerId) => {
+                                        const [id, name] = layerId.split('-'); // Extract actual ID and name from "id-name" format
+                                        return {
+                                          id: parseInt(id, 10), // Use actual layer ID from JSON
+                                          name: name || layerId // Use extracted name or fallback to full layerId
+                                        };
+                                      })
+                                    : [];
+
+                                  const payload = {
+                                    colors,
+                                    layers,
+                                    psd_file: psdFile
+                                  };
+
+                                  console.log('📋 API Payload:', payload);
+
+                                  // Make the API call
+                                  const response = await contentPipelineApi.generateAssets(jobData!.job_id!, payload);
+                                  
+                                  console.log('✅ Assets creation response:', response);
+                                  
+                                  // Navigate back to jobs list after successful creation
+                                  router.push('/jobs');
+                                  
+                                } catch (error) {
+                                  console.error('❌ Error creating assets:', error);
+                                  alert(`Failed to create assets: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                                  setCreatingAssets(false);
+                                }
+                              }}
+                              disabled={creatingAssets || !canCreateAssets}
+                              style={{
+                                padding: '16px 32px',
+                                background: creatingAssets 
+                                  ? 'rgba(156, 163, 175, 0.5)' 
+                                  : !canCreateAssets
+                                  ? 'rgba(156, 163, 175, 0.3)'
+                                  : 'linear-gradient(135deg, #10b981, #059669)',
+                                border: 'none',
+                                borderRadius: 12,
+                                color: 'white',
+                                fontSize: 16,
+                                fontWeight: 600,
+                                cursor: creatingAssets || !canCreateAssets ? 'not-allowed' : 'pointer',
+                                transition: 'all 0.2s',
+                                boxShadow: creatingAssets || !canCreateAssets
+                                  ? 'none' 
+                                  : '0 8px 24px rgba(16, 185, 129, 0.3)',
+                                minHeight: 60,
+                                opacity: !canCreateAssets ? 0.6 : 1
+                              }}
+                              onMouseEnter={(e) => {
+                                if (!creatingAssets && canCreateAssets) {
+                                  e.currentTarget.style.transform = 'scale(1.05)';
+                                  e.currentTarget.style.boxShadow = '0 12px 32px rgba(16, 185, 129, 0.4)';
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (!creatingAssets && canCreateAssets) {
+                                  e.currentTarget.style.transform = 'scale(1)';
+                                  e.currentTarget.style.boxShadow = '0 8px 24px rgba(16, 185, 129, 0.3)';
+                                }
+                              }}
+                            >
+                              {creatingAssets ? (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <div style={{
+                                    width: 16,
+                                    height: 16,
+                                    border: '2px solid rgba(255, 255, 255, 0.3)',
+                                    borderTop: '2px solid white',
+                                    borderRadius: '50%',
+                                    animation: 'spin 1s linear infinite'
+                                  }} />
+                                  Creating...
+                                </div>
+                              ) : (
+                                '🎨 Create Assets'
+                              )}
+                            </button>
+                            <div style={{
+                              fontSize: 12,
+                              color: '#9ca3af',
+                              marginTop: 8
+                            }}>
+                              {!canCreateAssets ? (
+                                hasSpotLayer ? 
+                                  `Select ${selectedLayers.size} colors and ${selectedExtractedLayers.size} layers` :
+                                  `Select ${selectedExtractedLayers.size} layers`
+                              ) : (
+                                `${hasSpotLayer ? `${selectedLayers.size} colors • ` : ''}${selectedExtractedLayers.size} layers`
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
 

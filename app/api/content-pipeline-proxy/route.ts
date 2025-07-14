@@ -256,9 +256,10 @@ async function handleRequest(request: NextRequest, method: string) {
         if (!id) {
           return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
         }
-        if (!body.colors || !body.layers || !body.psd_file) {
-          return NextResponse.json({ error: 'colors, layers, and psd_file are required' }, { status: 400 });
+        if (!body.layers || !body.psd_file) {
+          return NextResponse.json({ error: 'layers and psd_file are required' }, { status: 400 });
         }
+        // colors is optional - only required for spot layers
         apiUrl += `/jobs/${id}/generate-assets`;
         apiMethod = 'POST';
         break;
