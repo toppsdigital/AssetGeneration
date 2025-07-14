@@ -5,7 +5,7 @@ const S3_SERVICE_URL = 'https://devops-dev.services.toppsapps.com/s3/presigned-u
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    console.log('--- S3 Proxy: Incoming request ---');
+  console.log('--- S3 Proxy: Incoming request ---');
     console.log('Method:', request.method);
     console.log('Body:', JSON.stringify(body, null, 2));
     
@@ -13,85 +13,145 @@ export async function POST(request: NextRequest) {
 
 
 
-    if (client_method === 'put') {
+  if (client_method === 'put') {
       const { filename, upload, expires_in = 720 } = body;
-      console.log('S3 Proxy: PUT - filename:', filename, 'upload:', upload, 'expires_in:', expires_in);
-      const backendEndpoint = 'https://devops-dev.services.toppsapps.com/s3/presigned-url';
-      const putRes = await fetch(backendEndpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          client_method: 'put',
-          filename,
-          expires_in,
-        }),
-      });
-      console.log('S3 Proxy: PUT - Backend response status:', putRes.status);
-      if (!putRes.ok) {
-        const errorData = await putRes.json().catch(() => ({}));
-        console.error('S3 Proxy: PUT - Backend error:', errorData);
+    console.log('S3 Proxy: PUT - filename:', filename, 'upload:', upload, 'expires_in:', expires_in);
+    const backendEndpoint = 'https://devops-dev.services.toppsapps.com/s3/presigned-url';
+    const putRes = await fetch(backendEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_method: 'put',
+        filename,
+        expires_in,
+      }),
+    });
+    console.log('S3 Proxy: PUT - Backend response status:', putRes.status);
+    if (!putRes.ok) {
+      const errorData = await putRes.json().catch(() => ({}));
+      console.error('S3 Proxy: PUT - Backend error:', errorData);
         return NextResponse.json({ 
           error: 'Failed to get presigned S3 PUT URL', 
           details: errorData 
         }, { status: 500 });
-      }
-      const { url } = await putRes.json();
-      
-      // If upload=true, we'll handle the upload via FormData in a separate endpoint
-      if (upload) {
+    }
+    const { url } = await putRes.json();
+    
+    // If upload=true, we'll handle the upload via FormData in a separate endpoint
+    if (upload) {
         return NextResponse.json({ 
           uploadUrl: '/api/s3-upload', 
           presignedUrl: url 
         }, { status: 200 });
-      }
-      
-      return NextResponse.json({ url }, { status: 200 });
     }
+    
+      return NextResponse.json({ url }, { status: 200 });
+  }
 
-    if (client_method === 'get') {
-      const { filename, key, download } = body;
-      console.log('S3 Proxy: GET - filename:', filename, 'key:', key, 'download:', download);
-      if (!filename && !key) {
+  if (client_method === 'get') {
+      const { filename, key, download, direct_url } = body;
+    console.log('S3 Proxy: GET - filename:', filename, 'key:', key, 'download:', download, 'direct_url:', direct_url);
+    if (!filename && !key) {
         return NextResponse.json({ 
           error: 'Missing filename or key for GET request' 
         }, { status: 400 });
+    }
+    
+    // If download=true, fetch the content and return it directly (to avoid CORS)
+    if (download) {
+      let fetchUrl;
+      
+      // Check if this is a direct URL (full HTTP URL) or needs presigned URL
+      if (direct_url) {
+        // For direct URLs, use the URL as-is
+        fetchUrl = filename || key;
+        console.log('S3 Proxy: Downloading content from direct URL to avoid CORS...');
+        console.log('S3 Proxy: Using direct URL:', fetchUrl);
+      } else {
+        // For S3 paths, get presigned URL first
+        console.log('S3 Proxy: Getting presigned URL for S3 path...');
+        const backendEndpoint = 'https://devops-dev.services.toppsapps.com/s3/presigned-url';
+        const getRes = await fetch(backendEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            client_method: 'get',
+            filename: filename || key,
+            key: key || filename,
+            expires_in: 720,
+          }),
+        });
+        console.log('S3 Proxy: GET - Backend response status:', getRes.status);
+        if (!getRes.ok) {
+            const errorText = await getRes.text().catch(() => 'Unknown error');
+            console.error('S3 Proxy: GET - Backend error response:', errorText);
+            return NextResponse.json({ 
+              error: 'Failed to get presigned S3 GET URL',
+              details: errorText 
+            }, { status: 500 });
+        }
+        const backendData = await getRes.json();
+        console.log('S3 Proxy: GET - Backend response data:', backendData);
+        fetchUrl = backendData.url;
+        console.log('S3 Proxy: Downloading content from S3 to avoid CORS...');
+        console.log('S3 Proxy: Using presigned URL:', fetchUrl);
       }
       
-      // Try both filename and key for compatibility
-      const backendEndpoint = 'https://devops-dev.services.toppsapps.com/s3/presigned-url';
-      const getRes = await fetch(backendEndpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          client_method: 'get',
-          filename: filename || key,
-          key: key || filename,
-          expires_in: 720,
-        }),
-      });
-      console.log('S3 Proxy: GET - Backend response status:', getRes.status);
-      if (!getRes.ok) {
+      // Fetch the content
+      const contentResponse = await fetch(fetchUrl);
+      console.log('S3 Proxy: Content response status:', contentResponse.status);
+      console.log('S3 Proxy: Content response headers:', Object.fromEntries(contentResponse.headers.entries()));
+      
+      if (!contentResponse.ok) {
+          const errorText = await contentResponse.text().catch(() => 'Unknown error');
+          console.error('S3 Proxy: Content error response:', errorText);
+          return NextResponse.json({ 
+            error: 'Failed to download file',
+            status: contentResponse.status,
+            details: errorText
+          }, { status: 500 });
+      }
+      
+      try {
+        const content = await contentResponse.json();
+        console.log('S3 Proxy: Successfully downloaded and parsed JSON content');
+        return NextResponse.json(content, { status: 200 });
+      } catch (parseError) {
+        console.error('S3 Proxy: Failed to parse JSON content:', parseError);
         return NextResponse.json({ 
-          error: 'Failed to get presigned S3 GET URL' 
+          error: 'Failed to parse JSON content',
+          details: parseError.message 
         }, { status: 500 });
       }
-      const { url } = await getRes.json();
-      
-      // If download=true, fetch the content and return it directly (to avoid CORS)
-      if (download) {
-        console.log('S3 Proxy: Downloading content from S3 to avoid CORS...');
-        const s3Response = await fetch(url);
-        if (!s3Response.ok) {
-          return NextResponse.json({ 
-            error: 'Failed to download file from S3' 
-          }, { status: 500 });
-        }
-        const content = await s3Response.json();
-        return NextResponse.json(content, { status: 200 });
-      }
-      
-      return NextResponse.json({ url }, { status: 200 });
     }
+    
+    // For non-download requests, get presigned URL
+    const backendEndpoint = 'https://devops-dev.services.toppsapps.com/s3/presigned-url';
+    const getRes = await fetch(backendEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_method: 'get',
+        filename: filename || key,
+        key: key || filename,
+        expires_in: 720,
+      }),
+    });
+    console.log('S3 Proxy: GET - Backend response status:', getRes.status);
+    if (!getRes.ok) {
+        const errorText = await getRes.text().catch(() => 'Unknown error');
+        console.error('S3 Proxy: GET - Backend error response:', errorText);
+        return NextResponse.json({ 
+          error: 'Failed to get presigned S3 GET URL',
+          details: errorText 
+        }, { status: 500 });
+    }
+    const backendData = await getRes.json();
+    console.log('S3 Proxy: GET - Backend response data:', backendData);
+    const { url } = backendData;
+    
+      return NextResponse.json({ url }, { status: 200 });
+  }
 
     if (client_method === 'fetch_public_files') {
       const { public_url, file_type = 'pdf' } = body;
@@ -101,9 +161,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ 
           error: 'Missing public_url for fetch_public_files request' 
         }, { status: 400 });
-      }
-      
-      try {
+  }
+
+  try {
         console.log('S3 Proxy: Fetching file objects from public URL...');
         const response = await fetch(public_url);
         

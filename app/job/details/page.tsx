@@ -344,26 +344,45 @@ function JobDetailsPageContent() {
       }
       
       console.log('🔗 Using JSON URL:', selectedFileData.json_url);
+      console.log('📋 Available physical files:', physicalJsonFiles.map(f => ({ name: f.name, json_url: f.json_url })));
       
-      // Use S3 proxy to fetch the JSON content directly
+      const jsonUrl = selectedFileData.json_url;
+      
+      // Always use S3 proxy to avoid CORS issues, but handle both file paths and full URLs
+      const requestBody = { 
+        client_method: 'get',
+        filename: jsonUrl,
+        download: true,  // This tells the proxy to fetch and return the content directly
+        direct_url: jsonUrl.startsWith('http://') || jsonUrl.startsWith('https://') // Flag for proxy to know it's a direct URL
+      };
+      
+      console.log('📤 S3 proxy request body:', requestBody);
+      
       const response = await fetch('/api/s3-proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          client_method: 'get',
-          filename: selectedFileData.json_url,
-          download: true  // This tells the proxy to fetch and return the content directly
-        }),
+        body: JSON.stringify(requestBody),
       });
       
+      console.log('📥 S3 proxy response status:', response.status);
+      console.log('📥 S3 proxy response headers:', Object.fromEntries(response.headers.entries()));
+      
       if (!response.ok) {
-        throw new Error(`Failed to download JSON via proxy: ${response.status}`);
+        // Try to get more details about the error
+        let errorDetails = `Status: ${response.status}`;
+        try {
+          const errorBody = await response.text();
+          console.log('❌ S3 proxy error response body:', errorBody);
+          errorDetails += ` - ${errorBody}`;
+        } catch (e) {
+          console.log('❌ Could not read error response body:', e);
+        }
+        throw new Error(`Failed to download JSON via proxy: ${errorDetails}`);
       }
       
       const jsonData = await response.json();
-      console.log('📋 JSON data loaded successfully');
+      console.log('📋 JSON data loaded successfully via proxy, keys:', Object.keys(jsonData || {}));
       
-      // The S3 proxy with download=true returns the JSON content directly
       if (jsonData && typeof jsonData === 'object') {
         setJsonData(jsonData);
       } else {
