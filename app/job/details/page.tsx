@@ -208,14 +208,14 @@ function JobDetailsPageContent() {
 
   // (Reset logic moved to dedicated useEffect above)
 
-  // Monitor upload completion - runs every 1 second to check status
+  // Monitor upload completion - simplified and reliable
   useEffect(() => {
-    if (!jobData?.content_pipeline_files) {
+    if (!jobData?.content_pipeline_files || allFilesUploaded) {
       return;
     }
 
     const checkUploadStatus = () => {
-      // Check if all files have been uploaded
+      // Count all files and their statuses
       let totalFiles = 0;
       let uploadedFiles = 0;
       let uploadingFilesCount = 0;
@@ -236,44 +236,43 @@ function JobDetailsPageContent() {
         }
       });
 
-      console.log('📊 Upload status check:', uploadedFiles + '/' + totalFiles, 'uploaded,', uploadingFilesCount, 'uploading,', failedFiles, 'failed, uploadingFiles.size:', uploadingFiles.size, ', allFilesUploaded:', allFilesUploaded);
+      console.log('📊 Upload status check:', uploadedFiles + '/' + totalFiles, 'uploaded,', uploadingFilesCount, 'uploading,', failedFiles, 'failed, activeUploads:', uploadingFiles.size);
 
-      // Check if all files are uploaded and no files are currently uploading
-      // OR if upload process has finished (no uploading files) and we have uploaded at least some files
-      const allUploaded = totalFiles > 0 && uploadedFiles === totalFiles && uploadingFiles.size === 0;
-      const uploadProcessComplete = totalFiles > 0 && uploadingFiles.size === 0 && uploadingFilesCount === 0 && uploadedFiles > 0;
+      // Simple completion logic: all files uploaded AND no active uploads
+      const allFilesProcessed = totalFiles > 0 && (uploadedFiles + failedFiles) === totalFiles;
+      const noActiveUploads = uploadingFiles.size === 0;
+      const isComplete = allFilesProcessed && noActiveUploads && uploadedFiles > 0;
       
-      // Enhanced debugging for auto-navigate conditions
-      console.log(`🔍 Auto-navigate conditions:`, {
+      console.log(`🔍 Completion check:`, {
         totalFiles,
         uploadedFiles,
+        failedFiles,
         uploadingFilesCount,
-        uploadingFilesSize: uploadingFiles.size,
-        allFilesUploaded,
-        allUploaded,
-        uploadProcessComplete,
-        condition1: allUploaded && !allFilesUploaded,
-        condition2: uploadProcessComplete && !allFilesUploaded,
-        willTrigger: (allUploaded || uploadProcessComplete) && !allFilesUploaded
+        activeUploads: uploadingFiles.size,
+        allFilesProcessed,
+        noActiveUploads,
+        isComplete,
+        willNavigate: isComplete && !allFilesUploaded
       });
       
-      if ((allUploaded || uploadProcessComplete) && !allFilesUploaded) {
-        console.log('✅ Upload process completed! Auto-navigating to jobs list in 1 second...');
-        console.log('📋 Final status:', uploadedFiles + '/' + totalFiles, 'uploaded, allUploaded:', allUploaded, ', uploadProcessComplete:', uploadProcessComplete);
+      // Navigate when upload is truly complete
+      if (isComplete && !allFilesUploaded) {
+        console.log('✅ Upload completed! Navigating to jobs list...');
+        console.log('📋 Final status:', uploadedFiles + '/' + totalFiles, 'uploaded,', failedFiles, 'failed');
         setAllFilesUploaded(true);
         
-        // Auto-navigate to jobs list after a short delay
+        // Navigate immediately
         setTimeout(() => {
-          console.log('🚀 Auto-navigating to jobs list now...');
+          console.log('🚀 Navigating to jobs list now...');
           router.push('/jobs');
-        }, 1000); // 1 second delay to let user see the final upload status
+        }, 1000); // 1 second delay to see final status
       }
     };
 
     // Check immediately
     checkUploadStatus();
 
-    // Set up interval to check every 500ms (faster checking)
+    // Set up interval to check every 500ms for responsiveness
     const interval = setInterval(checkUploadStatus, 500);
 
     // Cleanup interval on unmount
@@ -933,19 +932,19 @@ function JobDetailsPageContent() {
     return new Promise(resolve => setTimeout(resolve, ms));
   };
 
-  // Upload a single file with retry logic
+  // Upload a single file with retry logic and improved tracking
   const uploadSingleFile = async (groupFilename: string, filename: string, file: File, fileInfo: any, maxRetries: number = 3): Promise<void> => {
     let retryCount = 0;
     
+    // Track this file as actively uploading (for UI progress)
+    setUploadingFiles(prev => {
+      const newSet = new Set(prev).add(filename);
+      console.log(`📤 Added ${filename} to uploadingFiles set. Current files:`, Array.from(newSet));
+      return newSet;
+    });
+    
     while (retryCount < maxRetries) {
       try {
-        // Track this file as actively uploading (for UI progress)
-        setUploadingFiles(prev => {
-          const newSet = new Set(prev).add(filename);
-          console.log(`📤 Added ${filename} to uploadingFiles set. Current files:`, Array.from(newSet));
-          return newSet;
-        });
-        
         console.log('🔄 Uploading', filename, '(attempt', retryCount + 1 + '/' + maxRetries + ')');
         console.log('📁 File path:', fileInfo.file_path);
         
@@ -963,25 +962,6 @@ function JobDetailsPageContent() {
         // Mark as uploaded in local state and sync to backend
         await updateFileStatus(groupFilename, filename, 'uploaded');
 
-        setUploadingFiles(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(filename);
-          console.log(`🗑️ Removed ${filename} from uploadingFiles set. Remaining files:`, Array.from(newSet));
-          console.log(`📊 Upload completion check: ${filename} finished, ${newSet.size} files still uploading`);
-          
-          // Trigger immediate check if this was the last file
-          if (newSet.size === 0) {
-            console.log('🚀 Last file finished uploading, scheduling immediate auto-navigate check...');
-            // Schedule immediate check after state updates propagate
-            setTimeout(() => {
-              console.log('🔍 Immediate auto-navigate check triggered by last file completion');
-              // The regular interval will handle the actual navigation
-            }, 100);
-          }
-          
-          return newSet;
-        });
-        
         // Clear upload progress for this file
         setUploadProgress(prev => {
           const newProgress = { ...prev };
@@ -991,6 +971,16 @@ function JobDetailsPageContent() {
         });
         
         console.log('✅ Successfully uploaded', filename);
+        
+        // Remove from uploading set immediately upon successful upload
+        setUploadingFiles(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(filename);
+          console.log(`🗑️ Removed ${filename} from uploadingFiles set. Remaining files:`, Array.from(newSet));
+          console.log(`📊 Upload completion check: ${filename} finished, ${newSet.size} files still uploading`);
+          return newSet;
+        });
+        
         return; // Success, exit the retry loop
         
       } catch (error) {
@@ -998,17 +988,19 @@ function JobDetailsPageContent() {
         console.error(`Failed to upload ${filename} (attempt ${retryCount}/${maxRetries}):`, error);
         
         if (retryCount < maxRetries) {
-          console.log(`Retrying upload of ${filename} in 1 second...`);
+          console.log(`Retrying upload of ${filename} in 1.5 seconds...`);
           // Update status to show retry (and sync to backend)
           await updateFileStatus(groupFilename, filename, 'uploading');
-          // Wait 1 second before retry
-          await wait(1000);
+          // Wait 1.5 seconds before retry (increased for better stability)
+          await wait(1500);
         } else {
           // All retries failed
           console.error('All retry attempts failed for', filename);
           
           // Mark as failed and sync to backend
           await updateFileStatus(groupFilename, filename, 'upload-failed');
+          
+          // Remove from uploading set on final failure
           setUploadingFiles(prev => {
             const newSet = new Set(prev);
             newSet.delete(filename);
@@ -1016,20 +1008,21 @@ function JobDetailsPageContent() {
             console.log(`📊 Upload completion check: ${filename} failed, ${newSet.size} files still uploading`);
             return newSet;
           });
+          
           throw error; // Re-throw to let the caller handle the final failure
         }
       }
     }
   };
 
-  // Start the upload process for all files (parallel batches of 2)
+  // Start the upload process for all files (parallel batches of 4)
   const startUploadProcess = async (files: File[]): Promise<void> => {
     if (!jobData?.content_pipeline_files) {
       console.log('startUploadProcess: No content_pipeline_files found');
       return;
     }
     
-    console.log('🚀 Starting parallel upload process (2 files at a time) for files:', files.map(f => f.name));
+    console.log('🚀 Starting parallel upload process (4 files at a time) for files:', files.map(f => f.name));
     console.log('Job data for upload:', { job_id: jobData.job_id, content_pipeline_files_count: jobData.content_pipeline_files.length });
     
     // Create a mapping of file names to File objects
@@ -1056,9 +1049,9 @@ function JobDetailsPageContent() {
     
     let uploadedCount = 0;
     let failedCount = 0;
-    const batchSize = 2; // Upload 2 files at a time
+    const batchSize = 4; // Upload 4 files at a time
     
-    // Process files in batches of 2
+    // Process files in batches of 4
     for (let i = 0; i < filesToUpload.length; i += batchSize) {
       const batch = filesToUpload.slice(i, i + batchSize);
       console.log('📦 Processing batch', Math.floor(i / batchSize) + 1 + '/' + Math.ceil(filesToUpload.length / batchSize) + ':', batch.map(b => b.filename).join(', '));
@@ -1067,10 +1060,10 @@ function JobDetailsPageContent() {
       const batchPromises = batch.map(async ({ groupFilename, filename, file, fileInfo }) => {
         try {
           await uploadSingleFile(groupFilename, filename, file, fileInfo);
-          return { success: true, filename };
+          return { success: true, filename, groupFilename };
         } catch (error) {
           console.error(`Failed to upload ${filename} after all retries:`, error);
-          return { success: false, filename, error };
+          return { success: false, filename, groupFilename, error };
         }
       });
       
@@ -1100,13 +1093,13 @@ function JobDetailsPageContent() {
       
       // Small delay between batches to avoid overwhelming the server
       if (i + batchSize < filesToUpload.length) {
-        await wait(500); // 500ms delay between batches
+        await wait(300); // 300ms delay between batches
       }
     }
     
      // Log final results
      if (failedCount === 0) {
-       console.log('✅ All files uploaded successfully in parallel batches');
+       console.log('✅ All files uploaded successfully in parallel batches (4 at a time)');
      } else if (uploadedCount > 0) {
        console.log('⚠️ Parallel upload completed with', failedCount, 'failures out of', filesToUpload.length, 'files');
      } else {
