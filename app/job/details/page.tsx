@@ -59,7 +59,7 @@ function JobDetailsPageContent() {
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
   const [uploadingFiles, setUploadingFiles] = useState<Set<string>>(new Set());
   const [uploadStarted, setUploadStarted] = useState(false);
-  const [physicalJsonFiles, setPhysicalJsonFiles] = useState<Array<{name: string; lastModified: string | null}>>([]);
+  const [physicalJsonFiles, setPhysicalJsonFiles] = useState<Array<{name: string; lastModified: string | null; json_url?: string}>>([]);
   const [loadingPhysicalFiles, setLoadingPhysicalFiles] = useState(false);
   const [selectedPhysicalFile, setSelectedPhysicalFile] = useState<string>('');
   const [jsonData, setJsonData] = useState<any>(null);
@@ -291,13 +291,15 @@ function JobDetailsPageContent() {
   const fetchPhysicalJsonFiles = async () => {
     try {
       setLoadingPhysicalFiles(true);
-      console.log('🔍 Fetching physical JSON files from S3...');
+      console.log('🔍 Fetching physical JSON files from public endpoint...');
       
       const response = await fetch('/api/s3-proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          client_method: 'list'
+          client_method: 'fetch_public_files',
+          public_url: 'https://topps-nexus-powertools.s3.us-east-1.amazonaws.com/asset_generator/dev/public/digital_to_physical_psd_files.json',
+          file_type: 'psd'
         }),
       });
 
@@ -306,14 +308,17 @@ function JobDetailsPageContent() {
       }
 
       const data = await response.json();
-      console.log('📁 All files:', data.files);
+      console.log('📁 Physical PSD files response:', data);
       
-      // Filter files that contain "physical" in the name and are JSON files
-      const physicalFiles = data.files.filter((file: {name: string; lastModified: string | null}) => 
-        file.name.toLowerCase().includes('physical') && file.name.toLowerCase().endsWith('.json')
-      );
+      // The new API returns files in the format:
+      // { files: [{ file_name: "...", display_name: "...", json_url: "..." }], total_count: ... }
+      const physicalFiles = (data.files || []).map((file: any) => ({
+        name: file.file_name || file.name || '',
+        lastModified: null, // Not available in the new format
+        json_url: file.json_url // Store the json_url for later use
+      }));
       
-      console.log('🎯 Filtered physical JSON files:', physicalFiles);
+      console.log('🎯 Formatted physical JSON files:', physicalFiles);
       setPhysicalJsonFiles(physicalFiles);
       
     } catch (error) {
@@ -323,28 +328,30 @@ function JobDetailsPageContent() {
     }
   };
 
-  // Function to construct S3 URL for JSON file
-  const constructJsonUrl = (filename: string): string => {
-    const baseUrl = 'https://topps-nexus-powertools.s3.us-east-1.amazonaws.com/asset_generator/dev/public/';
-    const filenameWithoutExtension = filename.replace('.json', '');
-    return `${baseUrl}${filenameWithoutExtension}/${filename}`;
-  };
-
   // Function to download and parse JSON file via S3 proxy (to avoid CORS)
-  const downloadJsonFile = async (filename: string) => {
+  const downloadJsonFile = async (selectedFile: string) => {
     try {
       setLoadingJsonData(true);
       setJsonData(null);
       
-      console.log('🔍 Downloading JSON via S3 proxy:', filename);
+      console.log('🔍 Downloading JSON via S3 proxy for selected file:', selectedFile);
       
-      // Use S3 proxy to avoid CORS issues
+      // Find the selected file in physicalJsonFiles to get its json_url
+      const selectedFileData = physicalJsonFiles.find(file => file.name === selectedFile);
+      
+      if (!selectedFileData || !selectedFileData.json_url) {
+        throw new Error(`JSON URL not found for file: ${selectedFile}`);
+      }
+      
+      console.log('🔗 Using JSON URL:', selectedFileData.json_url);
+      
+      // Use S3 proxy to fetch the JSON content directly
       const response = await fetch('/api/s3-proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           client_method: 'get',
-          filename: filename,
+          filename: selectedFileData.json_url,
           download: true  // This tells the proxy to fetch and return the content directly
         }),
       });
@@ -353,15 +360,14 @@ function JobDetailsPageContent() {
         throw new Error(`Failed to download JSON via proxy: ${response.status}`);
       }
       
-      const proxyData = await response.json();
-      console.log('📋 S3 proxy response received');
+      const jsonData = await response.json();
+      console.log('📋 JSON data loaded successfully');
       
-      // With download=true, the S3 proxy returns the JSON content directly
-      if (proxyData && typeof proxyData === 'object') {
-        console.log('📋 JSON data loaded successfully');
-        setJsonData(proxyData);
+      // The S3 proxy with download=true returns the JSON content directly
+      if (jsonData && typeof jsonData === 'object') {
+        setJsonData(jsonData);
       } else {
-        throw new Error('Invalid JSON content received from S3 proxy');
+        throw new Error('Invalid JSON content received from proxy');
       }
       
     } catch (error) {
@@ -375,8 +381,7 @@ function JobDetailsPageContent() {
   // Download JSON when file is selected
   useEffect(() => {
     if (selectedPhysicalFile) {
-      const filename = selectedPhysicalFile.split('/').pop() || selectedPhysicalFile;
-      downloadJsonFile(filename);
+      downloadJsonFile(selectedPhysicalFile);
     } else {
       setJsonData(null);
     }
@@ -1274,6 +1279,42 @@ function JobDetailsPageContent() {
                   textShadow: '0 1px 2px rgba(0, 0, 0, 0.5)'
                 }}>
                   {capitalizeStatus(jobData.job_status || 'Unknown')}
+                  {/* Show upload progress when status is uploading */}
+                  {(() => {
+                    if (jobData.job_status?.toLowerCase() === 'uploading' && jobData.content_pipeline_files) {
+                      // Calculate upload progress
+                      let totalFiles = 0;
+                      let uploadedFiles = 0;
+                      let failedFiles = 0;
+                      
+                      jobData.content_pipeline_files.forEach(fileGroup => {
+                        if (fileGroup.original_files) {
+                          Object.values(fileGroup.original_files).forEach(fileInfo => {
+                            totalFiles++;
+                            if (fileInfo.status === 'uploaded') {
+                              uploadedFiles++;
+                            } else if (fileInfo.status === 'upload-failed') {
+                              failedFiles++;
+                            }
+                          });
+                        }
+                      });
+                      
+                      if (totalFiles > 0) {
+                        return (
+                          <span style={{ 
+                            fontSize: 12, 
+                            fontWeight: 500,
+                            marginLeft: 4,
+                            opacity: 0.9
+                          }}>
+                            ({uploadedFiles}/{totalFiles} files)
+                          </span>
+                        );
+                      }
+                    }
+                    return null;
+                  })()}
                 </span>
               </div>
               
