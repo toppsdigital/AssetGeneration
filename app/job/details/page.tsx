@@ -845,7 +845,7 @@ function JobDetailsPageContent() {
     }
   };
 
-  // Update file status in the job data and sync with backend
+  // Update file status using backend response as single source of truth
   const updateFileStatus = async (
     groupFilename: string,
     pdfFilename: string,
@@ -855,75 +855,46 @@ function JobDetailsPageContent() {
 
     console.log('🔄 Updating status for', pdfFilename, 'in group', groupFilename, 'to', status);
 
-    const fileGroup = jobData.content_pipeline_files.find(f => f.filename === groupFilename);
-    if (!fileGroup) {
-      console.error(`File group ${groupFilename} not found in job data`);
-      return;
-    }
-
-    const originalFileInfo = fileGroup.original_files?.[pdfFilename];
-    if (!originalFileInfo) {
-      console.error('Original file info for', pdfFilename, 'not found in file group', groupFilename);
-      return;
-    }
-
-    // Create a new copy of original_files with the updated status
-    const updatedOriginalFiles = {
-      ...(fileGroup.original_files || {}),
-      [pdfFilename]: {
-        ...originalFileInfo,
-        status: status,
-      },
-    };
-
-    // Now, update the backend - send only the specific status that changed
     try {
-      console.log(`📡 Syncing status for ${pdfFilename} to backend (status only)...`, { pdf_filename: pdfFilename, status });
+      console.log(`📡 Updating ${pdfFilename} status in backend...`, { pdf_filename: pdfFilename, status });
 
+      // Update backend first - this is our single source of truth
       const response = await contentPipelineApi.updatePdfFileStatus(groupFilename, pdfFilename, status);
 
-      console.log(`✅ Successfully synced status for ${pdfFilename} to backend.`, response);
+      console.log(`✅ Backend update successful for ${pdfFilename}:`, response);
 
-      // Update local state ONLY with the response from the backend (no optimistic updates)
-      if (response.file) {
-        const updatedFileFromBackend = response.file;
-        
-        console.log(`🔄 Updating local state with backend response for ${groupFilename}:`, updatedFileFromBackend);
+      // ONLY update local state with the response from backend (no optimistic updates)
+      if (response.file && response.file.original_files) {
+        console.log(`🔄 Updating local state with backend response for ${groupFilename}`);
         
         setJobData(prev => {
           if (!prev?.content_pipeline_files) return prev;
           
-          const syncedContentPipelineFiles = prev.content_pipeline_files.map(file =>
+          const updatedFiles = prev.content_pipeline_files.map(file =>
             file.filename === groupFilename
               ? {
                   ...file,
-                  original_files: updatedFileFromBackend.original_files || file.original_files,
-                  extracted_files: updatedFileFromBackend.extracted_files || file.extracted_files,
-                  firefly_assets: updatedFileFromBackend.firefly_assets || file.firefly_assets,
+                  original_files: response.file.original_files,
+                  extracted_files: response.file.extracted_files || file.extracted_files,
+                  firefly_assets: response.file.firefly_assets || file.firefly_assets,
                   last_updated: new Date().toISOString()
                 }
               : file
           );
           
-          return { ...prev, content_pipeline_files: syncedContentPipelineFiles };
+          return { ...prev, content_pipeline_files: updatedFiles };
         });
         
-        console.log('✅ Local state updated with backend response for', groupFilename);
+        console.log('✅ Local state synced with backend response for', groupFilename);
       } else {
-        console.warn('⚠️ No file data in response for', groupFilename, ', updating local state directly');
-        
-        // Fallback: update local state directly if no backend response
-        const updatedContentPipelineFiles = jobData.content_pipeline_files.map(file =>
-          file.filename === groupFilename
-            ? { ...file, original_files: updatedOriginalFiles }
-            : file
-        );
-
-        setJobData(prev => (prev ? { ...prev, content_pipeline_files: updatedContentPipelineFiles } : null));
+        console.error('❌ Invalid backend response - missing file data or original_files');
+        throw new Error('Invalid backend response structure');
       }
     } catch (error) {
-      console.error(`❌ Failed to sync status for ${pdfFilename} to backend:`, error);
-      // Don't update local state if backend update failed
+      console.error(`❌ Failed to update ${pdfFilename} status in backend:`, error);
+      // Do NOT update local state if backend update failed
+      // This keeps files in their previous known good state
+      throw error; // Re-throw so caller knows the update failed
     }
   };
 
@@ -959,8 +930,15 @@ function JobDetailsPageContent() {
           }));
         });
         
-        // Mark as uploaded in local state and sync to backend
-        await updateFileStatus(groupFilename, filename, 'uploaded');
+        // Update backend status - backend response is source of truth
+        try {
+          await updateFileStatus(groupFilename, filename, 'uploaded');
+          console.log('✅ Successfully uploaded and status updated:', filename);
+        } catch (statusError) {
+          console.error('❌ File uploaded to S3 but status update failed:', filename, statusError);
+          // File was uploaded to S3 but status update failed
+          // Continue with cleanup but note the status issue
+        }
 
         // Clear upload progress for this file
         setUploadProgress(prev => {
@@ -970,9 +948,7 @@ function JobDetailsPageContent() {
           return newProgress;
         });
         
-        console.log('✅ Successfully uploaded', filename);
-        
-        // Remove from uploading set immediately upon successful upload
+        // Remove from uploading set immediately (S3 upload completed)
         setUploadingFiles(prev => {
           const newSet = new Set(prev);
           newSet.delete(filename);
@@ -989,16 +965,24 @@ function JobDetailsPageContent() {
         
         if (retryCount < maxRetries) {
           console.log(`Retrying upload of ${filename} in 1.5 seconds...`);
-          // Update status to show retry (and sync to backend)
-          await updateFileStatus(groupFilename, filename, 'uploading');
+          // Update status to show retry (backend is source of truth)
+          try {
+            await updateFileStatus(groupFilename, filename, 'uploading');
+          } catch (statusError) {
+            console.warn('⚠️ Failed to update retry status for', filename, '- continuing with retry anyway');
+          }
           // Wait 1.5 seconds before retry (increased for better stability)
           await wait(1500);
         } else {
           // All retries failed
           console.error('All retry attempts failed for', filename);
           
-          // Mark as failed and sync to backend
-          await updateFileStatus(groupFilename, filename, 'upload-failed');
+          // Mark as failed (backend is source of truth)
+          try {
+            await updateFileStatus(groupFilename, filename, 'upload-failed');
+          } catch (statusError) {
+            console.error('❌ Failed to update final failure status for', filename, statusError);
+          }
           
           // Remove from uploading set on final failure
           setUploadingFiles(prev => {
