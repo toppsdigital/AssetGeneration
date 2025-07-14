@@ -69,6 +69,11 @@ function JobDetailsPageContent() {
   const [creatingAssets, setCreatingAssets] = useState(false);
   const [allFilesUploaded, setAllFilesUploaded] = useState(false);
 
+  // Simple PDF upload tracking variables
+  const [totalPdfFiles, setTotalPdfFiles] = useState(0);
+  const [uploadedPdfFiles, setUploadedPdfFiles] = useState(0);
+  const [failedPdfFiles, setFailedPdfFiles] = useState(0);
+
   useEffect(() => {
     if (jobId) {
       // Debug: Check if pending files are available
@@ -215,42 +220,22 @@ function JobDetailsPageContent() {
     }
 
     const checkUploadStatus = () => {
-      // Count all files and their statuses
-      let totalFiles = 0;
-      let uploadedFiles = 0;
-      let uploadingFilesCount = 0;
-      let failedFiles = 0;
-      
-      jobData.content_pipeline_files.forEach(fileGroup => {
-        if (fileGroup.original_files) {
-          Object.values(fileGroup.original_files).forEach(fileInfo => {
-            totalFiles++;
-            if (fileInfo.status === 'uploaded') {
-              uploadedFiles++;
-            } else if (fileInfo.status === 'uploading') {
-              uploadingFilesCount++;
-            } else if (fileInfo.status === 'upload-failed') {
-              failedFiles++;
-            }
-          });
-        }
-      });
-
-      console.log('📊 Upload status check:', uploadedFiles + '/' + totalFiles, 'uploaded,', uploadingFilesCount, 'uploading,', failedFiles, 'failed, activeUploads:', uploadingFiles.size);
-
-      // Simple completion logic: all files uploaded AND no active uploads
-      const allFilesProcessed = totalFiles > 0 && (uploadedFiles + failedFiles) === totalFiles;
+      // Simple completion logic using our tracking variables
+      const allFilesProcessed = totalPdfFiles > 0 && (uploadedPdfFiles + failedPdfFiles) === totalPdfFiles;
       const noActiveUploads = uploadingFiles.size === 0;
-      const isComplete = allFilesProcessed && noActiveUploads && uploadedFiles > 0;
+      const hasUploads = uploadedPdfFiles > 0;
+      const isComplete = allFilesProcessed && noActiveUploads && hasUploads;
+      
+      console.log('📊 Upload status check:', uploadedPdfFiles + '/' + totalPdfFiles, 'uploaded,', failedPdfFiles, 'failed, activeUploads:', uploadingFiles.size);
       
       console.log(`🔍 Completion check:`, {
-        totalFiles,
-        uploadedFiles,
-        failedFiles,
-        uploadingFilesCount,
+        totalPdfFiles,
+        uploadedPdfFiles,
+        failedPdfFiles,
         activeUploads: uploadingFiles.size,
         allFilesProcessed,
         noActiveUploads,
+        hasUploads,
         isComplete,
         willNavigate: isComplete && !allFilesUploaded
       });
@@ -258,14 +243,14 @@ function JobDetailsPageContent() {
       // Navigate when upload is truly complete
       if (isComplete && !allFilesUploaded) {
         console.log('✅ Upload completed! Navigating to jobs list...');
-        console.log('📋 Final status:', uploadedFiles + '/' + totalFiles, 'uploaded,', failedFiles, 'failed');
+        console.log('📋 Final status:', uploadedPdfFiles + '/' + totalPdfFiles, 'uploaded,', failedPdfFiles, 'failed');
         setAllFilesUploaded(true);
         
-        // Navigate immediately
+        // Navigate to jobs list after short delay
         setTimeout(() => {
-          console.log('🚀 Navigating to jobs list now...');
+          console.log('🚀 Navigating to jobs list...');
           router.push('/jobs');
-        }, 1000); // 1 second delay to see final status
+        }, 1500);
       }
     };
 
@@ -856,40 +841,65 @@ function JobDetailsPageContent() {
     console.log('🔄 Updating status for', pdfFilename, 'in group', groupFilename, 'to', status);
 
     try {
-      console.log(`📡 Updating ${pdfFilename} status in backend...`, { pdf_filename: pdfFilename, status });
+      console.log(`📡 Calling backend API: updatePdfFileStatus(${groupFilename}, ${pdfFilename}, ${status})`);
 
       // Update backend first - this is our single source of truth
       const response = await contentPipelineApi.updatePdfFileStatus(groupFilename, pdfFilename, status);
 
-      console.log(`✅ Backend update successful for ${pdfFilename}:`, response);
+      console.log(`✅ Backend API response for ${pdfFilename}:`, JSON.stringify(response, null, 2));
+
+      // Check response structure in detail
+      if (!response) {
+        console.error('❌ Backend returned null/undefined response');
+        throw new Error('Backend returned null response');
+      }
+
+      if (!response.file) {
+        console.error('❌ Backend response missing "file" property:', response);
+        throw new Error('Backend response missing file property');
+      }
+
+      if (!response.file.original_files) {
+        console.error('❌ Backend response missing "original_files" property:', response.file);
+        throw new Error('Backend response missing original_files property');
+      }
+
+      // Log the specific file status we're looking for
+      const fileStatus = response.file.original_files[pdfFilename];
+      console.log(`📋 Backend says ${pdfFilename} status is:`, fileStatus);
 
       // ONLY update local state with the response from backend (no optimistic updates)
-      if (response.file && response.file.original_files) {
-        console.log(`🔄 Updating local state with backend response for ${groupFilename}`);
+      console.log(`🔄 Updating local state with backend response for ${groupFilename}`);
+      
+      setJobData(prev => {
+        if (!prev?.content_pipeline_files) {
+          console.warn('⚠️ No content_pipeline_files in previous state');
+          return prev;
+        }
         
-        setJobData(prev => {
-          if (!prev?.content_pipeline_files) return prev;
-          
-          const updatedFiles = prev.content_pipeline_files.map(file =>
-            file.filename === groupFilename
-              ? {
-                  ...file,
-                  original_files: response.file.original_files,
-                  extracted_files: response.file.extracted_files || file.extracted_files,
-                  firefly_assets: response.file.firefly_assets || file.firefly_assets,
-                  last_updated: new Date().toISOString()
-                }
-              : file
-          );
-          
-          return { ...prev, content_pipeline_files: updatedFiles };
-        });
+        const beforeUpdate = prev.content_pipeline_files.find(f => f.filename === groupFilename);
+        console.log(`📊 Before update - ${groupFilename} original_files:`, beforeUpdate?.original_files);
         
-        console.log('✅ Local state synced with backend response for', groupFilename);
-      } else {
-        console.error('❌ Invalid backend response - missing file data or original_files');
-        throw new Error('Invalid backend response structure');
-      }
+        const updatedFiles = prev.content_pipeline_files.map(file =>
+          file.filename === groupFilename
+            ? {
+                ...file,
+                original_files: response.file.original_files,
+                extracted_files: response.file.extracted_files || file.extracted_files,
+                firefly_assets: response.file.firefly_assets || file.firefly_assets,
+                last_updated: new Date().toISOString()
+              }
+            : file
+        );
+        
+        const afterUpdate = updatedFiles.find(f => f.filename === groupFilename);
+        console.log(`📊 After update - ${groupFilename} original_files:`, afterUpdate?.original_files);
+        
+        return { ...prev, content_pipeline_files: updatedFiles };
+      });
+      
+      console.log('✅ Local state synced with backend response for', groupFilename);
+      
     } catch (error) {
       console.error(`❌ Failed to update ${pdfFilename} status in backend:`, error);
       // Do NOT update local state if backend update failed
@@ -903,6 +913,73 @@ function JobDetailsPageContent() {
     return new Promise(resolve => setTimeout(resolve, ms));
   };
 
+  // Simplified local file status update (optimistic UI update)
+  const updateLocalFileStatus = (
+    groupFilename: string,
+    pdfFilename: string,
+    status: 'uploading' | 'uploaded' | 'upload-failed'
+  ): void => {
+    console.log('📱 Updating local file status:', pdfFilename, 'to', status);
+    
+    setJobData(prev => {
+      if (!prev?.content_pipeline_files) {
+        console.warn('⚠️ No content_pipeline_files in previous state');
+        return prev;
+      }
+      
+      const updatedFiles = prev.content_pipeline_files.map(file =>
+        file.filename === groupFilename
+          ? {
+              ...file,
+              original_files: {
+                ...file.original_files,
+                [pdfFilename]: {
+                  ...file.original_files?.[pdfFilename],
+                  status: status
+                }
+              },
+              last_updated: new Date().toISOString()
+            }
+          : file
+      );
+      
+      return { ...prev, content_pipeline_files: updatedFiles };
+    });
+    
+    // Update counters based on status
+    if (status === 'uploaded') {
+      setUploadedPdfFiles(prev => prev + 1);
+      console.log('✅ PDF uploaded successfully:', pdfFilename, '- Total uploaded:', uploadedPdfFiles + 1);
+    } else if (status === 'upload-failed') {
+      setFailedPdfFiles(prev => prev + 1);
+      console.log('❌ PDF upload failed:', pdfFilename, '- Total failed:', failedPdfFiles + 1);
+    }
+  };
+
+  // Debug function to check current file states (call from browser console)
+  const debugFileStates = () => {
+    console.log('🔍 DEBUG: Current job data:', jobData);
+    console.log('🔍 DEBUG: Upload progress:', uploadProgress);
+    console.log('🔍 DEBUG: Uploading files set:', Array.from(uploadingFiles));
+    console.log('🔍 DEBUG: All files uploaded flag:', allFilesUploaded);
+    
+    if (jobData?.content_pipeline_files) {
+      jobData.content_pipeline_files.forEach(fileGroup => {
+        console.log(`📁 File group: ${fileGroup.filename}`);
+        if (fileGroup.original_files) {
+          Object.entries(fileGroup.original_files).forEach(([filename, fileInfo]) => {
+            console.log(`  📄 ${filename}: ${fileInfo.status} (${fileInfo.card_type})`);
+          });
+        }
+      });
+    }
+  };
+
+  // Make debug function available globally for console access
+  if (typeof window !== 'undefined') {
+    (window as any).debugFileStates = debugFileStates;
+  }
+
   // Upload a single file with retry logic and improved tracking
   const uploadSingleFile = async (groupFilename: string, filename: string, file: File, fileInfo: any, maxRetries: number = 3): Promise<void> => {
     let retryCount = 0;
@@ -913,6 +990,9 @@ function JobDetailsPageContent() {
       console.log(`📤 Added ${filename} to uploadingFiles set. Current files:`, Array.from(newSet));
       return newSet;
     });
+    
+    // Set initial uploading status
+    updateLocalFileStatus(groupFilename, filename, 'uploading');
     
     while (retryCount < maxRetries) {
       try {
@@ -930,15 +1010,9 @@ function JobDetailsPageContent() {
           }));
         });
         
-        // Update backend status - backend response is source of truth
-        try {
-          await updateFileStatus(groupFilename, filename, 'uploaded');
-          console.log('✅ Successfully uploaded and status updated:', filename);
-        } catch (statusError) {
-          console.error('❌ File uploaded to S3 but status update failed:', filename, statusError);
-          // File was uploaded to S3 but status update failed
-          // Continue with cleanup but note the status issue
-        }
+        // File uploaded successfully - update local status immediately
+        console.log(`✅ File ${filename} successfully uploaded to S3`);
+        updateLocalFileStatus(groupFilename, filename, 'uploaded');
 
         // Clear upload progress for this file
         setUploadProgress(prev => {
@@ -965,24 +1039,12 @@ function JobDetailsPageContent() {
         
         if (retryCount < maxRetries) {
           console.log(`Retrying upload of ${filename} in 1.5 seconds...`);
-          // Update status to show retry (backend is source of truth)
-          try {
-            await updateFileStatus(groupFilename, filename, 'uploading');
-          } catch (statusError) {
-            console.warn('⚠️ Failed to update retry status for', filename, '- continuing with retry anyway');
-          }
-          // Wait 1.5 seconds before retry (increased for better stability)
+          // Keep status as uploading for retry
           await wait(1500);
         } else {
-          // All retries failed
+          // All retries failed - mark as failed
           console.error('All retry attempts failed for', filename);
-          
-          // Mark as failed (backend is source of truth)
-          try {
-            await updateFileStatus(groupFilename, filename, 'upload-failed');
-          } catch (statusError) {
-            console.error('❌ Failed to update final failure status for', filename, statusError);
-          }
+          updateLocalFileStatus(groupFilename, filename, 'upload-failed');
           
           // Remove from uploading set on final failure
           setUploadingFiles(prev => {
@@ -1006,8 +1068,7 @@ function JobDetailsPageContent() {
       return;
     }
     
-    console.log('🚀 Starting parallel upload process (4 files at a time) for files:', files.map(f => f.name));
-    console.log('Job data for upload:', { job_id: jobData.job_id, content_pipeline_files_count: jobData.content_pipeline_files.length });
+    console.log('🚀 Starting simplified upload process (4 files at a time) for files:', files.map(f => f.name));
     
     // Create a mapping of file names to File objects
     const fileMap = new Map<string, File>();
@@ -1015,24 +1076,29 @@ function JobDetailsPageContent() {
       fileMap.set(file.name, file);
     });
     
-    // Collect all files to upload in order
+    // Collect all files to upload and calculate total
     const filesToUpload: Array<{groupFilename: string, filename: string, file: File, fileInfo: any}> = [];
     
     jobData.content_pipeline_files.forEach((fileObj) => {
-      if (!fileObj.original_files) return;
-      
-      Object.entries(fileObj.original_files).forEach(([filename, fileInfo]) => {
-        const file = fileMap.get(filename);
-        if (file) {
-          filesToUpload.push({ groupFilename: fileObj.filename, filename, file, fileInfo });
-        } else {
-          console.warn(`File ${filename} not found in uploaded files`);
-        }
-      });
+      if (fileObj.original_files) {
+        Object.entries(fileObj.original_files).forEach(([filename, fileInfo]) => {
+          const file = fileMap.get(filename);
+          if (file) {
+            filesToUpload.push({ groupFilename: fileObj.filename, filename, file, fileInfo });
+          } else {
+            console.warn(`❌ File ${filename} not found in uploaded files`);
+          }
+        });
+      }
     });
     
-    let uploadedCount = 0;
-    let failedCount = 0;
+    // Set total PDF files and reset counters
+    const totalFiles = filesToUpload.length;
+    console.log('📊 Total PDF files to upload:', totalFiles);
+    setTotalPdfFiles(totalFiles);
+    setUploadedPdfFiles(0);
+    setFailedPdfFiles(0);
+    
     const batchSize = 4; // Upload 4 files at a time
     
     // Process files in batches of 4
@@ -1044,51 +1110,27 @@ function JobDetailsPageContent() {
       const batchPromises = batch.map(async ({ groupFilename, filename, file, fileInfo }) => {
         try {
           await uploadSingleFile(groupFilename, filename, file, fileInfo);
-          return { success: true, filename, groupFilename };
+          return { success: true, filename };
         } catch (error) {
           console.error(`Failed to upload ${filename} after all retries:`, error);
-          return { success: false, filename, groupFilename, error };
+          return { success: false, filename };
         }
       });
       
       // Wait for all files in the batch to complete
       const batchResults = await Promise.allSettled(batchPromises);
       
-      // Process results
-      batchResults.forEach((result, index) => {
-        if (result.status === 'fulfilled') {
-          if (result.value.success) {
-            uploadedCount++;
-            console.log('✅ Batch upload success:', result.value.filename);
-          } else {
-            failedCount++;
-            console.error('❌ Batch upload failed:', result.value.filename, result.value.error);
-          }
-        } else {
-          failedCount++;
-          const filename = batch[index]?.filename || 'unknown';
-          console.error('❌ Batch upload promise rejected:', filename, result.reason);
-        }
-      });
-      
-      // Update overall progress after each batch
-      const overallProgress = ((uploadedCount + failedCount) / filesToUpload.length) * 100;
-      console.log('📊 Batch', Math.floor(i / batchSize) + 1, 'completed. Overall progress:', Math.round(overallProgress) + '%', '(' + uploadedCount, 'uploaded,', failedCount, 'failed,', filesToUpload.length - uploadedCount - failedCount, 'remaining)');
+      // Log batch completion
+      const batchSuccessCount = batchResults.filter(r => r.status === 'fulfilled' && r.value.success).length;
+      console.log('✅ Batch completed:', batchSuccessCount + '/' + batch.length, 'files uploaded successfully');
       
       // Small delay between batches to avoid overwhelming the server
       if (i + batchSize < filesToUpload.length) {
-        await wait(300); // 300ms delay between batches
+        await wait(300);
       }
     }
     
-     // Log final results
-     if (failedCount === 0) {
-       console.log('✅ All files uploaded successfully in parallel batches (4 at a time)');
-     } else if (uploadedCount > 0) {
-       console.log('⚠️ Parallel upload completed with', failedCount, 'failures out of', filesToUpload.length, 'files');
-     } else {
-       console.log('❌ All file uploads failed');
-     }
+    console.log('🎉 Upload process completed! Total files:', totalFiles, 'Uploaded:', uploadedPdfFiles, 'Failed:', failedPdfFiles);
   };
 
 
@@ -1277,37 +1319,18 @@ function JobDetailsPageContent() {
                   {capitalizeStatus(jobData.job_status || 'Unknown')}
                   {/* Show upload progress when status is uploading */}
                   {(() => {
-                    if (jobData.job_status?.toLowerCase() === 'uploading' && jobData.content_pipeline_files) {
-                      // Calculate upload progress
-                      let totalFiles = 0;
-                      let uploadedFiles = 0;
-                      let failedFiles = 0;
-                      
-                      jobData.content_pipeline_files.forEach(fileGroup => {
-                        if (fileGroup.original_files) {
-                          Object.values(fileGroup.original_files).forEach(fileInfo => {
-                            totalFiles++;
-                            if (fileInfo.status === 'uploaded') {
-                              uploadedFiles++;
-                            } else if (fileInfo.status === 'upload-failed') {
-                              failedFiles++;
-                            }
-                          });
-                        }
-                      });
-                      
-                      if (totalFiles > 0) {
-                        return (
-                          <span style={{ 
-                            fontSize: 12, 
-                            fontWeight: 500,
-                            marginLeft: 4,
-                            opacity: 0.9
-                          }}>
-                            ({uploadedFiles}/{totalFiles} files)
-                          </span>
-                        );
-                      }
+                    if (jobData.job_status?.toLowerCase() === 'uploading' && totalPdfFiles > 0) {
+                      // Use simplified counters for upload progress
+                      return (
+                        <span style={{ 
+                          fontSize: 12, 
+                          fontWeight: 500,
+                          marginLeft: 4,
+                          opacity: 0.9
+                        }}>
+                          ({uploadedPdfFiles}/{totalPdfFiles} files)
+                        </span>
+                      );
                     }
                     return null;
                   })()}
