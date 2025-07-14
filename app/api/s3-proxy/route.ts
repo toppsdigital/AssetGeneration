@@ -11,53 +11,7 @@ export async function POST(request: NextRequest) {
     
     const { client_method } = body;
 
-    if (client_method === 'list') {
-      const backendEndpoint = 'https://devops-dev.services.toppsapps.com/s3/presigned-url';
-      console.log('S3 Proxy: LIST - Forwarding to backendEndpoint:', backendEndpoint);
-      const listRes = await fetch(backendEndpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          client_method: 'list',
-          expires_in: 3600,
-        }),
-      });
-      console.log('S3 Proxy: LIST - Backend response status:', listRes.status);
-      if (!listRes.ok) {
-        return NextResponse.json({ error: 'Failed to get presigned S3 LIST URL' }, { status: 500 });
-      }
-      const { url } = await listRes.json();
-      const s3Res = await fetch(url);
-      if (!s3Res.ok) {
-        return NextResponse.json({ error: 'Failed to fetch S3 file list' }, { status: 500 });
-      }
-      const xml = await s3Res.text();
-      console.log('S3 Proxy: LIST - Raw XML response:', xml);
-      
-      // Parse both Key and LastModified from the XML
-      // The XML structure has <Contents> elements with <Key> and <LastModified> children
-      const contentsRegex = /<Contents>[\s\S]*?<\/Contents>/g;
-      const keyRegex = /<Key>([^<]+\.json)<\/Key>/;
-      const lastModifiedRegex = /<LastModified>([^<]+)<\/LastModified>/;
-      
-      const files = [];
-      let match;
-      while ((match = contentsRegex.exec(xml)) !== null) {
-        const contentXml = match[0];
-        const keyMatch = contentXml.match(keyRegex);
-        const lastModifiedMatch = contentXml.match(lastModifiedRegex);
-        
-        if (keyMatch) {
-          files.push({
-            name: keyMatch[1],
-            lastModified: lastModifiedMatch ? lastModifiedMatch[1] : null
-          });
-        }
-      }
-      
-      console.log('S3 Proxy: LIST - Parsed files with metadata:', files);
-      return NextResponse.json({ files }, { status: 200 });
-    }
+
 
     if (client_method === 'put') {
       const { filename, upload, expires_in = 720 } = body;
@@ -137,6 +91,58 @@ export async function POST(request: NextRequest) {
       }
       
       return NextResponse.json({ url }, { status: 200 });
+    }
+
+    if (client_method === 'fetch_public_files') {
+      const { public_url, file_type = 'pdf' } = body;
+      console.log('S3 Proxy: FETCH_PUBLIC_FILES - public_url:', public_url, 'file_type:', file_type);
+      
+      if (!public_url) {
+        return NextResponse.json({ 
+          error: 'Missing public_url for fetch_public_files request' 
+        }, { status: 400 });
+      }
+      
+      try {
+        console.log('S3 Proxy: Fetching file objects from public URL...');
+        const response = await fetch(public_url);
+        
+        if (!response.ok) {
+          console.error('S3 Proxy: Failed to fetch public URL, status:', response.status);
+          return NextResponse.json({ 
+            error: 'Failed to fetch from public URL',
+            status: response.status 
+          }, { status: 500 });
+        }
+        
+        const fileObjects = await response.json();
+        console.log('S3 Proxy: Retrieved file objects:', fileObjects);
+        
+        // Filter by file type if specified
+        let filteredFiles = fileObjects;
+        if (file_type && Array.isArray(fileObjects)) {
+          filteredFiles = fileObjects.filter(file => {
+            const fileName = file.file_name || file.name || '';
+            const extension = fileName.split('.').pop()?.toLowerCase();
+            return extension === file_type.toLowerCase();
+          });
+          console.log('S3 Proxy: Filtered files by type', file_type, ':', filteredFiles);
+        }
+        
+        return NextResponse.json({ 
+          files: filteredFiles,
+          total_count: Array.isArray(filteredFiles) ? filteredFiles.length : 0,
+          file_type: file_type,
+          source_url: public_url
+        }, { status: 200 });
+        
+      } catch (error) {
+        console.error('S3 Proxy: Error fetching public files:', error);
+        return NextResponse.json({ 
+          error: 'Failed to parse response from public URL',
+          details: error.message 
+        }, { status: 500 });
+      }
     }
 
     // Default case - forward the request body exactly as received

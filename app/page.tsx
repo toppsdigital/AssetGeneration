@@ -7,7 +7,11 @@ import NavBar from '../components/NavBar';
 import { usePsdStore } from '../web/store/psdStore';
 
 export default function Home() {
-  const [singleAssetTemplates, setSingleAssetTemplates] = useState<(string | { name: string })[]>([]);
+  const [singleAssetTemplates, setSingleAssetTemplates] = useState<(string | { 
+    file_name: string; 
+    display_name: string; 
+    json_url: string; 
+  })[]>([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
   const router = useRouter();
   const { setPsdFile, reset } = usePsdStore();
@@ -19,24 +23,27 @@ export default function Home() {
       const res = await fetch('/api/s3-proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_method: 'list' }),
+        body: JSON.stringify({ 
+          client_method: 'fetch_public_files',
+          public_url: 'https://topps-nexus-powertools.s3.us-east-1.amazonaws.com/asset_generator/dev/public/one_off_psd_files.json',
+          file_type: 'psd'
+        }),
       });
       if (!res.ok) throw new Error('Failed to fetch templates');
       const data = await res.json();
       
-      // Filter for only .json files in uploads/ directory (no subdirectories)
-      // Exclude files with "physical" in their name
-      const jsonFiles = data.files.filter((file: any) => {
-        const fileName = typeof file === 'string' ? file : file.name;
-        const isJsonFile = fileName.toLowerCase().endsWith('.json');
-        const isInUploads = fileName.startsWith('asset_generator/dev/uploads/');
-        const pathParts = fileName.split('/');
-        const isDirectlyInUploads = pathParts.length === 4; // asset_generator/dev/uploads/filename.json (4 parts)
+      // The new API returns files in the format:
+      // { files: [{ file_name: "...", display_name: "...", json_url: "..." }], total_count: ... }
+      const psdFiles = data.files || [];
+      
+      // Filter out files with "physical" in their name if needed
+      const filteredFiles = psdFiles.filter((file: any) => {
+        const fileName = file.file_name || file.name || '';
         const hasPhysical = fileName.toLowerCase().includes('physical');
-        return isJsonFile && isInUploads && isDirectlyInUploads && !hasPhysical;
+        return !hasPhysical;
       });
       
-      setSingleAssetTemplates(jsonFiles);
+      setSingleAssetTemplates(filteredFiles);
     } catch (err) {
       alert('Error fetching templates: ' + (err as Error).message);
     } finally {
@@ -48,9 +55,12 @@ export default function Home() {
     fetchFiles();
   }, []);
 
-  const handleTemplateClick = async (template: string) => {
-    const fileName = template.split('/').pop();
-    const psdfile = fileName.replace(/\.json$/i, '');
+  const handleTemplateClick = async (template: any) => {
+    // Handle both old string format and new object format
+    const psdfile = typeof template === 'string' 
+      ? template.split('/').pop()?.replace(/\.json$/i, '') || ''
+      : template.display_name || template.file_name?.replace(/\.psd$/i, '') || '';
+    
     reset();
     
     // Check if the edit page exists before navigating
@@ -122,14 +132,16 @@ export default function Home() {
                   {singleAssetTemplates.length > 0 ? (
                     <ul className={styles.templateGrid}>
                       {singleAssetTemplates.map((template, index) => {
-                        const templateName = typeof template === 'string' ? template : template.name;
-                        const fileName = templateName.split('/').pop()!;
-                        const displayName = fileName.replace(/\.json$/i, '');
+                        // Handle both old string format and new object format
+                        const displayName = typeof template === 'string' 
+                          ? template.split('/').pop()?.replace(/\.json$/i, '') || ''
+                          : template.display_name || template.file_name?.replace(/\.psd$/i, '') || '';
+                        
                         return (
                           <li
                             key={`single-${index}`}
                             className={styles.templateCard}
-                            onClick={() => handleTemplateClick(templateName)}
+                            onClick={() => handleTemplateClick(template)}
                           >
                             <span className={styles.templateIcon}>🎨</span>
                             <span className={styles.templateName}>{displayName}</span>
