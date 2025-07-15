@@ -15,13 +15,11 @@ export default async function RootLayout({
 }) {
   const session = await auth();
 
-  console.log(session);
-  console.log(session?.user);
-
   if (!session) {
-    return (<html lang="en">
-      <body><SignIn/></body>
-    </html>)
+    return (
+      <html lang="en">
+        <body><SignIn/></body>
+      </html>)
   }
 
   return (
