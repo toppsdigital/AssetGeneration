@@ -15,7 +15,7 @@ export default function Home() {
   const [loadingFiles, setLoadingFiles] = useState(false);
   const router = useRouter();
   const { setPsdFile, reset } = usePsdStore();
-
+  
   // Refactor file list fetch into a function
   const fetchFiles = async () => {
     setLoadingFiles(true);
