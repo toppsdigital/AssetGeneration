@@ -1635,16 +1635,16 @@ function JobDetailsPageContent() {
                         
                         return (
                           <div style={{ maxWidth: 200 }}>
-                            <label style={{
-                              display: 'block',
-                              fontSize: 16,
-                              fontWeight: 600,
-                              color: '#f8f8f8',
-                              marginBottom: 12
-                            }}>
+                        <label style={{
+                          display: 'block',
+                          fontSize: 16,
+                          fontWeight: 600,
+                          color: '#f8f8f8',
+                          marginBottom: 12
+                        }}>
                               Select Color Variants
-                            </label>
-                            {(() => {
+                        </label>
+                        {(() => {
                               const spotGroup = jsonData.layers?.find((layer: any) => 
                                 layer.name?.toLowerCase().includes('spot group')
                               );
@@ -1663,78 +1663,78 @@ function JobDetailsPageContent() {
                               };
                               
                               const solidColorLayers = spotGroup ? collectSolidColorLayers(spotGroup) : [];
-                              
+                          
                               const toggleLayer = (layerId: string) => {
                                 const newSelected = new Set(selectedLayers);
                                 if (newSelected.has(layerId)) {
                                   newSelected.delete(layerId);
-                                } else {
+                            } else {
                                   newSelected.add(layerId);
-                                }
+                            }
                                 setSelectedLayers(newSelected);
-                              };
-                              
+                          };
+                          
                               return solidColorLayers.length > 0 ? (
-                                <div style={{
-                                  display: 'flex',
-                                  flexDirection: 'column',
+                            <div style={{
+                              display: 'flex',
+                              flexDirection: 'column',
                                   gap: 6,
-                                  maxWidth: 200
-                                }}>
+                              maxWidth: 200
+                            }}>
                                   {solidColorLayers.map((layer: any, index: number) => {
                                     const layerId = `${layer.id}-${layer.name}`;
                                     const isSelected = selectedLayers.has(layerId);
-                                    
-                                    return (
-                                      <label key={index} style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
+                                
+                                return (
+                                  <label key={index} style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
                                         gap: 8,
-                                        cursor: 'pointer',
-                                        fontSize: 13,
-                                        color: '#f8f8f8',
+                                    cursor: 'pointer',
+                                    fontSize: 13,
+                                    color: '#f8f8f8',
                                         padding: '8px 12px',
-                                        background: 'rgba(255, 255, 255, 0.05)',
-                                        borderRadius: 6,
-                                        border: '1px solid rgba(255, 255, 255, 0.1)',
-                                        transition: 'background-color 0.2s'
-                                      }}
-                                      onMouseEnter={(e) => {
-                                        e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
-                                      }}
-                                      onMouseLeave={(e) => {
-                                        e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                                      }}
-                                      >
-                                        <input
-                                          type="checkbox"
-                                          checked={isSelected}
+                                    background: 'rgba(255, 255, 255, 0.05)',
+                                    borderRadius: 6,
+                                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                                    transition: 'background-color 0.2s'
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                                  }}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
                                           onChange={() => toggleLayer(layerId)}
-                                          style={{
-                                            width: 14,
-                                            height: 14,
-                                            cursor: 'pointer',
-                                            flexShrink: 0
-                                          }}
-                                        />
-                                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      style={{
+                                        width: 14,
+                                        height: 14,
+                                        cursor: 'pointer',
+                                        flexShrink: 0
+                                      }}
+                                    />
+                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                           {layer.name || `Layer ${layer.id || index + 1}`}
-                                        </span>
-                                      </label>
-                                    );
-                                  })}
-                                </div>
-                              ) : (
-                                <div style={{
-                                  fontSize: 14,
-                                  color: '#9ca3af',
-                                  fontStyle: 'italic'
-                                }}>
+                                    </span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div style={{
+                              fontSize: 14,
+                              color: '#9ca3af',
+                              fontStyle: 'italic'
+                            }}>
                                   No color variants available
-                                </div>
-                              );
-                            })()}
-                          </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
                         );
                       })()}
 
@@ -1752,35 +1752,35 @@ function JobDetailsPageContent() {
                         );
                         
                         return (
-                          <div style={{ 
-                            display: 'flex', 
-                            flexDirection: 'column', 
+                        <div style={{ 
+                          display: 'flex', 
+                          flexDirection: 'column', 
                             alignItems: 'flex-start',
                             justifyContent: 'flex-start',
                             marginTop: 32
-                          }}>
-                            <button
-                              onClick={async () => {
+                        }}>
+                          <button
+                            onClick={async () => {
                                 if (!canCreateAssets) return;
 
-                                console.log('🎨 Creating digital assets with selected options:', {
-                                  selectedFile: selectedPhysicalFile,
-                                  psdFile: jsonData?.psd_file,
-                                  selectedLayers: Array.from(selectedLayers),
-                                  selectedExtractedLayers: Array.from(selectedExtractedLayers),
-                                  totalColors: selectedLayers.size,
+                              console.log('🎨 Creating digital assets with selected options:', {
+                                selectedFile: selectedPhysicalFile,
+                                psdFile: jsonData?.psd_file,
+                                selectedLayers: Array.from(selectedLayers),
+                                selectedExtractedLayers: Array.from(selectedExtractedLayers),
+                                totalColors: selectedLayers.size,
                                   totalLayers: selectedExtractedLayers.size,
                                   hasSpotLayer
-                                });
+                              });
 
-                                setCreatingAssets(true);
+                              setCreatingAssets(true);
 
-                                try {
-                                  // Extract PSD filename from the selected physical file
-                                  const psdFile = selectedPhysicalFile.split('/').pop()?.replace('.json', '.psd') || '';
+                              try {
+                                // Extract PSD filename from the selected physical file
+                                const psdFile = selectedPhysicalFile.split('/').pop()?.replace('.json', '.psd') || '';
 
-                                  // Use selected extracted layers instead of hardcoded layers
-                                  const layers = Array.from(selectedExtractedLayers);
+                                // Use selected extracted layers instead of hardcoded layers
+                                const layers = Array.from(selectedExtractedLayers);
 
                                   // Build payload - always include colors array (empty if no spot layers)
                                   const colors = hasSpotLayer 
@@ -1793,83 +1793,83 @@ function JobDetailsPageContent() {
                                       })
                                     : [];
 
-                                  const payload = {
-                                    colors,
-                                    layers,
-                                    psd_file: psdFile
-                                  };
+                                const payload = {
+                                  colors,
+                                  layers,
+                                  psd_file: psdFile
+                                };
 
-                                  console.log('📋 API Payload:', payload);
+                                console.log('📋 API Payload:', payload);
 
-                                  // Make the API call
-                                  const response = await contentPipelineApi.generateAssets(jobData!.job_id!, payload);
-                                  
-                                  console.log('✅ Assets creation response:', response);
-                                  
-                                  // Navigate back to jobs list after successful creation
-                                  router.push('/jobs');
-                                  
-                                } catch (error) {
-                                  console.error('❌ Error creating assets:', error);
-                                  alert(`Failed to create assets: ${error instanceof Error ? error.message : 'Unknown error'}`);
-                                  setCreatingAssets(false);
-                                }
-                              }}
+                                // Make the API call
+                                const response = await contentPipelineApi.generateAssets(jobData!.job_id!, payload);
+                                
+                                console.log('✅ Assets creation response:', response);
+                                
+                                // Navigate back to jobs list after successful creation
+                                router.push('/jobs');
+                                
+                              } catch (error) {
+                                console.error('❌ Error creating assets:', error);
+                                alert(`Failed to create assets: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                                setCreatingAssets(false);
+                              }
+                            }}
                               disabled={creatingAssets || !canCreateAssets}
-                              style={{
-                                padding: '16px 32px',
-                                background: creatingAssets 
-                                  ? 'rgba(156, 163, 175, 0.5)' 
+                            style={{
+                              padding: '16px 32px',
+                              background: creatingAssets 
+                                ? 'rgba(156, 163, 175, 0.5)' 
                                   : !canCreateAssets
                                   ? 'rgba(156, 163, 175, 0.3)'
-                                  : 'linear-gradient(135deg, #10b981, #059669)',
-                                border: 'none',
-                                borderRadius: 12,
-                                color: 'white',
-                                fontSize: 16,
-                                fontWeight: 600,
+                                : 'linear-gradient(135deg, #10b981, #059669)',
+                              border: 'none',
+                              borderRadius: 12,
+                              color: 'white',
+                              fontSize: 16,
+                              fontWeight: 600,
                                 cursor: creatingAssets || !canCreateAssets ? 'not-allowed' : 'pointer',
-                                transition: 'all 0.2s',
+                              transition: 'all 0.2s',
                                 boxShadow: creatingAssets || !canCreateAssets
-                                  ? 'none' 
-                                  : '0 8px 24px rgba(16, 185, 129, 0.3)',
+                                ? 'none' 
+                                : '0 8px 24px rgba(16, 185, 129, 0.3)',
                                 minHeight: 60,
                                 opacity: !canCreateAssets ? 0.6 : 1
-                              }}
-                              onMouseEnter={(e) => {
+                            }}
+                            onMouseEnter={(e) => {
                                 if (!creatingAssets && canCreateAssets) {
-                                  e.currentTarget.style.transform = 'scale(1.05)';
-                                  e.currentTarget.style.boxShadow = '0 12px 32px rgba(16, 185, 129, 0.4)';
-                                }
-                              }}
-                              onMouseLeave={(e) => {
+                                e.currentTarget.style.transform = 'scale(1.05)';
+                                e.currentTarget.style.boxShadow = '0 12px 32px rgba(16, 185, 129, 0.4)';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
                                 if (!creatingAssets && canCreateAssets) {
-                                  e.currentTarget.style.transform = 'scale(1)';
-                                  e.currentTarget.style.boxShadow = '0 8px 24px rgba(16, 185, 129, 0.3)';
-                                }
-                              }}
-                            >
-                              {creatingAssets ? (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                  <div style={{
-                                    width: 16,
-                                    height: 16,
-                                    border: '2px solid rgba(255, 255, 255, 0.3)',
-                                    borderTop: '2px solid white',
-                                    borderRadius: '50%',
-                                    animation: 'spin 1s linear infinite'
-                                  }} />
-                                  Creating...
-                                </div>
-                              ) : (
-                                '🎨 Create Assets'
-                              )}
-                            </button>
-                            <div style={{
-                              fontSize: 12,
-                              color: '#9ca3af',
+                                e.currentTarget.style.transform = 'scale(1)';
+                                e.currentTarget.style.boxShadow = '0 8px 24px rgba(16, 185, 129, 0.3)';
+                              }
+                            }}
+                          >
+                            {creatingAssets ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <div style={{
+                                  width: 16,
+                                  height: 16,
+                                  border: '2px solid rgba(255, 255, 255, 0.3)',
+                                  borderTop: '2px solid white',
+                                  borderRadius: '50%',
+                                  animation: 'spin 1s linear infinite'
+                                }} />
+                                Creating...
+                              </div>
+                            ) : (
+                              '🎨 Create Assets'
+                            )}
+                          </button>
+                          <div style={{
+                            fontSize: 12,
+                            color: '#9ca3af',
                               marginTop: 8
-                            }}>
+                          }}>
                               {!canCreateAssets ? (
                                 hasSpotLayer ? 
                                   `Select ${selectedLayers.size} colors and ${selectedExtractedLayers.size} layers` :
@@ -1877,8 +1877,8 @@ function JobDetailsPageContent() {
                               ) : (
                                 `${hasSpotLayer ? `${selectedLayers.size} colors • ` : ''}${selectedExtractedLayers.size} layers`
                               )}
-                            </div>
                           </div>
+                        </div>
                         );
                       })()}
                     </div>
