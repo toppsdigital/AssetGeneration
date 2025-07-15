@@ -6,6 +6,8 @@ import NavBar from '../../../components/NavBar';
 import styles from '../../../styles/Edit.module.css';
 import Spinner from '../../../components/Spinner';
 import { contentPipelineApi, JobData, FileData } from '../../../web/utils/contentPipelineApi';
+import { useJobData, useJobFiles, useUpdateJobStatus, createJobDataFromParams, UIJobData } from '../../../web/hooks/useJobData';
+import { useQueryClient } from '@tanstack/react-query';
 
 // Add CSS animation for spinner
 if (typeof document !== 'undefined') {
@@ -19,20 +21,236 @@ if (typeof document !== 'undefined') {
   document.head.appendChild(style);
 }
 
-// Extend the API JobData interface with UI-specific fields for backward compatibility
-interface UIJobData extends JobData {
-  // Legacy UI fields for backward compatibility
-  psd_file?: string;
-  template?: string;
-  total_files?: number;
-  timestamp?: string;
-  Subset_name?: string;
-  job_path?: string;
-  
-  // API files as separate property
-  api_files?: string[];
-  content_pipeline_files?: FileData[];
-}
+// UIJobData interface is now imported from useJobData hook
+
+// Add skeleton loader components
+const JobHeaderSkeleton = () => (
+  <div style={{ 
+    marginBottom: 48,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 16,
+    borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+    minHeight: 42 // Match the actual job header height
+  }}>
+    {/* Status Badge Skeleton - Match actual badge dimensions */}
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8,
+      padding: '8px 16px', // Match actual status badge padding
+      borderRadius: 20,
+      background: 'linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 100%)',
+      backgroundSize: '200% 100%',
+      animation: 'shimmer 2s infinite',
+      border: '1px solid rgba(255, 255, 255, 0.2)',
+      width: 120
+    }} />
+    
+    {/* Metadata Skeleton - Match actual metadata dimensions */}
+    <div style={{ display: 'flex', gap: 16 }}>
+      {[80, 100, 120].map((width, i) => (
+        <div key={i} style={{
+          width,
+          height: 14, // Match actual fontSize: 12 (12px + line height ≈ 14px)
+          background: 'linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 100%)',
+          backgroundSize: '200% 100%',
+          animation: 'shimmer 2s infinite',
+          borderRadius: 4,
+          animationDelay: `${i * 0.2}s`
+        }} />
+      ))}
+    </div>
+  </div>
+);
+
+const FileCardSkeleton = ({ index = 0 }: { index?: number }) => (
+  <div style={{
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    padding: 20,
+    animationDelay: `${index * 0.1}s`,
+    minHeight: 280, // Fixed minimum height to match real file cards
+    transition: 'all 0.3s ease'
+  }}>
+    {/* File Header Skeleton */}
+    <div style={{ marginBottom: 20 }}>
+      <div style={{
+        width: '60%',
+        height: 24,
+        background: 'linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 100%)',
+        backgroundSize: '200% 100%',
+        animation: 'shimmer 2s infinite',
+        borderRadius: 6,
+        marginBottom: 8
+      }} />
+      <div style={{
+        width: '40%',
+        height: 14,
+        background: 'linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 100%)',
+        backgroundSize: '200% 100%',
+        animation: 'shimmer 2s infinite',
+        borderRadius: 4
+      }} />
+    </div>
+    
+    {/* File Sections Skeleton */}
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+      gap: 20,
+      marginBottom: 24
+    }}>
+      {[1, 2].map((section) => (
+        <div key={section}>
+          {/* Section Header */}
+          <div style={{
+            width: '70%',
+            height: 16,
+            background: 'linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 100%)',
+            backgroundSize: '200% 100%',
+            animation: 'shimmer 2s infinite',
+            borderRadius: 4,
+            marginBottom: 12
+          }} />
+          
+          {/* Section Content */}
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.05)',
+            borderRadius: 8,
+            padding: 12,
+            height: 120
+          }}>
+            {[1, 2, 3].map((item) => (
+              <div key={item} style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: 8
+              }}>
+                <div style={{
+                  width: '60%',
+                  height: 13,
+                  background: 'linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 100%)',
+                  backgroundSize: '200% 100%',
+                  animation: 'shimmer 2s infinite',
+                  borderRadius: 4
+                }} />
+                <div style={{
+                  width: 60,
+                  height: 18,
+                  background: 'linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 100%)',
+                  backgroundSize: '200% 100%',
+                  animation: 'shimmer 2s infinite',
+                  borderRadius: 4
+                }} />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+const LoadingProgress = ({ 
+  step, 
+  totalSteps, 
+  message, 
+  detail 
+}: { 
+  step: number; 
+  totalSteps: number; 
+  message: string; 
+  detail?: string; 
+}) => (
+  <div style={{
+    textAlign: 'center',
+    padding: '48px 0',
+    background: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    minHeight: 220, // Fixed minimum height to prevent jumps
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    transition: 'all 0.3s ease' // Smooth transitions
+  }}>
+    {/* Animated Icon */}
+    <div style={{
+      width: 64,
+      height: 64,
+      margin: '0 auto 24px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+      borderRadius: '50%',
+      position: 'relative',
+      overflow: 'hidden'
+    }}>
+      <div style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'conic-gradient(from 0deg, transparent, rgba(255,255,255,0.3), transparent)',
+        borderRadius: '50%',
+        animation: 'spin 2s linear infinite'
+      }} />
+      <span style={{ fontSize: 24, zIndex: 1 }}>⚡</span>
+    </div>
+    
+    {/* Progress Bar */}
+    <div style={{
+      width: '60%',
+      maxWidth: 300,
+      height: 8,
+      background: 'rgba(255,255,255,0.1)',
+      borderRadius: 4,
+      margin: '0 auto 16px',
+      overflow: 'hidden'
+    }}>
+      <div style={{
+        width: `${(step / totalSteps) * 100}%`,
+        height: '100%',
+        background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)',
+        borderRadius: 4,
+        transition: 'width 0.5s ease'
+      }} />
+    </div>
+    
+    {/* Progress Text */}
+    <div style={{
+      color: '#f8f8f8',
+      fontSize: 18,
+      fontWeight: 600,
+      marginBottom: 8
+    }}>
+      {message}
+    </div>
+    
+    <div style={{
+      color: '#9ca3af',
+      fontSize: 14,
+      marginBottom: 12
+    }}>
+      Step {step} of {totalSteps}
+    </div>
+    
+    {detail && (
+      <div style={{
+        color: '#6b7280',
+        fontSize: 13,
+        fontStyle: 'italic'
+      }}>
+        {detail}
+      </div>
+    )}
+  </div>
+);
 
 function JobDetailsPageContent() {
   const router = useRouter();
@@ -51,11 +269,71 @@ function JobDetailsPageContent() {
   const description = searchParams.get('description');
   const createFiles = searchParams.get('createFiles');
   
-  const [jobData, setJobData] = useState<UIJobData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [filesLoaded, setFilesLoaded] = useState(false);
-  const [loadingFiles, setLoadingFiles] = useState(false);
+  // React Query hooks for smart caching
+  const queryClient = useQueryClient();
+  
+  // Check if we have query params to pre-populate cache
+  const hasQueryParams = !!(appName && releaseName && subsetName && sourceFolder && status);
+  
+  // Always use React Query caching - let it handle cached data automatically
+  const { 
+    data: jobData, 
+    isLoading: isLoadingJob, 
+    error: jobError,
+    isFetching: isRefetchingJob 
+  } = useJobData(jobId || null);
+  
+  // Debug logging for cache behavior
+  useEffect(() => {
+    console.log('🔍 React Query State:', {
+      jobId,
+      hasJobData: !!jobData,
+      isLoading: isLoadingJob,
+      isFetching: isRefetchingJob,
+      hasError: !!jobError,
+      source: jobData ? 'Cache/Fresh Data' : 'None',
+      timestamp: new Date().toISOString()
+    });
+  }, [jobId, jobData, isLoadingJob, isRefetchingJob, jobError]);
+  
+  // Pre-populate cache with query params data if available (for instant display)
+  useEffect(() => {
+    if (hasQueryParams && jobId && !jobData) {
+      const paramsData = createJobDataFromParams({
+        jobId,
+        appName: appName || undefined,
+        releaseName: releaseName || undefined,
+        subsetName: subsetName || undefined,
+        sourceFolder: sourceFolder || undefined,
+        status: status || undefined,
+        createdAt: createdAt || undefined,
+        files: files || undefined,
+        description: description || undefined,
+      });
+      
+      // Set the data in cache immediately (instant display)
+      queryClient.setQueryData(['jobs', 'detail', jobId], paramsData);
+      console.log('📋 Pre-populated cache with query params data for instant display');
+    }
+  }, [jobId, hasQueryParams, appName, releaseName, subsetName, sourceFolder, status, createdAt, files, description, queryClient, jobData]);
+  
+  // File data fetching with caching
+  const { 
+    data: fileData = [], 
+    isLoading: isLoadingFiles,
+    error: filesError 
+  } = useJobFiles(jobData?.job_id || null, jobData?.api_files || []);
+  
+  // Merge cached job data with fresh file data
+  const mergedJobData = jobData ? {
+    ...jobData,
+    content_pipeline_files: fileData
+  } : null;
+  
+  // Status update mutation
+  const updateJobStatusMutation = useUpdateJobStatus();
+  
+  // Legacy state for components that still need it
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
   const [uploadingFiles, setUploadingFiles] = useState<Set<string>>(new Set());
   const [uploadStarted, setUploadStarted] = useState(false);
@@ -69,11 +347,78 @@ function JobDetailsPageContent() {
   const [creatingAssets, setCreatingAssets] = useState(false);
   const [allFilesUploaded, setAllFilesUploaded] = useState(false);
 
+  // Enhanced loading state management - derived from React Query states
+  const isLoading = isLoadingJob && !jobData; // Only show loading if no cached data
+  const isLoadingData = isLoadingJob || isLoadingFiles;
+  const error = jobError || filesError;
+  
+  // Legacy state variables still needed by existing components
+  const [filesLoaded, setFilesLoaded] = useState(false);
+  const [loadingFiles, setLoadingFiles] = useState(false);
+  
+  // Temporary legacy setters (will be removed after full React Query migration)
+  const [loading, setLoading] = useState(false);
+  const [legacyError, setError] = useState<string | null>(null);
+  const [legacyJobData, setJobData] = useState<UIJobData | null>(null);
+  
+  const [loadingStep, setLoadingStep] = useState(1);
+  const [loadingMessage, setLoadingMessage] = useState('Initializing...');
+  const [loadingDetail, setLoadingDetail] = useState<string | undefined>(undefined);
+  
+  // Sync legacy state with React Query state
+  useEffect(() => {
+    // Update file loading states based on React Query
+    const hasFiles = fileData.length > 0;
+    const shouldMarkFilesLoaded = !isLoadingFiles && (hasFiles || (jobData && (!jobData.api_files || jobData.api_files.length === 0)));
+    
+    console.log('🔄 Syncing legacy state:', {
+      isLoadingFiles,
+      fileDataLength: fileData.length,
+      hasApiFiles: jobData?.api_files?.length || 0,
+      shouldMarkFilesLoaded,
+      currentFilesLoaded: filesLoaded
+    });
+    
+    setFilesLoaded(shouldMarkFilesLoaded);
+    setLoadingFiles(isLoadingFiles);
+    
+    // Sync loading state
+    setLoading(isLoadingJob && !jobData);
+    
+    // Update loading steps and messages based on React Query state
+    if (isLoadingJob && !jobData) {
+      setLoadingStep(1);
+      setLoadingMessage('Loading job details...');
+      setLoadingDetail('Fetching job information');
+    } else if (isLoadingFiles) {
+      setLoadingStep(2);
+      setLoadingMessage('Loading files...');
+      setLoadingDetail(`Fetching ${jobData?.api_files?.length || 0} file objects`);
+    } else if (shouldMarkFilesLoaded) {
+      const isExtracted = jobData?.job_status?.toLowerCase() === 'extracted';
+      setLoadingStep(isExtracted ? 4 : 2);
+      setLoadingMessage(isExtracted ? 'Ready for PSD selection' : 'Files loaded successfully');
+      setLoadingDetail(`${fileData.length} files ready`);
+    }
+    
+    // Clear any legacy errors if React Query data is successful
+    if (jobData && !error) {
+      setError(null);
+    }
+  }, [isLoadingFiles, fileData, isLoadingJob, jobData, error, filesLoaded]);
+
+  // Calculate total loading steps based on job status
+  const getTotalLoadingSteps = () => {
+    const isExtracted = mergedJobData?.job_status?.toLowerCase() === 'extracted';
+    return isExtracted ? 4 : 2; // 1-2 for basic loading, 3-4 for extracted jobs with PSD loading
+  };
+
   // Simple PDF upload tracking variables
   const [totalPdfFiles, setTotalPdfFiles] = useState(0);
   const [uploadedPdfFiles, setUploadedPdfFiles] = useState(0);
   const [failedPdfFiles, setFailedPdfFiles] = useState(0);
 
+  // Legacy job loading useEffect removed - React Query handles this now
   useEffect(() => {
     if (jobId) {
       // Debug: Check if pending files are available
@@ -86,53 +431,13 @@ function JobDetailsPageContent() {
         } : null
       });
       
-      // Check if we have job data from query params to avoid API call
-      if (appName && releaseName && subsetName && sourceFolder && status) {
-        loadJobDetailsFromParams();
-      } else {
-        loadJobDetails();
-      }
+      // React Query handles job data loading automatically
+      console.log('📋 React Query will handle job data loading for:', jobId);
     }
-  }, [jobId, appName, releaseName, subsetName, sourceFolder, status]);
+  }, [jobId]);
 
-  // Load file objects after job details are loaded
-  useEffect(() => {
-    console.log('🔄 useEffect[jobData, filesLoaded] triggered at', new Date().toISOString(), ':', { 
-      hasJobData: !!jobData, 
-      hasApiFiles: !!jobData?.api_files?.length, 
-      filesLoaded, 
-      jobStatus: jobData?.job_status,
-      uploadStarted,
-      hasContentPipelineFiles: !!jobData?.content_pipeline_files?.length
-    });
-    
-    // Don't reload files if upload has started - this prevents overwriting status updates
-    if (uploadStarted) {
-      console.log('🔄 Skipping file loading - upload in progress, avoiding status overwrites');
-      return;
-    }
-    
-    // Don't reload files if they're already loaded and we have content_pipeline_files
-    if (filesLoaded && jobData?.content_pipeline_files?.length > 0) {
-      console.log('🔄 Skipping file loading - files already loaded and present');
-      return;
-    }
-    
-    if (jobData && jobData.api_files && jobData.api_files.length > 0 && !filesLoaded) {
-      console.log('🔄 Loading files - condition met');
-      if (createFiles === 'true') {
-        // Create new file objects for jobs that need file creation
-        console.log('🔄 Calling createNewFiles (createFiles=true)');
-        createNewFiles();
-      } else {
-        // Load existing file objects for jobs that already have them
-        console.log('🔄 Calling loadExistingFiles (createFiles=false or not set)');
-        loadExistingFiles();
-      }
-    } else {
-      console.log('🔄 Skipping file loading - condition not met');
-    }
-  }, [jobData?.job_id, jobData?.api_files?.length, filesLoaded, uploadStarted, createFiles]);
+  // Legacy file loading useEffect removed - React Query handles this now
+  // File data is now automatically loaded via useJobFiles hook
 
   // Reset file loading state when job ID changes (navigation to different job)
   useEffect(() => {
@@ -275,6 +580,13 @@ function JobDetailsPageContent() {
   const fetchPhysicalJsonFiles = async () => {
     try {
       setLoadingPhysicalFiles(true);
+      // Only set loading step for PSD loading if status is extracted
+      if (jobData?.job_status?.toLowerCase() === 'extracted') {
+        setLoadingStep(3);
+        setLoadingMessage('Loading PSD templates...');
+        setLoadingDetail('Fetching available physical PSD files');
+      }
+      
       console.log('🔍 Fetching physical JSON files from public endpoint...');
       
       const response = await fetch('/api/s3-proxy', {
@@ -316,6 +628,12 @@ function JobDetailsPageContent() {
   const downloadJsonFile = async (selectedFile: string) => {
     try {
       setLoadingJsonData(true);
+      // Only set loading step for JSON data if status is extracted
+      if (jobData?.job_status?.toLowerCase() === 'extracted') {
+        setLoadingStep(4);
+        setLoadingMessage('Loading PSD data...');
+        setLoadingDetail(`Parsing ${selectedFile.split('/').pop()?.replace('.json', '.psd') || 'template'}`);
+      }
       setJsonData(null);
       
       console.log('🔍 Downloading JSON via S3 proxy for selected file:', selectedFile);
@@ -397,6 +715,10 @@ function JobDetailsPageContent() {
   const loadJobDetailsFromParams = async () => {
     try {
       setLoading(true);
+      setLoadingStep(1);
+      setLoadingMessage('Loading job details...');
+      setLoadingDetail('Parsing job parameters');
+      
       // Reset file-related state when loading a new job
       setFilesLoaded(false);
       setLoadingFiles(false);
@@ -444,6 +766,10 @@ function JobDetailsPageContent() {
   const loadJobDetails = async () => {
     try {
       setLoading(true);
+      setLoadingStep(1);
+      setLoadingMessage('Loading job details...');
+      setLoadingDetail('Fetching job information from API');
+      
       // Reset file-related state when loading a new job
       setFilesLoaded(false);
       setLoadingFiles(false);
@@ -482,6 +808,10 @@ function JobDetailsPageContent() {
     
     try {
       setLoadingFiles(true);
+      setLoadingStep(2);
+      setLoadingMessage('Loading files...');
+      setLoadingDetail(`Fetching ${jobData.api_files.length} file objects`);
+      
       console.log('Fetching existing file objects for:', jobData.api_files);
       
       // Batch read existing files
@@ -520,9 +850,20 @@ function JobDetailsPageContent() {
         console.log('🔄 setJobData called from: loadExistingFiles at', new Date().toISOString());
         setJobData(updatedJobData);
         setFilesLoaded(true);
+        
+        // Set appropriate completion step based on job status
+        const isExtracted = jobData.job_status?.toLowerCase() === 'extracted';
+        setLoadingStep(isExtracted ? 2 : 2); // Step 2 for file loading completion
+        setLoadingMessage(isExtracted ? 'Files loaded - Ready for PSD selection' : 'Files loaded successfully');
+        setLoadingDetail(`${fileObjects.length} file objects ready`);
       } else {
         console.warn('⚠️ No files returned from API, keeping existing state');
         setFilesLoaded(true); // Still mark as loaded to prevent retries
+        
+        const isExtracted = jobData.job_status?.toLowerCase() === 'extracted';
+        setLoadingStep(isExtracted ? 2 : 2);
+        setLoadingMessage(isExtracted ? 'Files ready - Ready for PSD selection' : 'Files loaded');
+        setLoadingDetail('No additional files found');
       }
       
     } catch (error) {
@@ -543,6 +884,10 @@ function JobDetailsPageContent() {
     
     try {
       setLoadingFiles(true);
+      setLoadingStep(2);
+      setLoadingMessage('Creating file objects...');
+      setLoadingDetail(`Setting up ${jobData.api_files.length} file entries`);
+      
       console.log('Creating file objects for:', jobData.api_files);
       console.log('Job data:', { job_id: jobData.job_id, app_name: jobData.app_name });
       
@@ -716,10 +1061,21 @@ function JobDetailsPageContent() {
         setJobData(updatedJobData);
         setFilesLoaded(true);
         
+        // Set appropriate completion step based on job status
+        const isExtracted = jobData.job_status?.toLowerCase() === 'extracted';
+        setLoadingStep(isExtracted ? 2 : 2); // Step 2 for file creation completion
+        setLoadingMessage(isExtracted ? 'Files created - Ready for PSD selection' : 'File objects created');
+        setLoadingDetail(`${finalFileObjects.length} files ready for upload`);
+        
         console.log('createNewFiles completed successfully, filesLoaded set to true');
       } else {
         console.warn('⚠️ No files created, keeping existing state');
         setFilesLoaded(true); // Still mark as loaded to prevent retries
+        
+        const isExtracted = jobData.job_status?.toLowerCase() === 'extracted';
+        setLoadingStep(isExtracted ? 2 : 2);
+        setLoadingMessage(isExtracted ? 'Files ready - Ready for PSD selection' : 'Files ready');
+        setLoadingDetail('No new files to create');
       }
       
     } catch (error) {
@@ -1149,16 +1505,16 @@ function JobDetailsPageContent() {
   };
 
   const getJobDisplayName = () => {
-    if (!jobData?.job_id) return 'Unknown Job';
-    return jobData.job_id;
+    if (!mergedJobData?.job_id) return 'Unknown Job';
+    return mergedJobData.job_id;
   };
 
   const getJobTitle = () => {
-    if (!jobData) return 'Loading...';
+    if (!mergedJobData) return 'Loading...';
     const parts = [
-      jobData.app_name,
-      jobData.release_name,
-      jobData.subset_name || jobData.Subset_name
+      mergedJobData.app_name,
+      mergedJobData.release_name,
+      mergedJobData.subset_name || mergedJobData.Subset_name
     ].filter(Boolean);
     return parts.join(' - ') || 'Unknown Job';
   };
@@ -1181,9 +1537,49 @@ function JobDetailsPageContent() {
           backLabel="Back to Jobs"
           title="Loading Job Details..."
         />
-        <div className={styles.loading}>
-          <Spinner />
-          <p>Loading job details...</p>
+        <div className={styles.editContainer}>
+          <main className={styles.mainContent}>
+            <div style={{
+              maxWidth: 1200,
+              width: '100%',
+              background: 'rgba(255, 255, 255, 0.06)',
+              backdropFilter: 'blur(20px)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              borderRadius: 16,
+              padding: 32,
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
+            }}>
+              {/* Job Header Skeleton */}
+              <JobHeaderSkeleton />
+              
+              {/* Loading Progress */}
+              <LoadingProgress
+                step={loadingStep}
+                totalSteps={getTotalLoadingSteps()}
+                message={loadingMessage}
+                detail={loadingDetail}
+              />
+              
+              {/* Files Section Skeleton */}
+              <div style={{ marginTop: 32 }}>
+                <div style={{
+                  width: '200px',
+                  height: 32,
+                  background: 'linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 100%)',
+                  backgroundSize: '200% 100%',
+                  animation: 'shimmer 2s infinite',
+                  borderRadius: 8,
+                  marginBottom: 24
+                }} />
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                  {[0, 1].map((index) => (
+                    <FileCardSkeleton key={index} index={index} />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </main>
         </div>
       </div>
     );
@@ -1203,7 +1599,7 @@ function JobDetailsPageContent() {
         <div className={styles.loading}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>❌</div>
           <h2>Error Loading Job Details</h2>
-          <p>{error}</p>
+          <p>{error?.message || 'Unknown error occurred'}</p>
           <button 
             onClick={() => router.push('/jobs')}
             style={{
@@ -1223,7 +1619,7 @@ function JobDetailsPageContent() {
     );
   }
 
-  if (!jobData) {
+  if (!mergedJobData) {
     return (
       <div className={styles.pageContainer}>
         <NavBar
@@ -1295,12 +1691,12 @@ function JobDetailsPageContent() {
                 gap: 8,
                 padding: '8px 16px',
                 borderRadius: 20,
-                background: getStatusColor(jobData.job_status || ''),
-                boxShadow: `0 2px 8px ${getStatusColor(jobData.job_status || '')}30`,
+                background: getStatusColor(mergedJobData.job_status || ''),
+                boxShadow: `0 2px 8px ${getStatusColor(mergedJobData.job_status || '')}30`,
                 border: '1px solid rgba(255, 255, 255, 0.2)'
               }}>
                 {/* Loading spinner for active statuses */}
-                {isStatusActive(jobData.job_status || '') && (
+                {isStatusActive(mergedJobData.job_status || '') && (
                   <div style={{
                     width: 14,
                     height: 14,
@@ -1316,10 +1712,10 @@ function JobDetailsPageContent() {
                   fontWeight: 600,
                   textShadow: '0 1px 2px rgba(0, 0, 0, 0.5)'
                 }}>
-                  {capitalizeStatus(jobData.job_status || 'Unknown')}
+                  {capitalizeStatus(mergedJobData.job_status || 'Unknown')}
                   {/* Show upload progress when status is uploading */}
                   {(() => {
-                    if (jobData.job_status?.toLowerCase() === 'uploading' && totalPdfFiles > 0) {
+                    if (mergedJobData.job_status?.toLowerCase() === 'uploading' && totalPdfFiles > 0) {
                       // Use simplified counters for upload progress
                       return (
                         <span style={{ 
@@ -1344,20 +1740,20 @@ function JobDetailsPageContent() {
                 fontSize: 12,
                 color: '#6b7280'
               }}>
-                <span>Files: <span style={{ color: '#9ca3af' }}>{jobData.content_pipeline_files?.length || 0}</span></span>
-                {jobData.created_at && (
-                  <span>Created: <span style={{ color: '#9ca3af' }}>{new Date(jobData.created_at).toLocaleDateString()}</span></span>
+                <span>Files: <span style={{ color: '#9ca3af' }}>{mergedJobData.content_pipeline_files?.length || 0}</span></span>
+                {mergedJobData.created_at && (
+                  <span>Created: <span style={{ color: '#9ca3af' }}>{new Date(mergedJobData.created_at).toLocaleDateString()}</span></span>
                 )}
-                {jobData.job_id && (
-                  <span>ID: <span style={{ color: '#9ca3af', fontFamily: 'monospace', fontSize: 11 }}>{jobData.job_id}</span></span>
+                {mergedJobData.job_id && (
+                  <span>ID: <span style={{ color: '#9ca3af', fontFamily: 'monospace', fontSize: 11 }}>{mergedJobData.job_id}</span></span>
                 )}
               </div>
             </div>
 
 
 
-            {/* Action Required Banner - Only show when status is "extracted" */}
-            {jobData?.job_status?.toLowerCase() === 'extracted' && (
+            {/* Action Required Banner - Only show when status is "extracted" and not loading */}
+            {mergedJobData?.job_status?.toLowerCase() === 'extracted' && !loading && !loadingFiles && (
               <div style={{ marginBottom: 32 }}>
                 {/* Prominent Call-to-Action Banner */}
                 <div style={{
@@ -1454,51 +1850,112 @@ function JobDetailsPageContent() {
                     }}>
                       Select PSD
                     </label>
-                    <select
-                      value={selectedPhysicalFile}
-                      onChange={(e) => setSelectedPhysicalFile(e.target.value)}
-                      disabled={loadingPhysicalFiles}
-                      style={{
+                    {loadingPhysicalFiles ? (
+                      <div style={{
                         width: '100%',
                         maxWidth: 400,
                         padding: '12px 16px',
                         background: 'rgba(255, 255, 255, 0.08)',
                         border: '1px solid rgba(255, 255, 255, 0.2)',
                         borderRadius: 8,
-                        color: '#f8f8f8',
-                        fontSize: 14,
-                        outline: 'none',
-                        transition: 'border-color 0.2s',
-                        boxSizing: 'border-box'
-                      }}
-                      onFocus={(e) => {
-                        e.target.style.borderColor = '#60a5fa';
-                      }}
-                      onBlur={(e) => {
-                        e.target.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-                      }}
-                    >
-                      <option value="" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                        {loadingPhysicalFiles ? 'Loading PSD files...' : 'Select PSD file...'}
-                      </option>
-                      {physicalJsonFiles.map((file, index) => {
-                        const filename = file.name.split('/').pop() || file.name;
-                        const displayName = filename.replace('.json', '');
-                        return (
-                          <option 
-                            key={index} 
-                            value={file.name} 
-                            style={{ background: '#1f2937', color: '#f8f8f8' }}
-                          >
-                            {displayName}
-                          </option>
-                        );
-                      })}
-                    </select>
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8
+                      }}>
+                        <div style={{
+                          width: 16,
+                          height: 16,
+                          border: '2px solid rgba(255, 255, 255, 0.3)',
+                          borderTop: '2px solid #60a5fa',
+                          borderRadius: '50%',
+                          animation: 'spin 1s linear infinite'
+                        }} />
+                        <span style={{ color: '#9ca3af', fontSize: 14 }}>
+                          Loading PSD templates...
+                        </span>
+                      </div>
+                    ) : (
+                      <select
+                        value={selectedPhysicalFile}
+                        onChange={(e) => setSelectedPhysicalFile(e.target.value)}
+                        disabled={loadingPhysicalFiles}
+                        style={{
+                          width: '100%',
+                          maxWidth: 400,
+                          padding: '12px 16px',
+                          background: 'rgba(255, 255, 255, 0.08)',
+                          border: '1px solid rgba(255, 255, 255, 0.2)',
+                          borderRadius: 8,
+                          color: '#f8f8f8',
+                          fontSize: 14,
+                          outline: 'none',
+                          transition: 'border-color 0.2s',
+                          boxSizing: 'border-box'
+                        }}
+                        onFocus={(e) => {
+                          e.target.style.borderColor = '#60a5fa';
+                        }}
+                        onBlur={(e) => {
+                          e.target.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                        }}
+                      >
+                        <option value="" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                          Select PSD file...
+                        </option>
+                        {physicalJsonFiles.map((file, index) => {
+                          const filename = file.name.split('/').pop() || file.name;
+                          const displayName = filename.replace('.json', '');
+                          return (
+                            <option 
+                              key={index} 
+                              value={file.name} 
+                              style={{ background: '#1f2937', color: '#f8f8f8' }}
+                            >
+                              {displayName}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    )}
                   </div>
 
-                                                      {/* Layer and Color Selection */}
-                  {selectedPhysicalFile && jsonData && (
+                                                      {/* Loading JSON Data */}
+                  {selectedPhysicalFile && loadingJsonData && (
+                    <div style={{
+                      padding: '24px',
+                      textAlign: 'center',
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      borderRadius: 12,
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      margin: '20px 0'
+                    }}>
+                      <div style={{
+                        width: 32,
+                        height: 32,
+                        border: '3px solid rgba(59, 130, 246, 0.3)',
+                        borderTop: '3px solid #3b82f6',
+                        borderRadius: '50%',
+                        animation: 'spin 1s linear infinite',
+                        margin: '0 auto 16px'
+                      }} />
+                      <div style={{
+                        color: '#9ca3af',
+                        fontSize: 14,
+                        marginBottom: 8
+                      }}>
+                        Loading PSD template data...
+                      </div>
+                      <div style={{
+                        color: '#6b7280',
+                        fontSize: 12
+                      }}>
+                        Parsing layers and color information
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Layer and Color Selection */}
+                  {selectedPhysicalFile && jsonData && !loadingJsonData && (
                     <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
                       {/* Select Layers from Extracted Files */}
                       <div style={{ maxWidth: 250 }}>
@@ -1901,34 +2358,69 @@ function JobDetailsPageContent() {
                   color: '#f8f8f8',
                   marginBottom: 24
                 }}>
-                  📁 Files ({jobData.content_pipeline_files?.length || 0})
+                  📁 Files ({mergedJobData.content_pipeline_files?.length || 0})
                 </h2>
 
                 
-                {loadingFiles ? (
+                {(() => {
+                  const showLoading = (loadingFiles && !mergedJobData?.content_pipeline_files?.length) || (!filesLoaded && mergedJobData?.api_files?.length > 0 && !uploadStarted && !mergedJobData?.content_pipeline_files?.length);
+                  
+                  console.log('🔍 Files Loading Condition:', {
+                    showLoading,
+                    loadingFiles,
+                    filesLoaded,
+                    hasApiFiles: mergedJobData?.api_files?.length || 0,
+                    hasCachedFiles: mergedJobData?.content_pipeline_files?.length || 0,
+                    uploadStarted
+                  });
+                  
+                  return showLoading;
+                })() ? (
                   <div style={{
-                    textAlign: 'center',
-                    padding: '48px 0',
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    borderRadius: 12,
-                    border: '1px solid rgba(255, 255, 255, 0.1)'
+                    transition: 'opacity 0.3s ease',
+                    opacity: 1
                   }}>
-                    <div style={{ fontSize: 48, marginBottom: 16 }}>⏳</div>
-                    <h3 style={{ color: '#9ca3af', fontSize: 18, marginBottom: 8 }}>Loading Files...</h3>
-                    <p style={{ color: '#6b7280', fontSize: 14 }}>
-                                          {jobData.job_status === 'uploading' 
-                      ? 'Creating file objects...' 
-                      : 'Fetching file objects...'}
-                    </p>
+                    <LoadingProgress
+                      step={loadingFiles ? loadingStep : 1}
+                      totalSteps={getTotalLoadingSteps()}
+                      message={loadingFiles ? loadingMessage : 'Preparing to load files...'}
+                      detail={loadingFiles ? loadingDetail : `Getting ready to process ${mergedJobData?.api_files?.length || 0} files`}
+                    />
+                    
+                    {/* File Skeletons while loading */}
+                    <div style={{ 
+                      marginTop: 32,
+                      display: 'flex', 
+                      flexDirection: 'column', 
+                      gap: 24,
+                      opacity: 0.6,
+                      transition: 'opacity 0.3s ease'
+                    }}>
+                      {[0, 1, 2].map((index) => (
+                        <FileCardSkeleton key={index} index={index} />
+                      ))}
+                    </div>
                   </div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-                    {jobData.content_pipeline_files && jobData.content_pipeline_files.length > 0 ? (
-                      jobData.content_pipeline_files.map((file, index) => (
+                  <div style={{ 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    gap: 24,
+                    transition: 'opacity 0.3s ease',
+                    opacity: 1,
+                    animation: 'fadeIn 0.3s ease-in'
+                  }}>
+                    {mergedJobData.content_pipeline_files && mergedJobData.content_pipeline_files.length > 0 ? (
+                      mergedJobData.content_pipeline_files.map((file, index) => (
                         <div key={index} style={{
                           border: '1px solid rgba(255, 255, 255, 0.1)',
                           borderRadius: 12,
-                          padding: 20
+                          padding: 20,
+                          minHeight: 280, // Match skeleton height
+                          transition: 'all 0.3s ease',
+                          opacity: 1,
+                          animationDelay: `${index * 0.1}s`,
+                          animation: 'fadeIn 0.3s ease-in-out forwards'
                         }}>
                           {/* File Header */}
                           <div style={{ marginBottom: 20 }}>
@@ -2324,11 +2816,20 @@ function JobDetailsPageContent() {
                         color: '#9ca3af',
                         fontSize: 14
                       }}>
-                        {!filesLoaded && !loadingFiles 
-                          ? 'Files not loaded yet.' 
-                          : filesLoaded && (!jobData.content_pipeline_files || jobData.content_pipeline_files.length === 0)
-                          ? 'No files available for this job.'
-                          : 'Loading files...'}
+                        {(() => {
+                          // Show loading if files should be loading but haven't started yet
+                          const shouldBeLoadingFiles = jobData?.api_files?.length > 0 && !filesLoaded && !uploadStarted;
+                          
+                          if (loadingFiles || shouldBeLoadingFiles) {
+                            return 'Loading files...';
+                          } else if (filesLoaded && (!mergedJobData.content_pipeline_files || mergedJobData.content_pipeline_files.length === 0)) {
+                            return 'No files available for this job.';
+                          } else if (!filesLoaded && !loadingFiles && !shouldBeLoadingFiles) {
+                            return 'Files not loaded yet.';
+                          } else {
+                            return 'Loading files...';
+                          }
+                        })()}
                       </div>
                     )}
                   </div>
@@ -2428,6 +2929,26 @@ function JobDetailsPageContent() {
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
+        }
+        
+        @keyframes shimmer {
+          0% { 
+            background-position: -200% 0; 
+          }
+          100% { 
+            background-position: 200% 0; 
+          }
+        }
+        
+        @keyframes fadeIn {
+          0% {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0);
+          }
         }
         
         @keyframes gradient-shift {
