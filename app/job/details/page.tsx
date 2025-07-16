@@ -129,6 +129,17 @@ function JobDetailsPageContent() {
     // When createFiles!='true', use fresh fileData from useJobFiles hook
     content_pipeline_files: createFiles === 'true' ? (jobData.content_pipeline_files || []) : fileData
   } : null;
+
+  // Debug logging for upload data flow
+  console.log('🔍 Upload Data Flow Debug:', {
+    createFiles,
+    hasJobData: !!jobData,
+    hasMergedJobData: !!mergedJobData,
+    jobDataFiles: jobData?.content_pipeline_files?.length || 0,
+    mergedJobDataFiles: mergedJobData?.content_pipeline_files?.length || 0,
+    fileDataLength: fileData.length,
+    timestamp: new Date().toISOString()
+  });
   
   // Debug logging for file source
   console.log('🔍 mergedJobData file source:', {
@@ -173,10 +184,20 @@ function JobDetailsPageContent() {
   // Track if file creation has been triggered to prevent double execution
   const fileCreationTriggeredRef = useRef(false);
 
+  // Create a proper data updater that updates React Query cache
+  const updateJobDataForUpload = useCallback((updater: (prev: any) => any) => {
+    // Update React Query cache directly
+    if (jobData?.job_id) {
+      queryClient.setQueryData(jobKeys.detail(jobData.job_id), updater);
+    }
+    // Also update legacy state for any remaining dependencies
+    setJobData(updater);
+  }, [jobData?.job_id, queryClient]);
+
   // Upload management with comprehensive upload engine
   const uploadEngine = useUploadEngine({ 
     jobData: mergedJobData, 
-    setJobData: setJobData,
+    setJobData: updateJobDataForUpload,
     onUploadComplete: () => {
       console.log('✅ Upload completed! Navigating to jobs list...');
       setTimeout(() => {
