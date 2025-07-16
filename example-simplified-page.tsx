@@ -9,8 +9,8 @@ import {
   FilesSection, 
   JobHeaderSkeleton, 
   Spinner 
-} from '../components';
-import { useJobData, useFileUpload } from '../hooks';
+} from './components';
+import { useJobData, useFileUpload } from './hooks';
 import styles from '../styles/Edit.module.css';
 
 function JobDetailsPageContent() {
@@ -110,6 +110,8 @@ function JobDetailsPageContent() {
               jobData={jobData}
               mergedJobData={jobData}
               isVisible={jobData.job_status?.toLowerCase() === 'extracted'}
+              creatingAssets={false}
+              setCreatingAssets={() => {}}
             />
 
             {/* Files Section - All complexity hidden */}
