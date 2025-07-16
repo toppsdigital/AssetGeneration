@@ -1,5 +1,6 @@
 // Upload management hooks
 export { useFileUpload } from './useFileUpload';
+export { useUploadEngine } from './useUploadEngine';
 
 // Job data hooks (from web/hooks)
 export { 
