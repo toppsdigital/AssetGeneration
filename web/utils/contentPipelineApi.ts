@@ -376,6 +376,38 @@ class ContentPipelineAPI {
 
     return response.json();
   }
+
+  // Download completed job output files from S3
+  async downloadJobOutputFolder(jobId: string): Promise<{
+    success: boolean;
+    message: string;
+    data?: {
+      download_url: string;
+      expires_in: number;
+      zip_key: string;
+      source_folder: string;
+      files_count: number;
+    };
+  }> {
+    const folder = `asset_generator/dev/uploads/Output/${jobId}`;
+    
+    const response = await fetch(`${this.baseUrl}?operation=s3_download_folder`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        folder: folder
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || `Failed to download job output folder: ${response.status}`);
+    }
+
+    return response.json();
+  }
 }
 
 // Export a singleton instance
