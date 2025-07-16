@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import styles from '../../styles/Home.module.css';
 import NavBar from '../../components/NavBar';
 import Spinner from '../../components/Spinner';
@@ -9,19 +10,18 @@ import { contentPipelineApi, JobData } from '../../web/utils/contentPipelineApi'
 
 export default function JobsPage() {
   const router = useRouter();
-  const [jobs, setJobs] = useState<JobData[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  // Fetch all jobs from Content Pipeline API
-  const fetchJobs = async (isBackgroundUpdate = false) => {
-    if (!isBackgroundUpdate) {
-      setLoading(true);
-      setError(null);
-    }
-    
-    try {
-      console.log(`Fetching jobs from Content Pipeline API... ${isBackgroundUpdate ? '(background)' : ''}`);
+  // React Query to fetch and cache jobs data
+  const { 
+    data: jobs = [], 
+    isLoading, 
+    error, 
+    refetch,
+    isRefetching 
+  } = useQuery({
+    queryKey: ['jobs'],
+    queryFn: async () => {
+      console.log('Fetching jobs from Content Pipeline API...');
       const response = await contentPipelineApi.listJobs();
       console.log('Jobs fetched:', response);
       
@@ -30,24 +30,21 @@ export default function JobsPage() {
         new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
       );
       
-      setJobs(sortedJobs);
-      
-      // Clear any existing errors on successful fetch
-      if (error) {
-        setError(null);
-      }
-    } catch (err) {
-      console.error('Error fetching jobs:', err);
-      // Only set error state for non-background updates to avoid disrupting UI
-      if (!isBackgroundUpdate) {
-        setError((err as Error).message);
-      }
-    } finally {
-      if (!isBackgroundUpdate) {
-        setLoading(false);
-      }
-    }
-  };
+      return sortedJobs;
+    },
+    // Refetch every 5 seconds to match the original background refresh
+    refetchInterval: 5000,
+    // Keep previous data while refetching to prevent UI flicker
+    placeholderData: (previousData) => previousData,
+    // Consider data stale after 1 second to ensure frequent updates
+    staleTime: 1000,
+    // Cache data for 10 minutes
+    gcTime: 10 * 60 * 1000,
+    // Retry failed requests
+    retry: 3,
+    // Refetch on window focus for real-time updates
+    refetchOnWindowFocus: true,
+  });
 
   // Navigate to job details page
   const viewJobDetails = (job: JobData) => {
@@ -67,20 +64,6 @@ export default function JobsPage() {
     
     router.push(`/job/details?${queryParams.toString()}`);
   };
-
-  useEffect(() => {
-    fetchJobs();
-  }, []);
-
-  // Set up background refresh every 5 seconds
-  useEffect(() => {
-    const interval = setInterval(() => {
-      fetchJobs(true); // Background update
-    }, 5000); // 5 seconds
-
-    // Cleanup interval on component unmount
-    return () => clearInterval(interval);
-  }, []);
 
   const getSubsetName = (job: JobData) => {
     if (!job.source_folder) return 'Unknown';
@@ -144,7 +127,12 @@ export default function JobsPage() {
     return status.charAt(0).toUpperCase() + status.slice(1);
   };
 
-  if (loading) {
+  // Handle manual refresh
+  const handleRefresh = () => {
+    refetch();
+  };
+
+  if (isLoading) {
     return (
       <div className={styles.container}>
         <NavBar 
@@ -173,9 +161,11 @@ export default function JobsPage() {
         <div className={styles.content}>
           <div style={{ textAlign: 'center', padding: '48px 0' }}>
             <h2 style={{ color: '#ef4444', marginBottom: 16 }}>❌ Error Loading Jobs</h2>
-            <p style={{ color: '#e0e0e0', marginBottom: 24 }}>{error}</p>
+            <p style={{ color: '#e0e0e0', marginBottom: 24 }}>
+              {error instanceof Error ? error.message : 'An unexpected error occurred'}
+            </p>
             <button
-              onClick={() => fetchJobs(false)}
+              onClick={handleRefresh}
               style={{
                 padding: '12px 24px',
                 background: '#3b82f6',
@@ -236,18 +226,20 @@ export default function JobsPage() {
                 ➕ New Job
               </button>
               <button
-                onClick={() => fetchJobs(false)}
+                onClick={handleRefresh}
+                disabled={isRefetching}
                 style={{
                   padding: '8px 16px',
-                  background: 'rgba(59, 130, 246, 0.1)',
+                  background: isRefetching ? 'rgba(59, 130, 246, 0.05)' : 'rgba(59, 130, 246, 0.1)',
                   border: '1px solid rgba(59, 130, 246, 0.3)',
                   borderRadius: 8,
-                  color: '#60a5fa',
-                  cursor: 'pointer',
-                  fontSize: 14
+                  color: isRefetching ? '#9ca3af' : '#60a5fa',
+                  cursor: isRefetching ? 'not-allowed' : 'pointer',
+                  fontSize: 14,
+                  transition: 'all 0.2s'
                 }}
               >
-                🔄 Refresh All
+                {isRefetching ? '🔄 Refreshing...' : '🔄 Refresh All'}
               </button>
             </div>
           </div>
