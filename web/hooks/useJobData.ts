@@ -204,6 +204,54 @@ export function useUpdateJobStatus() {
   });
 }
 
+// Download archive interface
+export interface DownloadArchive {
+  download_url: string;
+  expires_in: number;
+  zip_key: string;
+  source_folder: string;
+  files_count: number;
+}
+
+// Hook for fetching download archive with expiry-based caching
+export function useDownloadArchive(jobId: string | null, enabled: boolean = true) {
+  return useQuery({
+    queryKey: [...jobKeys.detail(jobId || ''), 'download-archive'] as const,
+    queryFn: async (): Promise<DownloadArchive> => {
+      if (!jobId) throw new Error('Job ID is required');
+      
+      console.log('🔄 Creating download archive for job:', jobId);
+      const response = await contentPipelineApi.downloadJobOutputFolder(jobId);
+      
+      if (!response.success || !response.data) {
+        throw new Error(response.message || 'Failed to create download archive');
+      }
+      
+      console.log('✅ Download archive created:', {
+        files_count: response.data.files_count,
+        expires_in: response.data.expires_in,
+        cache_duration: response.data.expires_in * 1000 * 0.9
+      });
+      
+      return response.data;
+    },
+    enabled: enabled && !!jobId,
+    staleTime: 30 * 60 * 1000, // Consider fresh for 30 minutes (most download links last 1 hour)
+    gcTime: 60 * 60 * 1000, // Keep in cache for 1 hour
+    refetchOnWindowFocus: false, // Don't refetch on focus since archive creation is expensive
+    retry: (failureCount, error) => {
+      // Don't retry on 404s or if no files found
+      if (error instanceof Error && (
+        error.message.includes('404') || 
+        error.message.includes('No files found')
+      )) {
+        return false;
+      }
+      return failureCount < 2; // Limited retries for archive creation
+    }
+  });
+}
+
 // Utility to create job data from query parameters (for navigation from job list)
 export function createJobDataFromParams(params: {
   jobId: string;
