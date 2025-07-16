@@ -235,17 +235,9 @@ export default function NewJobPage() {
       console.log('Stored upload session data and files for job:', createdJob.job_id);
       console.log('File count:', formData.selectedFiles!.length);
       
-      // Navigate to job details page with job data to avoid API call
+      // Navigate to job details page - React Query will handle data fetching
       const queryParams = new URLSearchParams({
         jobId: createdJob.job_id!,
-        appName: createdJob.app_name || formData.appName,
-        releaseName: createdJob.release_name || formData.releaseName,
-        subsetName: createdJob.subset_name || formData.subsetName,
-        sourceFolder: createdJob.source_folder || generateFilePath(formData.appName),
-        status: createdJob.job_status || 'Upload started',
-        createdAt: createdJob.created_at || new Date().toISOString(),
-        files: JSON.stringify(createdJob.files || filenames),
-        description: createdJob.description || `${formData.subsetName} - Processing PDFs into digital assets`,
         startUpload: 'true',
         createFiles: 'true'
       });

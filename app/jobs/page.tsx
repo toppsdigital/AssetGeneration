@@ -36,8 +36,8 @@ export default function JobsPage() {
     refetchInterval: 5000,
     // Keep previous data while refetching to prevent UI flicker
     placeholderData: (previousData) => previousData,
-    // Consider data stale after 1 second to ensure frequent updates
-    staleTime: 1000,
+    // Consider data stale immediately to ensure real-time status updates
+    staleTime: 0,
     // Cache data for 10 minutes
     gcTime: 10 * 60 * 1000,
     // Retry failed requests
@@ -46,23 +46,12 @@ export default function JobsPage() {
     refetchOnWindowFocus: true,
   });
 
-  // Navigate to job details page
+  // Navigate to job details page - React Query will handle data fetching
   const viewJobDetails = (job: JobData) => {
     if (!job.job_id) return;
     
-    // Pass job data to reduce API calls in details page
-    const queryParams = new URLSearchParams({
-      jobId: job.job_id,
-      appName: job.app_name || '',
-      releaseName: job.release_name || '',
-      sourceFolder: job.source_folder || '',
-      status: job.job_status || '',
-      createdAt: job.created_at || '',
-      files: JSON.stringify(job.files || []),
-      description: job.description || ''
-    });
-    
-    router.push(`/job/details?${queryParams.toString()}`);
+    // Simple navigation - React Query cache will provide the data
+    router.push(`/job/details?jobId=${job.job_id}`);
   };
 
   const getSubsetName = (job: JobData) => {
