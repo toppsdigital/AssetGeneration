@@ -2,13 +2,23 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, useCallback, Suspense, useRef } from 'react';
-import NavBar from '../../../components/NavBar';
+import { 
+  NavBar, 
+  JobHeader, 
+  PSDTemplateSelector, 
+  FilesSection, 
+  JobHeaderSkeleton, 
+  LoadingProgress,
+  FileCardSkeleton,
+  FileCard 
+} from '../../../components';
+import { useFileUpload } from '../../../hooks';
 import styles from '../../../styles/Edit.module.css';
 import Spinner from '../../../components/Spinner';
 import { contentPipelineApi, JobData, FileData } from '../../../web/utils/contentPipelineApi';
 import { useJobData, useJobFiles, useUpdateJobStatus, createJobDataFromParams, UIJobData, jobKeys } from '../../../web/hooks/useJobData';
 import { useQueryClient } from '@tanstack/react-query';
-import FileCard from '../../../components/FileCard';
+import { getTotalLoadingSteps, getJobTitle } from '../../../utils/fileOperations';
 
 // Add CSS animation for spinner
 if (typeof document !== 'undefined') {
@@ -24,234 +34,7 @@ if (typeof document !== 'undefined') {
 
 // UIJobData interface is now imported from useJobData hook
 
-// Add skeleton loader components
-const JobHeaderSkeleton = () => (
-  <div style={{ 
-    marginBottom: 48,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingBottom: 16,
-    borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-    minHeight: 42 // Match the actual job header height
-  }}>
-    {/* Status Badge Skeleton - Match actual badge dimensions */}
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: 8,
-      padding: '8px 16px', // Match actual status badge padding
-      borderRadius: 20,
-      background: 'linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 100%)',
-      backgroundSize: '200% 100%',
-      animation: 'shimmer 2s infinite',
-      border: '1px solid rgba(255, 255, 255, 0.2)',
-      width: 120
-    }} />
-    
-    {/* Metadata Skeleton - Match actual metadata dimensions */}
-    <div style={{ display: 'flex', gap: 16 }}>
-      {[80, 100, 120].map((width, i) => (
-        <div key={i} style={{
-          width,
-          height: 14, // Match actual fontSize: 12 (12px + line height ≈ 14px)
-          background: 'linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 100%)',
-          backgroundSize: '200% 100%',
-          animation: 'shimmer 2s infinite',
-          borderRadius: 4,
-          animationDelay: `${i * 0.2}s`
-        }} />
-      ))}
-    </div>
-  </div>
-);
-
-const FileCardSkeleton = ({ index = 0 }: { index?: number }) => (
-  <div style={{
-    border: '1px solid rgba(255, 255, 255, 0.1)',
-    borderRadius: 12,
-    padding: 20,
-    animationDelay: `${index * 0.1}s`,
-    minHeight: 280, // Fixed minimum height to match real file cards
-    transition: 'all 0.3s ease'
-  }}>
-    {/* File Header Skeleton */}
-    <div style={{ marginBottom: 20 }}>
-      <div style={{
-        width: '60%',
-        height: 24,
-        background: 'linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 100%)',
-        backgroundSize: '200% 100%',
-        animation: 'shimmer 2s infinite',
-        borderRadius: 6,
-        marginBottom: 8
-      }} />
-      <div style={{
-        width: '40%',
-        height: 14,
-        background: 'linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 100%)',
-        backgroundSize: '200% 100%',
-        animation: 'shimmer 2s infinite',
-        borderRadius: 4
-      }} />
-    </div>
-    
-    {/* File Sections Skeleton */}
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-      gap: 20,
-      marginBottom: 24
-    }}>
-      {[1, 2].map((section) => (
-        <div key={section}>
-          {/* Section Header */}
-          <div style={{
-            width: '70%',
-            height: 16,
-            background: 'linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 100%)',
-            backgroundSize: '200% 100%',
-            animation: 'shimmer 2s infinite',
-            borderRadius: 4,
-            marginBottom: 12
-          }} />
-          
-          {/* Section Content */}
-          <div style={{
-            background: 'rgba(255, 255, 255, 0.05)',
-            borderRadius: 8,
-            padding: 12,
-            height: 120
-          }}>
-            {[1, 2, 3].map((item) => (
-              <div key={item} style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: 8
-              }}>
-                <div style={{
-                  width: '60%',
-                  height: 13,
-                  background: 'linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 100%)',
-                  backgroundSize: '200% 100%',
-                  animation: 'shimmer 2s infinite',
-                  borderRadius: 4
-                }} />
-                <div style={{
-                  width: 60,
-                  height: 18,
-                  background: 'linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 100%)',
-                  backgroundSize: '200% 100%',
-                  animation: 'shimmer 2s infinite',
-                  borderRadius: 4
-                }} />
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  </div>
-);
-
-const LoadingProgress = ({ 
-  step, 
-  totalSteps, 
-  message, 
-  detail 
-}: { 
-  step: number; 
-  totalSteps: number; 
-  message: string; 
-  detail?: string; 
-}) => (
-  <div style={{
-    textAlign: 'center',
-    padding: '48px 0',
-    background: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 12,
-    border: '1px solid rgba(255, 255, 255, 0.1)',
-    minHeight: 220, // Fixed minimum height to prevent jumps
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'center',
-    transition: 'all 0.3s ease' // Smooth transitions
-  }}>
-    {/* Animated Icon */}
-    <div style={{
-      width: 64,
-      height: 64,
-      margin: '0 auto 24px',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
-      borderRadius: '50%',
-      position: 'relative',
-      overflow: 'hidden'
-    }}>
-      <div style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: 'conic-gradient(from 0deg, transparent, rgba(255,255,255,0.3), transparent)',
-        borderRadius: '50%',
-        animation: 'spin 2s linear infinite'
-      }} />
-      <span style={{ fontSize: 24, zIndex: 1 }}>⚡</span>
-    </div>
-    
-    {/* Progress Bar */}
-    <div style={{
-      width: '60%',
-      maxWidth: 300,
-      height: 8,
-      background: 'rgba(255,255,255,0.1)',
-      borderRadius: 4,
-      margin: '0 auto 16px',
-      overflow: 'hidden'
-    }}>
-      <div style={{
-        width: `${(step / totalSteps) * 100}%`,
-        height: '100%',
-        background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)',
-        borderRadius: 4,
-        transition: 'width 0.5s ease'
-      }} />
-    </div>
-    
-    {/* Progress Text */}
-    <div style={{
-      color: '#f8f8f8',
-      fontSize: 18,
-      fontWeight: 600,
-      marginBottom: 8
-    }}>
-      {message}
-    </div>
-    
-    <div style={{
-      color: '#9ca3af',
-      fontSize: 14,
-      marginBottom: 12
-    }}>
-      Step {step} of {totalSteps}
-    </div>
-    
-    {detail && (
-      <div style={{
-        color: '#6b7280',
-        fontSize: 13,
-        fontStyle: 'italic'
-      }}>
-        {detail}
-      </div>
-    )}
-  </div>
-);
+// Skeleton components are now imported from components/
 
 function JobDetailsPageContent() {
   const router = useRouter();
@@ -361,10 +144,10 @@ function JobDetailsPageContent() {
   // Status update mutation
   const updateJobStatusMutation = useUpdateJobStatus();
   
+  // Upload management with custom hook
+  const uploadState = useFileUpload();
+  
   // Legacy state for components that still need it
-  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
-  const [uploadingFiles, setUploadingFiles] = useState<Set<string>>(new Set());
-  const [uploadStarted, setUploadStarted] = useState(false);
   const [physicalJsonFiles, setPhysicalJsonFiles] = useState<Array<{name: string; lastModified: string | null; json_url?: string}>>([]);
   const [loadingPhysicalFiles, setLoadingPhysicalFiles] = useState(false);
   const [selectedPhysicalFile, setSelectedPhysicalFile] = useState<string>('');
@@ -373,7 +156,6 @@ function JobDetailsPageContent() {
   const [selectedLayers, setSelectedLayers] = useState<Set<string>>(new Set());
   const [selectedExtractedLayers, setSelectedExtractedLayers] = useState<Set<string>>(new Set());
   const [creatingAssets, setCreatingAssets] = useState(false);
-  const [allFilesUploaded, setAllFilesUploaded] = useState(false);
 
   // Enhanced loading state management - derived from React Query states
   const isLoading = isLoadingJob && !jobData; // Only show loading if no cached data
@@ -450,10 +232,7 @@ function JobDetailsPageContent() {
     return isExtracted ? 4 : 2; // 1-2 for basic loading, 3-4 for extracted jobs with PSD loading
   };
 
-  // Simple PDF upload tracking variables
-  const [totalPdfFiles, setTotalPdfFiles] = useState(0);
-  const [uploadedPdfFiles, setUploadedPdfFiles] = useState(0);
-  const [failedPdfFiles, setFailedPdfFiles] = useState(0);
+  // PDF upload tracking is now handled by uploadState hook
 
   // Legacy job loading useEffect removed - React Query handles this now
   useEffect(() => {
@@ -481,10 +260,10 @@ function JobDetailsPageContent() {
     console.log('🔄 Job ID changed, resetting file loading state');
     setFilesLoaded(false);
     setLoadingFiles(false);
-    setUploadStarted(false);
-    setUploadProgress({});
-    setUploadingFiles(new Set());
-    setAllFilesUploaded(false);
+    uploadState.setUploadStarted(false);
+    uploadState.setUploadProgress({});
+    uploadState.setUploadingFiles(new Set());
+    uploadState.setAllFilesUploaded(false);
     // Reset file creation trigger
     fileCreationTriggeredRef.current = false;
   }, [jobData?.job_id]);
@@ -516,7 +295,7 @@ function JobDetailsPageContent() {
 
   // Trigger upload check when files are loaded
   useEffect(() => {
-    if (!filesLoaded || !jobData?.content_pipeline_files || uploadStarted) {
+    if (!filesLoaded || !jobData?.content_pipeline_files || uploadState.uploadStarted) {
       return;
     }
 
@@ -560,7 +339,7 @@ function JobDetailsPageContent() {
         console.log('Starting upload for:', matchedFiles.map((f: File) => f.name));
         
         // Set flag to prevent re-triggering
-        setUploadStarted(true);
+        uploadState.setUploadStarted(true);
         
         // Start upload process (defined below)
         const doUpload = async () => {
@@ -578,42 +357,42 @@ function JobDetailsPageContent() {
       console.log('📋 Required files:', filesToUpload.map(f => f.filename));
       console.log('ℹ️ User will need to upload these files manually');
     }
-  }, [filesLoaded, uploadStarted]);
+  }, [filesLoaded, uploadState.uploadStarted]);
 
   // (Reset logic moved to dedicated useEffect above)
 
   // Monitor upload completion - simplified and reliable
   useEffect(() => {
-    if (!jobData?.content_pipeline_files || allFilesUploaded) {
+    if (!jobData?.content_pipeline_files || uploadState.allFilesUploaded) {
       return;
     }
 
     const checkUploadStatus = () => {
       // Simple completion logic using our tracking variables
-      const allFilesProcessed = totalPdfFiles > 0 && (uploadedPdfFiles + failedPdfFiles) === totalPdfFiles;
-      const noActiveUploads = uploadingFiles.size === 0;
-      const hasUploads = uploadedPdfFiles > 0;
+      const allFilesProcessed = uploadState.totalPdfFiles > 0 && (uploadState.uploadedPdfFiles + uploadState.failedPdfFiles) === uploadState.totalPdfFiles;
+      const noActiveUploads = uploadState.uploadingFiles.size === 0;
+      const hasUploads = uploadState.uploadedPdfFiles > 0;
       const isComplete = allFilesProcessed && noActiveUploads && hasUploads;
       
-      console.log('📊 Upload status check:', uploadedPdfFiles + '/' + totalPdfFiles, 'uploaded,', failedPdfFiles, 'failed, activeUploads:', uploadingFiles.size);
+      console.log('📊 Upload status check:', uploadState.uploadedPdfFiles + '/' + uploadState.totalPdfFiles, 'uploaded,', uploadState.failedPdfFiles, 'failed, activeUploads:', uploadState.uploadingFiles.size);
       
       console.log(`🔍 Completion check:`, {
-        totalPdfFiles,
-        uploadedPdfFiles,
-        failedPdfFiles,
-        activeUploads: uploadingFiles.size,
+        totalPdfFiles: uploadState.totalPdfFiles,
+        uploadedPdfFiles: uploadState.uploadedPdfFiles,
+        failedPdfFiles: uploadState.failedPdfFiles,
+        activeUploads: uploadState.uploadingFiles.size,
         allFilesProcessed,
         noActiveUploads,
         hasUploads,
         isComplete,
-        willNavigate: isComplete && !allFilesUploaded
+        willNavigate: isComplete && !uploadState.allFilesUploaded
       });
       
       // Navigate when upload is truly complete
-      if (isComplete && !allFilesUploaded) {
+      if (isComplete && !uploadState.allFilesUploaded) {
         console.log('✅ Upload completed! Navigating to jobs list...');
-        console.log('📋 Final status:', uploadedPdfFiles + '/' + totalPdfFiles, 'uploaded,', failedPdfFiles, 'failed');
-        setAllFilesUploaded(true);
+        console.log('📋 Final status:', uploadState.uploadedPdfFiles + '/' + uploadState.totalPdfFiles, 'uploaded,', uploadState.failedPdfFiles, 'failed');
+        uploadState.setAllFilesUploaded(true);
         
         // Navigate to jobs list after short delay
         setTimeout(() => {
@@ -631,7 +410,7 @@ function JobDetailsPageContent() {
 
     // Cleanup interval on unmount
     return () => clearInterval(interval);
-  }, [jobData?.content_pipeline_files, uploadingFiles, allFilesUploaded, router]);
+  }, [jobData?.content_pipeline_files, uploadState.uploadingFiles, uploadState.allFilesUploaded, router]);
 
   // Fetch physical JSON files when status is "extracted"
   useEffect(() => {
@@ -1378,20 +1157,20 @@ function JobDetailsPageContent() {
     
     // Update counters based on status
     if (status === 'uploaded') {
-      setUploadedPdfFiles(prev => prev + 1);
-      console.log('✅ PDF uploaded successfully:', pdfFilename, '- Total uploaded:', uploadedPdfFiles + 1);
+      uploadState.setUploadedPdfFiles(prev => prev + 1);
+      console.log('✅ PDF uploaded successfully:', pdfFilename, '- Total uploaded:', uploadState.uploadedPdfFiles + 1);
     } else if (status === 'upload-failed') {
-      setFailedPdfFiles(prev => prev + 1);
-      console.log('❌ PDF upload failed:', pdfFilename, '- Total failed:', failedPdfFiles + 1);
+      uploadState.setFailedPdfFiles(prev => prev + 1);
+      console.log('❌ PDF upload failed:', pdfFilename, '- Total failed:', uploadState.failedPdfFiles + 1);
     }
   };
 
   // Debug function to check current file states (call from browser console)
   const debugFileStates = () => {
     console.log('🔍 DEBUG: Current job data:', jobData);
-    console.log('🔍 DEBUG: Upload progress:', uploadProgress);
-    console.log('🔍 DEBUG: Uploading files set:', Array.from(uploadingFiles));
-    console.log('🔍 DEBUG: All files uploaded flag:', allFilesUploaded);
+    console.log('🔍 DEBUG: Upload progress:', uploadState.uploadProgress);
+    console.log('🔍 DEBUG: Uploading files set:', Array.from(uploadState.uploadingFiles));
+    console.log('🔍 DEBUG: All files uploaded flag:', uploadState.allFilesUploaded);
     
     if (jobData?.content_pipeline_files) {
       jobData.content_pipeline_files.forEach(fileGroup => {
@@ -1415,7 +1194,7 @@ function JobDetailsPageContent() {
     let retryCount = 0;
     
     // Track this file as actively uploading (for UI progress)
-    setUploadingFiles(prev => {
+    uploadState.setUploadingFiles(prev => {
       const newSet = new Set(prev).add(filename);
       console.log(`📤 Added ${filename} to uploadingFiles set. Current files:`, Array.from(newSet));
       return newSet;
@@ -1434,7 +1213,7 @@ function JobDetailsPageContent() {
         
         // Upload file with progress tracking
         await uploadFileToS3(file, uploadUrl, (progress) => {
-          setUploadProgress(prev => ({
+          uploadState.setUploadProgress(prev => ({
             ...prev,
             [filename]: progress
           }));
@@ -1445,7 +1224,7 @@ function JobDetailsPageContent() {
         updateLocalFileStatus(groupFilename, filename, 'uploaded');
 
         // Clear upload progress for this file
-        setUploadProgress(prev => {
+        uploadState.setUploadProgress(prev => {
           const newProgress = { ...prev };
           delete newProgress[filename];
           console.log('🧹 Cleared upload progress for', filename);
@@ -1453,7 +1232,7 @@ function JobDetailsPageContent() {
         });
         
         // Remove from uploading set immediately (S3 upload completed)
-        setUploadingFiles(prev => {
+        uploadState.setUploadingFiles(prev => {
           const newSet = new Set(prev);
           newSet.delete(filename);
           console.log(`🗑️ Removed ${filename} from uploadingFiles set. Remaining files:`, Array.from(newSet));
@@ -1477,7 +1256,7 @@ function JobDetailsPageContent() {
           updateLocalFileStatus(groupFilename, filename, 'upload-failed');
           
           // Remove from uploading set on final failure
-          setUploadingFiles(prev => {
+          uploadState.setUploadingFiles(prev => {
             const newSet = new Set(prev);
             newSet.delete(filename);
             console.log(`❌ Removed failed ${filename} from uploadingFiles set. Remaining files:`, Array.from(newSet));
@@ -1525,9 +1304,9 @@ function JobDetailsPageContent() {
     // Set total PDF files and reset counters
     const totalFiles = filesToUpload.length;
     console.log('📊 Total PDF files to upload:', totalFiles);
-    setTotalPdfFiles(totalFiles);
-    setUploadedPdfFiles(0);
-    setFailedPdfFiles(0);
+    uploadState.setTotalPdfFiles(totalFiles);
+    uploadState.setUploadedPdfFiles(0);
+    uploadState.setFailedPdfFiles(0);
     
     const batchSize = 4; // Upload 4 files at a time
     
@@ -1560,45 +1339,12 @@ function JobDetailsPageContent() {
       }
     }
     
-    console.log('🎉 Upload process completed! Total files:', totalFiles, 'Uploaded:', uploadedPdfFiles, 'Failed:', failedPdfFiles);
+    console.log('🎉 Upload process completed! Total files:', totalFiles, 'Uploaded:', uploadState.uploadedPdfFiles, 'Failed:', uploadState.failedPdfFiles);
   };
 
 
 
-  const getStatusColor = (status: string) => {
-    const lowerStatus = status.toLowerCase();
-    if (lowerStatus.includes('succeed') || lowerStatus.includes('completed')) return '#10b981';
-    if (lowerStatus.includes('fail') || lowerStatus.includes('error')) return '#ef4444';
-    if (lowerStatus.includes('progress') || lowerStatus.includes('running') || lowerStatus.includes('processing') || lowerStatus.includes('started')) return '#f59e0b';
-    return '#3b82f6';
-  };
-
-  const capitalizeStatus = (status: string) => {
-    if (!status) return '';
-    return status.charAt(0).toUpperCase() + status.slice(1);
-  };
-
-  const getJobDisplayName = () => {
-    if (!mergedJobData?.job_id) return 'Unknown Job';
-    return mergedJobData.job_id;
-  };
-
-  const getJobTitle = () => {
-    if (!mergedJobData) return 'Loading...';
-    const parts = [
-      mergedJobData.app_name,
-      mergedJobData.release_name,
-      mergedJobData.subset_name || mergedJobData.Subset_name
-    ].filter(Boolean);
-    return parts.join(' - ') || 'Unknown Job';
-  };
-
-  const isStatusActive = (status: string) => {
-    const lowerStatus = status.toLowerCase();
-    return lowerStatus.includes('uploading') || 
-           lowerStatus.includes('extracting') || 
-           lowerStatus.includes('generating');
-  };
+  // Utility functions now imported from utils/fileOperations.ts
 
   if (loading) {
     return (
@@ -1733,7 +1479,7 @@ function JobDetailsPageContent() {
         onHome={() => router.push('/')}
         onBackToEdit={() => router.push('/jobs')}
         backLabel="Back to Jobs"
-        title={getJobTitle()}
+        title={getJobTitle(mergedJobData)}
       />
       
       <div className={styles.editContainer}>
@@ -1749,811 +1495,37 @@ function JobDetailsPageContent() {
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
           }}>
             
-            {/* Job Overview - Compact */}
-            <div style={{ 
-              marginBottom: 48,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              paddingBottom: 16,
-              borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
-            }}>
-              {/* Status Badge */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '8px 16px',
-                borderRadius: 20,
-                background: getStatusColor(mergedJobData.job_status || ''),
-                boxShadow: `0 2px 8px ${getStatusColor(mergedJobData.job_status || '')}30`,
-                border: '1px solid rgba(255, 255, 255, 0.2)'
-              }}>
-                {/* Loading spinner for active statuses */}
-                {isStatusActive(mergedJobData.job_status || '') && (
-                  <div style={{
-                    width: 14,
-                    height: 14,
-                    border: '2px solid rgba(255, 255, 255, 0.3)',
-                    borderTop: '2px solid white',
-                    borderRadius: '50%',
-                    animation: 'spin 1s linear infinite'
-                  }} />
-                )}
-                <span style={{ 
-                  color: 'white', 
-                  fontSize: 14, 
-                  fontWeight: 600,
-                  textShadow: '0 1px 2px rgba(0, 0, 0, 0.5)'
-                }}>
-                  {capitalizeStatus(mergedJobData.job_status || 'Unknown')}
-                  {/* Show upload progress when status is uploading */}
-                  {(() => {
-                    if (mergedJobData.job_status?.toLowerCase() === 'uploading' && totalPdfFiles > 0) {
-                      // Use simplified counters for upload progress
-                      return (
-                        <span style={{ 
-                          fontSize: 12, 
-                          fontWeight: 500,
-                          marginLeft: 4,
-                          opacity: 0.9
-                        }}>
-                          ({uploadedPdfFiles}/{totalPdfFiles} files)
-                        </span>
-                      );
-                    }
-                    return null;
-                  })()}
-                </span>
-              </div>
-              
-              {/* Metadata - Less prominent */}
-              <div style={{
-                display: 'flex',
-                gap: 16,
-                fontSize: 12,
-                color: '#6b7280'
-              }}>
-                <span>Files: <span style={{ color: '#9ca3af' }}>{mergedJobData.content_pipeline_files?.length || 0}</span></span>
-                {mergedJobData.created_at && (
-                  <span>Created: <span style={{ color: '#9ca3af' }}>{new Date(mergedJobData.created_at).toLocaleDateString()}</span></span>
-                )}
-                {mergedJobData.job_id && (
-                  <span>ID: <span style={{ color: '#9ca3af', fontFamily: 'monospace', fontSize: 11 }}>{mergedJobData.job_id}</span></span>
-                )}
-              </div>
-            </div>
+            {/* Job Header - Now uses JobHeader component */}
+            <JobHeader 
+              jobData={mergedJobData}
+              totalPdfFiles={uploadState.totalPdfFiles}
+              uploadedPdfFiles={uploadState.uploadedPdfFiles}
+            />
 
 
 
-            {/* Action Required Banner - Only show when status is "extracted" and not loading */}
-            {mergedJobData?.job_status?.toLowerCase() === 'extracted' && !loading && !loadingFiles && (
-              <div style={{ marginBottom: 32 }}>
-                {/* Prominent Call-to-Action Banner */}
-                <div style={{
-                  background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(147, 51, 234, 0.15))',
-                  border: '2px solid rgba(59, 130, 246, 0.3)',
-                  borderRadius: 16,
-                  padding: 24,
-                  marginBottom: 32,
-                  position: 'relative',
-                  overflow: 'hidden'
-                }}>
-                  {/* Animated background accent */}
-                  <div style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    height: '4px',
-                    background: 'linear-gradient(90deg, #3b82f6, #8b5cf6, #3b82f6)',
-                    backgroundSize: '200% 100%',
-                    animation: 'gradient-shift 3s ease-in-out infinite'
-                  }} />
-                  
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 16,
-                    marginBottom: 16
-                  }}>
-                    <div style={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: '50%',
-                      background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 24,
-                      flexShrink: 0
-                    }}>
-                      ⚡
-                    </div>
-                    <div>
-                      <h2 style={{
-                        fontSize: '1.4rem',
-                        fontWeight: 700,
-                        color: '#f8f8f8',
-                        margin: '0 0 8px 0'
-                      }}>
-                        🎯 Action Required: Configure Digital Assets
-                      </h2>
-                      <p style={{
-                        fontSize: '1rem',
-                        color: '#bfdbfe',
-                        margin: 0,
-                        lineHeight: 1.5
-                      }}>
-                        Your files have been successfully extracted! Now configure your digital assets by selecting a PSD template, color variants, and layers below.
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div style={{
-                    display: 'flex',
-                    gap: 16,
-                    fontSize: 14,
-                    color: '#93c5fd',
-                    marginBottom: 24
-                  }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981' }} />
-                      Step 1: Select PSD Template
-                    </span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#f59e0b' }} />
-                      Step 2: Choose Color Variants
-                    </span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#8b5cf6' }} />
-                      Step 3: Select Layers
-                    </span>
-                  </div>
-
-                {/* Configuration Sections */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                  {/* PSD File Selection */}
-                  <div>
-                    <label style={{
-                      display: 'block',
-                      fontSize: 16,
-                      fontWeight: 600,
-                      color: '#f8f8f8',
-                      marginBottom: 12
-                    }}>
-                      Select PSD
-                    </label>
-                    {loadingPhysicalFiles ? (
-                      <div style={{
-                        width: '100%',
-                        maxWidth: 400,
-                        padding: '12px 16px',
-                        background: 'rgba(255, 255, 255, 0.08)',
-                        border: '1px solid rgba(255, 255, 255, 0.2)',
-                        borderRadius: 8,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8
-                      }}>
-                        <div style={{
-                          width: 16,
-                          height: 16,
-                          border: '2px solid rgba(255, 255, 255, 0.3)',
-                          borderTop: '2px solid #60a5fa',
-                          borderRadius: '50%',
-                          animation: 'spin 1s linear infinite'
-                        }} />
-                        <span style={{ color: '#9ca3af', fontSize: 14 }}>
-                          Loading PSD templates...
-                        </span>
-                      </div>
-                    ) : (
-                      <select
-                        value={selectedPhysicalFile}
-                        onChange={(e) => setSelectedPhysicalFile(e.target.value)}
-                        disabled={loadingPhysicalFiles}
-                        style={{
-                          width: '100%',
-                          maxWidth: 400,
-                          padding: '12px 16px',
-                          background: 'rgba(255, 255, 255, 0.08)',
-                          border: '1px solid rgba(255, 255, 255, 0.2)',
-                          borderRadius: 8,
-                          color: '#f8f8f8',
-                          fontSize: 14,
-                          outline: 'none',
-                          transition: 'border-color 0.2s',
-                          boxSizing: 'border-box'
-                        }}
-                        onFocus={(e) => {
-                          e.target.style.borderColor = '#60a5fa';
-                        }}
-                        onBlur={(e) => {
-                          e.target.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-                        }}
-                      >
-                        <option value="" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                          Select PSD file...
-                        </option>
-                        {physicalJsonFiles.map((file, index) => {
-                          const filename = file.name.split('/').pop() || file.name;
-                          const displayName = filename.replace('.json', '');
-                          return (
-                            <option 
-                              key={index} 
-                              value={file.name} 
-                              style={{ background: '#1f2937', color: '#f8f8f8' }}
-                            >
-                              {displayName}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    )}
-                  </div>
-
-                                                      {/* Loading JSON Data */}
-                  {selectedPhysicalFile && loadingJsonData && (
-                    <div style={{
-                      padding: '24px',
-                      textAlign: 'center',
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      borderRadius: 12,
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      margin: '20px 0'
-                    }}>
-                      <div style={{
-                        width: 32,
-                        height: 32,
-                        border: '3px solid rgba(59, 130, 246, 0.3)',
-                        borderTop: '3px solid #3b82f6',
-                        borderRadius: '50%',
-                        animation: 'spin 1s linear infinite',
-                        margin: '0 auto 16px'
-                      }} />
-                      <div style={{
-                        color: '#9ca3af',
-                        fontSize: 14,
-                        marginBottom: 8
-                      }}>
-                        Loading PSD template data...
-                      </div>
-                      <div style={{
-                        color: '#6b7280',
-                        fontSize: 12
-                      }}>
-                        Parsing layers and color information
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Layer and Color Selection */}
-                  {(() => {
-                    // Debug when this conditional is evaluated
-                    console.log('🔍 Layer selection conditional check:', {
-                      selectedPhysicalFile: !!selectedPhysicalFile,
-                      jsonData: !!jsonData,
-                      loadingJsonData,
-                      mergedJobDataFiles: mergedJobData?.content_pipeline_files?.length || 0,
-                      willShowLayerSelection: !!(selectedPhysicalFile && jsonData && !loadingJsonData)
-                    });
-                    
-                    return selectedPhysicalFile && jsonData && !loadingJsonData;
-                  })() && (
-                    <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
-                      {/* Select Layers from Extracted Files */}
-                      <div style={{ maxWidth: 250 }}>
-                        <label style={{
-                          display: 'block',
-                          fontSize: 16,
-                          fontWeight: 600,
-                          color: '#f8f8f8',
-                          marginBottom: 12
-                        }}>
-                          Select Layers
-                        </label>
-                        {(() => {
-                          // Extract unique layer names from all extracted files in the job
-                          const extractedLayerNames = new Set<string>();
-                          
-                          // Debug logging to see what data we have
-                          console.log('🔍 Layer extraction debug:', {
-                            hasJobData: !!jobData,
-                            hasMergedJobData: !!mergedJobData,
-                            jobDataFiles: jobData?.content_pipeline_files?.length || 0,
-                            mergedJobDataFiles: mergedJobData?.content_pipeline_files?.length || 0,
-                            selectedPhysicalFile,
-                            hasJsonData: !!jsonData
-                          });
-                          
-                          // Log the actual files to see their structure
-                          if (mergedJobData?.content_pipeline_files) {
-                            console.log('📁 Available file groups:', mergedJobData.content_pipeline_files.map(f => ({
-                              filename: f.filename,
-                              hasExtractedFiles: !!f.extracted_files,
-                              extractedFilesCount: f.extracted_files ? Object.keys(f.extracted_files).length : 0,
-                              extractedFileNames: f.extracted_files ? Object.keys(f.extracted_files) : []
-                            })));
-                          }
-                          
-                          // Function to extract layer name from filename
-                          const extractLayerName = (filename: string): string | null => {
-                            // Remove file extension first
-                            const nameWithoutExt = filename.replace(/\.(tif|pdf|png|jpg|jpeg)$/i, '');
-                            
-                            // Split by underscore
-                            const parts = nameWithoutExt.split('_');
-                            
-                            // Need at least 3 parts: prefix, number, layer_name
-                            if (parts.length < 3) return null;
-                            
-                            // Remove first part (app prefix like "25dnyc")
-                            // Remove second part (card number like "4905")
-                            // Keep the rest joined with underscores
-                            const layerParts = parts.slice(2);
-                            const layerName = layerParts.join('_');
-                            
-                            return layerName;
-                          };
-                          
-                          // Collect layer names from all extracted files - USE MERGED DATA
-                          if (mergedJobData?.content_pipeline_files) {
-                            mergedJobData.content_pipeline_files.forEach(fileGroup => {
-                              if (fileGroup.extracted_files) {
-                                Object.keys(fileGroup.extracted_files).forEach(filename => {
-                                  const layerName = extractLayerName(filename);
-                                  console.log('🏷️ Processing extracted file:', filename, '→ layer name:', layerName);
-                                  if (layerName) {
-                                    extractedLayerNames.add(layerName);
-                                  }
-                                });
-                              }
-                            });
-                          }
-                          
-                          const layerNamesArray = Array.from(extractedLayerNames).sort();
-                          
-                          console.log('🎯 Final extracted layer names:', layerNamesArray);
-                          
-                          const toggleExtractedLayer = (layerName: string) => {
-                            const newSelected = new Set(selectedExtractedLayers);
-                            if (newSelected.has(layerName)) {
-                              newSelected.delete(layerName);
-                            } else {
-                              newSelected.add(layerName);
-                            }
-                            setSelectedExtractedLayers(newSelected);
-                          };
-                          
-                          return layerNamesArray.length > 0 ? (
-                            <div style={{
-                              display: 'flex',
-                              flexDirection: 'column',
-                              gap: 6,
-                              maxWidth: 250
-                            }}>
-                              {layerNamesArray.map((layerName, index) => {
-                                const isSelected = selectedExtractedLayers.has(layerName);
-                                
-                                return (
-                                  <label key={index} style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 8,
-                                    cursor: 'pointer',
-                                    fontSize: 13,
-                                    color: '#f8f8f8',
-                                    padding: '8px 12px',
-                                    background: 'rgba(255, 255, 255, 0.05)',
-                                    borderRadius: 6,
-                                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                                    transition: 'background-color 0.2s'
-                                  }}
-                                  onMouseEnter={(e) => {
-                                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
-                                  }}
-                                  onMouseLeave={(e) => {
-                                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                                  }}
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      checked={isSelected}
-                                      onChange={() => toggleExtractedLayer(layerName)}
-                                      style={{
-                                        width: 14,
-                                        height: 14,
-                                        cursor: 'pointer',
-                                        flexShrink: 0
-                                      }}
-                                    />
-                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                      {layerName}
-                                    </span>
-                                  </label>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            <div style={{
-                              fontSize: 14,
-                              color: '#9ca3af',
-                              fontStyle: 'italic'
-                            }}>
-                              No extracted layers available
-                            </div>
-                          );
-                        })()}
-                      </div>
-
-                      {/* Color Variants Selection - Only show if spot layer is selected */}
-                      {(() => {
-                        // Check if any selected layer contains "spot" (case-insensitive)
-                        const hasSpotLayer = Array.from(selectedExtractedLayers).some(layerName => 
-                          layerName.toLowerCase().includes('spot')
-                        );
-                        
-                        if (!hasSpotLayer) {
-                          return null;
-                        }
-                        
-                        return (
-                          <div style={{ maxWidth: 200 }}>
-                        <label style={{
-                          display: 'block',
-                          fontSize: 16,
-                          fontWeight: 600,
-                          color: '#f8f8f8',
-                          marginBottom: 12
-                        }}>
-                              Select Color Variants
-                        </label>
-                        {(() => {
-                              const spotGroup = jsonData.layers?.find((layer: any) => 
-                                layer.name?.toLowerCase().includes('spot group')
-                              );
-                              
-                              const collectSolidColorLayers = (layer: any): any[] => {
-                                const layers: any[] = [];
-                                if (layer.type === 'solidcolorfill') {
-                                  layers.push(layer);
-                                }
-                                if (layer.children) {
-                                  layer.children.forEach((child: any) => {
-                                    layers.push(...collectSolidColorLayers(child));
-                                  });
-                                }
-                                return layers;
-                              };
-                              
-                              const solidColorLayers = spotGroup ? collectSolidColorLayers(spotGroup) : [];
-                          
-                              const toggleLayer = (layerId: string) => {
-                                const newSelected = new Set(selectedLayers);
-                                if (newSelected.has(layerId)) {
-                                  newSelected.delete(layerId);
-                            } else {
-                                  newSelected.add(layerId);
-                            }
-                                setSelectedLayers(newSelected);
-                          };
-                          
-                              return solidColorLayers.length > 0 ? (
-                            <div style={{
-                              display: 'flex',
-                              flexDirection: 'column',
-                                  gap: 6,
-                              maxWidth: 200
-                            }}>
-                                  {solidColorLayers.map((layer: any, index: number) => {
-                                    const layerId = `${layer.id}-${layer.name}`;
-                                    const isSelected = selectedLayers.has(layerId);
-                                
-                                return (
-                                  <label key={index} style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                        gap: 8,
-                                    cursor: 'pointer',
-                                    fontSize: 13,
-                                    color: '#f8f8f8',
-                                        padding: '8px 12px',
-                                    background: 'rgba(255, 255, 255, 0.05)',
-                                    borderRadius: 6,
-                                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                                    transition: 'background-color 0.2s'
-                                  }}
-                                  onMouseEnter={(e) => {
-                                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
-                                  }}
-                                  onMouseLeave={(e) => {
-                                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                                  }}
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      checked={isSelected}
-                                          onChange={() => toggleLayer(layerId)}
-                                      style={{
-                                        width: 14,
-                                        height: 14,
-                                        cursor: 'pointer',
-                                        flexShrink: 0
-                                      }}
-                                    />
-                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                          {layer.name || `Layer ${layer.id || index + 1}`}
-                                    </span>
-                                  </label>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            <div style={{
-                              fontSize: 14,
-                              color: '#9ca3af',
-                              fontStyle: 'italic'
-                            }}>
-                                  No color variants available
-                            </div>
-                          );
-                        })()}
-                      </div>
-                        );
-                      })()}
-
-                      {/* Create Assets Button */}
-                      {(() => {
-                        // Check if any selected layer contains "spot" (case-insensitive)
-                        const hasSpotLayer = Array.from(selectedExtractedLayers).some(layerName => 
-                          layerName.toLowerCase().includes('spot')
-                        );
-                        
-                        // For spot layers, require both layers and colors
-                        // For non-spot layers, only require layers
-                        const canCreateAssets = selectedExtractedLayers.size > 0 && (
-                          !hasSpotLayer || (hasSpotLayer && selectedLayers.size > 0)
-                        );
-                        
-                        return (
-                        <div style={{ 
-                          display: 'flex', 
-                          flexDirection: 'column', 
-                            alignItems: 'flex-start',
-                            justifyContent: 'flex-start',
-                            marginTop: 32
-                        }}>
-                          <button
-                            onClick={async () => {
-                                if (!canCreateAssets) return;
-
-                              console.log('🎨 Creating digital assets with selected options:', {
-                                selectedFile: selectedPhysicalFile,
-                                psdFile: jsonData?.psd_file,
-                                selectedLayers: Array.from(selectedLayers),
-                                selectedExtractedLayers: Array.from(selectedExtractedLayers),
-                                totalColors: selectedLayers.size,
-                                  totalLayers: selectedExtractedLayers.size,
-                                  hasSpotLayer
-                              });
-
-                              setCreatingAssets(true);
-
-                              try {
-                                // Extract PSD filename from the selected physical file
-                                const psdFile = selectedPhysicalFile.split('/').pop()?.replace('.json', '.psd') || '';
-
-                                // Use selected extracted layers instead of hardcoded layers
-                                const layers = Array.from(selectedExtractedLayers);
-
-                                  // Build payload - always include colors array (empty if no spot layers)
-                                  const colors = hasSpotLayer 
-                                    ? Array.from(selectedLayers).map((layerId) => {
-                                        const [id, name] = layerId.split('-'); // Extract actual ID and name from "id-name" format
-                                        return {
-                                          id: parseInt(id, 10), // Use actual layer ID from JSON
-                                          name: name || layerId // Use extracted name or fallback to full layerId
-                                        };
-                                      })
-                                    : [];
-
-                                const payload = {
-                                  colors,
-                                  layers,
-                                  psd_file: psdFile
-                                };
-
-                                console.log('📋 API Payload:', payload);
-
-                                // Make the API call
-                                const response = await contentPipelineApi.generateAssets(jobData!.job_id!, payload);
-                                
-                                console.log('✅ Assets creation response:', response);
-                                
-                                // Navigate back to jobs list after successful creation
-                                router.push('/jobs');
-                                
-                              } catch (error) {
-                                console.error('❌ Error creating assets:', error);
-                                alert(`Failed to create assets: ${error instanceof Error ? error.message : 'Unknown error'}`);
-                                setCreatingAssets(false);
-                              }
-                            }}
-                              disabled={creatingAssets || !canCreateAssets}
-                            style={{
-                              padding: '16px 32px',
-                              background: creatingAssets 
-                                ? 'rgba(156, 163, 175, 0.5)' 
-                                  : !canCreateAssets
-                                  ? 'rgba(156, 163, 175, 0.3)'
-                                : 'linear-gradient(135deg, #10b981, #059669)',
-                              border: 'none',
-                              borderRadius: 12,
-                              color: 'white',
-                              fontSize: 16,
-                              fontWeight: 600,
-                                cursor: creatingAssets || !canCreateAssets ? 'not-allowed' : 'pointer',
-                              transition: 'all 0.2s',
-                                boxShadow: creatingAssets || !canCreateAssets
-                                ? 'none' 
-                                : '0 8px 24px rgba(16, 185, 129, 0.3)',
-                                minHeight: 60,
-                                opacity: !canCreateAssets ? 0.6 : 1
-                            }}
-                            onMouseEnter={(e) => {
-                                if (!creatingAssets && canCreateAssets) {
-                                e.currentTarget.style.transform = 'scale(1.05)';
-                                e.currentTarget.style.boxShadow = '0 12px 32px rgba(16, 185, 129, 0.4)';
-                              }
-                            }}
-                            onMouseLeave={(e) => {
-                                if (!creatingAssets && canCreateAssets) {
-                                e.currentTarget.style.transform = 'scale(1)';
-                                e.currentTarget.style.boxShadow = '0 8px 24px rgba(16, 185, 129, 0.3)';
-                              }
-                            }}
-                          >
-                            {creatingAssets ? (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <div style={{
-                                  width: 16,
-                                  height: 16,
-                                  border: '2px solid rgba(255, 255, 255, 0.3)',
-                                  borderTop: '2px solid white',
-                                  borderRadius: '50%',
-                                  animation: 'spin 1s linear infinite'
-                                }} />
-                                Creating...
-                              </div>
-                            ) : (
-                              '🎨 Create Assets'
-                            )}
-                          </button>
-                          <div style={{
-                            fontSize: 12,
-                            color: '#9ca3af',
-                              marginTop: 8
-                          }}>
-                              {!canCreateAssets ? (
-                                hasSpotLayer ? 
-                                  `Select ${selectedLayers.size} colors and ${selectedExtractedLayers.size} layers` :
-                                  `Select ${selectedExtractedLayers.size} layers`
-                              ) : (
-                                `${hasSpotLayer ? `${selectedLayers.size} colors • ` : ''}${selectedExtractedLayers.size} layers`
-                              )}
-                          </div>
-                        </div>
-                        );
-                      })()}
-                    </div>
-                  )}
-
-                </div>
+            {/* PSD Template Selector - Now uses PSDTemplateSelector component */}
+            <PSDTemplateSelector
+              jobData={jobData}
+              mergedJobData={mergedJobData}
+              isVisible={mergedJobData?.job_status?.toLowerCase() === 'extracted' && !loading && !loadingFiles}
+            />
 
 
 
+                                                      
 
-                </div>
-               </div>
-             )}
-
-            {/* Files Details - Always show */}
-            <div style={{ marginTop: 32 }}>
-                <h2 style={{
-                  fontSize: '1.5rem',
-                  fontWeight: 600,
-                  color: '#f8f8f8',
-                  marginBottom: 24
-                }}>
-                  📁 Files ({mergedJobData.content_pipeline_files?.length || 0})
-                </h2>
-
-                
-                {(() => {
-                  const showLoading = (loadingFiles && !mergedJobData?.content_pipeline_files?.length) || (!filesLoaded && mergedJobData?.api_files?.length > 0 && !uploadStarted && !mergedJobData?.content_pipeline_files?.length);
-                  
-                  console.log('🔍 Files Loading Condition:', {
-                    showLoading,
-                    loadingFiles,
-                    filesLoaded,
-                    hasApiFiles: mergedJobData?.api_files?.length || 0,
-                    hasCachedFiles: mergedJobData?.content_pipeline_files?.length || 0,
-                    uploadStarted
-                  });
-                  
-                  return showLoading;
-                })() ? (
-                  <div style={{
-                    transition: 'opacity 0.3s ease',
-                    opacity: 1
-                  }}>
-                    <LoadingProgress
-                      step={loadingFiles ? loadingStep : 1}
-                      totalSteps={getTotalLoadingSteps()}
-                      message={loadingFiles ? loadingMessage : 'Preparing to load files...'}
-                      detail={loadingFiles ? loadingDetail : `Getting ready to process ${mergedJobData?.api_files?.length || 0} files`}
-                    />
-                    
-                    {/* File Skeletons while loading */}
-                    <div style={{ 
-                      marginTop: 32,
-                      display: 'flex', 
-                      flexDirection: 'column', 
-                      gap: 24,
-                      opacity: 0.6,
-                      transition: 'opacity 0.3s ease'
-                    }}>
-                      {[0, 1, 2].map((index) => (
-                        <FileCardSkeleton key={index} index={index} />
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ 
-                    display: 'flex', 
-                    flexDirection: 'column', 
-                    gap: 24,
-                    transition: 'opacity 0.3s ease',
-                    opacity: 1,
-                    animation: 'fadeIn 0.3s ease-in'
-                  }}>
-                    {mergedJobData.content_pipeline_files && mergedJobData.content_pipeline_files.length > 0 ? (
-                      mergedJobData.content_pipeline_files.map((file, index) => (
-                        <FileCard 
-                          key={index} 
-                          file={file} 
-                          index={index}
-                          jobData={jobData}
-                          uploadingFiles={uploadingFiles}
-                        />
-                      ))
-                    ) : (
-                      <div style={{
-                        textAlign: 'center',
-                        padding: '24px 0',
-                        color: '#9ca3af',
-                        fontSize: 14
-                      }}>
-                        {(() => {
-                          // Show loading if files should be loading but haven't started yet
-                          const shouldBeLoadingFiles = jobData?.api_files?.length > 0 && !filesLoaded && !uploadStarted;
-                          
-                          if (loadingFiles || shouldBeLoadingFiles) {
-                            return 'Loading files...';
-                          } else if (filesLoaded && (!mergedJobData.content_pipeline_files || mergedJobData.content_pipeline_files.length === 0)) {
-                            return 'No files available for this job.';
-                          } else if (!filesLoaded && !loadingFiles && !shouldBeLoadingFiles) {
-                            return 'Files not loaded yet.';
-                          } else {
-                            return 'Loading files...';
-                          }
-                        })()}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+            {/* Files Section - Now uses FilesSection component */}
+            <FilesSection
+              mergedJobData={mergedJobData}
+              jobData={jobData}
+              uploadingFiles={uploadState.uploadingFiles}
+              loadingFiles={loadingFiles}
+              filesLoaded={filesLoaded}
+              loadingStep={loadingStep}
+              loadingMessage={loadingMessage}
+              loadingDetail={loadingDetail}
+            />
 
           </div>
         </main>
