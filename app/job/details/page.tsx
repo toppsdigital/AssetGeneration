@@ -6,6 +6,7 @@ import {
   NavBar, 
   JobHeader, 
   PSDTemplateSelector, 
+  DownloadSection,
   FilesSection, 
   JobHeaderSkeleton, 
   LoadingProgress,
@@ -1034,9 +1035,11 @@ function JobDetailsPageContent() {
               setCreatingAssets={setCreatingAssets}
             />
 
-
-
-                                                      
+            {/* Download Section - Shows when job is completed */}
+            <DownloadSection
+              jobData={mergedJobData}
+              isVisible={['complete', 'completed'].includes(mergedJobData?.job_status?.toLowerCase() || '') && !loading && !loadingFiles}
+            />
 
             {/* Files Section - Now uses FilesSection component */}
             <FilesSection

@@ -2,6 +2,7 @@
 export { JobHeader } from './JobHeader';
 export { JobStatusBadge } from './JobStatusBadge';
 export { PSDTemplateSelector } from './PSDTemplateSelector';
+export { DownloadSection } from './DownloadSection';
 export { FilesSection } from './FilesSection';
 export { default as FileCard } from './FileCard';
 

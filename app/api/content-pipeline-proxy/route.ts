@@ -382,13 +382,19 @@ async function handleRequest(request: NextRequest, method: string) {
         break;
         
       case 's3_download_folder':
-        if (!body.prefix) {
-          return NextResponse.json({ error: 'prefix is required for S3 folder download' }, { status: 400 });
+        if (!body.folder && !body.prefix) {
+          return NextResponse.json({ error: 'folder is required for S3 folder download' }, { status: 400 });
         }
         apiUrl += '/s3-files';
         apiMethod = 'POST';
         // Add the hardcoded bucket name and mode to the request body
-        apiBody = { ...body, bucket: S3_BUCKET_NAME, mode: 'download' };
+        // Support both 'folder' (new format) and 'prefix' (legacy) for backwards compatibility
+        const folderPath = body.folder || body.prefix;
+        apiBody = { 
+          mode: 'download',
+          bucket: S3_BUCKET_NAME,
+          folder: folderPath
+        };
         break;
         
       case 's3_upload_files':
