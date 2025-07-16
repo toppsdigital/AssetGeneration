@@ -1,13 +1,14 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState, useCallback, Suspense } from 'react';
+import { useEffect, useState, useCallback, Suspense, useRef } from 'react';
 import NavBar from '../../../components/NavBar';
 import styles from '../../../styles/Edit.module.css';
 import Spinner from '../../../components/Spinner';
 import { contentPipelineApi, JobData, FileData } from '../../../web/utils/contentPipelineApi';
-import { useJobData, useJobFiles, useUpdateJobStatus, createJobDataFromParams, UIJobData } from '../../../web/hooks/useJobData';
+import { useJobData, useJobFiles, useUpdateJobStatus, createJobDataFromParams, UIJobData, jobKeys } from '../../../web/hooks/useJobData';
 import { useQueryClient } from '@tanstack/react-query';
+import FileCard from '../../../components/FileCard';
 
 // Add CSS animation for spinner
 if (typeof document !== 'undefined') {
@@ -317,18 +318,45 @@ function JobDetailsPageContent() {
     }
   }, [jobId, hasQueryParams, appName, releaseName, subsetName, sourceFolder, status, createdAt, files, description, queryClient, jobData]);
   
-  // File data fetching with caching
+  // File data fetching with caching - only when NOT creating files
+  const shouldFetchFiles = createFiles !== 'true';
+  
+  console.log('🔍 useJobFiles parameters:', {
+    createFiles,
+    shouldFetchFiles,
+    jobId: shouldFetchFiles ? (jobData?.job_id || null) : null,
+    apiFilesCount: shouldFetchFiles ? (jobData?.api_files || []).length : 0,
+    enabled: shouldFetchFiles
+  });
+  
   const { 
     data: fileData = [], 
     isLoading: isLoadingFiles,
     error: filesError 
-  } = useJobFiles(jobData?.job_id || null, jobData?.api_files || []);
+  } = useJobFiles(
+    shouldFetchFiles ? (jobData?.job_id || null) : null, 
+    shouldFetchFiles ? (jobData?.api_files || []) : [],
+    shouldFetchFiles // Disable the hook when createFiles=true
+  );
   
   // Merge cached job data with fresh file data
   const mergedJobData = jobData ? {
     ...jobData,
-    content_pipeline_files: fileData
+    // When createFiles='true', use files from jobData (set by createNewFiles)
+    // When createFiles!='true', use fresh fileData from useJobFiles hook
+    content_pipeline_files: createFiles === 'true' ? (jobData.content_pipeline_files || []) : fileData
   } : null;
+  
+  // Debug logging for file source
+  console.log('🔍 mergedJobData file source:', {
+    createFiles,
+    usingJobDataFiles: createFiles === 'true',
+    jobDataFilesCount: jobData?.content_pipeline_files?.length || 0,
+    fileDataCount: fileData.length,
+    finalCount: mergedJobData?.content_pipeline_files?.length || 0,
+    jobDataExists: !!jobData,
+    jobDataStructure: jobData ? Object.keys(jobData) : 'no jobData'
+  });
   
   // Status update mutation
   const updateJobStatusMutation = useUpdateJobStatus();
@@ -365,13 +393,22 @@ function JobDetailsPageContent() {
   const [loadingMessage, setLoadingMessage] = useState('Initializing...');
   const [loadingDetail, setLoadingDetail] = useState<string | undefined>(undefined);
   
-  // Sync legacy state with React Query state
+  // Track if file creation has been triggered to prevent double execution
+  const fileCreationTriggeredRef = useRef(false);
+
+  // Sync legacy state with React Query state - ONLY when NOT in create mode
   useEffect(() => {
+    // Skip sync when in create mode to avoid conflicts with createNewFiles()
+    if (createFiles === 'true') {
+      console.log('🔄 Skipping legacy state sync - in create mode');
+      return;
+    }
+    
     // Update file loading states based on React Query
     const hasFiles = fileData.length > 0;
     const shouldMarkFilesLoaded = !isLoadingFiles && (hasFiles || (jobData && (!jobData.api_files || jobData.api_files.length === 0)));
     
-    console.log('🔄 Syncing legacy state:', {
+    console.log('🔄 Syncing legacy state (fetch mode):', {
       isLoadingFiles,
       fileDataLength: fileData.length,
       hasApiFiles: jobData?.api_files?.length || 0,
@@ -405,7 +442,7 @@ function JobDetailsPageContent() {
     if (jobData && !error) {
       setError(null);
     }
-  }, [isLoadingFiles, fileData, isLoadingJob, jobData, error, filesLoaded]);
+  }, [createFiles, isLoadingFiles, fileData, isLoadingJob, jobData, error, filesLoaded]);
 
   // Calculate total loading steps based on job status
   const getTotalLoadingSteps = () => {
@@ -448,7 +485,34 @@ function JobDetailsPageContent() {
     setUploadProgress({});
     setUploadingFiles(new Set());
     setAllFilesUploaded(false);
+    // Reset file creation trigger
+    fileCreationTriggeredRef.current = false;
   }, [jobData?.job_id]);
+
+  // Auto-trigger file creation when createFiles=true
+  useEffect(() => {
+    console.log('📋 File handling decision useEffect triggered:', {
+      createFiles,
+      shouldFetchFiles: createFiles !== 'true',
+      hasJobData: !!jobData,
+      filesLoaded,
+      jobId: jobData?.job_id,
+      apiFilesCount: jobData?.api_files?.length || 0,
+      alreadyTriggered: fileCreationTriggeredRef.current
+    });
+    
+    if (createFiles === 'true' && jobData && !filesLoaded && !fileCreationTriggeredRef.current) {
+      console.log('🔄 Auto-triggering file creation for createFiles=true');
+      fileCreationTriggeredRef.current = true;
+      createNewFiles();
+    } else if (createFiles !== 'true' && jobData && !filesLoaded) {
+      console.log('📋 createFiles=false, will fetch existing files via useJobFiles hook');
+    } else if (filesLoaded) {
+      console.log('📋 Files already loaded, no action needed');
+    } else {
+      console.log('📋 Waiting for job data...');
+    }
+  }, [createFiles, jobData, filesLoaded]);
 
   // Trigger upload check when files are loaded
   useEffect(() => {
@@ -1050,16 +1114,26 @@ function JobDetailsPageContent() {
       
       // Only update if we actually got files back
       if (finalFileObjects.length > 0) {
-        // Update job data with all files (created + existing)
+        // Update React Query cache with all files (created + existing)
         const updatedJobData = {
           ...jobData,
           content_pipeline_files: finalFileObjects
         };
         
         console.log('Setting job data with file objects:', updatedJobData);
-        console.log('🔄 setJobData called from: createNewFiles at', new Date().toISOString());
-        setJobData(updatedJobData);
+        console.log('🔄 Updating React Query cache from: createNewFiles at', new Date().toISOString());
+        
+        // Update React Query cache instead of legacy state
+        queryClient.setQueryData(jobKeys.detail(jobData.job_id), updatedJobData);
         setFilesLoaded(true);
+        
+        // Verify the cache was updated
+        const cachedData = queryClient.getQueryData<UIJobData>(jobKeys.detail(jobData.job_id));
+        console.log('🔍 Cache verification after update:', {
+          updatedFiles: finalFileObjects.length,
+          cachedFiles: cachedData?.content_pipeline_files?.length || 0,
+          cacheUpdateSuccessful: !!cachedData?.content_pipeline_files?.length
+        });
         
         // Set appropriate completion step based on job status
         const isExtracted = jobData.job_status?.toLowerCase() === 'extracted';
@@ -1955,7 +2029,18 @@ function JobDetailsPageContent() {
                   )}
 
                   {/* Layer and Color Selection */}
-                  {selectedPhysicalFile && jsonData && !loadingJsonData && (
+                  {(() => {
+                    // Debug when this conditional is evaluated
+                    console.log('🔍 Layer selection conditional check:', {
+                      selectedPhysicalFile: !!selectedPhysicalFile,
+                      jsonData: !!jsonData,
+                      loadingJsonData,
+                      mergedJobDataFiles: mergedJobData?.content_pipeline_files?.length || 0,
+                      willShowLayerSelection: !!(selectedPhysicalFile && jsonData && !loadingJsonData)
+                    });
+                    
+                    return selectedPhysicalFile && jsonData && !loadingJsonData;
+                  })() && (
                     <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
                       {/* Select Layers from Extracted Files */}
                       <div style={{ maxWidth: 250 }}>
@@ -1971,6 +2056,26 @@ function JobDetailsPageContent() {
                         {(() => {
                           // Extract unique layer names from all extracted files in the job
                           const extractedLayerNames = new Set<string>();
+                          
+                          // Debug logging to see what data we have
+                          console.log('🔍 Layer extraction debug:', {
+                            hasJobData: !!jobData,
+                            hasMergedJobData: !!mergedJobData,
+                            jobDataFiles: jobData?.content_pipeline_files?.length || 0,
+                            mergedJobDataFiles: mergedJobData?.content_pipeline_files?.length || 0,
+                            selectedPhysicalFile,
+                            hasJsonData: !!jsonData
+                          });
+                          
+                          // Log the actual files to see their structure
+                          if (mergedJobData?.content_pipeline_files) {
+                            console.log('📁 Available file groups:', mergedJobData.content_pipeline_files.map(f => ({
+                              filename: f.filename,
+                              hasExtractedFiles: !!f.extracted_files,
+                              extractedFilesCount: f.extracted_files ? Object.keys(f.extracted_files).length : 0,
+                              extractedFileNames: f.extracted_files ? Object.keys(f.extracted_files) : []
+                            })));
+                          }
                           
                           // Function to extract layer name from filename
                           const extractLayerName = (filename: string): string | null => {
@@ -1992,12 +2097,13 @@ function JobDetailsPageContent() {
                             return layerName;
                           };
                           
-                          // Collect layer names from all extracted files
-                          if (jobData?.content_pipeline_files) {
-                            jobData.content_pipeline_files.forEach(fileGroup => {
+                          // Collect layer names from all extracted files - USE MERGED DATA
+                          if (mergedJobData?.content_pipeline_files) {
+                            mergedJobData.content_pipeline_files.forEach(fileGroup => {
                               if (fileGroup.extracted_files) {
                                 Object.keys(fileGroup.extracted_files).forEach(filename => {
                                   const layerName = extractLayerName(filename);
+                                  console.log('🏷️ Processing extracted file:', filename, '→ layer name:', layerName);
                                   if (layerName) {
                                     extractedLayerNames.add(layerName);
                                   }
@@ -2007,6 +2113,8 @@ function JobDetailsPageContent() {
                           }
                           
                           const layerNamesArray = Array.from(extractedLayerNames).sort();
+                          
+                          console.log('🎯 Final extracted layer names:', layerNamesArray);
                           
                           const toggleExtractedLayer = (layerName: string) => {
                             const newSelected = new Set(selectedExtractedLayers);
@@ -2412,402 +2520,13 @@ function JobDetailsPageContent() {
                   }}>
                     {mergedJobData.content_pipeline_files && mergedJobData.content_pipeline_files.length > 0 ? (
                       mergedJobData.content_pipeline_files.map((file, index) => (
-                        <div key={index} style={{
-                          border: '1px solid rgba(255, 255, 255, 0.1)',
-                          borderRadius: 12,
-                          padding: 20,
-                          minHeight: 280, // Match skeleton height
-                          transition: 'all 0.3s ease',
-                          opacity: 1,
-                          animationDelay: `${index * 0.1}s`,
-                          animation: 'fadeIn 0.3s ease-in-out forwards'
-                        }}>
-                          {/* File Header */}
-                          <div style={{ marginBottom: 20 }}>
-                            <h3 style={{
-                              fontSize: '1.2rem',
-                              fontWeight: 600,
-                              color: '#f8f8f8',
-                              margin: '0 0 8px 0',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 8
-                            }}>
-                              📄 {file.filename}
-                            </h3>
-                            {file.last_updated && (
-                              <p style={{
-                                color: '#9ca3af',
-                                fontSize: 14,
-                                margin: 0
-                              }}>
-                                Last updated: {new Date(file.last_updated).toLocaleString()}
-                              </p>
-                            )}
-                          </div>
-
-                          <div style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-                            gap: 20,
-                            marginBottom: 24
-                          }}>
-                            {/* Original PDF Files */}
-                            <div>
-                              <h4 style={{
-                                color: '#f59e0b',
-                                fontSize: 16,
-                                fontWeight: 600,
-                                margin: '0 0 12px 0'
-                              }}>
-                                📄 Original PDF Files ({file.original_files ? Object.keys(file.original_files).length : 0})
-                              </h4>
-                              <div style={{
-                                background: 'rgba(245, 158, 11, 0.1)',
-                                border: '1px solid rgba(245, 158, 11, 0.3)',
-                                borderRadius: 8,
-                                padding: 12,
-                                maxHeight: 200,
-                                overflowY: 'auto'
-                              }}>
-                                {file.original_files && Object.keys(file.original_files).length > 0 ? (
-                                  Object.entries(file.original_files).map(([filename, fileInfo], origIndex) => (
-                                    <div key={origIndex} style={{
-                                      marginBottom: 8,
-                                      fontSize: 13,
-                                      color: '#fbbf24',
-                                      display: 'flex',
-                                      justifyContent: 'space-between',
-                                      alignItems: 'center'
-                                    }}>
-                                      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                        <span>📋</span>
-                                        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                          <span>{filename}</span>
-                                          {/* Show loading spinner when upload is actively happening */}
-                                          {uploadingFiles.has(filename) && (
-                                            <div style={{
-                                              width: 12,
-                                              height: 12,
-                                              border: '1.5px solid rgba(245, 158, 11, 0.3)',
-                                              borderTop: '1.5px solid #f59e0b',
-                                              borderRadius: '50%',
-                                              animation: 'spin 1s linear infinite',
-                                              marginLeft: 4
-                                            }} />
-                                          )}
-                                        </span>
-                                        {/* Show animated uploading text for files being uploaded */}
-                                        {uploadingFiles.has(filename) && (
-                                          <span style={{
-                                            fontSize: 11,
-                                            color: '#f59e0b',
-                                            animation: 'pulse 2s infinite',
-                                            marginLeft: 4
-                                          }}>
-                                            Uploading...
-                                          </span>
-                                        )}
-                                      </span>
-                                      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                                        <span style={{
-                                          fontSize: 11,
-                                          padding: '2px 6px',
-                                          borderRadius: 4,
-                                          background: 'rgba(245, 158, 11, 0.2)',
-                                          color: '#f59e0b'
-                                        }}>
-                                          {fileInfo.card_type}
-                                        </span>
-                                        <span style={{
-                                          fontSize: 11,
-                                          padding: '2px 6px',
-                                          borderRadius: 4,
-                                          background: fileInfo.status.toLowerCase() === 'uploaded' 
-                                            ? 'rgba(16, 185, 129, 0.2)' 
-                                            : fileInfo.status.toLowerCase() === 'upload-failed'
-                                            ? 'rgba(239, 68, 68, 0.2)'
-                                            : 'rgba(249, 115, 22, 0.2)',
-                                          color: fileInfo.status.toLowerCase() === 'uploaded' 
-                                            ? '#34d399' 
-                                            : fileInfo.status.toLowerCase() === 'upload-failed'
-                                            ? '#fca5a5'
-                                            : '#fdba74'
-                                        }}>
-                                          {capitalizeStatus(fileInfo.status)}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  ))
-                                ) : (
-                                  <p style={{ color: '#9ca3af', fontSize: 13, margin: 0 }}>
-                                    No original PDF files found
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Extracted Layers - Only show if there are extracted files */}
-                            {file.extracted_files && Object.keys(file.extracted_files).length > 0 && (
-                              <div>
-                                <div style={{
-                                  display: 'flex',
-                                  justifyContent: 'space-between',
-                                  alignItems: 'center',
-                                  marginBottom: 12
-                                }}>
-                                  <h4 style={{
-                                    color: '#60a5fa',
-                                    fontSize: 16,
-                                    fontWeight: 600,
-                                    margin: 0
-                                  }}>
-                                    🖼️ Extracted Layers ({Object.keys(file.extracted_files).length})
-                                  </h4>
-                                  {(() => {
-                                    // Check if all extracted files have "uploaded" status (case insensitive)
-                                    const allUploaded = Object.values(file.extracted_files || {}).every(
-                                      extractedFile => extractedFile.status.toLowerCase() === 'uploaded'
-                                    );
-                                    
-
-                                    
-                                    return allUploaded ? (
-                                      <button
-                                        onClick={() => {
-                                          // Collect file paths from extracted files
-                                          const filePaths = Object.values(file.extracted_files || {}).map(extractedFile => 
-                                            extractedFile.file_path
-                                          ).filter(path => path);
-                                          
-                                          const baseName = file.filename.replace('.pdf', '').replace('.PDF', '');
-                                          // Use jobId since jobPath is not available
-                                          const jobPath = jobData?.job_id || '';
-                                          
-
-                                          
-                                          // Pass the file paths as a query parameter
-                                          const filePathsParam = encodeURIComponent(JSON.stringify(filePaths));
-                                          router.push(`/job/preview?jobPath=${encodeURIComponent(jobPath)}&fileName=${encodeURIComponent(baseName)}&type=extracted&filePaths=${filePathsParam}`);
-                                        }}
-                                        style={{
-                                          background: 'rgba(59, 130, 246, 0.2)',
-                                          border: '1px solid rgba(59, 130, 246, 0.4)',
-                                          borderRadius: 6,
-                                          color: '#60a5fa',
-                                          cursor: 'pointer',
-                                          fontSize: 12,
-                                          padding: '6px 12px',
-                                          transition: 'all 0.2s',
-                                          fontWeight: 500
-                                        }}
-                                        onMouseEnter={(e) => {
-                                          e.currentTarget.style.background = 'rgba(59, 130, 246, 0.3)';
-                                        }}
-                                        onMouseLeave={(e) => {
-                                          e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)';
-                                        }}
-                                      >
-                                        👁️ Preview Layers
-                                      </button>
-                                    ) : (
-                                      <span style={{
-                                        fontSize: 12,
-                                        color: '#9ca3af',
-                                        padding: '6px 12px',
-                                        border: '1px solid rgba(156, 163, 175, 0.3)',
-                                        borderRadius: 6,
-                                        background: 'rgba(156, 163, 175, 0.1)'
-                                      }}>
-                                        ⏳ Waiting for all layers to be uploaded
-                                      </span>
-                                    );
-                                  })()}
-                                </div>
-                                <div style={{
-                                  background: 'rgba(59, 130, 246, 0.1)',
-                                  border: '1px solid rgba(59, 130, 246, 0.3)',
-                                  borderRadius: 8,
-                                  padding: 12,
-                                  maxHeight: 200,
-                                  overflowY: 'auto'
-                                }}>
-                                  {Object.entries(file.extracted_files).map(([filename, extractedFile], extIndex) => (
-                                    <div key={extIndex} style={{
-                                      marginBottom: 8,
-                                      fontSize: 13,
-                                      color: '#bfdbfe',
-                                      display: 'flex',
-                                      justifyContent: 'space-between',
-                                      alignItems: 'center'
-                                    }}>
-                                      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                        <span>🖼️</span>
-                                        <span>{filename}</span>
-                                      </span>
-                                      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                                        <span style={{ 
-                                          background: 'rgba(59, 130, 246, 0.2)', 
-                                          padding: '2px 6px', 
-                                          borderRadius: 4,
-                                          color: '#60a5fa',
-                                          fontSize: 11
-                                        }}>
-                                          {extractedFile.layer_type}
-                                        </span>
-                                        <span style={{
-                                          fontSize: 11,
-                                          padding: '2px 6px',
-                                          borderRadius: 4,
-                                          background: extractedFile.status.toLowerCase() === 'uploaded' 
-                                            ? 'rgba(16, 185, 129, 0.2)' 
-                                            : 'rgba(249, 115, 22, 0.2)',
-                                          color: extractedFile.status.toLowerCase() === 'uploaded' 
-                                            ? '#34d399' 
-                                            : '#fdba74'
-                                        }}>
-                                          {capitalizeStatus(extractedFile.status)}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Firefly Assets - Only show if there are firefly assets */}
-                          {file.firefly_assets && Object.keys(file.firefly_assets).length > 0 && (
-                            <div>
-                              <div style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                marginBottom: 12
-                              }}>
-                                <h4 style={{
-                                  color: '#34d399',
-                                  fontSize: 16,
-                                  fontWeight: 600,
-                                  margin: 0
-                                }}>
-                                  🎨 Firefly Assets ({Object.keys(file.firefly_assets).length})
-                                </h4>
-                                {(() => {
-                                  // Check if all firefly assets have "succeeded" status (case insensitive)
-                                  const allSucceeded = Object.values(file.firefly_assets || {}).every(
-                                    asset => asset.status.toLowerCase() === 'succeeded'
-                                  );
-                                  
-
-                                  
-                                  return allSucceeded ? (
-                                    <button
-                                      onClick={() => {
-                                        // Use the actual file paths from firefly assets
-                                        const filePaths = Object.values(file.firefly_assets || {}).map(asset => 
-                                          asset.file_path
-                                        ).filter(path => path);
-                                        
-                                        const baseName = file.filename.replace('.pdf', '').replace('.PDF', '');
-                                        // Use jobId since jobPath is not available
-                                        const jobPath = jobData?.job_id || '';
-                                        
-
-                                        
-                                        // Pass the file paths as a query parameter
-                                        const filePathsParam = encodeURIComponent(JSON.stringify(filePaths));
-                                        router.push(`/job/preview?jobPath=${encodeURIComponent(jobPath)}&fileName=${encodeURIComponent(baseName)}&type=firefly&filePaths=${filePathsParam}`);
-                                      }}
-                                      style={{
-                                        background: 'rgba(16, 185, 129, 0.2)',
-                                        border: '1px solid rgba(16, 185, 129, 0.4)',
-                                        borderRadius: 6,
-                                        color: '#34d399',
-                                        cursor: 'pointer',
-                                        fontSize: 12,
-                                        padding: '6px 12px',
-                                        transition: 'all 0.2s',
-                                        fontWeight: 500
-                                      }}
-                                      onMouseEnter={(e) => {
-                                        e.currentTarget.style.background = 'rgba(16, 185, 129, 0.3)';
-                                      }}
-                                      onMouseLeave={(e) => {
-                                        e.currentTarget.style.background = 'rgba(16, 185, 129, 0.2)';
-                                      }}
-                                    >
-                                      👁️ Preview Final Assets
-                                    </button>
-                                  ) : (
-                                    <span style={{
-                                      fontSize: 12,
-                                      color: '#9ca3af',
-                                      padding: '6px 12px',
-                                      border: '1px solid rgba(156, 163, 175, 0.3)',
-                                      borderRadius: 6,
-                                      background: 'rgba(156, 163, 175, 0.1)'
-                                    }}>
-                                                                              ⏳ Waiting for all assets to succeed
-                                    </span>
-                                  );
-                                })()}
-                              </div>
-                              <div style={{
-                                background: 'rgba(16, 185, 129, 0.1)',
-                                border: '1px solid rgba(16, 185, 129, 0.3)',
-                                borderRadius: 8,
-                                padding: 12
-                              }}>
-                                {Object.entries(file.firefly_assets).map(([filename, asset], assetIndex) => (
-                                  <div key={assetIndex} style={{
-                                    marginBottom: 8,
-                                    fontSize: 13,
-                                    color: '#86efac',
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center'
-                                  }}>
-                                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                      <span>🎨</span>
-                                      <span>{filename}</span>
-                                    </span>
-                                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                                      <span style={{
-                                        fontSize: 11,
-                                        padding: '2px 6px',
-                                        borderRadius: 4,
-                                        background: asset.status.toLowerCase().includes('succeed') || asset.status.toLowerCase() === 'created'
-                                          ? 'rgba(16, 185, 129, 0.2)' 
-                                          : asset.status.toLowerCase().includes('fail')
-                                          ? 'rgba(239, 68, 68, 0.2)'
-                                          : 'rgba(249, 115, 22, 0.2)',
-                                        color: asset.status.toLowerCase().includes('succeed') || asset.status.toLowerCase() === 'created'
-                                          ? '#34d399' 
-                                          : asset.status.toLowerCase().includes('fail')
-                                          ? '#fca5a5'
-                                          : '#fdba74'
-                                      }}>
-                                        {capitalizeStatus(asset.status)}
-                                      </span>
-                                      {asset.card_type && (
-                                        <span style={{ 
-                                          background: 'rgba(16, 185, 129, 0.2)', 
-                                          padding: '2px 6px', 
-                                          borderRadius: 4,
-                                          fontSize: 11,
-                                          color: '#34d399'
-                                        }}>
-                                          {asset.card_type}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
+                        <FileCard 
+                          key={index} 
+                          file={file} 
+                          index={index}
+                          jobData={jobData}
+                          uploadingFiles={uploadingFiles}
+                        />
                       ))
                     ) : (
                       <div style={{

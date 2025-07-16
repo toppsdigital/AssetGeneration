@@ -60,7 +60,14 @@ export function useJobData(jobId: string | null) {
 }
 
 // Hook for fetching job files separately (for future implementation)
-export function useJobFiles(jobId: string | null, apiFiles: string[] = []) {
+export function useJobFiles(jobId: string | null, apiFiles: string[] = [], enabled: boolean = true) {
+  console.log('🔍 useJobFiles called with:', {
+    jobId,
+    apiFilesCount: apiFiles.length,
+    enabled,
+    willExecute: enabled && !!jobId && apiFiles.length > 0
+  });
+  
   return useQuery({
     queryKey: jobKeys.files(jobId || ''),
     queryFn: async (): Promise<FileData[]> => {
@@ -85,7 +92,7 @@ export function useJobFiles(jobId: string | null, apiFiles: string[] = []) {
       console.log('✅ File objects fetched:', fileObjects.length);
       return fileObjects;
     },
-    enabled: !!jobId && apiFiles.length > 0,
+    enabled: enabled && !!jobId && apiFiles.length > 0,
     staleTime: 15 * 1000, // Files change more frequently, consider fresh for 15 seconds
     gcTime: 3 * 60 * 1000, // Keep in cache for 3 minutes
   });
