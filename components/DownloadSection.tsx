@@ -1,15 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { contentPipelineApi } from '../web/utils/contentPipelineApi';
-
-interface DownloadArchive {
-  download_url: string;
-  expires_in: number;
-  zip_key: string;
-  source_folder: string;
-  files_count: number;
-}
+import { useState } from 'react';
+import { useDownloadArchive } from '../web/hooks/useJobData';
 
 interface DownloadSectionProps {
   jobData: any;
@@ -17,47 +9,16 @@ interface DownloadSectionProps {
 }
 
 export const DownloadSection = ({ jobData, isVisible }: DownloadSectionProps) => {
-  // State management
-  const [archiveData, setArchiveData] = useState<DownloadArchive | null>(null);
-  const [loadingArchive, setLoadingArchive] = useState(false);
-  const [downloadError, setDownloadError] = useState<string | null>(null);
+  // Use React Query hook for smart caching with expiry management
+  const { 
+    data: archiveData, 
+    isLoading: loadingArchive, 
+    error: downloadError,
+    refetch: refetchArchive
+  } = useDownloadArchive(jobData?.job_id || null, isVisible);
+
+  // Local state only for download progress
   const [downloadingArchive, setDownloadingArchive] = useState(false);
-
-  // Fetch download archive when component becomes visible
-  useEffect(() => {
-    if (isVisible && jobData?.job_id) {
-      fetchDownloadArchive();
-    }
-  }, [isVisible, jobData?.job_id]);
-
-  const fetchDownloadArchive = async () => {
-    if (!jobData?.job_id) return;
-    
-    try {
-      setLoadingArchive(true);
-      setDownloadError(null);
-      
-      console.log('🔍 Creating download archive for job:', jobData.job_id);
-      
-      const response = await contentPipelineApi.downloadJobOutputFolder(jobData.job_id);
-      
-      console.log('📁 Download archive response:', response);
-      
-      if (response.success && response.data) {
-        setArchiveData(response.data);
-      } else {
-        setDownloadError(response.message || 'No files found for download');
-        setArchiveData(null);
-      }
-      
-    } catch (error) {
-      console.error('❌ Error creating download archive:', error);
-      setDownloadError(error instanceof Error ? error.message : 'Failed to create download archive');
-      setArchiveData(null);
-    } finally {
-      setLoadingArchive(false);
-    }
-  };
 
   const handleDownloadArchive = async () => {
     if (!archiveData) return;
@@ -193,9 +154,9 @@ export const DownloadSection = ({ jobData, isVisible }: DownloadSectionProps) =>
           margin: '20px 0'
         }}>
           <div style={{ fontWeight: 600, marginBottom: 4 }}>Unable to create download archive</div>
-          <div style={{ opacity: 0.8 }}>{downloadError}</div>
+          <div style={{ opacity: 0.8 }}>{downloadError instanceof Error ? downloadError.message : String(downloadError)}</div>
           <button
-            onClick={fetchDownloadArchive}
+            onClick={() => refetchArchive()}
             style={{
               marginTop: 8,
               padding: '6px 12px',
