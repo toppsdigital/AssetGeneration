@@ -206,6 +206,48 @@ function JobDetailsPageContent() {
     }
   });
 
+  // Check if uploads are in progress
+  const uploadsInProgress = uploadEngine.uploadStarted && !uploadEngine.allFilesUploaded;
+
+  // Prevent browser navigation during uploads
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (uploadsInProgress) {
+        e.preventDefault();
+        e.returnValue = 'Files are currently uploading. Are you sure you want to leave? This will cancel the upload.';
+        return 'Files are currently uploading. Are you sure you want to leave? This will cancel the upload.';
+      }
+    };
+
+    const handlePopState = (e: PopStateEvent) => {
+      if (uploadsInProgress) {
+        const confirmLeave = window.confirm(
+          'Files are currently uploading. Are you sure you want to leave? This will cancel the upload.'
+        );
+        if (!confirmLeave) {
+          // Push the current state back to prevent navigation
+          window.history.pushState(null, '', window.location.href);
+          e.preventDefault();
+          return false;
+        }
+      }
+    };
+
+    // Block navigation attempts during uploads
+    if (uploadsInProgress) {
+      // Add a dummy state to the history to intercept back button
+      window.history.pushState(null, '', window.location.href);
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('popstate', handlePopState);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [uploadsInProgress]);
+
   // Sync legacy state with React Query state - ONLY when NOT in create mode
   useEffect(() => {
     // Skip sync when in create mode to avoid conflicts with createNewFiles()
@@ -997,14 +1039,51 @@ function JobDetailsPageContent() {
     <div className={styles.pageContainer}>
       <NavBar
         showHome
-        showBackToEdit
+        showBackToEdit={!uploadsInProgress} // Hide back button during uploads
         onHome={() => router.push('/')}
         onBackToEdit={() => router.push('/jobs')}
         backLabel="Back to Jobs"
         title={getJobTitle(mergedJobData)}
       />
       
-      <div className={styles.editContainer}>
+      {/* Upload Warning Banner */}
+      {uploadsInProgress && (
+        <div style={{
+          position: 'fixed',
+          top: 80, // Below the navbar
+          left: 0,
+          right: 0,
+          background: 'linear-gradient(90deg, rgba(245, 158, 11, 0.95), rgba(217, 119, 6, 0.95))',
+          color: 'white',
+          padding: '12px 24px',
+          textAlign: 'center',
+          fontSize: 14,
+          fontWeight: 500,
+          zIndex: 1000,
+          backdropFilter: 'blur(10px)',
+          border: '1px solid rgba(245, 158, 11, 0.3)',
+          boxShadow: '0 4px 20px rgba(245, 158, 11, 0.2)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            <span style={{ fontSize: 16 }}>⚠️</span>
+            <span>
+              Upload in progress ({uploadEngine.uploadedPdfFiles}/{uploadEngine.totalPdfFiles} files) - 
+              Please don't close this tab or use the browser back button
+            </span>
+            <div style={{
+              width: 16,
+              height: 16,
+              border: '2px solid rgba(255, 255, 255, 0.3)',
+              borderTop: '2px solid white',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite',
+              marginLeft: 8
+            }} />
+          </div>
+        </div>
+      )}
+      
+      <div className={styles.editContainer} style={uploadsInProgress ? { paddingTop: '60px' } : {}}>
         <main className={styles.mainContent}>
           <div style={{
             maxWidth: 1200,
