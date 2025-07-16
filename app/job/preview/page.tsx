@@ -24,6 +24,7 @@ function JobPreviewPageContent() {
   const fileName = searchParams.get('fileName');
   const type = searchParams.get('type');
   const filePaths = searchParams.get('filePaths');
+  const assetUrls = searchParams.get('assetUrls');
   
   const [assets, setAssets] = useState<AssetItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,7 +40,7 @@ function JobPreviewPageContent() {
     if (jobPath && fileName && type) {
       loadAssets();
     }
-  }, [jobPath, fileName, type, filePaths]);
+  }, [jobPath, fileName, type, filePaths, assetUrls]);
 
   const loadAssets = async () => {
     try {
@@ -52,19 +53,22 @@ function JobPreviewPageContent() {
 
       setDisplayName(fileName as string);
       
-      // Parse the actual file paths passed from details page
-      if (!filePaths) {
-        setError('No file paths provided');
+      // Parse the actual file paths/URLs passed from details page
+      // For Firefly assets, use assetUrls; for extracted layers, use filePaths
+      const urlParameter = type === 'firefly' ? assetUrls : filePaths;
+      
+      if (!urlParameter) {
+        setError(`No ${type === 'firefly' ? 'asset URLs' : 'file paths'} provided`);
         return;
       }
 
       let actualFilePaths: string[] = [];
       try {
-        actualFilePaths = JSON.parse(decodeURIComponent(filePaths as string));
-        console.log(`🎯 Using actual file paths:`, actualFilePaths);
+        actualFilePaths = JSON.parse(decodeURIComponent(urlParameter as string));
+        console.log(`🎯 Preview page - Loading ${actualFilePaths.length} ${type} assets:`, actualFilePaths);
       } catch (error) {
-        console.error(`❌ Failed to parse filePaths parameter:`, error);
-        setError('Invalid file paths parameter');
+        console.error(`❌ Failed to parse ${type === 'firefly' ? 'assetUrls' : 'filePaths'} parameter:`, error);
+        setError(`Invalid ${type === 'firefly' ? 'asset URLs' : 'file paths'} parameter`);
         return;
       }
 

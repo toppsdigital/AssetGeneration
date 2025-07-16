@@ -47,8 +47,54 @@ interface BatchGetRequest {
   filenames: string[];
 }
 
+// TypeScript interfaces for S3 operations
+interface S3DownloadFileRequest {
+  key: string;
+}
+
+interface S3DownloadFolderRequest {
+  prefix: string;
+}
+
+interface S3UploadFilesRequest {
+  files: Array<{
+    filename: string;
+    content: string; // base64 encoded
+    content_type?: string;
+  }>;
+  job_id?: string;
+}
+
+interface S3DownloadFileResponse {
+  success: boolean;
+  message: string;
+  file_content?: string;
+  filename?: string;
+}
+
+interface S3DownloadFolderResponse {
+  success: boolean;
+  message: string;
+  files?: Array<{
+    filename: string;
+    s3_path: string;
+  }>;
+}
+
+interface S3UploadFilesResponse {
+  success: boolean;
+  message: string;
+  uploaded_files?: Array<{
+    filename: string;
+    s3_path: string;
+    size: number;
+    status: string;
+  }>;
+}
+
 // Configuration - replace with your actual API Gateway URL
 const API_BASE_URL = process.env.CONTENT_PIPELINE_API_URL;
+const S3_BUCKET_NAME = 'topps-nexus-powertools';
 
 // If no API URL is configured, return mock data for development
 if (!API_BASE_URL) {
@@ -252,6 +298,37 @@ async function handleRequest(request: NextRequest, method: string) {
           }, { status: 500 });
         }
         
+      // S3 operations
+      case 's3_download_file':
+        if (!body.key) {
+          return NextResponse.json({ error: 'key is required for S3 file download' }, { status: 400 });
+        }
+        apiUrl += '/s3/download-file';
+        apiMethod = 'POST';
+        // Add the hardcoded bucket name to the request body
+        apiBody = { ...body, bucket: S3_BUCKET_NAME };
+        break;
+        
+      case 's3_download_folder':
+        if (!body.prefix) {
+          return NextResponse.json({ error: 'prefix is required for S3 folder download' }, { status: 400 });
+        }
+        apiUrl += '/s3/download-folder';
+        apiMethod = 'POST';
+        // Add the hardcoded bucket name to the request body
+        apiBody = { ...body, bucket: S3_BUCKET_NAME };
+        break;
+        
+      case 's3_upload_files':
+        if (!body.files || !Array.isArray(body.files) || body.files.length === 0) {
+          return NextResponse.json({ error: 'files array is required for S3 upload' }, { status: 400 });
+        }
+        apiUrl += '/s3/upload-files';
+        apiMethod = 'POST';
+        // Add the hardcoded bucket name to the request body
+        apiBody = { ...body, bucket: S3_BUCKET_NAME };
+        break;
+        
       case 'generate_assets':
         if (!id) {
           return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
@@ -271,7 +348,8 @@ async function handleRequest(request: NextRequest, method: string) {
             'create_job', 'get_job', 'update_job', 'list_jobs',
             'create_file', 'get_file', 'update_file', 'list_files',
             'batch_create_files', 'batch_get_files', 'update_pdf_status',
-            'generate_assets'
+            'generate_assets',
+            's3_download_file', 's3_download_folder', 's3_upload_files'
           ]
         }, { status: 400 });
     }
