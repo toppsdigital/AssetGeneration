@@ -14,9 +14,11 @@ interface PSDTemplateSelectorProps {
   jobData: any;
   mergedJobData: any;
   isVisible: boolean;
+  creatingAssets: boolean;
+  setCreatingAssets: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
-export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible }: PSDTemplateSelectorProps) => {
+export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatingAssets, setCreatingAssets }: PSDTemplateSelectorProps) => {
   const router = useRouter();
   
   // State management
@@ -27,7 +29,6 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible }: PSDTe
   const [loadingJsonData, setLoadingJsonData] = useState(false);
   const [selectedLayers, setSelectedLayers] = useState<Set<string>>(new Set());
   const [selectedExtractedLayers, setSelectedExtractedLayers] = useState<Set<string>>(new Set());
-  const [creatingAssets, setCreatingAssets] = useState(false);
 
   // Fetch physical JSON files when component becomes visible
   useEffect(() => {
@@ -627,62 +628,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible }: PSDTe
         </div>
       </div>
 
-      {/* Asset Creation Modal */}
-      {creatingAssets && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.8)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 9999,
-          backdropFilter: 'blur(4px)'
-        }}>
-          <div style={{
-            backgroundColor: '#1f2937',
-            borderRadius: 16,
-            padding: 48,
-            textAlign: 'center',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-            maxWidth: 400,
-            width: '90%'
-          }}>
-            <div style={{
-              width: 64,
-              height: 64,
-              border: '4px solid rgba(16, 185, 129, 0.2)',
-              borderTop: '4px solid #10b981',
-              borderRadius: '50%',
-              animation: 'spin 1s linear infinite',
-              margin: '0 auto 24px auto'
-            }} />
-            
-            <h2 style={{
-              color: '#f8f8f8',
-              fontSize: 24,
-              fontWeight: 600,
-              margin: '0 0 12px 0'
-            }}>
-              🎨 Creating Digital Assets
-            </h2>
-            
-            <p style={{
-              color: '#9ca3af',
-              fontSize: 16,
-              margin: '0 0 24px 0',
-              lineHeight: 1.5
-            }}>
-              Processing your selected colors and layers...
-            </p>
-          </div>
-        </div>
-      )}
+
     </>
   );
 }; 

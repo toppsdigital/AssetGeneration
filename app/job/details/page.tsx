@@ -1509,6 +1509,8 @@ function JobDetailsPageContent() {
               jobData={jobData}
               mergedJobData={mergedJobData}
               isVisible={mergedJobData?.job_status?.toLowerCase() === 'extracted' && !loading && !loadingFiles}
+              creatingAssets={creatingAssets}
+              setCreatingAssets={setCreatingAssets}
             />
 
 
@@ -1531,7 +1533,7 @@ function JobDetailsPageContent() {
         </main>
       </div>
 
-      {/* Blocking Loading Overlay for Asset Creation */}
+      {/* Fullscreen Blocking Overlay for Asset Creation */}
       {creatingAssets && (
         <div style={{
           position: 'fixed',
@@ -1599,9 +1601,9 @@ function JobDetailsPageContent() {
                 height: 8,
                 backgroundColor: '#10b981',
                 borderRadius: '50%',
-                animation: 'pulse 1.5s infinite'
+                animation: 'pulse 1.5s ease-in-out infinite'
               }} />
-              <span>This may take a few moments</span>
+              <span>This may take a few moments...</span>
             </div>
           </div>
         </div>
