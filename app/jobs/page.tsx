@@ -225,10 +225,11 @@ export default function JobsPage() {
                   color: isRefetching ? '#9ca3af' : '#60a5fa',
                   cursor: isRefetching ? 'not-allowed' : 'pointer',
                   fontSize: 14,
-                  transition: 'all 0.2s'
+                  transition: 'all 0.2s',
+                  opacity: isRefetching ? 0.6 : 1
                 }}
               >
-                {isRefetching ? '🔄 Refreshing...' : '🔄 Refresh All'}
+                🔄 Refresh All
               </button>
             </div>
           </div>
