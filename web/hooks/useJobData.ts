@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/react-query';
 import { contentPipelineApi, JobData, FileData } from '../utils/contentPipelineApi';
 
 // Job query keys for consistent caching
@@ -10,6 +10,33 @@ export const jobKeys = {
   detail: (id: string) => [...jobKeys.details(), id] as const,
   files: (id: string) => [...jobKeys.detail(id), 'files'] as const,
 };
+
+// Utility function to synchronize job data across all caches
+export function syncJobDataAcrossCaches(
+  queryClient: QueryClient, 
+  jobId: string, 
+  updater: (job: UIJobData | JobData) => UIJobData | JobData
+) {
+  console.log('🔄 Syncing job data across caches for job:', jobId);
+  
+  // Update individual job detail cache
+  queryClient.setQueryData(jobKeys.detail(jobId), (old: UIJobData | undefined) => {
+    if (!old) return old;
+    return updater(old) as UIJobData;
+  });
+  
+  // Update jobs list cache
+  queryClient.setQueryData(jobKeys.all, (old: JobData[] | undefined) => {
+    if (!old) return old;
+    return old.map(job => 
+      job.job_id === jobId 
+        ? updater(job) as JobData
+        : job
+    );
+  });
+  
+  console.log('✅ Job data synchronized across all caches for job:', jobId);
+}
 
 // Extended job data interface for UI compatibility
 export interface UIJobData extends JobData {
@@ -46,7 +73,7 @@ export function useJobData(jobId: string | null) {
       return mappedData;
     },
     enabled: !!jobId,
-    staleTime: 30 * 1000, // Consider fresh for 30 seconds
+    staleTime: 5 * 1000, // Consider fresh for only 5 seconds to ensure quick updates
     gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
     refetchOnWindowFocus: true, // Refresh when tab becomes active
     retry: (failureCount, error) => {
@@ -98,7 +125,7 @@ export function useJobFiles(jobId: string | null, apiFiles: string[] = [], enabl
   });
 }
 
-// Hook for updating job status with optimistic updates
+// Hook for updating job status with optimistic updates and cache synchronization
 export function useUpdateJobStatus() {
   const queryClient = useQueryClient();
   
@@ -109,30 +136,70 @@ export function useUpdateJobStatus() {
       return response.job;
     },
     onMutate: async ({ jobId, status }) => {
-      // Cancel any outgoing refetches
+      // Cancel any outgoing refetches for both caches
       await queryClient.cancelQueries({ queryKey: jobKeys.detail(jobId) });
+      await queryClient.cancelQueries({ queryKey: jobKeys.all });
       
-      // Snapshot the previous value
+      // Snapshot the previous values
       const previousJob = queryClient.getQueryData<UIJobData>(jobKeys.detail(jobId));
+      const previousJobsList = queryClient.getQueryData<JobData[]>(jobKeys.all);
       
-      // Optimistically update to the new value
+      // Optimistically update the individual job cache
       queryClient.setQueryData<UIJobData>(jobKeys.detail(jobId), (old) => {
         if (!old) return old;
         return { ...old, job_status: status };
       });
       
-      // Return a context object with the snapshotted value
-      return { previousJob };
+      // Optimistically update the jobs list cache
+      queryClient.setQueryData<JobData[]>(jobKeys.all, (old) => {
+        if (!old) return old;
+        return old.map(job => 
+          job.job_id === jobId 
+            ? { ...job, job_status: status }
+            : job
+        );
+      });
+      
+      console.log('🔄 Optimistically updated both job detail and jobs list caches for job:', jobId);
+      
+      // Return a context object with the snapshotted values
+      return { previousJob, previousJobsList };
     },
     onError: (err, { jobId }, context) => {
+      console.error('❌ Job status update failed, rolling back optimistic updates:', err);
+      
       // If the mutation fails, use the context returned from onMutate to roll back
       if (context?.previousJob) {
         queryClient.setQueryData(jobKeys.detail(jobId), context.previousJob);
       }
+      if (context?.previousJobsList) {
+        queryClient.setQueryData(jobKeys.all, context.previousJobsList);
+      }
+    },
+    onSuccess: (updatedJob, { jobId }) => {
+      console.log('✅ Job status update successful, syncing final data across caches');
+      
+      // Update both caches with the actual server response
+      queryClient.setQueryData<UIJobData>(jobKeys.detail(jobId), (old) => {
+        if (!old) return old;
+        return { ...old, ...updatedJob };
+      });
+      
+      queryClient.setQueryData<JobData[]>(jobKeys.all, (old) => {
+        if (!old) return old;
+        return old.map(job => 
+          job.job_id === jobId 
+            ? { ...job, ...updatedJob }
+            : job
+        );
+      });
     },
     onSettled: (data, error, { jobId }) => {
       // Always refetch after error or success to ensure consistency
       queryClient.invalidateQueries({ queryKey: jobKeys.detail(jobId) });
+      queryClient.invalidateQueries({ queryKey: jobKeys.all });
+      
+      console.log('🔄 Cache invalidation completed for both job detail and jobs list');
     },
   });
 }

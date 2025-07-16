@@ -16,7 +16,7 @@ import { useUploadEngine } from '../../../hooks';
 import styles from '../../../styles/Edit.module.css';
 import Spinner from '../../../components/Spinner';
 import { contentPipelineApi, JobData, FileData } from '../../../web/utils/contentPipelineApi';
-import { useJobData, useJobFiles, useUpdateJobStatus, createJobDataFromParams, UIJobData, jobKeys } from '../../../web/hooks/useJobData';
+import { useJobData, useJobFiles, useUpdateJobStatus, UIJobData, jobKeys, syncJobDataAcrossCaches } from '../../../web/hooks/useJobData';
 import { useQueryClient } from '@tanstack/react-query';
 import { getTotalLoadingSteps, getJobTitle } from '../../../utils/fileOperations';
 
@@ -43,31 +43,23 @@ function JobDetailsPageContent() {
   // Extract query parameters using useSearchParams
   const jobId = searchParams.get('jobId');
   const startUpload = searchParams.get('startUpload');
-  const appName = searchParams.get('appName');
-  const releaseName = searchParams.get('releaseName');
-  const subsetName = searchParams.get('subsetName');
-  const sourceFolder = searchParams.get('sourceFolder');
-  const status = searchParams.get('status');
-  const createdAt = searchParams.get('createdAt');
-  const files = searchParams.get('files');
-  const description = searchParams.get('description');
   const createFiles = searchParams.get('createFiles');
   
   // React Query hooks for smart caching
   const queryClient = useQueryClient();
   
-  // Check if we have query params to pre-populate cache
-  const hasQueryParams = !!(appName && releaseName && subsetName && sourceFolder && status);
+  // React Query hooks for smart caching
   
   // Always use React Query caching - let it handle cached data automatically
   const { 
     data: jobData, 
     isLoading: isLoadingJob, 
     error: jobError,
-    isFetching: isRefetchingJob 
+    isFetching: isRefetchingJob,
+    refetch: refetchJobData
   } = useJobData(jobId || null);
   
-  // Debug logging for cache behavior
+  // Debug logging for cache behavior and fresh data synchronization
   useEffect(() => {
     console.log('🔍 React Query State:', {
       jobId,
@@ -75,31 +67,38 @@ function JobDetailsPageContent() {
       isLoading: isLoadingJob,
       isFetching: isRefetchingJob,
       hasError: !!jobError,
+      jobStatus: jobData?.job_status,
       source: jobData ? 'Cache/Fresh Data' : 'None',
       timestamp: new Date().toISOString()
     });
-  }, [jobId, jobData, isLoadingJob, isRefetchingJob, jobError]);
-  
-  // Pre-populate cache with query params data if available (for instant display)
-  useEffect(() => {
-    if (hasQueryParams && jobId && !jobData) {
-      const paramsData = createJobDataFromParams({
-        jobId,
-        appName: appName || undefined,
-        releaseName: releaseName || undefined,
-        subsetName: subsetName || undefined,
-        sourceFolder: sourceFolder || undefined,
-        status: status || undefined,
-        createdAt: createdAt || undefined,
-        files: files || undefined,
-        description: description || undefined,
-      });
+
+    // Check if we have fresher data in jobs list cache and sync it
+    if (jobId && jobData) {
+      const jobsListData = queryClient.getQueryData<JobData[]>(jobKeys.all);
+      const freshJobFromList = jobsListData?.find(job => job.job_id === jobId);
       
-      // Set the data in cache immediately (instant display)
-      queryClient.setQueryData(['jobs', 'detail', jobId], paramsData);
-      console.log('📋 Pre-populated cache with query params data for instant display');
+      if (freshJobFromList && freshJobFromList.job_status !== jobData.job_status) {
+        console.log('🔄 Found fresher job status in jobs list cache. Syncing...', {
+          currentStatus: jobData.job_status,
+          freshStatus: freshJobFromList.job_status,
+          jobId
+        });
+        
+                 // Update the individual job cache with fresh data from jobs list
+         syncJobDataAcrossCaches(queryClient, jobId, (prevJobData) => ({
+           ...prevJobData,
+           job_status: freshJobFromList.job_status,
+           last_updated: freshJobFromList.last_updated || new Date().toISOString()
+         }));
+         
+         // Also force a refetch to get the absolute latest data from the server
+         console.log('🔄 Force refetching job data to ensure absolute freshness');
+         refetchJobData();
+      }
     }
-  }, [jobId, hasQueryParams, appName, releaseName, subsetName, sourceFolder, status, createdAt, files, description, queryClient, jobData]);
+  }, [jobId, jobData, isLoadingJob, isRefetchingJob, jobError, queryClient]);
+  
+
   
   // File data fetching with caching - only when NOT creating files
   const shouldFetchFiles = createFiles !== 'true';
@@ -184,11 +183,11 @@ function JobDetailsPageContent() {
   // Track if file creation has been triggered to prevent double execution
   const fileCreationTriggeredRef = useRef(false);
 
-  // Create a proper data updater that updates React Query cache
+  // Create a proper data updater that updates React Query cache with synchronization
   const updateJobDataForUpload = useCallback((updater: (prev: any) => any) => {
-    // Update React Query cache directly
+    // Update both React Query caches using synchronization utility
     if (jobData?.job_id) {
-      queryClient.setQueryData(jobKeys.detail(jobData.job_id), updater);
+      syncJobDataAcrossCaches(queryClient, jobData.job_id, updater);
     }
     // Also update legacy state for any remaining dependencies
     setJobData(updater);
@@ -469,57 +468,7 @@ function JobDetailsPageContent() {
     setSelectedExtractedLayers(new Set());
   }, [selectedPhysicalFile]);
 
-  // Load job details from query parameters (to avoid API call)
-  const loadJobDetailsFromParams = async () => {
-    try {
-      setLoading(true);
-      setLoadingStep(1);
-      setLoadingMessage('Loading job details...');
-      setLoadingDetail('Parsing job parameters');
-      
-      // Reset file-related state when loading a new job
-      setFilesLoaded(false);
-      setLoadingFiles(false);
-      
-      console.log('Loading job details from query params (avoiding API call)');
-      
-      // Parse files from query params
-      let parsedFiles: string[] = [];
-      try {
-        parsedFiles = files ? JSON.parse(files as string) : [];
-      } catch (e) {
-        console.warn('Failed to parse files from query params:', e);
-      }
-      
-      // Create job data from query parameters, preserving existing files
-      setJobData(prevJobData => {
-        const mappedJobData: UIJobData = {
-          job_id: jobId as string,
-          app_name: appName as string,
-          release_name: releaseName as string,
-          subset_name: subsetName as string,
-          source_folder: sourceFolder as string,
-          job_status: status as JobData['job_status'],
-          created_at: createdAt as string,
-          description: description as string,
-          api_files: parsedFiles,
-          files: prevJobData?.files || [], // Preserve existing legacy files
-          content_pipeline_files: prevJobData?.content_pipeline_files || [], // Preserve existing Content Pipeline files
-          Subset_name: subsetName as string // Map subsetName to Subset_name for UI compatibility
-        };
-        
-        console.log('🔄 setJobData called from: loadJobDetailsFromParams (preserving existing files) at', new Date().toISOString());
-        console.log('📊 Preserved files:', mappedJobData.content_pipeline_files?.length || 0);
-        return mappedJobData;
-      });
-      
-    } catch (error) {
-      console.error('Error loading job details from params:', error);
-      setError('Failed to load job details: ' + (error as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  };
+
 
   const loadJobDetails = async () => {
     try {
@@ -855,7 +804,7 @@ function JobDetailsPageContent() {
     }
   };
 
-    // Update job status using Content Pipeline API
+    // Update job status using Content Pipeline API with cache synchronization
   const updateJobStatus = async (status: JobData['job_status']): Promise<void> => {
     if (!jobData?.job_id) return;
     
@@ -868,8 +817,23 @@ function JobDetailsPageContent() {
       
       console.log('Job status updated successfully:', response.job);
       
-      // Use functional update to preserve current file statuses
-      console.log('🔄 setJobData called from: updateJobStatus (preserving file statuses) at', new Date().toISOString());
+      // Update both React Query caches and legacy state
+      console.log('🔄 Synchronizing job status update across all caches at', new Date().toISOString());
+      
+      // Use cache synchronization utility to update both caches
+      syncJobDataAcrossCaches(queryClient, jobData.job_id, (prevJobData) => {
+        const prevUIJobData = prevJobData as UIJobData;
+        const updatedJob: UIJobData = {
+          ...response.job,
+          api_files: response.job.files, // Store API files separately
+          files: prevUIJobData.files || [], // Preserve existing legacy files
+          content_pipeline_files: prevUIJobData.content_pipeline_files || [], // Preserve current Content Pipeline files with updated statuses
+          Subset_name: response.job.source_folder // Map source_folder to Subset_name for UI compatibility
+        };
+        return updatedJob;
+      });
+      
+      // Also update legacy state for backward compatibility
       setJobData(prevJobData => {
         if (!prevJobData) return prevJobData;
         
@@ -881,6 +845,8 @@ function JobDetailsPageContent() {
           Subset_name: response.job.source_folder // Map source_folder to Subset_name for UI compatibility
         };
       });
+      
+      console.log('✅ Job status synchronized across all caches and legacy state');
     } catch (error) {
       console.error('Error updating job status:', error);
       throw error;
