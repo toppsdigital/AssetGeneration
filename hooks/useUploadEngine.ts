@@ -67,66 +67,119 @@ export const useUploadEngine = ({
     return new Promise(resolve => setTimeout(resolve, ms));
   };
 
-  // Get pre-signed URL for uploading files
-  const getPresignedUrl = useCallback(async (filePath: string): Promise<string> => {
-    try {
-      console.log('🔗 Getting presigned URL for:', filePath);
+  // Web Worker for background base64 conversion
+  const workerRef = useRef<Worker | null>(null);
+  const conversionPromises = useRef<Map<string, { resolve: (value: string) => void; reject: (error: Error) => void }>>(new Map());
+
+  // Initialize Web Worker
+  useEffect(() => {
+    if (typeof Worker !== 'undefined') {
+      workerRef.current = new Worker('/base64-worker.js');
       
-      const requestBody = { 
-        filename: filePath,
-        client_method: 'put',
-        expires_in: 720
+      workerRef.current.onmessage = (e) => {
+        const { id, success, base64Content, error, fileName } = e.data;
+        const promise = conversionPromises.current.get(id);
+        
+        if (promise) {
+          if (success) {
+            promise.resolve(base64Content);
+          } else {
+            promise.reject(new Error(`Base64 conversion failed for ${fileName}: ${error}`));
+          }
+          conversionPromises.current.delete(id);
+        }
       };
       
-      const response = await fetch('/api/s3-proxy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(`Failed to get pre-signed URL: ${response.statusText} - ${JSON.stringify(errorData)}`);
-      }
-      
-      const data = await response.json();
-      return data.url;
-    } catch (error) {
-      console.error('❌ Error getting pre-signed URL:', error);
-      throw error;
+      workerRef.current.onerror = (error) => {
+        console.error('Web Worker error:', error);
+        // Reject all pending promises
+        conversionPromises.current.forEach(({ reject }) => {
+          reject(new Error('Web Worker error'));
+        });
+        conversionPromises.current.clear();
+      };
     }
+
+    return () => {
+      if (workerRef.current) {
+        workerRef.current.terminate();
+        workerRef.current = null;
+      }
+      conversionPromises.current.clear();
+    };
   }, []);
 
-  // Upload file using pre-signed URL
-  const uploadFileToS3 = useCallback(async (
-    file: File, 
-    uploadUrl: string, 
-    onProgress?: (progress: number) => void
+  // Convert file to base64 using Web Worker
+  const fileToBase64 = useCallback((file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      if (!workerRef.current) {
+        // Fallback to main thread if Web Worker not available
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => {
+          const result = reader.result as string;
+          const base64 = result.split(',')[1];
+          resolve(base64);
+        };
+        reader.onerror = error => reject(error);
+        return;
+      }
+
+      const id = `${Date.now()}-${Math.random()}`;
+      conversionPromises.current.set(id, { resolve, reject });
+      
+      // Send file to Web Worker for conversion
+      workerRef.current.postMessage({
+        id,
+        file,
+        fileName: file.name
+      });
+    });
+  }, []);
+
+  // Upload files using Content Pipeline API
+  const uploadFilesToContentPipeline = useCallback(async (
+    files: Array<{ file: File; filePath: string }>
   ): Promise<void> => {
     try {
-      console.log('📤 Starting proxied upload for:', file.name);
-
-      const response = await fetch('/api/s3-upload', {
-        method: 'PUT',
+      console.log('📤 Starting Content Pipeline upload for', files.length, 'files');
+      
+      // Convert files to base64 format required by API
+      const uploadFiles = await Promise.all(
+        files.map(async ({ file, filePath }) => ({
+          filename: filePath,
+          content: await fileToBase64(file),
+          content_type: file.type || 'application/pdf'
+        }))
+      );
+      
+      // Upload to Content Pipeline
+      const response = await fetch('/api/content-pipeline-proxy?operation=s3_upload_files', {
+        method: 'POST',
         headers: {
-          'Content-Type': file.type || 'application/pdf',
-          'x-presigned-url': uploadUrl,
+          'Content-Type': 'application/json',
         },
-        body: file,
+        body: JSON.stringify({
+          files: uploadFiles,
+          job_id: jobData?.job_id,
+          folder: 'asset_generator/dev/uploads'
+        }),
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Upload failed with status ${response.status}: ${errorText}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`Upload failed: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`);
       }
 
-      console.log('✅ Proxied upload completed for', file.name);
-      onProgress?.(100);
+      const result = await response.json();
+      console.log('✅ Content Pipeline upload successful:', result);
+      
+      return result;
     } catch (error) {
-      console.error(`❌ Proxied upload failed for ${file.name}:`, error);
+      console.error('❌ Content Pipeline upload failed:', error);
       throw error;
     }
-  }, []);
+  }, [fileToBase64, jobData]);
 
   // Update file status with backend sync
   const updateFileStatus = useCallback(async (
@@ -199,7 +252,7 @@ export const useUploadEngine = ({
     }
   }, [jobData, setJobData, queryClient]);
 
-  // Local file status update (optimistic UI)
+  // Local file status update (optimistic UI) - no counter updates since group-level handles this
   const updateLocalFileStatus = useCallback((
     groupFilename: string,
     pdfFilename: string,
@@ -230,161 +283,252 @@ export const useUploadEngine = ({
         return { ...prev, content_pipeline_files: updatedFiles };
       });
     }
-    
-    // Update counters
-    if (status === 'uploaded') {
-      setUploadedPdfFiles(prev => prev + 1);
-      console.log('✅ PDF uploaded successfully:', pdfFilename);
-    } else if (status === 'upload-failed') {
-      setFailedPdfFiles(prev => prev + 1);
-      console.log('❌ PDF upload failed:', pdfFilename);
-    }
   }, [setJobData]);
 
-  // Upload a single file with retry logic
-  const uploadSingleFile = useCallback(async (
-    groupFilename: string, 
-    filename: string, 
-    file: File, 
-    fileInfo: any, 
-    maxRetries: number = 3
-  ): Promise<void> => {
-    let retryCount = 0;
+
+
+
+
+  // Pre-convert files to base64 for pipeline optimization
+  const preConvertBatch = useCallback(async (
+    batch: Array<[string, Array<{filename: string, file: File, fileInfo: any}>]>
+  ): Promise<Array<[string, Array<{filename: string, file: File, fileInfo: any, base64Content: string}>]>> => {
+    console.log('🔄 Pre-converting batch to base64...');
     
-    // Track this file as actively uploading
-    setUploadingFiles(prev => {
-      const newSet = new Set(prev).add(filename);
-      console.log(`📤 Added ${filename} to uploadingFiles set. Current files:`, Array.from(newSet));
-      return newSet;
+    return await Promise.all(
+      batch.map(async ([groupFilename, groupFiles]) => {
+        const convertedFiles = await Promise.all(
+          groupFiles.map(async (fileData) => ({
+            ...fileData,
+            base64Content: await fileToBase64(fileData.file)
+          }))
+        );
+        return [groupFilename, convertedFiles] as [string, Array<{filename: string, file: File, fileInfo: any, base64Content: string}>];
+      })
+    );
+  }, [fileToBase64]);
+
+  // Upload pre-converted file group
+  const uploadPreConvertedFileGroup = useCallback(async (
+    groupFilename: string,
+    convertedFiles: Array<{filename: string, file: File, fileInfo: any, base64Content: string}>
+  ): Promise<void> => {
+    console.log(`🚀 Uploading pre-converted file group ${groupFilename} with ${convertedFiles.length} PDFs`);
+    
+    // Set optimistic uploading status for all files in group
+    convertedFiles.forEach(({ filename }) => {
+      updateLocalFileStatus(groupFilename, filename, 'uploading');
     });
     
-    // Set initial uploading status
-    updateLocalFileStatus(groupFilename, filename, 'uploading');
-    
-    while (retryCount < maxRetries) {
-      try {
-        console.log('🔄 Uploading', filename, '(attempt', retryCount + 1 + '/' + maxRetries + ')');
-        
-        // Get pre-signed URL
-        const uploadUrl = await getPresignedUrl(fileInfo.file_path);
-        
-        // Upload file with progress tracking
-        await uploadFileToS3(file, uploadUrl, (progress) => {
-          setUploadProgress(prev => ({
-            ...prev,
-            [filename]: progress
-          }));
-        });
-        
-        // File uploaded successfully
-        console.log(`✅ File ${filename} successfully uploaded to S3`);
-        updateLocalFileStatus(groupFilename, filename, 'uploaded');
+    try {
+      // Upload files using pre-converted base64 content
+      const uploadFiles = convertedFiles.map(({ fileInfo, base64Content }) => ({
+        filename: fileInfo.file_path,
+        content: base64Content,
+        content_type: 'application/pdf'
+      }));
+      
+      const response = await fetch('/api/content-pipeline-proxy?operation=s3_upload_files', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          files: uploadFiles,
+          job_id: jobData?.job_id,
+          folder: 'asset_generator/dev/uploads'
+        }),
+      });
 
-        // Clear upload progress
-        setUploadProgress(prev => {
-          const newProgress = { ...prev };
-          delete newProgress[filename];
-          return newProgress;
-        });
-        
-        // Remove from uploading set
-        setUploadingFiles(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(filename);
-          console.log(`🗑️ Removed ${filename} from uploadingFiles set. Remaining:`, Array.from(newSet));
-          return newSet;
-        });
-        
-        return; // Success
-        
-      } catch (error) {
-        retryCount++;
-        console.error(`Failed to upload ${filename} (attempt ${retryCount}/${maxRetries}):`, error);
-        
-        if (retryCount < maxRetries) {
-          console.log(`Retrying upload of ${filename} in 1.5 seconds...`);
-          await wait(1500);
-        } else {
-          // All retries failed
-          console.error('All retry attempts failed for', filename);
-          updateLocalFileStatus(groupFilename, filename, 'upload-failed');
-          
-          // Remove from uploading set
-          setUploadingFiles(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(filename);
-            console.log(`❌ Removed failed ${filename} from uploadingFiles set. Remaining:`, Array.from(newSet));
-            return newSet;
-          });
-          
-          throw error;
-        }
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`Upload failed: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`);
       }
-    }
-  }, [getPresignedUrl, uploadFileToS3, updateLocalFileStatus]);
 
-  // Start the upload process for all files
+      console.log(`✅ File group ${groupFilename} uploaded successfully`);
+      
+      // Update backend status for all files in the group with a single API call
+      try {
+        const pdfUpdates = convertedFiles.map(({ filename }) => ({
+          pdf_filename: filename,
+          status: 'uploaded' as const
+        }));
+        
+        const statusResponse = await contentPipelineApi.batchUpdatePdfFileStatus(groupFilename, pdfUpdates);
+        
+        if (statusResponse?.file?.original_files) {
+          // Update local state with backend response
+          if (setJobData) {
+            setJobData(prev => {
+              if (!prev?.content_pipeline_files) return prev;
+              
+              const updatedFiles = prev.content_pipeline_files.map((file: any) =>
+                file.filename === groupFilename
+                  ? {
+                      ...file,
+                      original_files: statusResponse.file.original_files,
+                      last_updated: new Date().toISOString()
+                    }
+                  : file
+              );
+              
+              return { ...prev, content_pipeline_files: updatedFiles };
+            });
+          }
+        }
+        
+        console.log(`✅ Batch updated ${pdfUpdates.length} PDFs to 'uploaded' status`);
+      } catch (error) {
+        console.error(`Failed to batch update status for group ${groupFilename}:`, error);
+        // Fallback to local status updates
+        convertedFiles.forEach(({ filename }) => {
+          updateLocalFileStatus(groupFilename, filename, 'uploaded');
+        });
+      }
+      
+      // Update counters (only once per group, not per file)
+      setUploadedPdfFiles(prev => prev + convertedFiles.length);
+      console.log(`📊 Updated counters: +${convertedFiles.length} uploaded files`);
+      
+    } catch (error) {
+      console.error(`❌ Failed to upload file group ${groupFilename}:`, error);
+      
+      // Update backend status for all files in the group to failed with a single API call
+      try {
+        const pdfUpdates = convertedFiles.map(({ filename }) => ({
+          pdf_filename: filename,
+          status: 'upload-failed' as const
+        }));
+        
+        const statusResponse = await contentPipelineApi.batchUpdatePdfFileStatus(groupFilename, pdfUpdates);
+        
+        if (statusResponse?.file?.original_files) {
+          // Update local state with backend response
+          if (setJobData) {
+            setJobData(prev => {
+              if (!prev?.content_pipeline_files) return prev;
+              
+              const updatedFiles = prev.content_pipeline_files.map((file: any) =>
+                file.filename === groupFilename
+                  ? {
+                      ...file,
+                      original_files: statusResponse.file.original_files,
+                      last_updated: new Date().toISOString()
+                    }
+                  : file
+              );
+              
+              return { ...prev, content_pipeline_files: updatedFiles };
+            });
+          }
+        }
+        
+        console.log(`✅ Batch updated ${pdfUpdates.length} PDFs to 'upload-failed' status`);
+      } catch (batchError) {
+        console.error(`Failed to batch update failed status for group ${groupFilename}:`, batchError);
+        // Fallback to local status updates
+        convertedFiles.forEach(({ filename }) => {
+          updateLocalFileStatus(groupFilename, filename, 'upload-failed');
+        });
+      }
+      
+      // Update counters (only once per group, not per file)
+      setFailedPdfFiles(prev => prev + convertedFiles.length);
+      console.log(`📊 Updated counters: +${convertedFiles.length} failed files`);
+      
+      throw error;
+    }
+  }, [updateLocalFileStatus, setJobData, jobData]);
+
+  // Start the upload process with pipeline optimization
   const startUploadProcess = useCallback(async (files: File[]): Promise<void> => {
     if (!jobData?.content_pipeline_files) {
       console.log('startUploadProcess: No content_pipeline_files found');
       return;
     }
     
-    console.log('🚀 Starting upload process for files:', files.map(f => f.name));
+    console.log('🚀 Starting pipelined upload process for files:', files.map(f => f.name));
     
     // Create file mapping
     const fileMap = new Map<string, File>();
     files.forEach(file => fileMap.set(file.name, file));
     
-    // Collect files to upload
-    const filesToUpload: Array<{groupFilename: string, filename: string, file: File, fileInfo: any}> = [];
+    // Group files by their logical file group
+    const fileGroups = new Map<string, Array<{filename: string, file: File, fileInfo: any}>>();
+    let totalPdfFiles = 0;
     
     jobData.content_pipeline_files.forEach((fileObj: any) => {
       if (fileObj.original_files) {
+        const groupFiles: Array<{filename: string, file: File, fileInfo: any}> = [];
+        
         Object.entries(fileObj.original_files).forEach(([filename, fileInfo]: [string, any]) => {
           const file = fileMap.get(filename);
           if (file) {
-            filesToUpload.push({ groupFilename: fileObj.filename, filename, file, fileInfo });
+            groupFiles.push({ filename, file, fileInfo });
+            totalPdfFiles++;
           }
         });
+        
+        if (groupFiles.length > 0) {
+          fileGroups.set(fileObj.filename, groupFiles);
+        }
       }
     });
     
     // Set totals and reset counters
-    const totalFiles = filesToUpload.length;
-    console.log('📊 Total PDF files to upload:', totalFiles);
-    setTotalPdfFiles(totalFiles);
+    console.log(`📊 Total: ${fileGroups.size} file groups, ${totalPdfFiles} PDF files`);
+    setTotalPdfFiles(totalPdfFiles);
     setUploadedPdfFiles(0);
     setFailedPdfFiles(0);
     
-    const batchSize = 4;
+    // Pipelined upload: Convert next batch while uploading current batch
+    const groupEntries = Array.from(fileGroups.entries());
+    const batchSize = 6; // Increased to 6 for maximum throughput
     
-    // Process in batches
-    for (let i = 0; i < filesToUpload.length; i += batchSize) {
-      const batch = filesToUpload.slice(i, i + batchSize);
-      console.log('📦 Processing batch', Math.floor(i / batchSize) + 1, ':', batch.map(b => b.filename));
+    let nextBatchConverted: Array<[string, Array<{filename: string, file: File, fileInfo: any, base64Content: string}>]> = [];
+    
+    for (let i = 0; i < groupEntries.length; i += batchSize) {
+      const currentBatch = groupEntries.slice(i, i + batchSize);
+      const nextBatch = groupEntries.slice(i + batchSize, i + batchSize * 2);
       
-      // Upload batch in parallel
-      const batchPromises = batch.map(async ({ groupFilename, filename, file, fileInfo }) => {
+      console.log(`📦 Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(groupEntries.length / batchSize)}:`, currentBatch.map(([groupName]) => groupName));
+      
+      // Get converted files for current batch (either pre-converted or convert now)
+      const currentConverted = nextBatchConverted.length > 0 
+        ? nextBatchConverted 
+        : await preConvertBatch(currentBatch);
+      
+      // Start uploading current batch AND converting next batch in parallel
+      const uploadPromise = Promise.all(currentConverted.map(async ([groupFilename, convertedFiles]) => {
         try {
-          await uploadSingleFile(groupFilename, filename, file, fileInfo);
-          return { success: true, filename };
+          await uploadPreConvertedFileGroup(groupFilename, convertedFiles);
+          return { success: true, groupFilename };
         } catch (error) {
-          console.error(`Failed to upload ${filename}:`, error);
-          return { success: false, filename };
+          console.error(`Failed to upload file group ${groupFilename}:`, error);
+          return { success: false, groupFilename };
         }
-      });
+      }));
       
-      await Promise.allSettled(batchPromises);
+      // Convert next batch in parallel if it exists
+      const convertPromise = nextBatch.length > 0 ? preConvertBatch(nextBatch) : Promise.resolve([]);
       
-      // Small delay between batches
-      if (i + batchSize < filesToUpload.length) {
-        await wait(300);
+      const [uploadResults, nextConverted] = await Promise.all([uploadPromise, convertPromise]);
+      
+      // Store converted next batch for next iteration
+      nextBatchConverted = nextConverted;
+      
+      // Log batch completion
+      const successCount = uploadResults.filter(r => r.success).length;
+      console.log(`✅ Batch completed: ${successCount}/${currentBatch.length} file groups uploaded successfully`);
+      
+      // Shorter delay between batches for better throughput
+      if (i + batchSize < groupEntries.length) {
+        await wait(200);
       }
     }
     
-    console.log('🎉 Upload process completed!');
-  }, [jobData, uploadSingleFile]);
+    console.log('🎉 Pipelined upload process completed!');
+  }, [jobData, preConvertBatch, uploadPreConvertedFileGroup]);
 
   // Check for files that need uploading and start process
   const checkAndStartUpload = useCallback(async (filesLoaded: boolean): Promise<void> => {

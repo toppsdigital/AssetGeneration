@@ -317,6 +317,32 @@ class ContentPipelineAPI {
     return response.json();
   }
 
+  // Update multiple PDF file statuses within original_files in a single API call
+  async batchUpdatePdfFileStatus(
+    groupFilename: string, 
+    pdfUpdates: Array<{
+      pdf_filename: string;
+      status: 'uploading' | 'uploaded' | 'upload-failed';
+    }>
+  ): Promise<FileResponse> {
+    const response = await fetch(`${this.baseUrl}?operation=batch_update_pdf_status&id=${encodeURIComponent(groupFilename)}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        pdf_updates: pdfUpdates
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || `Failed to batch update PDF status: ${response.status}`);
+    }
+
+    return response.json();
+  }
+
   // Get recent jobs for dashboard
   async getRecentJobs(limit: number = 10): Promise<JobListResponse> {
     return this.listJobs({

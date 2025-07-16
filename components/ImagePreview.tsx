@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { usePresignedUrlCache } from '../hooks/usePresignedUrlCache';
 import RegularImageViewer from './RegularImageViewer';
 import TiffImageViewer from './TiffImageViewer';
 
@@ -116,6 +115,40 @@ const ProgressLoader = ({ progress = 0 }: { progress?: number }) => (
   </div>
 );
 
+// Simple helper to get presigned URL for viewing images
+const getPresignedUrl = async (filePath: string): Promise<string | null> => {
+  try {
+    console.log('🔗 Getting presigned URL for viewing:', filePath);
+    
+    const response = await fetch('/api/s3-proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        client_method: 'get',
+        filename: filePath
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Unknown error');
+      throw new Error(`${response.status} ${response.statusText}: ${errorText}`);
+    }
+
+    const data = await response.json();
+    
+    if (data.url) {
+      console.log('✅ Got presigned URL for viewing:', filePath);
+      return data.url;
+    } else {
+      throw new Error('No URL in response');
+    }
+    
+  } catch (error) {
+    console.error(`❌ Failed to get presigned URL for ${filePath}:`, error);
+    return null;
+  }
+};
+
 export default function ImagePreview({
   filePath,
   alt,
@@ -130,7 +163,6 @@ export default function ImagePreview({
   const [error, setError] = useState<string | null>(null);
   const [presignedUrl, setPresignedUrl] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const { getUrl } = usePresignedUrlCache();
 
   const isTiff = filePath.toLowerCase().endsWith('.tif') || filePath.toLowerCase().endsWith('.tiff');
 
@@ -168,7 +200,7 @@ export default function ImagePreview({
     const fetchUrl = async () => {
       try {
         setError(null);
-        const url = await getUrl(filePath);
+        const url = await getPresignedUrl(filePath);
         if (url) {
           setPresignedUrl(url);
         } else {
@@ -181,18 +213,18 @@ export default function ImagePreview({
     };
 
     fetchUrl();
-  }, [isVisible, filePath, getUrl, presignedUrl]);
+  }, [isVisible, filePath, presignedUrl]);
 
   // Preload URLs for priority images
   useEffect(() => {
     if (priority && filePath) {
-      getUrl(filePath).then(url => {
+      getPresignedUrl(filePath).then(url => {
         if (url) {
           setPresignedUrl(url);
         }
       }).catch(console.error);
     }
-  }, [priority, filePath, getUrl]);
+  }, [priority, filePath]);
 
   // Simulate loading progress for better UX
   useEffect(() => {
