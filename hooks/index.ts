@@ -12,4 +12,4 @@ export {
 } from '../web/hooks/useJobData';
 
 // URL cache hook
-export { usePresignedUrlCache } from './usePresignedUrlCache'; 
+// usePresignedUrlCache removed - uploads now use Content Pipeline API directly 
