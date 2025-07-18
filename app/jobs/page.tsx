@@ -127,7 +127,7 @@ export default function JobsPage() {
         <NavBar 
           showHome
           onHome={() => router.push('/')}
-          title="Job Management"
+          title="Physical to Digital Jobs"
         />
         <div className={styles.content}>
           <div style={{ textAlign: 'center', padding: '48px 0' }}>
@@ -145,7 +145,7 @@ export default function JobsPage() {
         <NavBar 
           showHome
           onHome={() => router.push('/')}
-          title="Job Management"
+          title="Physical to Digital Jobs"
         />
         <div className={styles.content}>
           <div style={{ textAlign: 'center', padding: '48px 0' }}>
@@ -178,7 +178,7 @@ export default function JobsPage() {
       <NavBar 
         showHome
         onHome={() => router.push('/')}
-        title="Job Management"
+        title="Physical to Digital Jobs"
       />
       <div className={styles.content}>
         <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px' }}>
@@ -226,10 +226,27 @@ export default function JobsPage() {
                   cursor: isRefetching ? 'not-allowed' : 'pointer',
                   fontSize: 14,
                   transition: 'all 0.2s',
-                  opacity: isRefetching ? 0.6 : 1
+                  opacity: isRefetching ? 0.6 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6
                 }}
               >
-                🔄 Refresh All
+                <div style={{ width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {isRefetching ? (
+                    <div style={{
+                      width: 16,
+                      height: 16,
+                      border: '2px solid transparent',
+                      borderTop: '2px solid currentColor',
+                      borderRadius: '50%',
+                      animation: 'spin 1s linear infinite'
+                    }} />
+                  ) : (
+                    <span style={{ fontSize: 16 }}>🔄</span>
+                  )}
+                </div>
+                Refresh
               </button>
             </div>
           </div>

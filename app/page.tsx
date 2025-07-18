@@ -87,7 +87,7 @@ export default function Home() {
   return (
     <div className={styles.container}>
       <NavBar 
-        title="Digital Content Production" 
+        title="Content Production Hub" 
       />
       <div className={styles.content}>
         <div className={styles.mainSections}>
@@ -95,7 +95,7 @@ export default function Home() {
           <div className={styles.prominentSection}>
             <div className={styles.sectionHeader}>
               <h2>Physical to Digital Pipeline</h2>
-              <p>Transform physical PDF assets into digital collectibles</p>
+              <p>Upload physical PDFs, and convert them into layered, production-ready assets.</p>
             </div>
             <div className={styles.buttonGroup}>
               <button
@@ -115,11 +115,11 @@ export default function Home() {
             </div>
           </div>
 
-          {/* In App Content Creation Section */}
+          {/* Create New Digital Assets Section */}
           <div className={styles.prominentSection}>
             <div className={styles.sectionHeader}>
-              <h2>In App Content Creation</h2>
-              <p>Select a PSD to start creating a new asset</p>
+              <h2>Create New Digital Assets</h2>
+              <p>Select a PSD template to generate an image for in-app use.</p>
             </div>
             <div className={styles.templatesList}>
               {loadingFiles ? (
