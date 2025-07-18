@@ -72,7 +72,7 @@ function JobDetailsPageContent() {
       source: jobData ? 'Cache/Fresh Data' : 'None',
       timestamp: new Date().toISOString()
     });
-
+  
     // Check if we have fresher data in jobs list cache and sync it
     if (jobId && jobData) {
       const jobsListData = queryClient.getQueryData<JobData[]>(jobKeys.all);
@@ -83,8 +83,8 @@ function JobDetailsPageContent() {
           currentStatus: jobData.job_status,
           freshStatus: freshJobFromList.job_status,
           jobId
-        });
-        
+      });
+      
                  // Update the individual job cache with fresh data from jobs list
          syncJobDataAcrossCaches(queryClient, jobId, (prevJobData) => ({
            ...prevJobData,

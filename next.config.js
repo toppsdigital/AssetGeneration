@@ -2,6 +2,28 @@
 const nextConfig = {
   reactStrictMode: true,
   
+  // Image optimization configuration for S3 presigned URLs
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '*.s3.*.amazonaws.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.s3.amazonaws.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 's3.*.amazonaws.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 's3.amazonaws.com',
+      }
+    ],
+  },
+  
   // Ensure UTIF library is properly bundled for client-side usage
   webpack: (config, { buildId, dev, isServer, defaultLoaders, webpack }) => {
     // Don't bundle UTIF on server side since it's only used in browser
