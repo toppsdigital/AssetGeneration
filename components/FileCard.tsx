@@ -312,7 +312,7 @@ const FileCard: React.FC<FileCardProps> = ({
         )}
       </div>
 
-      {/* Firefly Assets - Only show if there are firefly assets */}
+      {/* Digital Collectibles - Only show if there are firefly assets */}
       {file.firefly_assets && Object.keys(file.firefly_assets).length > 0 && (
         <div style={{ marginTop: 20 }}>
           <div style={{
@@ -327,10 +327,10 @@ const FileCard: React.FC<FileCardProps> = ({
               fontWeight: 600,
               margin: 0
             }}>
-              🎨 Firefly Assets ({Object.keys(file.firefly_assets).length})
+              🎨 Digital Collectibles ({Object.keys(file.firefly_assets).length})
             </h4>
             {(() => {
-              // Check if all firefly assets have "succeeded" status (case insensitive)
+              // Check if all digital collectibles have "succeeded" status (case insensitive)
               const allSucceeded = Object.values(file.firefly_assets || {}).every(
                 asset => asset.status.toLowerCase() === 'succeeded'
               );
@@ -338,12 +338,12 @@ const FileCard: React.FC<FileCardProps> = ({
               return allSucceeded ? (
                 <button
                   onClick={() => {
-                    // Use the actual file paths from firefly assets
+                    // Use the actual file paths from digital collectibles
                     const assetUrls = Object.values(file.firefly_assets || {}).map(asset => 
                       asset.file_path
                     ).filter(url => url);
                     
-                    console.log('🔥 Firefly preview - Asset URLs:', assetUrls);
+                    console.log('🎨 Digital collectibles preview - Asset URLs:', assetUrls);
                     
                     const baseName = file.filename.replace('.pdf', '').replace('.PDF', '');
                     const jobPath = jobData?.job_id || '';
@@ -370,7 +370,7 @@ const FileCard: React.FC<FileCardProps> = ({
                     e.currentTarget.style.background = 'rgba(52, 211, 153, 0.2)';
                   }}
                 >
-                  🎨 Preview Assets
+                  🎨 Preview Collectibles
                 </button>
               ) : (
                 <span style={{
@@ -381,7 +381,7 @@ const FileCard: React.FC<FileCardProps> = ({
                   borderRadius: 6,
                   background: 'rgba(156, 163, 175, 0.1)'
                 }}>
-                  ⏳ Generating assets...
+                  ⏳ Generating collectibles...
                 </span>
               );
             })()}

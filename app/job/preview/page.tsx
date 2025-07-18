@@ -50,11 +50,11 @@ function JobPreviewPageContent() {
       setDisplayName(fileName as string);
       
       // Parse the actual file paths/URLs passed from details page
-      // For Firefly assets, use assetUrls; for extracted layers, use filePaths
+      // For digital collectibles, use assetUrls; for extracted layers, use filePaths
       const urlParameter = type === 'firefly' ? assetUrls : filePaths;
       
       if (!urlParameter) {
-        setError(`No ${type === 'firefly' ? 'asset URLs' : 'file paths'} provided`);
+        setError(`No ${type === 'firefly' ? 'digital collectibles' : 'file paths'} provided`);
         return;
       }
 
@@ -63,13 +63,13 @@ function JobPreviewPageContent() {
         actualFilePaths = JSON.parse(decodeURIComponent(urlParameter as string));
         console.log(`🎯 Preview page - Loading ${actualFilePaths.length} ${type} assets:`, actualFilePaths);
       } catch (error) {
-        console.error(`❌ Failed to parse ${type === 'firefly' ? 'assetUrls' : 'filePaths'} parameter:`, error);
-        setError(`Invalid ${type === 'firefly' ? 'asset URLs' : 'file paths'} parameter`);
+        console.error(`❌ Failed to parse ${type === 'firefly' ? 'digital collectible URLs' : 'filePaths'} parameter:`, error);
+        setError(`Invalid ${type === 'firefly' ? 'digital collectible URLs' : 'file paths'} parameter`);
         return;
       }
 
       if (actualFilePaths.length === 0) {
-        setError(`No ${type} files found`);
+        setError(`No ${type === 'firefly' ? 'digital collectibles' : type + ' files'} found`);
         return;
       }
 
@@ -193,7 +193,7 @@ function JobPreviewPageContent() {
   return (
     <>
       <Head>
-        <title>Preview {type === 'extracted' ? 'Extracted Layers' : 'Firefly Assets'}</title>
+        <title>Preview {type === 'extracted' ? 'Extracted Layers' : 'Digital Collectibles'}</title>
       </Head>
       <div className={styles.pageContainer}>
         <NavBar
@@ -202,7 +202,7 @@ function JobPreviewPageContent() {
           showBackToEdit
           onBackToEdit={() => router.push(`/job/details?jobId=${encodeURIComponent(jobPath as string)}`)}
           backLabel="Job Details"
-          title={`${displayName} ${type === 'extracted' ? 'Extracted Layers' : 'Generated Assets'}`}
+          title={`${displayName} ${type === 'extracted' ? 'Extracted Layers' : 'Digital Collectibles'}`}
         />
       
         <div className={styles.editContainer}>
@@ -291,9 +291,11 @@ function JobPreviewPageContent() {
                   border: '1px solid rgba(255, 255, 255, 0.1)'
                 }}>
                   <div style={{ fontSize: 48, marginBottom: 16 }}>📷</div>
-                  <h3 style={{ color: '#9ca3af', fontSize: 18, marginBottom: 8 }}>No Assets Found</h3>
+                  <h3 style={{ color: '#9ca3af', fontSize: 18, marginBottom: 8 }}>
+                    No {type === 'firefly' ? 'Digital Collectibles' : 'Assets'} Found
+                  </h3>
                   <p style={{ color: '#6b7280', fontSize: 14 }}>
-                    This job doesn't have any generated assets yet.
+                    This job doesn't have any {type === 'firefly' ? 'digital collectibles' : 'generated assets'} yet.
                   </p>
                 </div>
               )}
