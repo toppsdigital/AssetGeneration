@@ -35,6 +35,7 @@ interface FileCardProps {
   index?: number;
   jobData?: {
     job_id?: string;
+    status?: string; // Add job status to determine when to show file status
   };
   uploadingFiles?: Set<string>;
 }
@@ -88,17 +89,17 @@ const FileCard: React.FC<FileCardProps> = ({
 
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-        gap: 20,
-        marginBottom: 24
+        gridTemplateColumns: '1fr 1fr 1.5fr', // Narrower for PDF/Layers, wider for Digital Collectibles
+        gap: 16, // Reduced from 20
+        marginBottom: 20 // Reduced from 24
       }}>
         {/* Original PDF Files */}
         <div>
           <h4 style={{
             color: '#f59e0b',
-            fontSize: 16,
+            fontSize: 15, // Slightly smaller
             fontWeight: 600,
-            margin: '0 0 12px 0'
+            margin: '0 0 10px 0' // Reduced margin
           }}>
             📄 Original PDF Files ({file.original_files ? Object.keys(file.original_files).length : 0})
           </h4>
@@ -106,81 +107,91 @@ const FileCard: React.FC<FileCardProps> = ({
             background: 'rgba(245, 158, 11, 0.1)',
             border: '1px solid rgba(245, 158, 11, 0.3)',
             borderRadius: 8,
-            padding: 12,
-            maxHeight: 200,
+            padding: 10, // Reduced from 12
+            maxHeight: 180, // Reduced from 200
             overflowY: 'auto'
           }}>
             {file.original_files && Object.keys(file.original_files).length > 0 ? (
-              Object.entries(file.original_files).map(([filename, fileInfo], origIndex) => (
-                <div key={origIndex} style={{
-                  marginBottom: 8,
-                  fontSize: 13,
-                  color: '#fbbf24',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span>📋</span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span>{filename}</span>
-                      {/* Show loading spinner when upload is actively happening */}
+              Object.entries(file.original_files).map(([filename, fileInfo], origIndex) => {
+                // Show status when there are NO firefly assets (job hasn't reached generating/complete), or file is actively uploading
+                const hasFireflyAssets = file.firefly_assets && Object.keys(file.firefly_assets).length > 0;
+                const showStatus = uploadingFiles.has(filename) || !hasFireflyAssets;
+                
+                return (
+                  <div key={origIndex} style={{
+                    marginBottom: 6, // Reduced from 8
+                    fontSize: 12, // Reduced from 13
+                    color: '#fbbf24',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}> {/* Reduced gap */}
+                      <span>📋</span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}> {/* Reduced gap */}
+                        <span>{filename}</span>
+                        {/* Show loading spinner when upload is actively happening */}
+                        {uploadingFiles.has(filename) && (
+                          <div style={{
+                            width: 10, // Reduced from 12
+                            height: 10, // Reduced from 12
+                            border: '1.5px solid rgba(245, 158, 11, 0.3)',
+                            borderTop: '1.5px solid #f59e0b',
+                            borderRadius: '50%',
+                            animation: 'spin 1s linear infinite',
+                            marginLeft: 3 // Reduced from 4
+                          }} />
+                        )}
+                      </span>
+                      {/* Show animated uploading text for files being uploaded */}
                       {uploadingFiles.has(filename) && (
-                        <div style={{
-                          width: 12,
-                          height: 12,
-                          border: '1.5px solid rgba(245, 158, 11, 0.3)',
-                          borderTop: '1.5px solid #f59e0b',
-                          borderRadius: '50%',
-                          animation: 'spin 1s linear infinite',
-                          marginLeft: 4
-                        }} />
+                        <span style={{
+                          fontSize: 10, // Reduced from 11
+                          color: '#f59e0b',
+                          animation: 'pulse 2s infinite',
+                          marginLeft: 3 // Reduced from 4
+                        }}>
+                          Uploading...
+                        </span>
                       )}
                     </span>
-                    {/* Show animated uploading text for files being uploaded */}
-                    {uploadingFiles.has(filename) && (
+                    <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}> {/* Reduced gap, always show */}
+                      {/* Always show file type */}
                       <span style={{
-                        fontSize: 11,
-                        color: '#f59e0b',
-                        animation: 'pulse 2s infinite',
-                        marginLeft: 4
+                        fontSize: 10, // Reduced from 11
+                        padding: '1px 4px', // Reduced padding
+                        borderRadius: 3, // Reduced border radius
+                        background: 'rgba(245, 158, 11, 0.2)',
+                        color: '#f59e0b'
                       }}>
-                        Uploading...
+                        {fileInfo.card_type}
                       </span>
-                    )}
-                  </span>
-                  <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                    <span style={{
-                      fontSize: 11,
-                      padding: '2px 6px',
-                      borderRadius: 4,
-                      background: 'rgba(245, 158, 11, 0.2)',
-                      color: '#f59e0b'
-                    }}>
-                      {fileInfo.card_type}
-                    </span>
-                    <span style={{
-                      fontSize: 11,
-                      padding: '2px 6px',
-                      borderRadius: 4,
-                      background: fileInfo.status.toLowerCase() === 'uploaded' 
-                        ? 'rgba(16, 185, 129, 0.2)' 
-                        : fileInfo.status.toLowerCase() === 'upload-failed'
-                        ? 'rgba(239, 68, 68, 0.2)'
-                        : 'rgba(249, 115, 22, 0.2)',
-                      color: fileInfo.status.toLowerCase() === 'uploaded' 
-                        ? '#34d399' 
-                        : fileInfo.status.toLowerCase() === 'upload-failed'
-                        ? '#fca5a5'
-                        : '#fdba74'
-                    }}>
-                      {capitalizeStatus(fileInfo.status)}
-                    </span>
+                      {/* Only show status if needed */}
+                      {showStatus && (
+                        <span style={{
+                          fontSize: 10, // Reduced from 11
+                          padding: '1px 4px', // Reduced padding
+                          borderRadius: 3, // Reduced border radius
+                          background: fileInfo.status.toLowerCase() === 'uploaded' 
+                            ? 'rgba(16, 185, 129, 0.2)' 
+                            : fileInfo.status.toLowerCase() === 'upload-failed'
+                            ? 'rgba(239, 68, 68, 0.2)'
+                            : 'rgba(249, 115, 22, 0.2)',
+                          color: fileInfo.status.toLowerCase() === 'uploaded' 
+                            ? '#34d399' 
+                            : fileInfo.status.toLowerCase() === 'upload-failed'
+                            ? '#fca5a5'
+                            : '#fdba74'
+                        }}>
+                          {capitalizeStatus(fileInfo.status)}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             ) : (
-              <p style={{ color: '#9ca3af', fontSize: 13, margin: 0 }}>
+              <p style={{ color: '#9ca3af', fontSize: 12, margin: 0 }}> {/* Reduced font size */}
                 No original PDF files found
               </p>
             )}
@@ -194,11 +205,11 @@ const FileCard: React.FC<FileCardProps> = ({
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
-              marginBottom: 12
+              marginBottom: 10 // Reduced from 12
             }}>
               <h4 style={{
                 color: '#60a5fa',
-                fontSize: 16,
+                fontSize: 15, // Slightly smaller
                 fontWeight: 600,
                 margin: 0
               }}>
@@ -229,11 +240,11 @@ const FileCard: React.FC<FileCardProps> = ({
                     style={{
                       background: 'rgba(59, 130, 246, 0.2)',
                       border: '1px solid rgba(59, 130, 246, 0.4)',
-                      borderRadius: 6,
+                      borderRadius: 4, // Reduced from 6
                       color: '#60a5fa',
                       cursor: 'pointer',
-                      fontSize: 12,
-                      padding: '6px 12px',
+                      fontSize: 11, // Reduced from 12
+                      padding: '4px 8px', // Reduced padding
                       transition: 'all 0.2s',
                       fontWeight: 500
                     }}
@@ -244,18 +255,18 @@ const FileCard: React.FC<FileCardProps> = ({
                       e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)';
                     }}
                   >
-                    👁️ Preview Layers
+                    👁️ Preview
                   </button>
                 ) : (
                   <span style={{
-                    fontSize: 12,
+                    fontSize: 11, // Reduced from 12
                     color: '#9ca3af',
-                    padding: '6px 12px',
+                    padding: '4px 8px', // Reduced padding
                     border: '1px solid rgba(156, 163, 175, 0.3)',
-                    borderRadius: 6,
+                    borderRadius: 4, // Reduced from 6
                     background: 'rgba(156, 163, 175, 0.1)'
                   }}>
-                    ⏳ Waiting for all layers to be uploaded
+                    ⏳ Processing...
                   </span>
                 );
               })()}
@@ -264,46 +275,187 @@ const FileCard: React.FC<FileCardProps> = ({
               background: 'rgba(59, 130, 246, 0.1)',
               border: '1px solid rgba(59, 130, 246, 0.3)',
               borderRadius: 8,
-              padding: 12,
-              maxHeight: 200,
+              padding: 10, // Reduced from 12
+              maxHeight: 180, // Reduced from 200
               overflowY: 'auto'
             }}>
-              {Object.entries(file.extracted_files).map(([filename, extractedFile], extIndex) => (
-                <div key={extIndex} style={{
-                  marginBottom: 8,
-                  fontSize: 13,
-                  color: '#bfdbfe',
+              {Object.entries(file.extracted_files).map(([filename, extractedFile], extIndex) => {
+                // Show status when there are NO firefly assets (job hasn't reached generating/complete), or file is actively uploading
+                const hasFireflyAssets = file.firefly_assets && Object.keys(file.firefly_assets).length > 0;
+                const showStatus = uploadingFiles.has(filename) || !hasFireflyAssets;
+                
+                return (
+                  <div key={extIndex} style={{
+                    marginBottom: 6, // Reduced from 8
+                    fontSize: 12, // Reduced from 13
+                    color: '#bfdbfe',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}> {/* Reduced gap */}
+                      <span>🖼️</span>
+                      <span>{filename}</span>
+                    </span>
+                    <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}> {/* Reduced gap, always show */}
+                      {/* Always show layer type */}
+                      <span style={{ 
+                        background: 'rgba(59, 130, 246, 0.2)', 
+                        padding: '1px 4px', // Reduced padding
+                        borderRadius: 3, // Reduced border radius
+                        color: '#60a5fa',
+                        fontSize: 10 // Reduced from 11
+                      }}>
+                        {extractedFile.layer_type}
+                      </span>
+                      {/* Only show status if needed */}
+                      {showStatus && (
+                        <span style={{
+                          fontSize: 10, // Reduced from 11
+                          padding: '1px 4px', // Reduced padding
+                          borderRadius: 3, // Reduced border radius
+                          background: extractedFile.status.toLowerCase() === 'uploaded' 
+                            ? 'rgba(16, 185, 129, 0.2)' 
+                            : 'rgba(249, 115, 22, 0.2)',
+                          color: extractedFile.status.toLowerCase() === 'uploaded' 
+                            ? '#34d399' 
+                            : '#fdba74'
+                        }}>
+                          {capitalizeStatus(extractedFile.status)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Digital Collectibles - Only show if there are firefly assets */}
+        {file.firefly_assets && Object.keys(file.firefly_assets).length > 0 && (
+          <div>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: 10 // Reduced from 12
+            }}>
+              <h4 style={{
+                color: '#34d399',
+                fontSize: 15, // Slightly smaller
+                fontWeight: 600,
+                margin: 0
+              }}>
+                🎨 Digital Collectibles ({Object.keys(file.firefly_assets).length})
+              </h4>
+              {(() => {
+                // Check if all digital collectibles have "succeeded" status (case insensitive)
+                const allSucceeded = Object.values(file.firefly_assets || {}).every(
+                  asset => asset.status.toLowerCase() === 'succeeded'
+                );
+                
+                return allSucceeded ? (
+                  <button
+                    onClick={() => {
+                      // Use the actual file paths from digital collectibles
+                      const assetUrls = Object.values(file.firefly_assets || {}).map(asset => 
+                        asset.file_path
+                      ).filter(url => url);
+                      
+                      console.log('🎨 Digital collectibles preview - Asset URLs:', assetUrls);
+                      
+                      const baseName = file.filename.replace('.pdf', '').replace('.PDF', '');
+                      const jobPath = jobData?.job_id || '';
+                      
+                      // Pass the asset URLs as a query parameter
+                      const assetUrlsParam = encodeURIComponent(JSON.stringify(assetUrls));
+                      router.push(`/job/preview?jobPath=${encodeURIComponent(jobPath)}&fileName=${encodeURIComponent(baseName)}&type=firefly&assetUrls=${assetUrlsParam}`);
+                    }}
+                    style={{
+                      background: 'rgba(52, 211, 153, 0.2)',
+                      border: '1px solid rgba(52, 211, 153, 0.4)',
+                      borderRadius: 4, // Reduced from 6
+                      color: '#34d399',
+                      cursor: 'pointer',
+                      fontSize: 11, // Reduced from 12
+                      padding: '4px 8px', // Reduced padding
+                      transition: 'all 0.2s',
+                      fontWeight: 500
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(52, 211, 153, 0.3)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(52, 211, 153, 0.2)';
+                    }}
+                  >
+                    🎨 Preview
+                  </button>
+                ) : (
+                  <span style={{
+                    fontSize: 11, // Reduced from 12
+                    color: '#9ca3af',
+                    padding: '4px 8px', // Reduced padding
+                    border: '1px solid rgba(156, 163, 175, 0.3)',
+                    borderRadius: 4, // Reduced from 6
+                    background: 'rgba(156, 163, 175, 0.1)'
+                  }}>
+                    ⏳ Generating...
+                  </span>
+                );
+              })()}
+            </div>
+            <div style={{
+              background: 'rgba(52, 211, 153, 0.1)',
+              border: '1px solid rgba(52, 211, 153, 0.3)',
+              borderRadius: 8,
+              padding: 10, // Reduced from 12
+              maxHeight: 180, // Reduced from 200
+              overflowY: 'auto'
+            }}>
+              {Object.entries(file.firefly_assets).map(([assetName, asset], assetIndex) => (
+                <div key={assetIndex} style={{
+                  marginBottom: 6, // Reduced from 8
+                  fontSize: 12, // Reduced from 13
+                  color: '#6ee7b7',
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center'
                 }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span>🖼️</span>
-                    <span>{filename}</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}> {/* Reduced gap */}
+                    <span>🎨</span>
+                    <span>{assetName}</span>
                   </span>
-                  <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                    <span style={{ 
-                      background: 'rgba(59, 130, 246, 0.2)', 
-                      padding: '2px 6px', 
-                      borderRadius: 4,
-                      color: '#60a5fa',
-                      fontSize: 11
-                    }}>
-                      {extractedFile.layer_type}
-                    </span>
-                    <span style={{
-                      fontSize: 11,
-                      padding: '2px 6px',
-                      borderRadius: 4,
-                      background: extractedFile.status.toLowerCase() === 'uploaded' 
-                        ? 'rgba(16, 185, 129, 0.2)' 
-                        : 'rgba(249, 115, 22, 0.2)',
-                      color: extractedFile.status.toLowerCase() === 'uploaded' 
-                        ? '#34d399' 
-                        : '#fdba74'
-                    }}>
-                      {capitalizeStatus(extractedFile.status)}
-                    </span>
+                  <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}> {/* Reduced gap, always show */}
+                    {/* Always show card type */}
+                    {asset.card_type && (
+                      <span style={{
+                        fontSize: 10, // Reduced from 11
+                        padding: '1px 4px', // Reduced padding
+                        borderRadius: 3, // Reduced border radius
+                        background: 'rgba(52, 211, 153, 0.2)',
+                        color: '#34d399'
+                      }}>
+                        {asset.card_type}
+                      </span>
+                    )}
+                    {/* Only show status if NOT succeeded */}
+                    {asset.status.toLowerCase() !== 'succeeded' && (
+                      <span style={{
+                        fontSize: 10, // Reduced from 11
+                        padding: '1px 4px', // Reduced padding
+                        borderRadius: 3, // Reduced border radius
+                        background: asset.status.toLowerCase() === 'failed'
+                          ? 'rgba(239, 68, 68, 0.2)'
+                          : 'rgba(249, 115, 22, 0.2)',
+                        color: asset.status.toLowerCase() === 'failed'
+                          ? '#fca5a5'
+                          : '#fdba74'
+                      }}>
+                        {capitalizeStatus(asset.status)}
+                      </span>
+                    )}
                   </div>
                 </div>
               ))}
@@ -311,124 +463,6 @@ const FileCard: React.FC<FileCardProps> = ({
           </div>
         )}
       </div>
-
-      {/* Digital Collectibles - Only show if there are firefly assets */}
-      {file.firefly_assets && Object.keys(file.firefly_assets).length > 0 && (
-        <div style={{ marginTop: 20 }}>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: 12
-          }}>
-            <h4 style={{
-              color: '#34d399',
-              fontSize: 16,
-              fontWeight: 600,
-              margin: 0
-            }}>
-              🎨 Digital Collectibles ({Object.keys(file.firefly_assets).length})
-            </h4>
-            {(() => {
-              // Check if all digital collectibles have "succeeded" status (case insensitive)
-              const allSucceeded = Object.values(file.firefly_assets || {}).every(
-                asset => asset.status.toLowerCase() === 'succeeded'
-              );
-              
-              return allSucceeded ? (
-                <button
-                  onClick={() => {
-                    // Use the actual file paths from digital collectibles
-                    const assetUrls = Object.values(file.firefly_assets || {}).map(asset => 
-                      asset.file_path
-                    ).filter(url => url);
-                    
-                    console.log('🎨 Digital collectibles preview - Asset URLs:', assetUrls);
-                    
-                    const baseName = file.filename.replace('.pdf', '').replace('.PDF', '');
-                    const jobPath = jobData?.job_id || '';
-                    
-                    // Pass the asset URLs as a query parameter
-                    const assetUrlsParam = encodeURIComponent(JSON.stringify(assetUrls));
-                    router.push(`/job/preview?jobPath=${encodeURIComponent(jobPath)}&fileName=${encodeURIComponent(baseName)}&type=firefly&assetUrls=${assetUrlsParam}`);
-                  }}
-                  style={{
-                    background: 'rgba(52, 211, 153, 0.2)',
-                    border: '1px solid rgba(52, 211, 153, 0.4)',
-                    borderRadius: 6,
-                    color: '#34d399',
-                    cursor: 'pointer',
-                    fontSize: 12,
-                    padding: '6px 12px',
-                    transition: 'all 0.2s',
-                    fontWeight: 500
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'rgba(52, 211, 153, 0.3)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'rgba(52, 211, 153, 0.2)';
-                  }}
-                >
-                  🎨 Preview Collectibles
-                </button>
-              ) : (
-                <span style={{
-                  fontSize: 12,
-                  color: '#9ca3af',
-                  padding: '6px 12px',
-                  border: '1px solid rgba(156, 163, 175, 0.3)',
-                  borderRadius: 6,
-                  background: 'rgba(156, 163, 175, 0.1)'
-                }}>
-                  ⏳ Generating collectibles...
-                </span>
-              );
-            })()}
-          </div>
-          <div style={{
-            background: 'rgba(52, 211, 153, 0.1)',
-            border: '1px solid rgba(52, 211, 153, 0.3)',
-            borderRadius: 8,
-            padding: 12,
-            maxHeight: 200,
-            overflowY: 'auto'
-          }}>
-            {Object.entries(file.firefly_assets).map(([assetName, asset], assetIndex) => (
-              <div key={assetIndex} style={{
-                marginBottom: 8,
-                fontSize: 13,
-                color: '#6ee7b7',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center'
-              }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span>🎨</span>
-                  <span>{assetName}</span>
-                </span>
-                <span style={{
-                  fontSize: 11,
-                  padding: '2px 6px',
-                  borderRadius: 4,
-                  background: asset.status.toLowerCase() === 'succeeded' 
-                    ? 'rgba(16, 185, 129, 0.2)' 
-                    : asset.status.toLowerCase() === 'failed'
-                    ? 'rgba(239, 68, 68, 0.2)'
-                    : 'rgba(249, 115, 22, 0.2)',
-                  color: asset.status.toLowerCase() === 'succeeded' 
-                    ? '#34d399' 
-                    : asset.status.toLowerCase() === 'failed'
-                    ? '#fca5a5'
-                    : '#fdba74'
-                }}>
-                  {capitalizeStatus(asset.status)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 };
