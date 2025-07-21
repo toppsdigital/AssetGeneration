@@ -9,8 +9,8 @@ import contentPipelineApi from '../../web/utils/contentPipelineApi';
 
 interface NewJobFormData {
   appName: string;
-  releaseName: string;
-  subsetName: string;
+  filenamePrefix: string;
+  description: string;
   uploadFolder: string;
   selectedFiles: FileList | null;
 }
@@ -30,8 +30,8 @@ export default function NewJobPage() {
   
   const [formData, setFormData] = useState<NewJobFormData>({
     appName: '',
-    releaseName: '',
-    subsetName: '',
+    filenamePrefix: '',
+    description: '',
     uploadFolder: '',
     selectedFiles: null
   });
@@ -99,8 +99,8 @@ export default function NewJobPage() {
   const isFormValid = (): boolean => {
     return !!(
       formData.appName.trim() &&
-      formData.releaseName.trim() &&
-      formData.subsetName.trim() &&
+      formData.filenamePrefix.trim() &&
+      formData.description.trim() &&
       formData.uploadFolder.trim() &&
       formData.selectedFiles &&
       formData.selectedFiles.length > 0
@@ -115,12 +115,12 @@ export default function NewJobPage() {
       newErrors.appName = 'App name is required';
     }
 
-    if (!formData.releaseName.trim()) {
-      newErrors.releaseName = 'Release name is required';
+    if (!formData.filenamePrefix.trim()) {
+      newErrors.filenamePrefix = 'Filename prefix is required';
     }
 
-    if (!formData.subsetName.trim()) {
-      newErrors.subsetName = 'Subset name is required';
+    if (!formData.description.trim()) {
+      newErrors.description = 'Description is required';
     }
 
     if (!formData.uploadFolder.trim()) {
@@ -134,8 +134,7 @@ export default function NewJobPage() {
   // Create job using Content Pipeline API
   const createJob = async (jobData: {
     appName: string;
-    releaseName: string;
-    subsetName: string;
+    filenamePrefix: string;
     sourceFolder: string;
     files: string[];
     description?: string;
@@ -143,8 +142,7 @@ export default function NewJobPage() {
     try {
       const response = await contentPipelineApi.createJob({
         app_name: jobData.appName,
-        release_name: jobData.releaseName,
-        subset_name: jobData.subsetName,
+        filename_prefix: jobData.filenamePrefix,
         source_folder: jobData.sourceFolder,
         files: jobData.files,
         description: jobData.description
@@ -201,11 +199,10 @@ export default function NewJobPage() {
       // Create job using Content Pipeline API
       const createdJob = await createJob({
         appName: formData.appName,
-        releaseName: formData.releaseName,
-        subsetName: formData.subsetName,
+        filenamePrefix: formData.filenamePrefix,
         sourceFolder: generateFilePath(formData.appName),
         files: filenames,
-        description: `${formData.subsetName} - Processing PDFs into digital assets`
+        description: formData.description
       });
 
       setJobCreated(createdJob);
@@ -215,8 +212,8 @@ export default function NewJobPage() {
       const uploadSession = {
         jobId: createdJob.job_id,
         appName: formData.appName,
-        releaseName: formData.releaseName,
-        subsetName: formData.subsetName,
+        filenamePrefix: formData.filenamePrefix,
+        description: formData.description,
         files: Array.from(formData.selectedFiles!).map(file => ({
           name: file.name,
           size: file.size,
@@ -355,7 +352,7 @@ export default function NewJobPage() {
                   )}
                 </div>
 
-                {/* Release Name */}
+                {/* Filename Prefix */}
                 <div>
                   <label style={{
                     display: 'block',
@@ -364,18 +361,18 @@ export default function NewJobPage() {
                     color: '#f3f4f6',
                     marginBottom: 8
                   }}>
-                    Release Name *
+                    Filename Prefix *
                   </label>
-                  <input
-                    type="text"
-                    value={formData.releaseName}
-                    onChange={(e) => handleInputChange('releaseName', e.target.value)}
-                    placeholder="e.g., 2024 Spring Release, Season 1, Wave 3"
+                                      <input
+                      type="text"
+                      value={formData.filenamePrefix}
+                      onChange={(e) => handleInputChange('filenamePrefix', e.target.value)}
+                      placeholder="e.g., bunt25_25tcbb_chrome"
                     style={{
                       width: '100%',
                       padding: '12px 16px',
                       background: 'rgba(255, 255, 255, 0.08)',
-                      border: `1px solid ${errors.releaseName ? '#ef4444' : 'rgba(255, 255, 255, 0.2)'}`,
+                      border: `1px solid ${errors.filenamePrefix ? '#ef4444' : 'rgba(255, 255, 255, 0.2)'}`,
                       borderRadius: 8,
                       color: '#f8f8f8',
                       fontSize: 14,
@@ -384,28 +381,28 @@ export default function NewJobPage() {
                       boxSizing: 'border-box'
                     }}
                     onFocus={(e) => {
-                      if (!errors.releaseName) {
+                      if (!errors.filenamePrefix) {
                         e.target.style.borderColor = '#60a5fa';
                       }
                     }}
                     onBlur={(e) => {
-                      if (!errors.releaseName) {
+                      if (!errors.filenamePrefix) {
                         e.target.style.borderColor = 'rgba(255, 255, 255, 0.2)';
                       }
                     }}
                   />
-                  {errors.releaseName && (
+                  {errors.filenamePrefix && (
                     <p style={{ 
                       color: '#ef4444', 
                       fontSize: 12, 
                       margin: '4px 0 0 0' 
                     }}>
-                      {errors.releaseName}
+                      {errors.filenamePrefix}
                     </p>
                   )}
                 </div>
 
-                {/* Subset Name */}
+                {/* Description */}
                 <div>
                   <label style={{
                     display: 'block',
@@ -414,43 +411,44 @@ export default function NewJobPage() {
                     color: '#f3f4f6',
                     marginBottom: 8
                   }}>
-                    Subset Name *
+                    Description *
                   </label>
-                  <input
-                    type="text"
-                    value={formData.subsetName}
-                    onChange={(e) => handleInputChange('subsetName', e.target.value)}
-                    placeholder="e.g., Base Cards, Inserts, Parallels"
+                  <textarea
+                    value={formData.description}
+                    onChange={(e) => handleInputChange('description', e.target.value)}
+                    placeholder="e.g., Processing NBA base cards for digital assets with enhanced backgrounds"
+                    rows={3}
                     style={{
                       width: '100%',
                       padding: '12px 16px',
                       background: 'rgba(255, 255, 255, 0.08)',
-                      border: `1px solid ${errors.subsetName ? '#ef4444' : 'rgba(255, 255, 255, 0.2)'}`,
+                      border: `1px solid ${errors.description ? '#ef4444' : 'rgba(255, 255, 255, 0.2)'}`,
                       borderRadius: 8,
                       color: '#f8f8f8',
                       fontSize: 14,
                       outline: 'none',
                       transition: 'border-color 0.2s',
-                      boxSizing: 'border-box'
+                      boxSizing: 'border-box',
+                      resize: 'vertical'
                     }}
                     onFocus={(e) => {
-                      if (!errors.subsetName) {
+                      if (!errors.description) {
                         e.target.style.borderColor = '#60a5fa';
                       }
                     }}
                     onBlur={(e) => {
-                      if (!errors.subsetName) {
+                      if (!errors.description) {
                         e.target.style.borderColor = 'rgba(255, 255, 255, 0.2)';
                       }
                     }}
-                  />
-                  {errors.subsetName && (
+                  ></textarea>
+                  {errors.description && (
                     <p style={{ 
                       color: '#ef4444', 
                       fontSize: 12, 
                       margin: '4px 0 0 0' 
                     }}>
-                      {errors.subsetName}
+                      {errors.description}
                     </p>
                   )}
                 </div>

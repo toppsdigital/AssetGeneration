@@ -4,8 +4,7 @@
 export interface JobData {
   job_id?: string;
   app_name: string;
-  release_name: string;
-  subset_name: string;
+  filename_prefix: string;
   source_folder: string;
   files?: string[];
   description?: string;
