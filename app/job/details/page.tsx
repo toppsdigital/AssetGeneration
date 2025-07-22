@@ -529,15 +529,15 @@ function JobDetailsPageContent() {
       
       console.log('Job details loaded:', response.job);
       
-      // Map API response to our local interface, preserving existing files
-      setJobData(prevJobData => {
-        const mappedJobData: UIJobData = {
-          ...response.job,
-          api_files: response.job.files, // Store API files separately
-          files: prevJobData?.files || [], // Preserve existing legacy files
-          content_pipeline_files: prevJobData?.content_pipeline_files || [], // Preserve existing Content Pipeline files
-          Subset_name: response.job.subset_name || response.job.source_folder // Map subset_name to Subset_name for UI compatibility
-        };
+              // Map API response to our local interface, preserving existing files
+        setJobData(prevJobData => {
+          const mappedJobData: UIJobData = {
+            ...response.job,
+            api_files: response.job.files, // Store API files separately
+            files: prevJobData?.files || [], // Preserve existing legacy files
+            content_pipeline_files: prevJobData?.content_pipeline_files || [], // Preserve existing Content Pipeline files
+            Subset_name: response.job.source_folder // Map source_folder to Subset_name for UI compatibility
+          };
         
         console.log('🔄 setJobData called from: loadJobDetails (preserving existing files) at', new Date().toISOString());
         console.log('📊 Preserved files:', mappedJobData.content_pipeline_files?.length || 0);
@@ -724,76 +724,45 @@ function JobDetailsPageContent() {
       // Handle the response - some files may already exist
       let finalFileObjects: FileData[] = [];
       
-              // Add successfully created files
-        if (batchResponse.created_files && batchResponse.created_files.length > 0) {
-          console.log('✅ Successfully created files:', batchResponse.created_files.length);
-          finalFileObjects = batchResponse.created_files.map((apiFile: any) => ({
-            filename: apiFile.filename,
-            last_updated: apiFile.last_updated || new Date().toISOString(),
-            original_files: apiFile.original_files || apiFile.metadata?.original_files || {},
-            extracted_files: apiFile.extracted_files || apiFile.metadata?.extracted_files || {},
-            firefly_assets: apiFile.firefly_assets || apiFile.metadata?.firefly_assets || {}
-          }));
-        }
+      // Add successfully created files
+      if (batchResponse.created_files && batchResponse.created_files.length > 0) {
+        console.log('✅ Successfully created files:', batchResponse.created_files.length);
+        const createdFiles = batchResponse.created_files.map((apiFile: any) => ({
+          filename: apiFile.filename,
+          last_updated: apiFile.last_updated || new Date().toISOString(),
+          original_files: apiFile.original_files || apiFile.metadata?.original_files || {},
+          extracted_files: apiFile.extracted_files || apiFile.metadata?.extracted_files || {},
+          firefly_assets: apiFile.firefly_assets || apiFile.metadata?.firefly_assets || {}
+        }));
+        finalFileObjects = [...finalFileObjects, ...createdFiles];
+      }
       
-      // Handle failed files - check if they already exist
+      // Handle existing files returned by the API
+      if (batchResponse.existing_files && batchResponse.existing_files.length > 0) {
+        console.log('📁 Found existing files:', batchResponse.existing_files.length);
+        const existingFiles = batchResponse.existing_files.map((apiFile: any) => ({
+          filename: apiFile.filename,
+          job_id: apiFile.job_id,
+          last_updated: apiFile.last_updated || new Date().toISOString(),
+          original_files: apiFile.original_files || apiFile.metadata?.original_files || {},
+          extracted_files: apiFile.extracted_files || apiFile.metadata?.extracted_files || {},
+          firefly_assets: apiFile.firefly_assets || apiFile.metadata?.firefly_assets || {}
+        }));
+        finalFileObjects = [...finalFileObjects, ...existingFiles];
+        
+        console.log('🔍 Existing files details:', existingFiles.map(f => ({
+          filename: f.filename,
+          hasOriginalFiles: Object.keys(f.original_files || {}).length > 0,
+          hasExtractedFiles: Object.keys(f.extracted_files || {}).length > 0,
+          hasFireflyAssets: Object.keys(f.firefly_assets || {}).length > 0
+        })));
+      }
+      
+      // Handle any failed files (log for debugging)
       if (batchResponse.failed_files && batchResponse.failed_files.length > 0) {
-        console.log('⚠️ Some files failed to create:', batchResponse.failed_files.length);
-        
-        // Separate files that already exist from other errors
-        const alreadyExistFiles = batchResponse.failed_files.filter((failedFile: any) => 
-          failedFile.error && failedFile.error.includes('already exists')
-        );
-        
-        const otherErrors = batchResponse.failed_files.filter((failedFile: any) => 
-          !failedFile.error || !failedFile.error.includes('already exists')
-        );
-        
-        if (otherErrors.length > 0) {
-          console.error('❌ Files with non-recoverable errors:', otherErrors);
-          // Continue processing but log the errors
-        }
-        
-        if (alreadyExistFiles.length > 0) {
-          console.log('🔄 Files already exist, loading existing files:', alreadyExistFiles.map((f: any) => f.file_data.filename));
-          
-          // Load existing files using batch read
-          const existingFilenames = alreadyExistFiles.map((f: any) => f.file_data.filename);
-          try {
-            const existingFilesResponse = await contentPipelineApi.batchGetFiles(existingFilenames);
-            
-            console.log('✅ Loaded existing files:', existingFilesResponse.files.length);
-            
-            // Add existing files to our final list
-            const existingFileObjects = existingFilesResponse.files.map((apiFile: FileData) => ({
-              filename: apiFile.filename,
-              job_id: apiFile.job_id,
-              last_updated: apiFile.last_updated || new Date().toISOString(),
-              original_files: apiFile.original_files || {},
-              extracted_files: apiFile.extracted_files || {},
-              firefly_assets: apiFile.firefly_assets || {}
-            }));
-            
-            finalFileObjects = [...finalFileObjects, ...existingFileObjects];
-            
-          } catch (loadError) {
-            console.error('❌ Error loading existing files:', loadError);
-            // If we can't load existing files, create them manually from our local data
-            const manualFileObjects = alreadyExistFiles.map((failedFile: any) => {
-              const originalFileData = fileObjects.find(f => f.filename === failedFile.file_data.filename);
-              return originalFileData || {
-                filename: failedFile.file_data.filename,
-                job_id: failedFile.file_data.job_id,
-                last_updated: failedFile.file_data.last_updated || new Date().toISOString(),
-                original_files: failedFile.file_data.original_files || {},
-                extracted_files: failedFile.file_data.extracted_files || {},
-                firefly_assets: failedFile.file_data.firefly_assets || {}
-              };
-            });
-            
-            finalFileObjects = [...finalFileObjects, ...manualFileObjects];
-          }
-        }
+        console.warn('⚠️ Some files failed to create:', batchResponse.failed_files.length);
+        console.warn('Failed files details:', batchResponse.failed_files);
+        // Backend now handles existing files gracefully, so we just log any genuine failures
       }
       
       console.log('📁 Final file objects count:', finalFileObjects.length);
@@ -821,10 +790,22 @@ function JobDetailsPageContent() {
           cacheUpdateSuccessful: !!cachedData?.content_pipeline_files?.length
         });
         
-        // Set appropriate completion step based on job status
+        // Set appropriate completion step and message based on what was found
         const isExtracted = jobData.job_status?.toLowerCase() === 'extracted';
+        const createdCount = batchResponse.created_files?.length || 0;
+        const existingCount = batchResponse.existing_files?.length || 0;
+        
+        let completionMessage = 'Files ready';
+        if (createdCount > 0 && existingCount > 0) {
+          completionMessage = `${createdCount} files created, ${existingCount} existing files loaded`;
+        } else if (createdCount > 0) {
+          completionMessage = `${createdCount} files created successfully`;
+        } else if (existingCount > 0) {
+          completionMessage = `${existingCount} existing files loaded`;
+        }
+        
         setLoadingStep(isExtracted ? 2 : 2); // Step 2 for file creation completion
-        setLoadingMessage(isExtracted ? 'Files created - Ready for PSD selection' : 'File objects created');
+        setLoadingMessage(isExtracted ? `${completionMessage} - Ready for PSD selection` : completionMessage);
         setLoadingDetail(`${finalFileObjects.length} files ready for upload`);
         
         console.log('createNewFiles completed successfully, filesLoaded set to true');
@@ -1101,6 +1082,18 @@ function JobDetailsPageContent() {
               jobData={mergedJobData}
               totalPdfFiles={uploadEngine.totalPdfFiles}
               uploadedPdfFiles={uploadEngine.uploadedPdfFiles}
+              onRerunJob={mergedJobData && !uploadsInProgress ? () => {
+                // Navigate to new job page with pre-filled data
+                const queryParams = new URLSearchParams({
+                  rerun: 'true',
+                  sourceJobId: mergedJobData.job_id || '',
+                  appName: mergedJobData.app_name || '',
+                  filenamePrefix: mergedJobData.filename_prefix || '',
+                  description: mergedJobData.description || '',
+                  sourceFolder: mergedJobData.source_folder || ''
+                });
+                router.push(`/new-job?${queryParams.toString()}`);
+              } : undefined}
             />
 
 

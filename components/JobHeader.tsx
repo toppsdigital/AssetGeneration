@@ -7,6 +7,9 @@ interface JobHeaderProps {
     release_name?: string;
     subset_name?: string;
     Subset_name?: string;
+    filename_prefix?: string;
+    description?: string;
+    source_folder?: string;
     job_status?: string;
     created_at?: string;
     content_pipeline_files?: any[];
@@ -14,13 +17,15 @@ interface JobHeaderProps {
   totalPdfFiles?: number;
   uploadedPdfFiles?: number;
   className?: string;
+  onRerunJob?: () => void;
 }
 
 export const JobHeader = ({ 
   jobData, 
   totalPdfFiles = 0, 
   uploadedPdfFiles = 0, 
-  className = '' 
+  className = '',
+  onRerunJob
 }: JobHeaderProps) => {
   const getJobTitle = () => {
     if (!jobData) return 'Loading...';
@@ -71,14 +76,47 @@ export const JobHeader = ({
           </span>
         )}
         {jobData.job_id && (
-          <span>
-            ID: <span style={{ 
-              color: '#9ca3af', 
-              fontFamily: 'monospace', 
-              fontSize: 11 
-            }}>
-              {jobData.job_id}
+          <span style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+            <span>
+              ID: <span style={{ 
+                color: '#9ca3af', 
+                fontFamily: 'monospace', 
+                fontSize: 11 
+              }}>
+                {jobData.job_id}
+              </span>
             </span>
+            {onRerunJob && (
+              <button
+                onClick={onRerunJob}
+                style={{
+                  padding: '1px 6px',
+                  background: 'rgba(245, 158, 11, 0.1)',
+                  border: '1px solid rgba(245, 158, 11, 0.3)',
+                  borderRadius: 3,
+                  color: '#f59e0b',
+                  fontSize: 10,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 3,
+                  verticalAlign: 'baseline',
+                  lineHeight: 1
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(245, 158, 11, 0.2)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(245, 158, 11, 0.1)';
+                }}
+                title="Re-run this job with new files"
+              >
+                <span style={{ fontSize: 12, color: '#d1d5db' }}>⟲</span>
+                Re-run
+              </button>
+            )}
           </span>
         )}
       </div>
