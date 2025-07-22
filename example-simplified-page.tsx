@@ -77,8 +77,8 @@ function JobDetailsPageContent() {
   const getJobTitle = () => {
     const parts = [
       jobData.app_name,
-      jobData.release_name,
-      jobData.subset_name
+      jobData.filename_prefix,
+      jobData.source_folder // Use source_folder as the subset equivalent
     ].filter(Boolean);
     return parts.join(' - ') || 'Unknown Job';
   };

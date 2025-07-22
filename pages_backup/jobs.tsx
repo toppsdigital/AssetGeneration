@@ -55,7 +55,7 @@ export default function JobsPage() {
     const queryParams = new URLSearchParams({
       jobId: job.job_id,
       appName: job.app_name || '',
-      releaseName: job.release_name || '',
+      releaseName: job.filename_prefix || '', // Use filename_prefix for backward compatibility
       sourceFolder: job.source_folder || '',
       status: job.job_status || '',
       createdAt: job.created_at || '',
@@ -90,7 +90,7 @@ export default function JobsPage() {
     const parts = [];
     
     if (job.app_name) parts.push(job.app_name);
-    if (job.release_name) parts.push(job.release_name);
+    if (job.filename_prefix) parts.push(job.filename_prefix);
     
     // Add subset name from source_folder
     const subsetName = getSubsetName(job);

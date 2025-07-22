@@ -393,8 +393,7 @@ export default function JobDetailsPage() {
         const mappedJobData: UIJobData = {
           job_id: jobId as string,
           app_name: appName as string,
-          release_name: releaseName as string,
-          subset_name: subsetName as string,
+          filename_prefix: releaseName as string, // Map releaseName to filename_prefix
           source_folder: sourceFolder as string,
           job_status: status as JobData['job_status'],
           created_at: createdAt as string,
@@ -437,7 +436,7 @@ export default function JobDetailsPage() {
           api_files: response.job.files, // Store API files separately
           files: prevJobData?.files || [], // Preserve existing legacy files
           content_pipeline_files: prevJobData?.content_pipeline_files || [], // Preserve existing Content Pipeline files
-          Subset_name: response.job.subset_name || response.job.source_folder // Map subset_name to Subset_name for UI compatibility
+          Subset_name: response.job.source_folder // Map source_folder to Subset_name for UI compatibility
         };
         
         console.log('🔄 setJobData called from: loadJobDetails (preserving existing files) at', new Date().toISOString());
@@ -1099,8 +1098,8 @@ export default function JobDetailsPage() {
     if (!jobData) return 'Loading...';
     const parts = [
       jobData.app_name,
-      jobData.release_name,
-      jobData.subset_name || jobData.Subset_name
+      jobData.filename_prefix,
+      jobData.Subset_name
     ].filter(Boolean);
     return parts.join(' - ') || 'Unknown Job';
   };
