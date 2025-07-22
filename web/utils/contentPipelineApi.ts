@@ -1,6 +1,13 @@
 // Content Pipeline API utility for job and file management
 // This utility provides a clean interface to interact with the content-pipeline-proxy API
 
+// Cache clearing callback type for rerun operations
+export type CacheClearingCallback = (
+  sourceJobId: string, 
+  newJobId: string, 
+  deletedFiles?: string[]
+) => void;
+
 export interface JobData {
   job_id?: string;
   app_name: string;
@@ -353,7 +360,11 @@ class ContentPipelineAPI {
   }
 
   // Re-run a job with new parameters
-  async rerunJob(jobId: string, jobData: Omit<JobData, 'job_id' | 'created_at' | 'last_updated' | 'job_status'>): Promise<JobResponse> {
+  async rerunJob(
+    jobId: string, 
+    jobData: Omit<JobData, 'job_id' | 'created_at' | 'last_updated' | 'job_status'>,
+    onCacheClear?: CacheClearingCallback
+  ): Promise<JobResponse> {
     // Calculate total PDF files based on grouped filenames
     // Each grouped filename represents 2 PDF files (front and back)
     const totalPdfFiles = (jobData.files || []).length * 2;
@@ -380,7 +391,20 @@ class ContentPipelineAPI {
       throw new Error(error.error || `Failed to rerun job: ${response.status}`);
     }
 
-    return response.json();
+    const result = await response.json();
+    
+    // Clear relevant caches after successful rerun
+    if (onCacheClear && result.job?.job_id) {
+      console.log('🔄 Clearing caches after successful job rerun');
+      
+      // Extract deleted files from the response for specific cache clearing
+      const deletedFiles = result.file_deletion_details?.deleted_files || [];
+      console.log('📁 Files deleted during rerun:', deletedFiles);
+      
+      onCacheClear(jobId, result.job.job_id, deletedFiles);
+    }
+
+    return result;
   }
 
   // Generate assets for a job

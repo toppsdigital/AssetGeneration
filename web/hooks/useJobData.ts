@@ -38,6 +38,77 @@ export function syncJobDataAcrossCaches(
   console.log('✅ Job data synchronized across all caches for job:', jobId);
 }
 
+// Cache clearing utility for rerun operations
+export function createCacheClearingCallback(queryClient: QueryClient) {
+  return (sourceJobId: string, newJobId: string, deletedFiles?: string[]) => {
+    console.log('🗑️ Clearing caches for rerun operation:', { 
+      sourceJobId, 
+      newJobId, 
+      deletedFilesCount: deletedFiles?.length || 0 
+    });
+    
+    // Clear source job cache (the job being re-run)
+    queryClient.removeQueries({ queryKey: jobKeys.detail(sourceJobId) });
+    queryClient.removeQueries({ queryKey: jobKeys.files(sourceJobId) });
+    
+    // Clear all job-related caches to ensure no stale data
+    queryClient.removeQueries({ queryKey: jobKeys.all });
+    queryClient.removeQueries({ queryKey: jobKeys.lists() });
+    queryClient.removeQueries({ queryKey: jobKeys.details() });
+    
+    // Clear caches for specifically deleted files
+    if (deletedFiles && deletedFiles.length > 0) {
+      console.log('🗑️ Clearing caches for specifically deleted files:', deletedFiles);
+      
+      deletedFiles.forEach(deletedFile => {
+        // Clear any cache that might reference this specific file
+        queryClient.removeQueries({ 
+          predicate: (query) => {
+            const queryKey = query.queryKey;
+            return queryKey.some(key => 
+              typeof key === 'string' && (
+                key.includes(deletedFile) ||
+                key.includes(deletedFile.replace('.pdf', '')) // Also check without extension
+              )
+            );
+          }
+        });
+      });
+    }
+    
+    // Clear any potential file-related caches that might exist
+    // This ensures deleted files don't have cached data lingering
+    queryClient.removeQueries({ 
+      predicate: (query) => {
+        const queryKey = query.queryKey;
+        // Clear any query that references the source job ID
+        return queryKey.some(key => 
+          typeof key === 'string' && key.includes(sourceJobId)
+        );
+      }
+    });
+    
+    // Clear any upload-related or session caches
+    queryClient.removeQueries({ 
+      predicate: (query) => {
+        const queryKey = query.queryKey;
+        // Clear any file or upload related queries
+        return queryKey.some(key => 
+          typeof key === 'string' && (
+            key.includes('files') || 
+            key.includes('upload') || 
+            key.includes('batch')
+          )
+        );
+      }
+    });
+    
+    console.log('✅ Comprehensive cache clearing completed for rerun operation');
+    console.log('🗑️ Cleared caches for deleted files and all related data');
+    console.log(`📊 Processed ${deletedFiles?.length || 0} deleted files for cache clearing`);
+  };
+}
+
 // Extended job data interface for UI compatibility
 export interface UIJobData extends JobData {
   psd_file?: string;
@@ -66,7 +137,7 @@ export function useJobData(jobId: string | null) {
         api_files: response.job.files,
         files: [],
         content_pipeline_files: [],
-        Subset_name: response.job.subset_name || response.job.source_folder
+        Subset_name: response.job.source_folder
       };
       
       console.log('✅ Job data fetched and mapped:', mappedData);
@@ -274,8 +345,7 @@ export function createJobDataFromParams(params: {
   return {
     job_id: params.jobId,
     app_name: params.appName || '',
-    release_name: params.releaseName || '',
-    subset_name: params.subsetName || '',
+    filename_prefix: params.releaseName || '', // Map releaseName to filename_prefix for backward compatibility
     source_folder: params.sourceFolder || '',
     job_status: (params.status as JobData['job_status']) || 'uploading',
     created_at: params.createdAt || new Date().toISOString(),
