@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import styles from '../../styles/Home.module.css';
 import NavBar from '../../components/NavBar';
 import Spinner from '../../components/Spinner';
@@ -15,8 +15,13 @@ interface NewJobFormData {
   selectedFiles: FileList | null;
 }
 
-export default function NewJobPage() {
+function NewJobPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  
+  // Check if this is a re-run operation
+  const isRerun = searchParams.get('rerun') === 'true';
+  const sourceJobId = searchParams.get('sourceJobId');
   
   // Helper function to generate S3 file paths based on app and optional filename
   const generateFilePath = (appName: string, filename?: string): string => {
@@ -28,10 +33,11 @@ export default function NewJobPage() {
     return filename ? `${basePath}/${filename}` : basePath;
   };
   
+  // Initialize form data - pre-fill if this is a re-run
   const [formData, setFormData] = useState<NewJobFormData>({
-    appName: '',
-    filenamePrefix: '',
-    description: '',
+    appName: isRerun ? (searchParams.get('appName') || '') : '',
+    filenamePrefix: isRerun ? (searchParams.get('filenamePrefix') || '') : '',
+    description: isRerun ? (searchParams.get('description') || '') : '',
     uploadFolder: '',
     selectedFiles: null
   });
@@ -42,9 +48,12 @@ export default function NewJobPage() {
 
   // Handle input changes
   const handleInputChange = (field: keyof NewJobFormData, value: string) => {
+    // Convert filename prefix to lowercase automatically
+    const processedValue = field === 'filenamePrefix' ? value.toLowerCase() : value;
+    
     setFormData(prev => ({
       ...prev,
-      [field]: value
+      [field]: processedValue
     }));
     
     // Clear error when user starts typing
@@ -131,7 +140,7 @@ export default function NewJobPage() {
     return Object.keys(newErrors).length === 0;
   };
 
-  // Create job using Content Pipeline API
+  // Create or rerun job using Content Pipeline API
   const createJob = async (jobData: {
     appName: string;
     filenamePrefix: string;
@@ -140,18 +149,33 @@ export default function NewJobPage() {
     description?: string;
   }) => {
     try {
-      const response = await contentPipelineApi.createJob({
-        app_name: jobData.appName,
-        filename_prefix: jobData.filenamePrefix,
-        source_folder: jobData.sourceFolder,
-        files: jobData.files,
-        description: jobData.description
-      });
-
-      console.log('Job created successfully via Content Pipeline API:', response.job.job_id);
+      let response;
+      
+      if (isRerun && sourceJobId) {
+        // Use rerun API for re-run operations
+        response = await contentPipelineApi.rerunJob(sourceJobId, {
+          app_name: jobData.appName,
+          filename_prefix: jobData.filenamePrefix,
+          source_folder: jobData.sourceFolder,
+          files: jobData.files,
+          description: jobData.description
+        });
+        console.log('Job re-run successfully via Content Pipeline API:', response.job.job_id);
+      } else {
+        // Use create API for new jobs
+        response = await contentPipelineApi.createJob({
+          app_name: jobData.appName,
+          filename_prefix: jobData.filenamePrefix,
+          source_folder: jobData.sourceFolder,
+          files: jobData.files,
+          description: jobData.description
+        });
+        console.log('Job created successfully via Content Pipeline API:', response.job.job_id);
+      }
+      
       return response.job;
     } catch (error) {
-      console.error('Error creating job via API:', error);
+      console.error(`Error ${isRerun ? 're-running' : 'creating'} job via API:`, error);
       throw error;
     }
   };
@@ -242,8 +266,8 @@ export default function NewJobPage() {
       router.push(`/job/details?${queryParams.toString()}`);
       
     } catch (error) {
-      console.error('Error creating job:', error);
-      alert('Failed to create job: ' + (error as Error).message);
+      console.error(`Error ${isRerun ? 're-running' : 'creating'} job:`, error);
+      alert(`Failed to ${isRerun ? 're-run' : 'create'} job: ` + (error as Error).message);
       setIsSubmitting(false);
     }
   };
@@ -253,7 +277,7 @@ export default function NewJobPage() {
       <NavBar 
         showHome
         onHome={() => router.push('/')}
-        title="Create New Job"
+        title={isRerun ? "Re-run Job" : "Create New Job"}
         showViewJobs
         onViewJobs={() => router.push('/jobs')}
       />
@@ -266,8 +290,30 @@ export default function NewJobPage() {
               margin: 0,
               textAlign: 'center'
             }}>
-              Set up a new job for processing PDFs into digital assets
+              {isRerun 
+                ? "Re-run an existing job with new files but same configuration" 
+                : "Set up a new job for processing PDFs into digital assets"
+              }
             </p>
+            {isRerun && (
+              <div style={{
+                marginTop: 16,
+                padding: 12,
+                background: 'rgba(59, 130, 246, 0.1)',
+                border: '1px solid rgba(59, 130, 246, 0.3)',
+                borderRadius: 8,
+                textAlign: 'center'
+              }}>
+                <p style={{
+                  color: '#60a5fa',
+                  fontSize: 14,
+                  margin: 0,
+                  fontWeight: 500
+                }}>
+                  🔄 Re-running job from: {sourceJobId}
+                </p>
+              </div>
+            )}
           </div>
 
           <form onSubmit={handleSubmit}>
@@ -685,7 +731,10 @@ export default function NewJobPage() {
                       animation: 'spin 1s linear infinite'
                     }} />
                   )}
-                  {isSubmitting ? 'Creating Job...' : 'Create Job'}
+                  {isSubmitting 
+                    ? (isRerun ? 'Re-running Job...' : 'Creating Job...')
+                    : (isRerun ? 'Re-run Job' : 'Create Job')
+                  }
                 </button>
               </div>
             </div>
@@ -830,4 +879,25 @@ export default function NewJobPage() {
       `}</style>
     </div>
   );
-} 
+}
+
+export default function NewJobPage() {
+  return (
+    <Suspense fallback={
+      <div style={{
+        minHeight: '100vh',
+        backgroundColor: '#0f172a',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <Spinner />
+          <p style={{ marginTop: 16, color: '#e0e0e0' }}>Loading...</p>
+        </div>
+      </div>
+    }>
+      <NewJobPageContent />
+    </Suspense>
+  );
+}

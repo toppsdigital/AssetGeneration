@@ -72,6 +72,7 @@ export interface FileListResponse {
 
 export interface BatchCreateResponse {
   created_files: FileData[];
+  existing_files?: FileData[];
   failed_files: Array<{
     filename: string;
     error: string;
@@ -349,6 +350,37 @@ class ContentPipelineAPI {
       recentOnly: true,
       lastModifiedOnly: true,
     });
+  }
+
+  // Re-run a job with new parameters
+  async rerunJob(jobId: string, jobData: Omit<JobData, 'job_id' | 'created_at' | 'last_updated' | 'job_status'>): Promise<JobResponse> {
+    // Calculate total PDF files based on grouped filenames
+    // Each grouped filename represents 2 PDF files (front and back)
+    const totalPdfFiles = (jobData.files || []).length * 2;
+    
+    const jobPayload = {
+      ...jobData,
+      job_status: 'uploading',
+      files: jobData.files || [],
+      original_files_total_count: totalPdfFiles,
+      original_files_completed_count: 0,
+      original_files_failed_count: 0
+    };
+
+    const response = await fetch(`${this.baseUrl}?operation=rerun_job&id=${encodeURIComponent(jobId)}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(jobPayload),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || `Failed to rerun job: ${response.status}`);
+    }
+
+    return response.json();
   }
 
   // Generate assets for a job
