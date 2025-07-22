@@ -115,7 +115,8 @@ function JobDetailsPageContent() {
   const { 
     data: fileData = [], 
     isLoading: isLoadingFiles,
-    error: filesError 
+    error: filesError,
+    refetch: refetchFileData 
   } = useJobFiles(
     shouldFetchFiles ? (jobData?.job_id || null) : null, 
     shouldFetchFiles ? (jobData?.api_files || []) : [],
@@ -149,7 +150,9 @@ function JobDetailsPageContent() {
     fileDataCount: fileData.length,
     finalCount: mergedJobData?.content_pipeline_files?.length || 0,
     jobDataExists: !!jobData,
-    jobDataStructure: jobData ? Object.keys(jobData) : 'no jobData'
+    jobDataStructure: jobData ? Object.keys(jobData) : 'no jobData',
+    shouldFetchFiles,
+    jobStatus: jobData?.job_status
   });
   
   // Status update mutation
@@ -204,6 +207,18 @@ function JobDetailsPageContent() {
         router.push('/jobs');
       }, 1500);
     }
+  });
+
+  // Debug upload engine state after initialization
+  console.log('🔍 Upload Engine State:', {
+    uploadsInProgress: uploadEngine.uploadStarted,
+    totalPdfFiles: uploadEngine.totalPdfFiles,
+    uploadedPdfFiles: uploadEngine.uploadedPdfFiles,
+    allFilesUploaded: uploadEngine.allFilesUploaded,
+    hasJobData: !!mergedJobData,
+    jobDataFilesCount: mergedJobData?.content_pipeline_files?.length || 0,
+    filesLoaded,
+    timestamp: new Date().toISOString()
   });
 
   // Check if uploads are in progress
@@ -304,7 +319,7 @@ function JobDetailsPageContent() {
 
   // PDF upload tracking is now handled by uploadState hook
 
-  // Legacy job loading useEffect removed - React Query handles this now
+  // Initial job loading and setup
   useEffect(() => {
     if (jobId) {
       // Debug: Check if pending files are available
@@ -348,7 +363,7 @@ function JobDetailsPageContent() {
     });
     
     if (createFiles === 'true' && jobData && !filesLoaded && !fileCreationTriggeredRef.current) {
-      console.log('🔄 Auto-triggering file creation for createFiles=true');
+      console.log('🔄 Auto-triggering file creation for new job');
       fileCreationTriggeredRef.current = true;
       createNewFiles();
     } else if (createFiles !== 'true' && jobData && !filesLoaded) {
@@ -787,7 +802,12 @@ function JobDetailsPageContent() {
         console.log('🔍 Cache verification after update:', {
           updatedFiles: finalFileObjects.length,
           cachedFiles: cachedData?.content_pipeline_files?.length || 0,
-          cacheUpdateSuccessful: !!cachedData?.content_pipeline_files?.length
+          cacheUpdateSuccessful: !!cachedData?.content_pipeline_files?.length,
+          finalFileObjectsSample: finalFileObjects.slice(0, 2).map(f => ({
+            filename: f.filename,
+            hasOriginalFiles: Object.keys(f.original_files || {}).length > 0
+          })),
+          updatedJobDataStructure: Object.keys(updatedJobData)
         });
         
         // Set appropriate completion step and message based on what was found
@@ -1114,6 +1134,21 @@ function JobDetailsPageContent() {
             />
 
             {/* Files Section - Now uses FilesSection component */}
+            {(() => {
+              console.log('🔍 FilesSection Props Debug:', {
+                mergedJobDataFiles: mergedJobData?.content_pipeline_files?.length || 0,
+                jobDataFiles: jobData?.content_pipeline_files?.length || 0,
+                uploadingFiles: uploadEngine.uploadingFiles?.size || 0,
+                loadingFiles,
+                filesLoaded,
+                loadingStep,
+                loadingMessage,
+                uploadsStarted: uploadEngine.uploadStarted,
+                totalPdfFiles: uploadEngine.totalPdfFiles,
+                uploadedPdfFiles: uploadEngine.uploadedPdfFiles
+              });
+              return null;
+            })()}
             <FilesSection
               mergedJobData={mergedJobData}
               jobData={jobData}

@@ -2,10 +2,12 @@
 
 import React, { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import styles from '../../styles/Home.module.css';
 import NavBar from '../../components/NavBar';
 import Spinner from '../../components/Spinner';
 import contentPipelineApi from '../../web/utils/contentPipelineApi';
+import { createCacheClearingCallback } from '../../web/hooks/useJobData';
 
 interface NewJobFormData {
   appName: string;
@@ -18,6 +20,7 @@ interface NewJobFormData {
 function NewJobPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
   
   // Check if this is a re-run operation
   const isRerun = searchParams.get('rerun') === 'true';
@@ -152,14 +155,15 @@ function NewJobPageContent() {
       let response;
       
       if (isRerun && sourceJobId) {
-        // Use rerun API for re-run operations
+        // Use rerun API for re-run operations with cache clearing
+        const cacheClearingCallback = createCacheClearingCallback(queryClient);
         response = await contentPipelineApi.rerunJob(sourceJobId, {
           app_name: jobData.appName,
           filename_prefix: jobData.filenamePrefix,
           source_folder: jobData.sourceFolder,
           files: jobData.files,
           description: jobData.description
-        });
+        }, cacheClearingCallback);
         console.log('Job re-run successfully via Content Pipeline API:', response.job.job_id);
       } else {
         // Use create API for new jobs
