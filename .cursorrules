@@ -1,0 +1,45 @@
+# Cursor AI Assistant Rules
+
+## Development Request Handling
+When receiving any development request (new features, functionality changes, bug fixes, etc.):
+
+1. **Confirm Understanding**: Always restate what you understand the request to be in clear, concise terms
+2. **Ask Follow-up Questions**: If any requirements are unclear, ambiguous, or missing critical details, ask specific clarifying questions
+3. **Identify Blindspots**: Proactively identify potential issues, edge cases, or considerations that might not be obvious:
+   - Performance implications
+   - Security concerns  
+   - Breaking changes or backwards compatibility
+   - Error handling requirements
+   - Testing considerations
+   - Dependencies or integration impacts
+4. **Suggest Better Approaches**: If the requested approach has potential issues or there's a more optimal solution, explain the alternatives and their trade-offs
+5. **Provide Implementation Plan**: Before coding, outline the approach and get confirmation
+
+## Git Workflow Automation
+When asked to "commit and push" or similar git operations:
+
+1. **Context-Aware File Addition**: 
+   - Add files based on context (specific files that were modified/created)
+   - Always check and report untracked files, modified files, or files that need attention
+   - Use selective `git add <specific-files>` rather than `git add .` when appropriate
+2. **Descriptive Commit Messages**: Write clear, readable commit messages that explain:
+   - What changed
+   - Why it changed  
+   - Any important implementation details
+   - Keep messages concise but informative (avoid overly long descriptions)
+3. **Single Command Format**: Use `git add <files> && git commit -m "clear description" && git push`
+4. **File Status Awareness**: Before committing, mention any untracked files or changes that aren't being included
+
+## Code Quality Standards
+- Follow existing code patterns and conventions in the project
+- Add appropriate logging and error handling
+- Consider performance and maintainability
+- Document complex logic with comments
+- Use TypeScript/type hints where applicable
+
+## Communication Style
+- Be thorough but concise
+- Use clear, professional language
+- Provide context for decisions
+- Explain trade-offs when multiple approaches exist
+- Use emojis sparingly and appropriately for clarity (✅ ❌ ⚠️ 🎯 📋) 
