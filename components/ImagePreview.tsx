@@ -115,17 +115,16 @@ const ProgressLoader = ({ progress = 0 }: { progress?: number }) => (
   </div>
 );
 
-// Simple helper to get presigned URL for viewing images
-const getPresignedUrl = async (filePath: string): Promise<string | null> => {
+// Simple helper to get image content via content pipeline and create a blob URL
+const getImageUrl = async (filePath: string): Promise<string | null> => {
   try {
-    console.log('🔗 Getting presigned URL for viewing:', filePath);
+    console.log('🔗 Getting image via content pipeline for:', filePath);
     
-    const response = await fetch('/api/s3-proxy', {
+    const response = await fetch('/api/content-pipeline-proxy?operation=s3_download_file', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
-        client_method: 'get',
-        filename: filePath
+        key: filePath
       }),
     });
 
@@ -135,16 +134,65 @@ const getPresignedUrl = async (filePath: string): Promise<string | null> => {
     }
 
     const data = await response.json();
+    console.log('📥 Content pipeline response:', data);
     
-    if (data.url) {
-      console.log('✅ Got presigned URL for viewing:', filePath);
-      return data.url;
+    // Check if we have a pre-signed URL in the response
+    if (data.success && data.data?.download_url) {
+      console.log('✅ Got pre-signed URL from content pipeline for:', filePath);
+      return data.data.download_url;
+    } 
+    // Fallback: check if we have base64 file content (alternative API response format)
+    else if (data.file_content) {
+      console.log('📦 Converting base64 content to blob URL for:', filePath);
+      
+      try {
+        // Detect content type from file extension
+        const extension = filePath.toLowerCase().split('.').pop();
+        let contentType = 'image/jpeg'; // default
+        
+        switch (extension) {
+          case 'png':
+            contentType = 'image/png';
+            break;
+          case 'gif':
+            contentType = 'image/gif';
+            break;
+          case 'webp':
+            contentType = 'image/webp';
+            break;
+          case 'tif':
+          case 'tiff':
+            contentType = 'image/tiff';
+            break;
+          case 'jpg':
+          case 'jpeg':
+            contentType = 'image/jpeg';
+            break;
+        }
+        
+        // Convert base64 to blob
+        const binaryString = atob(data.file_content);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        
+        const blob = new Blob([bytes], { type: contentType });
+        const blobUrl = URL.createObjectURL(blob);
+        
+        console.log('✅ Created blob URL for:', filePath);
+        return blobUrl;
+      } catch (blobError) {
+        console.error('❌ Failed to create blob URL:', blobError);
+        throw new Error('Failed to process image data');
+      }
     } else {
-      throw new Error('No URL in response');
+      console.error('❌ Unexpected response format:', data);
+      throw new Error('No download URL or file content in response');
     }
     
   } catch (error) {
-    console.error(`❌ Failed to get presigned URL for ${filePath}:`, error);
+    console.error(`❌ Failed to get image via content pipeline for ${filePath}:`, error);
     return null;
   }
 };
@@ -161,10 +209,31 @@ export default function ImagePreview({
   const [isImageLoaded, setIsImageLoaded] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [presignedUrl, setPresignedUrl] = useState<string | null>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const isTiff = filePath.toLowerCase().endsWith('.tif') || filePath.toLowerCase().endsWith('.tiff');
+
+  // Cleanup blob URL when component unmounts or filePath changes
+  useEffect(() => {
+    return () => {
+      if (imageUrl && imageUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(imageUrl);
+      }
+    };
+  }, [imageUrl]);
+
+  // Cleanup old blob URL when filePath changes  
+  useEffect(() => {
+    if (imageUrl && imageUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(imageUrl);
+    }
+    // Reset state when filePath changes
+    setImageUrl(null);
+    setIsImageLoaded(false);
+    setError(null);
+    setLoadingProgress(0);
+  }, [filePath]);
 
   // Optimized intersection observer with earlier threshold
   useEffect(() => {
@@ -195,14 +264,14 @@ export default function ImagePreview({
 
   // Fetch presigned URL when visible
   useEffect(() => {
-    if (!isVisible || presignedUrl) return;
+    if (!isVisible || imageUrl) return;
 
     const fetchUrl = async () => {
       try {
         setError(null);
-        const url = await getPresignedUrl(filePath);
+        const url = await getImageUrl(filePath);
         if (url) {
-          setPresignedUrl(url);
+          setImageUrl(url);
         } else {
           setError('Failed to get image URL');
         }
@@ -213,14 +282,14 @@ export default function ImagePreview({
     };
 
     fetchUrl();
-  }, [isVisible, filePath, presignedUrl]);
+  }, [isVisible, filePath, imageUrl]);
 
   // Preload URLs for priority images
   useEffect(() => {
     if (priority && filePath) {
-      getPresignedUrl(filePath).then(url => {
+      getImageUrl(filePath).then(url => {
         if (url) {
-          setPresignedUrl(url);
+          setImageUrl(url);
         }
       }).catch(console.error);
     }
@@ -228,7 +297,7 @@ export default function ImagePreview({
 
   // Simulate loading progress for better UX
   useEffect(() => {
-    if (isVisible && presignedUrl && !isImageLoaded) {
+    if (isVisible && imageUrl && !isImageLoaded) {
       const interval = setInterval(() => {
         setLoadingProgress(prev => {
           if (prev >= 90) {
@@ -241,7 +310,7 @@ export default function ImagePreview({
 
       return () => clearInterval(interval);
     }
-  }, [isVisible, presignedUrl, isImageLoaded]);
+  }, [isVisible, imageUrl, isImageLoaded]);
 
   const handleImageLoad = () => {
     setIsImageLoaded(true);
@@ -256,10 +325,10 @@ export default function ImagePreview({
   };
 
   const handleImageClick = () => {
-    if (!onExpand || !isImageLoaded || !presignedUrl) return;
+    if (!onExpand || !isImageLoaded || !imageUrl) return;
     
     onExpand({
-      src: presignedUrl,
+      src: imageUrl,
       alt,
       isTiff
     });
@@ -318,11 +387,11 @@ export default function ImagePreview({
       }}
       onClick={handleImageClick}
     >
-      {(!presignedUrl || !isImageLoaded) && (
+      {(!imageUrl || !isImageLoaded) && (
         <ProgressLoader progress={loadingProgress} />
       )}
       
-      {presignedUrl && (
+      {imageUrl && (
         <div
           style={{
             width: '100%',
@@ -335,7 +404,7 @@ export default function ImagePreview({
         >
           {isTiff ? (
             <TiffImageViewer
-              src={presignedUrl}
+              src={imageUrl}
               alt={alt}
               onLoad={handleImageLoad}
               onError={() => handleImageError('Failed to load TIFF image')}
@@ -348,7 +417,7 @@ export default function ImagePreview({
             />
           ) : (
             <RegularImageViewer
-              src={presignedUrl}
+              src={imageUrl}
               alt={alt}
               onLoad={handleImageLoad}
               onError={() => handleImageError('Failed to load image')}
