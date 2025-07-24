@@ -187,39 +187,48 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       const psdFile = selectedPhysicalFile.split('/').pop()?.replace('.json', '.psd') || '';
       
       // Convert configured assets to API format
-      const layers: string[] = [];
-      const colors: { id: number; name: string }[] = [];
-      
-      configuredAssets.forEach(asset => {
+      const assets = configuredAssets.map(asset => {
         if (asset.type === 'front-parallel' && asset.spotColorPairs) {
           // Handle new format with multiple spot/color pairs
-          asset.spotColorPairs.forEach(pair => {
-            layers.push(pair.spot);
-            if (pair.color) {
-              colors.push({
+          return {
+            type: asset.type,
+            layer: asset.layer,
+            spot_color_pairs: asset.spotColorPairs.map(pair => ({
+              spot: pair.spot,
+              color: pair.color ? {
                 id: pair.color.id,
                 name: pair.color.name
-              });
-            }
-          });
+              } : undefined
+            })),
+            vfx: asset.vfx,
+            chrome: asset.chrome
+          };
         } else if (asset.type === 'front-parallel') {
           // Handle legacy format
-          layers.push(asset.spot || asset.layer);
-          if (asset.color) {
-            colors.push({
+          return {
+            type: asset.type,
+            layer: asset.layer,
+            spot: asset.spot,
+            color: asset.color ? {
               id: asset.color.id,
               name: asset.color.name
-            });
-          }
+            } : undefined,
+            vfx: asset.vfx,
+            chrome: asset.chrome
+          };
         } else {
           // Other card types
-          layers.push(asset.layer);
+          return {
+            type: asset.type,
+            layer: asset.layer,
+            vfx: asset.vfx,
+            chrome: asset.chrome
+          };
         }
       });
 
       const payload = {
-        colors,
-        layers,
+        assets,
         psd_file: psdFile
       };
 
@@ -321,7 +330,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
   };
 
   const getSpotLayers = () => {
-    const extractedLayers = getExtractedLayers();
+  const extractedLayers = getExtractedLayers();
     return extractedLayers.filter(layer => 
       layer.toLowerCase().includes('spot')
     );
@@ -531,7 +540,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
               margin: 0,
               lineHeight: 1.5
             }}>
-              Your files have been successfully extracted! Now configure your digital assets by selecting a PSD template, color variants, and layers below.
+              Configure your digital assets by selecting a PSD template and configuring card types, layers, and colors below.
             </p>
           </div>
         </div>
@@ -715,8 +724,8 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                     {/* Layer Selection - Different layout for parallel vs others */}
                     {currentCardType === 'front-parallel' ? (
                       <div>
-                        <div style={{
-                          display: 'flex',
+                  <div style={{
+                    display: 'flex',
                           alignItems: 'center',
                           gap: 8,
                           marginBottom: 8
@@ -746,8 +755,8 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                               color: (!spotColorPairs[0]?.spot || spotColorPairs.filter(p => p.spot).length >= getSpotLayers().length) ? '#6b7280' : '#86efac',
                               fontSize: 16,
                               cursor: (!spotColorPairs[0]?.spot || spotColorPairs.filter(p => p.spot).length >= getSpotLayers().length) ? 'not-allowed' : 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
+                        display: 'flex',
+                        alignItems: 'center',
                               justifyContent: 'center',
                               transition: 'all 0.2s'
                             }}
@@ -794,7 +803,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                   }}
                                   style={{
                                     width: '100%',
-                                    padding: '8px 12px',
+                        padding: '8px 12px',
                                     background: 'rgba(255, 255, 255, 0.08)',
                                     border: '1px solid rgba(255, 255, 255, 0.2)',
                                     borderRadius: 8,
@@ -838,14 +847,14 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                         color: { id: parseInt(id), name } 
                                       };
                                       setSpotColorPairs(newPairs);
-                                    } else {
+                            } else {
                                       const newPairs = [...spotColorPairs];
                                       newPairs[index] = { ...newPairs[index], color: undefined };
                                       setSpotColorPairs(newPairs);
-                                    }
-                                  }}
+                            }
+                          }}
                                   disabled={!pair.spot}
-                                  style={{
+                          style={{
                                     width: '100%',
                                     padding: '8px 12px',
                                     background: 'rgba(255, 255, 255, 0.08)',
@@ -904,13 +913,13 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                             </div>
                           ))}
                         </div>
-                      </div>
-                    ) : (
+                  </div>
+                ) : (
                       /* Regular Layer Selection for non-parallel types */
                       <div>
                         <label style={{
                           display: 'block',
-                          fontSize: 14,
+                    fontSize: 14,
                           fontWeight: 600,
                           color: '#f8f8f8',
                           marginBottom: 8
@@ -952,17 +961,17 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                             </option>
                           ))}
                         </select>
-                      </div>
-                    )}
+                  </div>
+                )}
 
                     {/* Step 3: VFX Texture Selection (front-parallel + at least one spot selected + wp_inv layers exist) */}
                     {currentCardType === 'front-parallel' && spotColorPairs.some(pair => pair.spot) && getWpInvLayers().length > 0 && (
                       <div>
-                        <label style={{
-                          display: 'block',
+                  <label style={{
+                    display: 'block',
                           fontSize: 14,
-                          fontWeight: 600,
-                          color: '#f8f8f8',
+                    fontWeight: 600,
+                    color: '#f8f8f8',
                           marginBottom: 8
                         }}>
                           Step 3: Select VFX Texture
@@ -984,7 +993,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                               - using {getWpInvLayers()[0]}
                             </span>
                           )}
-                        </label>
+                  </label>
                         <select
                           value={currentConfig.vfx || ''}
                           onChange={(e) => setCurrentConfig(prev => ({ ...prev, vfx: e.target.value }))}
@@ -1047,16 +1056,16 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                     {(currentCardType === 'front-base' || currentCardType === 'front-parallel') && getWpInvLayers().length > 0 && (
                       <div>
                         <label style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 8,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
                           fontSize: 14,
                           fontWeight: 600,
-                          color: '#f8f8f8',
+                            color: '#f8f8f8',
                           cursor: 'pointer'
-                        }}>
-                          <input
-                            type="checkbox"
+                          }}>
+                            <input
+                              type="checkbox"
                             checked={currentConfig.chrome || false}
                             onChange={(e) => setCurrentConfig(prev => ({ ...prev, chrome: e.target.checked }))}
                             style={{ width: 16, height: 16 }}
@@ -1075,7 +1084,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
 
                         if (!currentCardType) {
                           validationMessage = 'Select card type';
-                        } else {
+                                } else {
                           switch (currentCardType) {
                             case 'wp':
                             case 'back':
@@ -1123,7 +1132,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                             {editingAssetId && (
                               <button
                                 onClick={resetCurrentConfig}
-                                style={{
+                              style={{
                                   padding: '12px 24px',
                                   background: 'rgba(156, 163, 175, 0.3)',
                                   border: 'none',
@@ -1131,7 +1140,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                   color: 'white',
                                   fontSize: 14,
                                   fontWeight: 600,
-                                  cursor: 'pointer',
+                                cursor: 'pointer',
                                   marginLeft: 8
                                 }}
                               >
@@ -1228,7 +1237,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                   letterSpacing: '0.02em'
                                 }}>
                                   {asset.type === 'front-base' ? 'BASE' : asset.type === 'front-parallel' ? 'PARALLEL' : asset.type.toUpperCase()}
-                                </span>
+                            </span>
                               </td>
                               <td style={{ padding: '10px 12px', color: '#e5e7eb', fontSize: 13 }}>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -1442,16 +1451,16 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                 </div>
                               </td>
                             </tr>
-                          );
-                        })}
+                        );
+                      })}
                       </tbody>
                     </table>
-                  </div>
-                ) : (
-                  <div style={{
+                    </div>
+                  ) : (
+                    <div style={{
                     textAlign: 'center',
                     padding: '48px 24px',
-                    color: '#9ca3af',
+                      color: '#9ca3af',
                     fontSize: 14,
                     background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.03), rgba(147, 51, 234, 0.03))',
                     borderRadius: 12,
@@ -1476,46 +1485,46 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                     <div style={{ color: '#6b7280', fontSize: 13 }}>
                       Use the form on the left to add assets
                     </div>
-                  </div>
-                )}
+                </div>
+              )}
 
                 {/* Generate All Assets Button */}
                 {configuredAssets.length > 0 && (
-                  <button
-                    onClick={createAssets}
-                    disabled={creatingAssets || !canCreateAssets}
-                    style={{
+                <button
+                  onClick={createAssets}
+                  disabled={creatingAssets || !canCreateAssets}
+                  style={{
                       width: '100%',
-                      padding: '16px 32px',
-                      background: creatingAssets 
-                        ? 'rgba(156, 163, 175, 0.5)' 
-                        : 'linear-gradient(135deg, #10b981, #059669)',
-                      border: 'none',
-                      borderRadius: 12,
-                      color: 'white',
-                      fontSize: 16,
-                      fontWeight: 600,
+                    padding: '16px 32px',
+                    background: creatingAssets 
+                      ? 'rgba(156, 163, 175, 0.5)' 
+                      : 'linear-gradient(135deg, #10b981, #059669)',
+                    border: 'none',
+                    borderRadius: 12,
+                    color: 'white',
+                    fontSize: 16,
+                    fontWeight: 600,
                       cursor: creatingAssets ? 'not-allowed' : 'pointer',
-                      transition: 'all 0.2s',
+                    transition: 'all 0.2s',
                       boxShadow: creatingAssets ? 'none' : '0 8px 24px rgba(16, 185, 129, 0.3)'
-                    }}
-                  >
-                    {creatingAssets ? (
+                  }}
+                >
+                  {creatingAssets ? (
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                        <div style={{
-                          width: 16,
-                          height: 16,
-                          border: '2px solid rgba(255, 255, 255, 0.3)',
-                          borderTop: '2px solid white',
-                          borderRadius: '50%',
-                          animation: 'spin 1s linear infinite'
-                        }} />
+                      <div style={{
+                        width: 16,
+                        height: 16,
+                        border: '2px solid rgba(255, 255, 255, 0.3)',
+                        borderTop: '2px solid white',
+                        borderRadius: '50%',
+                        animation: 'spin 1s linear infinite'
+                      }} />
                         Creating Assets...
-                      </div>
-                    ) : (
+                    </div>
+                  ) : (
                       `🎨 Generate All Assets (${configuredAssets.length})`
-                    )}
-                  </button>
+                  )}
+                </button>
                 )}
               </div>
             </div>

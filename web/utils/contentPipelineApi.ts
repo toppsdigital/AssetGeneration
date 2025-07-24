@@ -411,8 +411,18 @@ class ContentPipelineAPI {
   async generateAssets(
     jobId: string,
     payload: {
-      colors: Array<{ id: number; name: string }>;
-      layers: string[];
+      assets: Array<{
+        type: 'wp' | 'back' | 'front-base' | 'front-parallel';
+        layer: string;
+        spot?: string;
+        color?: { id: number; name: string };
+        spot_color_pairs?: Array<{
+          spot: string;
+          color?: { id: number; name: string };
+        }>;
+        vfx?: string;
+        chrome: boolean;
+      }>;
       psd_file: string;
     }
   ): Promise<any> {
