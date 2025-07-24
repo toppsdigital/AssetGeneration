@@ -36,14 +36,7 @@ export default function Home() {
       // { files: [{ file_name: "...", display_name: "...", json_url: "..." }], total_count: ... }
       const psdFiles = data.files || [];
       
-      // Filter out files with "physical" in their name if needed
-      const filteredFiles = psdFiles.filter((file: any) => {
-        const fileName = file.file_name || file.name || '';
-        const hasPhysical = fileName.toLowerCase().includes('physical');
-        return !hasPhysical;
-      });
-      
-      setSingleAssetTemplates(filteredFiles);
+      setSingleAssetTemplates(psdFiles);
     } catch (err) {
       alert('Error fetching templates: ' + (err as Error).message);
     } finally {
