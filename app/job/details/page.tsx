@@ -544,15 +544,15 @@ function JobDetailsPageContent() {
       
       console.log('Job details loaded:', response.job);
       
-              // Map API response to our local interface, preserving existing files
-        setJobData(prevJobData => {
-          const mappedJobData: UIJobData = {
-            ...response.job,
-            api_files: response.job.files, // Store API files separately
-            files: prevJobData?.files || [], // Preserve existing legacy files
-            content_pipeline_files: prevJobData?.content_pipeline_files || [], // Preserve existing Content Pipeline files
+      // Map API response to our local interface, preserving existing files
+      setJobData(prevJobData => {
+        const mappedJobData: UIJobData = {
+          ...response.job,
+          api_files: response.job.files, // Store API files separately
+          files: prevJobData?.files || [], // Preserve existing legacy files
+          content_pipeline_files: prevJobData?.content_pipeline_files || [], // Preserve existing Content Pipeline files
             Subset_name: response.job.source_folder // Map source_folder to Subset_name for UI compatibility
-          };
+        };
         
         console.log('🔄 setJobData called from: loadJobDetails (preserving existing files) at', new Date().toISOString());
         console.log('📊 Preserved files:', mappedJobData.content_pipeline_files?.length || 0);
@@ -739,16 +739,16 @@ function JobDetailsPageContent() {
       // Handle the response - some files may already exist
       let finalFileObjects: FileData[] = [];
       
-      // Add successfully created files
-      if (batchResponse.created_files && batchResponse.created_files.length > 0) {
-        console.log('✅ Successfully created files:', batchResponse.created_files.length);
+              // Add successfully created files
+        if (batchResponse.created_files && batchResponse.created_files.length > 0) {
+          console.log('✅ Successfully created files:', batchResponse.created_files.length);
         const createdFiles = batchResponse.created_files.map((apiFile: any) => ({
-          filename: apiFile.filename,
-          last_updated: apiFile.last_updated || new Date().toISOString(),
-          original_files: apiFile.original_files || apiFile.metadata?.original_files || {},
-          extracted_files: apiFile.extracted_files || apiFile.metadata?.extracted_files || {},
-          firefly_assets: apiFile.firefly_assets || apiFile.metadata?.firefly_assets || {}
-        }));
+            filename: apiFile.filename,
+            last_updated: apiFile.last_updated || new Date().toISOString(),
+            original_files: apiFile.original_files || apiFile.metadata?.original_files || {},
+            extracted_files: apiFile.extracted_files || apiFile.metadata?.extracted_files || {},
+            firefly_assets: apiFile.firefly_assets || apiFile.metadata?.firefly_assets || {}
+          }));
         finalFileObjects = [...finalFileObjects, ...createdFiles];
       }
       
@@ -756,13 +756,13 @@ function JobDetailsPageContent() {
       if (batchResponse.existing_files && batchResponse.existing_files.length > 0) {
         console.log('📁 Found existing files:', batchResponse.existing_files.length);
         const existingFiles = batchResponse.existing_files.map((apiFile: any) => ({
-          filename: apiFile.filename,
-          job_id: apiFile.job_id,
-          last_updated: apiFile.last_updated || new Date().toISOString(),
+              filename: apiFile.filename,
+              job_id: apiFile.job_id,
+              last_updated: apiFile.last_updated || new Date().toISOString(),
           original_files: apiFile.original_files || apiFile.metadata?.original_files || {},
           extracted_files: apiFile.extracted_files || apiFile.metadata?.extracted_files || {},
           firefly_assets: apiFile.firefly_assets || apiFile.metadata?.firefly_assets || {}
-        }));
+            }));
         finalFileObjects = [...finalFileObjects, ...existingFiles];
         
         console.log('🔍 Existing files details:', existingFiles.map(f => ({

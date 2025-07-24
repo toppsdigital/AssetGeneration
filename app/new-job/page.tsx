@@ -158,7 +158,7 @@ function NewJobPageContent() {
         // Use rerun API for re-run operations with cache clearing
         const cacheClearingCallback = createCacheClearingCallback(queryClient);
         response = await contentPipelineApi.rerunJob(sourceJobId, {
-          app_name: jobData.appName,
+        app_name: jobData.appName,
           filename_prefix: jobData.filenamePrefix,
           source_folder: jobData.sourceFolder,
           files: jobData.files,
@@ -170,11 +170,11 @@ function NewJobPageContent() {
         response = await contentPipelineApi.createJob({
           app_name: jobData.appName,
           filename_prefix: jobData.filenamePrefix,
-          source_folder: jobData.sourceFolder,
-          files: jobData.files,
-          description: jobData.description
-        });
-        console.log('Job created successfully via Content Pipeline API:', response.job.job_id);
+        source_folder: jobData.sourceFolder,
+        files: jobData.files,
+        description: jobData.description
+      });
+      console.log('Job created successfully via Content Pipeline API:', response.job.job_id);
       }
       
       return response.job;
@@ -413,8 +413,8 @@ function NewJobPageContent() {
                   }}>
                     Filename Prefix *
                   </label>
-                                      <input
-                      type="text"
+                  <input
+                    type="text"
                       value={formData.filenamePrefix}
                       onChange={(e) => handleInputChange('filenamePrefix', e.target.value)}
                       placeholder="e.g., bunt25_25tcbb_chrome"
@@ -883,7 +883,7 @@ function NewJobPageContent() {
       `}</style>
     </div>
   );
-}
+} 
 
 export default function NewJobPage() {
   return (

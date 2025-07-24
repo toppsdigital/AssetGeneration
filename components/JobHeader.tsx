@@ -77,14 +77,14 @@ export const JobHeader = ({
         )}
         {jobData.job_id && (
           <span style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-            <span>
-              ID: <span style={{ 
-                color: '#9ca3af', 
-                fontFamily: 'monospace', 
-                fontSize: 11 
-              }}>
-                {jobData.job_id}
-              </span>
+          <span>
+            ID: <span style={{ 
+              color: '#9ca3af', 
+              fontFamily: 'monospace', 
+              fontSize: 11 
+            }}>
+              {jobData.job_id}
+            </span>
             </span>
             {onRerunJob && (
               <button
