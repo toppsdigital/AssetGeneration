@@ -958,7 +958,6 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                         }}>
                           <th style={{ padding: '10px 12px', textAlign: 'left', color: '#f8f8f8', fontSize: 12, fontWeight: 600, letterSpacing: '0.05em' }}>TYPE</th>
                           <th style={{ padding: '10px 12px', textAlign: 'left', color: '#f8f8f8', fontSize: 12, fontWeight: 600, letterSpacing: '0.05em' }}>LAYERS</th>
-                          <th style={{ padding: '10px 12px', textAlign: 'left', color: '#f8f8f8', fontSize: 12, fontWeight: 600, letterSpacing: '0.05em' }}>COLOR</th>
                           <th style={{ padding: '10px 12px', textAlign: 'left', color: '#f8f8f8', fontSize: 12, fontWeight: 600, letterSpacing: '0.05em' }}>VFX</th>
                           <th style={{ padding: '10px 12px', textAlign: 'center', color: '#f8f8f8', fontSize: 12, fontWeight: 600, letterSpacing: '0.05em' }}>CHROME</th>
                           <th style={{ padding: '10px 12px', textAlign: 'center', color: '#f8f8f8', fontSize: 12, fontWeight: 600, letterSpacing: '0.05em' }}>ACTIONS</th>
@@ -966,11 +965,6 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                       </thead>
                       <tbody>
                         {configuredAssets.map((asset, index) => {
-                          // Combine layers: spot + layer (or just layer if no spot)
-                          const layersDisplay = asset.spot && asset.spot !== asset.layer 
-                            ? `${asset.spot}, ${asset.layer}` 
-                            : asset.layer;
-                          
                           return (
                             <tr key={asset.id} style={{ 
                               borderBottom: index < configuredAssets.length - 1 ? '1px solid rgba(255, 255, 255, 0.05)' : 'none',
@@ -1005,35 +999,44 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                 </span>
                               </td>
                               <td style={{ padding: '10px 12px', color: '#e5e7eb', fontSize: 12 }}>
-                                <code style={{
-                                  background: 'rgba(255, 255, 255, 0.05)',
-                                  padding: '2px 6px',
-                                  borderRadius: 4,
-                                  fontSize: 12,
-                                  fontFamily: 'monospace'
-                                }}>
-                                  {layersDisplay}
-                                </code>
-                              </td>
-                              <td style={{ padding: '10px 12px', color: '#e5e7eb', fontSize: 12 }}>
-                                {asset.color?.name ? (
-                                  <span style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 4
-                                  }}>
-                                    <span style={{
-                                      width: 10,
-                                      height: 10,
-                                      borderRadius: '50%',
-                                      background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
-                                      display: 'inline-block'
-                                    }} />
-                                    {asset.color.name}
-                                  </span>
-                                ) : (
-                                  <span style={{ color: '#6b7280' }}>—</span>
-                                )}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                  {asset.spot && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                      <code style={{
+                                        background: 'rgba(255, 255, 255, 0.05)',
+                                        padding: '2px 6px',
+                                        borderRadius: 4,
+                                        fontSize: 11,
+                                        fontFamily: 'monospace'
+                                      }}>
+                                        {asset.spot}
+                                      </code>
+                                      {asset.color && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                          <span style={{
+                                            width: 10,
+                                            height: 10,
+                                            borderRadius: '50%',
+                                            background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
+                                            display: 'inline-block'
+                                          }} />
+                                          <span style={{ fontSize: 11, color: '#f8f8f8' }}>{asset.color.name}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                  {asset.layer && (!asset.spot || asset.spot !== asset.layer) && (
+                                    <code style={{
+                                      background: 'rgba(255, 255, 255, 0.05)',
+                                      padding: '2px 6px',
+                                      borderRadius: 4,
+                                      fontSize: 11,
+                                      fontFamily: 'monospace'
+                                    }}>
+                                      {asset.layer}
+                                    </code>
+                                  )}
+                                                                </div>
                               </td>
                               <td style={{ padding: '10px 12px', color: '#e5e7eb', fontSize: 12 }}>
                                 {asset.vfx ? (
@@ -1052,7 +1055,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                               </td>
                               <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                                 {asset.type === 'wp' || asset.type === 'back' || getWpInvLayers().length === 0 ? (
-                                  <span style={{ color: '#6b7280', fontSize: 11 }}>N/A</span>
+                                  <span style={{ color: '#6b7280' }}>—</span>
                                 ) : (
                                   <span style={{
                                     display: 'inline-flex',
