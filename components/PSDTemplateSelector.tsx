@@ -18,6 +18,17 @@ interface PSDTemplateSelectorProps {
   setCreatingAssets: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
+interface AssetConfig {
+  id: string;
+  name: string;
+  type: 'wp' | 'back' | 'front-base' | 'front-parallel';
+  layer: string;
+  spot?: string;
+  color?: { id: number; name: string };
+  vfx?: string;
+  chrome: boolean;
+}
+
 export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatingAssets, setCreatingAssets }: PSDTemplateSelectorProps) => {
   const router = useRouter();
   
@@ -27,8 +38,14 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
   const [selectedPhysicalFile, setSelectedPhysicalFile] = useState<string>('');
   const [jsonData, setJsonData] = useState<any>(null);
   const [loadingJsonData, setLoadingJsonData] = useState(false);
-  const [selectedLayers, setSelectedLayers] = useState<Set<string>>(new Set());
-  const [selectedExtractedLayers, setSelectedExtractedLayers] = useState<Set<string>>(new Set());
+  
+  // New asset configuration state
+  const [configuredAssets, setConfiguredAssets] = useState<AssetConfig[]>([]);
+  const [currentCardType, setCurrentCardType] = useState<'wp' | 'back' | 'front-base' | 'front-parallel' | null>(null);
+  const [currentConfig, setCurrentConfig] = useState<Partial<AssetConfig>>({
+    chrome: false
+  });
+  const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
 
   // Fetch physical JSON files when component becomes visible
   useEffect(() => {
@@ -44,9 +61,10 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     } else {
       setJsonData(null);
     }
-    // Clear selected layers when changing files
-    setSelectedLayers(new Set());
-    setSelectedExtractedLayers(new Set());
+    // Clear current configuration when changing files
+    setCurrentConfig({ chrome: false });
+    setCurrentCardType(null);
+    setConfiguredAssets([]);
   }, [selectedPhysicalFile]);
 
   const fetchPhysicalJsonFiles = async () => {
@@ -145,37 +163,36 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
   };
 
   const createAssets = async () => {
-    if (!selectedExtractedLayers.size) return;
+    if (configuredAssets.length === 0) return;
 
-    console.log('🎨 Creating digital assets with selected options:', {
+    console.log('🎨 Creating digital assets with configured assets:', {
       selectedFile: selectedPhysicalFile,
       psdFile: jsonData?.psd_file,
-      selectedLayers: Array.from(selectedLayers),
-      selectedExtractedLayers: Array.from(selectedExtractedLayers),
-      totalColors: selectedLayers.size,
-      totalLayers: selectedExtractedLayers.size,
+      configuredAssets,
+      totalAssets: configuredAssets.length,
     });
 
     setCreatingAssets(true);
 
     try {
       const psdFile = selectedPhysicalFile.split('/').pop()?.replace('.json', '.psd') || '';
-      const layers = Array.from(selectedExtractedLayers);
       
-      // Check if any selected layer contains "spot"
-      const hasSpotLayer = layers.some(layerName => 
-        layerName.toLowerCase().includes('spot')
-      );
-
-      const colors = hasSpotLayer 
-        ? Array.from(selectedLayers).map((layerId) => {
-            const [id, name] = layerId.split('-');
-            return {
-              id: parseInt(id, 10),
-              name: name || layerId
-            };
-          })
-        : [];
+      // Convert configured assets to API format
+      const layers = configuredAssets.map(asset => {
+        if (asset.type === 'front-parallel') {
+          // For parallel front cards, use the spot layer name
+          return asset.spot || asset.layer;
+        }
+        return asset.layer;
+      });
+      
+      // Collect colors from parallel front cards
+      const colors = configuredAssets
+        .filter(asset => asset.type === 'front-parallel' && asset.color)
+        .map(asset => ({
+          id: asset.color!.id,
+          name: asset.color!.name
+        }));
 
       const payload = {
         colors,
@@ -255,16 +272,127 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     return spotGroup ? collectSolidColorLayers(spotGroup) : [];
   };
 
+  // Helper functions for new UI
+  const getLayersByType = (type: 'wp' | 'back' | 'front-base' | 'front-parallel') => {
+    const extractedLayers = getExtractedLayers();
+    console.log('🔍 All extracted layers:', extractedLayers);
+    
+    const filtered = extractedLayers.filter(layer => {
+      const lowerLayer = layer.toLowerCase();
+      switch(type) {
+        case 'wp':
+          return lowerLayer.includes('wp') && !lowerLayer.includes('inv'); // Include wp but exclude wp_inv
+        case 'back': 
+          return lowerLayer.startsWith('bk') || lowerLayer.includes('back');
+        case 'front-base':
+          return lowerLayer.includes('fr_cmyk') || (lowerLayer.startsWith('fr') && lowerLayer.includes('cmyk'));
+        case 'front-parallel':
+          return lowerLayer.includes('spot') && (lowerLayer.startsWith('fr') || lowerLayer.includes('front'));
+        default:
+          return false;
+      }
+    });
+    
+    console.log(`🎯 Filtered ${type} layers:`, filtered);
+    return filtered;
+  };
+
+  const getSpotLayers = () => {
+    const extractedLayers = getExtractedLayers();
+    return extractedLayers.filter(layer => 
+      layer.toLowerCase().includes('spot')
+    );
+  };
+
+  const getVfxTextures = () => {
+    // Get VFX textures from JSON data under "VFX textures" group
+    const vfxGroup = jsonData?.layers?.find((layer: any) => 
+      layer.name?.toLowerCase().includes('vfx') || layer.name?.toLowerCase().includes('texture')
+    );
+    
+    if (vfxGroup && vfxGroup.children) {
+      return vfxGroup.children
+        .map((child: any) => child.name || 'Unnamed Texture')
+        .filter((textureName: string) => !textureName.toLowerCase().includes('wpc v')); // Filter out "wpc v"
+    }
+    return [];
+  };
+
+  const getWpInvLayers = () => {
+    const extractedLayers = getExtractedLayers();
+    return extractedLayers.filter(layer => 
+      layer.toLowerCase().includes('wp') && layer.toLowerCase().includes('inv')
+    );
+  };
+
+  const resetCurrentConfig = () => {
+    setCurrentConfig({ chrome: false });
+    setCurrentCardType(null);
+    setEditingAssetId(null);
+  };
+
+  const addAsset = () => {
+    if (!currentCardType || !currentConfig.layer) return;
+
+    // For front-parallel cards, auto-select wp_inv layer if only one exists and VFX is selected
+    let finalLayer = currentConfig.layer;
+    if (currentCardType === 'front-parallel' && currentConfig.vfx && getWpInvLayers().length === 1) {
+      finalLayer = getWpInvLayers()[0];
+    }
+
+    const newAsset: AssetConfig = {
+      id: editingAssetId || Date.now().toString(),
+      name: generateAssetName({
+        ...currentConfig,
+        type: currentCardType,
+        layer: finalLayer
+      } as AssetConfig),
+      type: currentCardType,
+      layer: finalLayer,
+      spot: currentConfig.spot,
+      color: currentConfig.color,
+      vfx: currentConfig.vfx,
+      chrome: (currentConfig.chrome && (currentCardType === 'front-base' || currentCardType === 'front-parallel') && getWpInvLayers().length > 0) || false // Chrome only for front cards with wp_inv layers
+    };
+
+    if (editingAssetId) {
+      // Update existing asset
+      setConfiguredAssets(prev => 
+        prev.map(asset => asset.id === editingAssetId ? newAsset : asset)
+      );
+    } else {
+      // Add new asset
+      setConfiguredAssets(prev => [...prev, newAsset]);
+    }
+
+    resetCurrentConfig();
+  };
+
+  const generateAssetName = (config: AssetConfig): string => {
+    const parts = [config.type.replace('-', ' ').toUpperCase()];
+    
+    if (config.spot) parts.push(config.spot);
+    if (config.color) parts.push(config.color.name);
+    if (config.chrome && (config.type === 'front-base' || config.type === 'front-parallel') && getWpInvLayers().length > 0) parts.push('Chrome'); // Chrome only for front cards with wp_inv layers
+    
+    return parts.join(' ');
+  };
+
+  const removeAsset = (id: string) => {
+    setConfiguredAssets(prev => prev.filter(asset => asset.id !== id));
+  };
+
+  const editAsset = (asset: AssetConfig) => {
+    setCurrentCardType(asset.type);
+    setCurrentConfig(asset);
+    setEditingAssetId(asset.id);
+  };
+
   if (!isVisible) return null;
 
   const extractedLayers = getExtractedLayers();
   const colorVariants = getColorVariants();
-  const hasSpotLayer = Array.from(selectedExtractedLayers).some(layerName => 
-    layerName.toLowerCase().includes('spot')
-  );
-  const canCreateAssets = selectedExtractedLayers.size > 0 && (
-    !hasSpotLayer || (hasSpotLayer && selectedLayers.size > 0)
-  );
+  const canCreateAssets = configuredAssets.length > 0;
 
   return (
     <>
@@ -422,215 +550,530 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
             </div>
           )}
 
-          {/* Layer and Color Selection */}
+          {/* New Asset Builder UI */}
           {selectedPhysicalFile && jsonData && !loadingJsonData && (
-            <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
-              {/* Layer Selection */}
-              <div style={{ maxWidth: 250 }}>
-                <label style={{
-                  display: 'block',
-                  fontSize: 16,
+            <>
+              {/* Asset Configuration Panel */}
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.05)',
+                borderRadius: 12,
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                padding: 20,
+                marginBottom: 20
+              }}>
+                <h3 style={{
+                  fontSize: 18,
                   fontWeight: 600,
                   color: '#f8f8f8',
-                  marginBottom: 12
+                  marginBottom: 16,
+                  margin: 0
                 }}>
-                  Select Layers
-                </label>
-                {extractedLayers.length > 0 ? (
-                  <div style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 6,
-                    maxWidth: 250
+                  Asset Configuration
+                </h3>
+                
+                {/* Step 1: Card Type Selection */}
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{
+                    display: 'block',
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: '#f8f8f8',
+                    marginBottom: 8
                   }}>
-                    {extractedLayers.map((layerName, index) => (
-                      <label key={index} style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        cursor: 'pointer',
-                        fontSize: 13,
-                        color: '#f8f8f8',
-                        padding: '8px 12px',
-                        background: 'rgba(255, 255, 255, 0.05)',
-                        borderRadius: 6,
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
-                        transition: 'background-color 0.2s'
-                      }}>
-                        <input
-                          type="checkbox"
-                          checked={selectedExtractedLayers.has(layerName)}
-                          onChange={() => {
-                            const newSelected = new Set(selectedExtractedLayers);
-                            if (newSelected.has(layerName)) {
-                              newSelected.delete(layerName);
-                            } else {
-                              newSelected.add(layerName);
-                            }
-                            setSelectedExtractedLayers(newSelected);
-                          }}
-                          style={{
-                            width: 14,
-                            height: 14,
-                            cursor: 'pointer',
-                            flexShrink: 0
-                          }}
-                        />
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {layerName}
-                        </span>
-                      </label>
+                    Step 1: Select Card Type
+                  </label>
+                  <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                    {(['wp', 'back', 'front-base', 'front-parallel'] as const).map(type => (
+                      <button
+                        key={type}
+                        onClick={() => {
+                          setCurrentCardType(type);
+                          
+                          if (type === 'front-parallel') {
+                            // For front-parallel, auto-select spot layer
+                            const spotLayers = getSpotLayers();
+                            const autoSelectedSpot = spotLayers.length === 1 ? spotLayers[0] : '';
+                            setCurrentConfig({ 
+                              chrome: false,
+                              type,
+                              spot: autoSelectedSpot,
+                              layer: autoSelectedSpot // Set layer to spot for front-parallel
+                            });
+                          } else {
+                            // For other types, auto-select layer
+                            const layersForType = getLayersByType(type);
+                            const autoSelectedLayer = layersForType.length === 1 ? layersForType[0] : '';
+                            setCurrentConfig({ 
+                              chrome: false,
+                              type,
+                              layer: autoSelectedLayer
+                            });
+                          }
+                        }}
+                        style={{
+                          padding: '8px 16px',
+                          background: currentCardType === type ? '#3b82f6' : 'rgba(255, 255, 255, 0.1)',
+                          border: '1px solid rgba(255, 255, 255, 0.2)',
+                          borderRadius: 8,
+                          color: '#f8f8f8',
+                          fontSize: 14,
+                          cursor: 'pointer',
+                          transition: 'all 0.2s'
+                        }}
+                      >
+                        {type.replace('-', ' ').toUpperCase()}
+                      </button>
                     ))}
                   </div>
-                ) : (
-                  <div style={{
-                    fontSize: 14,
-                    color: '#9ca3af',
-                    fontStyle: 'italic'
-                  }}>
-                    No extracted layers available
+                </div>
+
+                {/* Dynamic Configuration based on Card Type */}
+                {currentCardType && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    {/* Layer Selection */}
+                    <div>
+                      <label style={{
+                        display: 'block',
+                        fontSize: 14,
+                        fontWeight: 600,
+                        color: '#f8f8f8',
+                        marginBottom: 8
+                      }}>
+                        {currentCardType === 'front-parallel' ? 'Step 2: Select Spot Layer' : 'Step 2: Select Layer'}
+                        {(() => {
+                          const layersForType = currentCardType === 'front-parallel' ? getSpotLayers() : getLayersByType(currentCardType);
+                          return layersForType.length === 1 ? (
+                            <span style={{ 
+                              fontSize: 12, 
+                              color: '#10b981', 
+                              fontWeight: 400,
+                              marginLeft: 8 
+                            }}>
+                              (auto-selected)
+                            </span>
+                          ) : null;
+                        })()}
+                      </label>
+                      <select
+                        value={currentCardType === 'front-parallel' ? (currentConfig.spot || '') : (currentConfig.layer || '')}
+                        onChange={(e) => {
+                          if (currentCardType === 'front-parallel') {
+                            setCurrentConfig(prev => ({ ...prev, spot: e.target.value, layer: e.target.value }));
+                          } else {
+                            setCurrentConfig(prev => ({ ...prev, layer: e.target.value }));
+                          }
+                        }}
+                        style={{
+                          width: '100%',
+                          maxWidth: 300,
+                          padding: '8px 12px',
+                          background: 'rgba(255, 255, 255, 0.08)',
+                          border: '1px solid rgba(255, 255, 255, 0.2)',
+                          borderRadius: 8,
+                          color: '#f8f8f8',
+                          fontSize: 14
+                        }}
+                      >
+                        <option value="" style={{ background: '#1f2937' }}>
+                          {currentCardType === 'front-parallel' ? 'Select spot layer...' : 'Select layer...'}
+                        </option>
+                        {(currentCardType === 'front-parallel' ? getSpotLayers() : getLayersByType(currentCardType)).map(layer => (
+                          <option key={layer} value={layer} style={{ background: '#1f2937' }}>
+                            {layer}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Step 3: Color Selection (front-parallel + spot selected) */}
+                    {currentCardType === 'front-parallel' && currentConfig.spot && (
+                      <div>
+                        <label style={{
+                          display: 'block',
+                          fontSize: 14,
+                          fontWeight: 600,
+                          color: '#f8f8f8',
+                          marginBottom: 8
+                        }}>
+                          Step 3: Select Color
+                        </label>
+                        <select
+                          value={currentConfig.color ? `${currentConfig.color.id}-${currentConfig.color.name}` : ''}
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              const [id, name] = e.target.value.split('-');
+                              setCurrentConfig(prev => ({ 
+                                ...prev, 
+                                color: { id: parseInt(id), name } 
+                              }));
+                            } else {
+                              setCurrentConfig(prev => ({ ...prev, color: undefined }));
+                            }
+                          }}
+                          style={{
+                            width: '100%',
+                            maxWidth: 300,
+                            padding: '8px 12px',
+                            background: 'rgba(255, 255, 255, 0.08)',
+                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                            borderRadius: 8,
+                            color: '#f8f8f8',
+                            fontSize: 14
+                          }}
+                        >
+                          <option value="" style={{ background: '#1f2937' }}>Select color...</option>
+                          {colorVariants.map((colorLayer: any, index: number) => (
+                            <option 
+                              key={index} 
+                              value={`${colorLayer.id}-${colorLayer.name}`} 
+                              style={{ background: '#1f2937' }}
+                            >
+                              {colorLayer.name || `Color ${index + 1}`}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {/* Step 4: VFX Texture Selection (front-parallel + color selected + wp_inv layers exist) */}
+                    {currentCardType === 'front-parallel' && currentConfig.color && getWpInvLayers().length > 0 && (
+                      <div>
+                        <label style={{
+                          display: 'block',
+                          fontSize: 14,
+                          fontWeight: 600,
+                          color: '#f8f8f8',
+                          marginBottom: 8
+                        }}>
+                          Step 4: Select VFX Texture
+                          {getWpInvLayers().length === 1 && (
+                            <span style={{ 
+                              fontSize: 12, 
+                              color: '#9ca3af', 
+                              fontWeight: 400,
+                              marginLeft: 8 
+                            }}>
+                              (using {getWpInvLayers()[0]})
+                            </span>
+                          )}
+                        </label>
+                        <select
+                          value={currentConfig.vfx || ''}
+                          onChange={(e) => setCurrentConfig(prev => ({ ...prev, vfx: e.target.value }))}
+                          style={{
+                            width: '100%',
+                            maxWidth: 300,
+                            padding: '8px 12px',
+                            background: 'rgba(255, 255, 255, 0.08)',
+                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                            borderRadius: 8,
+                            color: '#f8f8f8',
+                            fontSize: 14
+                          }}
+                        >
+                          <option value="" style={{ background: '#1f2937' }}>Select VFX texture...</option>
+                          {getVfxTextures().map(texture => (
+                            <option key={texture} value={texture} style={{ background: '#1f2937' }}>
+                              {texture}
+                            </option>
+                          ))}
+                        </select>
+                        
+                        {/* WP_INV Layer Selection - Only show when multiple wp_inv layers exist */}
+                        {currentConfig.vfx && getWpInvLayers().length > 1 && (
+                          <div style={{ marginTop: 12 }}>
+                            <label style={{
+                              display: 'block',
+                              fontSize: 14,
+                              fontWeight: 600,
+                              color: '#f8f8f8',
+                              marginBottom: 8
+                            }}>
+                              Step 5: Select WP_INV Layer
+                            </label>
+                            <select
+                              value={currentConfig.layer || ''}
+                              onChange={(e) => setCurrentConfig(prev => ({ ...prev, layer: e.target.value }))}
+                              style={{
+                                width: '100%',
+                                maxWidth: 300,
+                                padding: '8px 12px',
+                                background: 'rgba(255, 255, 255, 0.08)',
+                                border: '1px solid rgba(255, 255, 255, 0.2)',
+                                borderRadius: 8,
+                                color: '#f8f8f8',
+                                fontSize: 14
+                              }}
+                            >
+                              <option value="" style={{ background: '#1f2937' }}>Select wp_inv layer...</option>
+                              {getWpInvLayers().map(wpInvLayer => (
+                                <option key={wpInvLayer} value={wpInvLayer} style={{ background: '#1f2937' }}>
+                                  {wpInvLayer}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Chrome Toggle - Only for front cards with wp_inv layers */}
+                    {(currentCardType === 'front-base' || currentCardType === 'front-parallel') && getWpInvLayers().length > 0 && (
+                      <div>
+                        <label style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          fontSize: 14,
+                          fontWeight: 600,
+                          color: '#f8f8f8',
+                          cursor: 'pointer'
+                        }}>
+                          <input
+                            type="checkbox"
+                            checked={currentConfig.chrome || false}
+                            onChange={(e) => setCurrentConfig(prev => ({ ...prev, chrome: e.target.checked }))}
+                            style={{ width: 16, height: 16 }}
+                          />
+                          Chrome Effect
+                        </label>
+                      </div>
+                    )}
+
+                    {/* Add Asset Button */}
+                    <div>
+                      {(() => {
+                        // Validation logic for different card types
+                        let canAdd = false;
+                        let validationMessage = '';
+
+                        if (!currentCardType) {
+                          validationMessage = 'Select card type';
+                        } else if (!currentConfig.layer) {
+                          validationMessage = 'Select layer';
+                        } else {
+                          switch (currentCardType) {
+                            case 'wp':
+                            case 'back':
+                            case 'front-base':
+                              canAdd = true;
+                              break;
+                            case 'front-parallel':
+                              if (!currentConfig.spot) {
+                                validationMessage = 'Select spot layer';
+                              } else if (!currentConfig.color) {
+                                validationMessage = 'Select color';
+                              } else if (getWpInvLayers().length > 0) {
+                                if (!currentConfig.vfx) {
+                                  validationMessage = 'Select VFX texture';
+                                } else if (getWpInvLayers().length === 1) {
+                                  canAdd = true; // Auto-select single wp_inv layer
+                                } else if (getWpInvLayers().length > 1 && !currentConfig.layer) {
+                                  validationMessage = 'Select wp_inv layer';
+                                } else {
+                                  canAdd = true;
+                                }
+                              } else {
+                                canAdd = true; // No wp_inv layers required
+                              }
+                              break;
+                          }
+                        }
+
+                        return (
+                          <>
+                            <button
+                              onClick={addAsset}
+                              disabled={!canAdd}
+                              style={{
+                                padding: '12px 24px',
+                                background: !canAdd ? 'rgba(156, 163, 175, 0.3)' : 'linear-gradient(135deg, #10b981, #059669)',
+                                border: 'none',
+                                borderRadius: 8,
+                                color: 'white',
+                                fontSize: 14,
+                                fontWeight: 600,
+                                cursor: !canAdd ? 'not-allowed' : 'pointer',
+                                transition: 'all 0.2s',
+                                opacity: !canAdd ? 0.6 : 1
+                              }}
+                            >
+                              {editingAssetId ? 'Update Asset' : 'Add Asset'}
+                            </button>
+                            {editingAssetId && (
+                              <button
+                                onClick={resetCurrentConfig}
+                                style={{
+                                  padding: '12px 24px',
+                                  background: 'rgba(156, 163, 175, 0.3)',
+                                  border: 'none',
+                                  borderRadius: 8,
+                                  color: 'white',
+                                  fontSize: 14,
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                  marginLeft: 8
+                                }}
+                              >
+                                Cancel
+                              </button>
+                            )}
+                            {validationMessage && (
+                              <div style={{
+                                fontSize: 12,
+                                color: '#9ca3af',
+                                marginTop: 8
+                              }}>
+                                {validationMessage}
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
                   </div>
                 )}
               </div>
 
-              {/* Color Variants Selection */}
-              {hasSpotLayer && (
-                <div style={{ maxWidth: 200 }}>
-                  <label style={{
-                    display: 'block',
-                    fontSize: 16,
-                    fontWeight: 600,
-                    color: '#f8f8f8',
-                    marginBottom: 12
-                  }}>
-                    Select Color Variants
-                  </label>
-                  {colorVariants.length > 0 ? (
-                    <div style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 6,
-                      maxWidth: 200
-                    }}>
-                      {colorVariants.map((layer: any, index: number) => {
-                        const layerId = `${layer.id}-${layer.name}`;
-                        const isSelected = selectedLayers.has(layerId);
-                        
-                        return (
-                          <label key={index} style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 8,
-                            cursor: 'pointer',
-                            fontSize: 13,
-                            color: '#f8f8f8',
-                            padding: '8px 12px',
-                            background: 'rgba(255, 255, 255, 0.05)',
-                            borderRadius: 6,
-                            border: '1px solid rgba(255, 255, 255, 0.1)',
-                            transition: 'background-color 0.2s'
-                          }}>
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => {
-                                const newSelected = new Set(selectedLayers);
-                                if (newSelected.has(layerId)) {
-                                  newSelected.delete(layerId);
-                                } else {
-                                  newSelected.add(layerId);
-                                }
-                                setSelectedLayers(newSelected);
-                              }}
-                              style={{
-                                width: 14,
-                                height: 14,
-                                cursor: 'pointer',
-                                flexShrink: 0
-                              }}
-                            />
-                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {layer.name || `Layer ${layer.id || index + 1}`}
-                            </span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div style={{
-                      fontSize: 14,
-                      color: '#9ca3af',
-                      fontStyle: 'italic'
-                    }}>
-                      No color variants available
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Create Assets Button */}
-              <div style={{ 
-                display: 'flex', 
-                flexDirection: 'column', 
-                alignItems: 'flex-start',
-                justifyContent: 'flex-start',
-                marginTop: 32
+              {/* Configured Assets List */}
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.05)',
+                borderRadius: 12,
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                padding: 20
               }}>
-                <button
-                  onClick={createAssets}
-                  disabled={creatingAssets || !canCreateAssets}
-                  style={{
-                    padding: '16px 32px',
-                    background: creatingAssets 
-                      ? 'rgba(156, 163, 175, 0.5)' 
-                      : !canCreateAssets
-                      ? 'rgba(156, 163, 175, 0.3)'
-                      : 'linear-gradient(135deg, #10b981, #059669)',
-                    border: 'none',
-                    borderRadius: 12,
-                    color: 'white',
-                    fontSize: 16,
-                    fontWeight: 600,
-                    cursor: creatingAssets || !canCreateAssets ? 'not-allowed' : 'pointer',
-                    transition: 'all 0.2s',
-                    boxShadow: creatingAssets || !canCreateAssets
-                      ? 'none' 
-                      : '0 8px 24px rgba(16, 185, 129, 0.3)',
-                    minHeight: 60,
-                    opacity: !canCreateAssets ? 0.6 : 1
-                  }}
-                >
-                  {creatingAssets ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div style={{
-                        width: 16,
-                        height: 16,
-                        border: '2px solid rgba(255, 255, 255, 0.3)',
-                        borderTop: '2px solid white',
-                        borderRadius: '50%',
-                        animation: 'spin 1s linear infinite'
-                      }} />
-                      Creating...
-                    </div>
-                  ) : (
-                    '🎨 Create Assets'
-                  )}
-                </button>
-                <div style={{
-                  fontSize: 12,
-                  color: '#9ca3af',
-                  marginTop: 8
+                <h3 style={{
+                  fontSize: 18,
+                  fontWeight: 600,
+                  color: '#f8f8f8',
+                  marginBottom: 16,
+                  margin: 0
                 }}>
-                  {!canCreateAssets ? (
-                    hasSpotLayer ? 
-                      `Select ${selectedLayers.size} colors and ${selectedExtractedLayers.size} layers` :
-                      `Select ${selectedExtractedLayers.size} layers`
-                  ) : (
-                    `${hasSpotLayer ? `${selectedLayers.size} colors • ` : ''}${selectedExtractedLayers.size} layers`
-                  )}
-                </div>
+                  📋 Assets to Generate ({configuredAssets.length})
+                </h3>
+                
+                {configuredAssets.length > 0 ? (
+                  <div style={{
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    borderRadius: 8,
+                    overflow: 'hidden',
+                    marginBottom: 20
+                  }}>
+                                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ background: 'rgba(255, 255, 255, 0.1)' }}>
+                          <th style={{ padding: 12, textAlign: 'left', color: '#f8f8f8', fontSize: 14 }}>Name</th>
+                          <th style={{ padding: 12, textAlign: 'left', color: '#f8f8f8', fontSize: 14 }}>Type</th>
+                          <th style={{ padding: 12, textAlign: 'left', color: '#f8f8f8', fontSize: 14 }}>Layer</th>
+                          <th style={{ padding: 12, textAlign: 'left', color: '#f8f8f8', fontSize: 14 }}>Spot</th>
+                          <th style={{ padding: 12, textAlign: 'left', color: '#f8f8f8', fontSize: 14 }}>Color</th>
+                          <th style={{ padding: 12, textAlign: 'left', color: '#f8f8f8', fontSize: 14 }}>VFX</th>
+                          <th style={{ padding: 12, textAlign: 'left', color: '#f8f8f8', fontSize: 14 }}>Chrome</th>
+                          <th style={{ padding: 12, textAlign: 'left', color: '#f8f8f8', fontSize: 14 }}>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {configuredAssets.map((asset, index) => (
+                          <tr key={asset.id} style={{ 
+                            borderBottom: index < configuredAssets.length - 1 ? '1px solid rgba(255, 255, 255, 0.1)' : 'none' 
+                          }}>
+                            <td style={{ padding: 12, color: '#f8f8f8', fontSize: 14 }}>{asset.name}</td>
+                            <td style={{ padding: 12, color: '#9ca3af', fontSize: 14 }}>{asset.type.replace('-', ' ').toUpperCase()}</td>
+                            <td style={{ padding: 12, color: '#9ca3af', fontSize: 14 }}>{asset.layer}</td>
+                            <td style={{ padding: 12, color: '#9ca3af', fontSize: 14 }}>{asset.spot || '-'}</td>
+                            <td style={{ padding: 12, color: '#9ca3af', fontSize: 14 }}>{asset.color?.name || '-'}</td>
+                            <td style={{ padding: 12, color: '#9ca3af', fontSize: 14 }}>{asset.vfx || '-'}</td>
+                            <td style={{ padding: 12, color: '#9ca3af', fontSize: 14 }}>
+                              {asset.type === 'wp' || asset.type === 'back' || getWpInvLayers().length === 0 ? 'N/A' : (asset.chrome ? 'ON' : 'OFF')}
+                            </td>
+                            <td style={{ padding: 12 }}>
+                              <button
+                                onClick={() => editAsset(asset)}
+                                style={{
+                                  padding: '4px 8px',
+                                  background: 'rgba(59, 130, 246, 0.2)',
+                                  border: '1px solid rgba(59, 130, 246, 0.3)',
+                                  borderRadius: 4,
+                                  color: '#60a5fa',
+                                  fontSize: 12,
+                                  cursor: 'pointer',
+                                  marginRight: 8
+                                }}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => removeAsset(asset.id)}
+                                style={{
+                                  padding: '4px 8px',
+                                  background: 'rgba(239, 68, 68, 0.2)',
+                                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                                  borderRadius: 4,
+                                  color: '#f87171',
+                                  fontSize: 12,
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                Remove
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div style={{
+                    textAlign: 'center',
+                    padding: 24,
+                    color: '#9ca3af',
+                    fontSize: 14,
+                    fontStyle: 'italic'
+                  }}>
+                    No assets configured yet. Use the form above to add assets.
+                  </div>
+                )}
+
+                {/* Generate All Assets Button */}
+                {configuredAssets.length > 0 && (
+                  <button
+                    onClick={createAssets}
+                    disabled={creatingAssets || !canCreateAssets}
+                    style={{
+                      width: '100%',
+                      padding: '16px 32px',
+                      background: creatingAssets 
+                        ? 'rgba(156, 163, 175, 0.5)' 
+                        : 'linear-gradient(135deg, #10b981, #059669)',
+                      border: 'none',
+                      borderRadius: 12,
+                      color: 'white',
+                      fontSize: 16,
+                      fontWeight: 600,
+                      cursor: creatingAssets ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.2s',
+                      boxShadow: creatingAssets ? 'none' : '0 8px 24px rgba(16, 185, 129, 0.3)'
+                    }}
+                  >
+                    {creatingAssets ? (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                        <div style={{
+                          width: 16,
+                          height: 16,
+                          border: '2px solid rgba(255, 255, 255, 0.3)',
+                          borderTop: '2px solid white',
+                          borderRadius: '50%',
+                          animation: 'spin 1s linear infinite'
+                        }} />
+                        Creating Assets...
+                      </div>
+                    ) : (
+                      `🎨 Generate All Assets (${configuredAssets.length})`
+                    )}
+                  </button>
+                )}
               </div>
-            </div>
+            </>
           )}
         </div>
       </div>
