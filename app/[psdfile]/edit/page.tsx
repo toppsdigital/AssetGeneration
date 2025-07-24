@@ -82,12 +82,22 @@ export default function EditPage() {
       setLoading(true);
       setStatus('Loading layer data from JSON...');
       
-      // Direct fetch from the provided JSON URL
-      fetch(jsonUrl)
+      // Use proxy to fetch JSON data to avoid CORS errors
+      fetch('/api/s3-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_method: 'get',
+          filename: jsonUrl,
+          download: true,
+          direct_url: true
+        }),
+      })
         .then(async res => {
-          console.log('[EditPage] Direct fetch response:', res);
+          console.log('[EditPage] Proxy fetch response:', res);
           if (!res.ok) {
-            throw new Error(`Failed to fetch JSON data: ${res.status} ${res.statusText}`);
+            const errorData = await res.json().catch(() => ({}));
+            throw new Error(`Failed to fetch JSON data via proxy: ${res.status} ${res.statusText} - ${errorData.error || 'Unknown error'}`);
           }
           return res.json();
         })
