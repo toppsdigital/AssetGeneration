@@ -946,20 +946,25 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                 
                 {configuredAssets.length > 0 ? (
                   <div style={{
-                    background: 'rgba(255, 255, 255, 0.03)',
-                    borderRadius: 8,
+                    background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(147, 51, 234, 0.05))',
+                    borderRadius: 12,
                     overflow: 'hidden',
-                    marginBottom: 20
+                    marginBottom: 20,
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
                   }}>
-                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
                       <thead>
-                        <tr style={{ background: 'rgba(255, 255, 255, 0.1)' }}>
-                          <th style={{ padding: 8, textAlign: 'left', color: '#f8f8f8', fontSize: 12 }}>Type</th>
-                          <th style={{ padding: 8, textAlign: 'left', color: '#f8f8f8', fontSize: 12 }}>Layers</th>
-                          <th style={{ padding: 8, textAlign: 'left', color: '#f8f8f8', fontSize: 12 }}>Color</th>
-                          <th style={{ padding: 8, textAlign: 'left', color: '#f8f8f8', fontSize: 12 }}>VFX</th>
-                          <th style={{ padding: 8, textAlign: 'left', color: '#f8f8f8', fontSize: 12 }}>Chrome</th>
-                          <th style={{ padding: 8, textAlign: 'center', color: '#f8f8f8', fontSize: 12 }}>Actions</th>
+                        <tr style={{ 
+                          background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05))',
+                          borderBottom: '2px solid rgba(255, 255, 255, 0.1)'
+                        }}>
+                          <th style={{ padding: '10px 12px', textAlign: 'left', color: '#f8f8f8', fontSize: 12, fontWeight: 600, letterSpacing: '0.05em' }}>TYPE</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'left', color: '#f8f8f8', fontSize: 12, fontWeight: 600, letterSpacing: '0.05em' }}>LAYERS</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'left', color: '#f8f8f8', fontSize: 12, fontWeight: 600, letterSpacing: '0.05em' }}>COLOR</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'left', color: '#f8f8f8', fontSize: 12, fontWeight: 600, letterSpacing: '0.05em' }}>VFX</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'center', color: '#f8f8f8', fontSize: 12, fontWeight: 600, letterSpacing: '0.05em' }}>CHROME</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'center', color: '#f8f8f8', fontSize: 12, fontWeight: 600, letterSpacing: '0.05em' }}>ACTIONS</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -971,61 +976,173 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                           
                           return (
                             <tr key={asset.id} style={{ 
-                              borderBottom: index < configuredAssets.length - 1 ? '1px solid rgba(255, 255, 255, 0.1)' : 'none' 
-                            }}>
-                              <td style={{ padding: 8, color: '#9ca3af', fontSize: 12 }}>
-                                {asset.type === 'front-base' ? 'BASE' : asset.type === 'front-parallel' ? 'PARALLEL' : asset.type.toUpperCase()}
+                              borderBottom: index < configuredAssets.length - 1 ? '1px solid rgba(255, 255, 255, 0.05)' : 'none',
+                              transition: 'background 0.2s',
+                              background: index % 2 === 0 ? 'transparent' : 'rgba(255, 255, 255, 0.02)'
+                            }}
+                            onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'}
+                            onMouseOut={(e) => e.currentTarget.style.background = index % 2 === 0 ? 'transparent' : 'rgba(255, 255, 255, 0.02)'}
+                            >
+                              <td style={{ 
+                                padding: '10px 12px', 
+                                color: '#f8f8f8', 
+                                fontSize: 12,
+                                fontWeight: 500
+                              }}>
+                                <span style={{
+                                  background: asset.type === 'wp' ? 'rgba(34, 197, 94, 0.2)' : 
+                                             asset.type === 'back' ? 'rgba(168, 85, 247, 0.2)' :
+                                             asset.type === 'front-base' ? 'rgba(59, 130, 246, 0.2)' :
+                                             'rgba(236, 72, 153, 0.2)',
+                                  color: asset.type === 'wp' ? '#86efac' : 
+                                         asset.type === 'back' ? '#c084fc' :
+                                         asset.type === 'front-base' ? '#93c5fd' :
+                                         '#f9a8d4',
+                                  padding: '3px 8px',
+                                  borderRadius: 4,
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  letterSpacing: '0.02em'
+                                }}>
+                                  {asset.type === 'front-base' ? 'BASE' : asset.type === 'front-parallel' ? 'PARALLEL' : asset.type.toUpperCase()}
+                                </span>
                               </td>
-                              <td style={{ padding: 8, color: '#9ca3af', fontSize: 12 }}>
-                                {layersDisplay}
+                              <td style={{ padding: '10px 12px', color: '#e5e7eb', fontSize: 12 }}>
+                                <code style={{
+                                  background: 'rgba(255, 255, 255, 0.05)',
+                                  padding: '2px 6px',
+                                  borderRadius: 4,
+                                  fontSize: 12,
+                                  fontFamily: 'monospace'
+                                }}>
+                                  {layersDisplay}
+                                </code>
                               </td>
-                              <td style={{ padding: 8, color: '#9ca3af', fontSize: 12 }}>
-                                {asset.color?.name || '-'}
+                              <td style={{ padding: '10px 12px', color: '#e5e7eb', fontSize: 12 }}>
+                                {asset.color?.name ? (
+                                  <span style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 4
+                                  }}>
+                                    <span style={{
+                                      width: 10,
+                                      height: 10,
+                                      borderRadius: '50%',
+                                      background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
+                                      display: 'inline-block'
+                                    }} />
+                                    {asset.color.name}
+                                  </span>
+                                ) : (
+                                  <span style={{ color: '#6b7280' }}>—</span>
+                                )}
                               </td>
-                              <td style={{ padding: 8, color: '#9ca3af', fontSize: 12 }}>
-                                {asset.vfx || '-'}
-                              </td>
-                              <td style={{ padding: 8, color: '#9ca3af', fontSize: 12 }}>
-                                {asset.type === 'wp' || asset.type === 'back' || getWpInvLayers().length === 0 ? 'N/A' : (asset.chrome ? 'ON' : 'OFF')}
-                              </td>
-                              <td style={{ padding: 8, textAlign: 'center' }}>
-                                <button
-                                  onClick={() => editAsset(asset)}
-                                  style={{
-                                    padding: '4px 6px',
-                                    background: 'rgba(59, 130, 246, 0.2)',
-                                    border: '1px solid rgba(59, 130, 246, 0.3)',
+                              <td style={{ padding: '10px 12px', color: '#e5e7eb', fontSize: 12 }}>
+                                {asset.vfx ? (
+                                  <span style={{
+                                    background: 'rgba(147, 51, 234, 0.1)',
+                                    color: '#c084fc',
+                                    padding: '2px 6px',
                                     borderRadius: 4,
-                                    color: '#60a5fa',
-                                    fontSize: 12,
-                                    cursor: 'pointer',
-                                    marginRight: 4,
+                                    fontSize: 11
+                                  }}>
+                                    {asset.vfx}
+                                  </span>
+                                ) : (
+                                  <span style={{ color: '#6b7280' }}>—</span>
+                                )}
+                              </td>
+                              <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                                {asset.type === 'wp' || asset.type === 'back' || getWpInvLayers().length === 0 ? (
+                                  <span style={{ color: '#6b7280', fontSize: 11 }}>N/A</span>
+                                ) : (
+                                  <span style={{
                                     display: 'inline-flex',
                                     alignItems: 'center',
-                                    justifyContent: 'center'
-                                  }}
-                                  title="Edit asset"
-                                >
-                                  ✏️
-                                </button>
-                                <button
-                                  onClick={() => removeAsset(asset.id)}
-                                  style={{
-                                    padding: '4px 6px',
-                                    background: 'rgba(239, 68, 68, 0.2)',
-                                    border: '1px solid rgba(239, 68, 68, 0.3)',
-                                    borderRadius: 4,
-                                    color: '#f87171',
-                                    fontSize: 12,
-                                    cursor: 'pointer',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center'
-                                  }}
-                                  title="Remove asset"
-                                >
-                                  🗑️
-                                </button>
+                                    gap: 3,
+                                    background: asset.chrome ? 'rgba(34, 197, 94, 0.2)' : 'rgba(156, 163, 175, 0.2)',
+                                    color: asset.chrome ? '#86efac' : '#9ca3af',
+                                    padding: '3px 8px',
+                                    borderRadius: 12,
+                                    fontSize: 10,
+                                    fontWeight: 600
+                                  }}>
+                                    <span style={{
+                                      width: 5,
+                                      height: 5,
+                                      borderRadius: '50%',
+                                      background: asset.chrome ? '#86efac' : '#6b7280'
+                                    }} />
+                                    {asset.chrome ? 'ON' : 'OFF'}
+                                  </span>
+                                )}
+                              </td>
+                              <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                                <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                                  <button
+                                    onClick={() => editAsset(asset)}
+                                    style={{
+                                      width: 26,
+                                      height: 26,
+                                      background: 'rgba(59, 130, 246, 0.1)',
+                                      border: '1px solid rgba(59, 130, 246, 0.2)',
+                                      borderRadius: 6,
+                                      color: '#60a5fa',
+                                      fontSize: 12,
+                                      cursor: 'pointer',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      transition: 'all 0.2s',
+                                      position: 'relative',
+                                      overflow: 'hidden'
+                                    }}
+                                    onMouseOver={(e) => {
+                                      e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)';
+                                      e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.4)';
+                                      e.currentTarget.style.transform = 'scale(1.05)';
+                                    }}
+                                    onMouseOut={(e) => {
+                                      e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)';
+                                      e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.2)';
+                                      e.currentTarget.style.transform = 'scale(1)';
+                                    }}
+                                    title="Edit asset"
+                                  >
+                                    ✏️
+                                  </button>
+                                  <button
+                                    onClick={() => removeAsset(asset.id)}
+                                    style={{
+                                      width: 26,
+                                      height: 26,
+                                      background: 'rgba(239, 68, 68, 0.1)',
+                                      border: '1px solid rgba(239, 68, 68, 0.2)',
+                                      borderRadius: 6,
+                                      color: '#ef4444',
+                                      fontSize: 12,
+                                      cursor: 'pointer',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      transition: 'all 0.2s'
+                                    }}
+                                    onMouseOver={(e) => {
+                                      e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
+                                      e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+                                      e.currentTarget.style.transform = 'scale(1.05)';
+                                    }}
+                                    onMouseOut={(e) => {
+                                      e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+                                      e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.2)';
+                                      e.currentTarget.style.transform = 'scale(1)';
+                                    }}
+                                    title="Remove asset"
+                                  >
+                                    🗑️
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           );
@@ -1036,12 +1153,32 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                 ) : (
                   <div style={{
                     textAlign: 'center',
-                    padding: 24,
+                    padding: '48px 24px',
                     color: '#9ca3af',
                     fontSize: 14,
-                    fontStyle: 'italic'
+                    background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.03), rgba(147, 51, 234, 0.03))',
+                    borderRadius: 12,
+                    border: '1px dashed rgba(255, 255, 255, 0.1)'
                   }}>
-                    No assets configured yet. Use the form above to add assets.
+                    <div style={{
+                      width: 48,
+                      height: 48,
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      margin: '0 auto 16px',
+                      fontSize: 24
+                    }}>
+                      📋
+                    </div>
+                    <div style={{ fontStyle: 'italic', marginBottom: 8 }}>
+                      No assets configured yet
+                    </div>
+                    <div style={{ color: '#6b7280', fontSize: 13 }}>
+                      Use the form on the left to add assets
+                    </div>
                   </div>
                 )}
 
