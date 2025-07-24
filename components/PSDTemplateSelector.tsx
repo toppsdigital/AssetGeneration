@@ -448,19 +448,18 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
         {/* Configuration Sections */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           {/* PSD File Selection */}
-          <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
             <label style={{
-              display: 'block',
               fontSize: 16,
               fontWeight: 600,
               color: '#f8f8f8',
-              marginBottom: 12
+              minWidth: 120
             }}>
-              Select PSD
+              Select PSD:
             </label>
             {loadingPhysicalFiles ? (
               <div style={{
-                width: '100%',
+                flex: 1,
                 maxWidth: 400,
                 padding: '12px 16px',
                 background: 'rgba(255, 255, 255, 0.08)',
@@ -488,7 +487,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                 onChange={(e) => setSelectedPhysicalFile(e.target.value)}
                 disabled={loadingPhysicalFiles}
                 style={{
-                  width: '100%',
+                  flex: 1,
                   maxWidth: 400,
                   padding: '12px 16px',
                   background: 'rgba(255, 255, 255, 0.08)',
@@ -552,14 +551,15 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
 
           {/* New Asset Builder UI */}
           {selectedPhysicalFile && jsonData && !loadingJsonData && (
-            <>
-              {/* Asset Configuration Panel */}
+            <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+              {/* Left Side: Asset Configuration Panel */}
               <div style={{
+                flex: 1,
+                minWidth: 400,
                 background: 'rgba(255, 255, 255, 0.05)',
                 borderRadius: 12,
                 border: '1px solid rgba(255, 255, 255, 0.1)',
-                padding: 20,
-                marginBottom: 20
+                padding: 20
               }}>
                 <h3 style={{
                   fontSize: 18,
@@ -568,7 +568,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                   marginBottom: 16,
                   margin: 0
                 }}>
-                  Asset Configuration
+                  Select Card Type
                 </h3>
                 
                 {/* Step 1: Card Type Selection */}
@@ -580,7 +580,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                     color: '#f8f8f8',
                     marginBottom: 8
                   }}>
-                    Step 1: Select Card Type
+                    Card Type:
                   </label>
                   <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                     {(['wp', 'back', 'front-base', 'front-parallel'] as const).map(type => (
@@ -772,7 +772,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                           }}
                         >
                           <option value="" style={{ background: '#1f2937' }}>Select VFX texture...</option>
-                          {getVfxTextures().map(texture => (
+                          {getVfxTextures().map((texture: string) => (
                             <option key={texture} value={texture} style={{ background: '#1f2937' }}>
                               {texture}
                             </option>
@@ -935,8 +935,10 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                 )}
               </div>
 
-              {/* Configured Assets List */}
+              {/* Right Side: Configured Assets List */}
               <div style={{
+                flex: 1,
+                minWidth: 500,
                 background: 'rgba(255, 255, 255, 0.05)',
                 borderRadius: 12,
                 border: '1px solid rgba(255, 255, 255, 0.1)',
@@ -949,7 +951,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                   marginBottom: 16,
                   margin: 0
                 }}>
-                  📋 Assets to Generate ({configuredAssets.length})
+                  Assets to Generate ({configuredAssets.length})
                 </h3>
                 
                 {configuredAssets.length > 0 ? (
@@ -959,66 +961,85 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                     overflow: 'hidden',
                     marginBottom: 20
                   }}>
-                                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                       <thead>
                         <tr style={{ background: 'rgba(255, 255, 255, 0.1)' }}>
-                          <th style={{ padding: 12, textAlign: 'left', color: '#f8f8f8', fontSize: 14 }}>Name</th>
-                          <th style={{ padding: 12, textAlign: 'left', color: '#f8f8f8', fontSize: 14 }}>Type</th>
-                          <th style={{ padding: 12, textAlign: 'left', color: '#f8f8f8', fontSize: 14 }}>Layer</th>
-                          <th style={{ padding: 12, textAlign: 'left', color: '#f8f8f8', fontSize: 14 }}>Spot</th>
-                          <th style={{ padding: 12, textAlign: 'left', color: '#f8f8f8', fontSize: 14 }}>Color</th>
-                          <th style={{ padding: 12, textAlign: 'left', color: '#f8f8f8', fontSize: 14 }}>VFX</th>
-                          <th style={{ padding: 12, textAlign: 'left', color: '#f8f8f8', fontSize: 14 }}>Chrome</th>
-                          <th style={{ padding: 12, textAlign: 'left', color: '#f8f8f8', fontSize: 14 }}>Actions</th>
+                          <th style={{ padding: 8, textAlign: 'left', color: '#f8f8f8', fontSize: 12 }}>Type</th>
+                          <th style={{ padding: 8, textAlign: 'left', color: '#f8f8f8', fontSize: 12 }}>Layers</th>
+                          <th style={{ padding: 8, textAlign: 'left', color: '#f8f8f8', fontSize: 12 }}>Color</th>
+                          <th style={{ padding: 8, textAlign: 'left', color: '#f8f8f8', fontSize: 12 }}>VFX</th>
+                          <th style={{ padding: 8, textAlign: 'left', color: '#f8f8f8', fontSize: 12 }}>Chrome</th>
+                          <th style={{ padding: 8, textAlign: 'center', color: '#f8f8f8', fontSize: 12 }}>Actions</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {configuredAssets.map((asset, index) => (
-                          <tr key={asset.id} style={{ 
-                            borderBottom: index < configuredAssets.length - 1 ? '1px solid rgba(255, 255, 255, 0.1)' : 'none' 
-                          }}>
-                            <td style={{ padding: 12, color: '#f8f8f8', fontSize: 14 }}>{asset.name}</td>
-                            <td style={{ padding: 12, color: '#9ca3af', fontSize: 14 }}>{asset.type.replace('-', ' ').toUpperCase()}</td>
-                            <td style={{ padding: 12, color: '#9ca3af', fontSize: 14 }}>{asset.layer}</td>
-                            <td style={{ padding: 12, color: '#9ca3af', fontSize: 14 }}>{asset.spot || '-'}</td>
-                            <td style={{ padding: 12, color: '#9ca3af', fontSize: 14 }}>{asset.color?.name || '-'}</td>
-                            <td style={{ padding: 12, color: '#9ca3af', fontSize: 14 }}>{asset.vfx || '-'}</td>
-                            <td style={{ padding: 12, color: '#9ca3af', fontSize: 14 }}>
-                              {asset.type === 'wp' || asset.type === 'back' || getWpInvLayers().length === 0 ? 'N/A' : (asset.chrome ? 'ON' : 'OFF')}
-                            </td>
-                            <td style={{ padding: 12 }}>
-                              <button
-                                onClick={() => editAsset(asset)}
-                                style={{
-                                  padding: '4px 8px',
-                                  background: 'rgba(59, 130, 246, 0.2)',
-                                  border: '1px solid rgba(59, 130, 246, 0.3)',
-                                  borderRadius: 4,
-                                  color: '#60a5fa',
-                                  fontSize: 12,
-                                  cursor: 'pointer',
-                                  marginRight: 8
-                                }}
-                              >
-                                Edit
-                              </button>
-                              <button
-                                onClick={() => removeAsset(asset.id)}
-                                style={{
-                                  padding: '4px 8px',
-                                  background: 'rgba(239, 68, 68, 0.2)',
-                                  border: '1px solid rgba(239, 68, 68, 0.3)',
-                                  borderRadius: 4,
-                                  color: '#f87171',
-                                  fontSize: 12,
-                                  cursor: 'pointer'
-                                }}
-                              >
-                                Remove
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
+                        {configuredAssets.map((asset, index) => {
+                          // Combine layers: spot + layer (or just layer if no spot)
+                          const layersDisplay = asset.spot && asset.spot !== asset.layer 
+                            ? `${asset.spot}, ${asset.layer}` 
+                            : asset.layer;
+                          
+                          return (
+                            <tr key={asset.id} style={{ 
+                              borderBottom: index < configuredAssets.length - 1 ? '1px solid rgba(255, 255, 255, 0.1)' : 'none' 
+                            }}>
+                              <td style={{ padding: 8, color: '#9ca3af', fontSize: 12 }}>
+                                {asset.type.replace('-', ' ').toUpperCase()}
+                              </td>
+                              <td style={{ padding: 8, color: '#9ca3af', fontSize: 12 }}>
+                                {layersDisplay}
+                              </td>
+                              <td style={{ padding: 8, color: '#9ca3af', fontSize: 12 }}>
+                                {asset.color?.name || '-'}
+                              </td>
+                              <td style={{ padding: 8, color: '#9ca3af', fontSize: 12 }}>
+                                {asset.vfx || '-'}
+                              </td>
+                              <td style={{ padding: 8, color: '#9ca3af', fontSize: 12 }}>
+                                {asset.type === 'wp' || asset.type === 'back' || getWpInvLayers().length === 0 ? 'N/A' : (asset.chrome ? 'ON' : 'OFF')}
+                              </td>
+                              <td style={{ padding: 8, textAlign: 'center' }}>
+                                <button
+                                  onClick={() => editAsset(asset)}
+                                  style={{
+                                    padding: '4px 6px',
+                                    background: 'rgba(59, 130, 246, 0.2)',
+                                    border: '1px solid rgba(59, 130, 246, 0.3)',
+                                    borderRadius: 4,
+                                    color: '#60a5fa',
+                                    fontSize: 12,
+                                    cursor: 'pointer',
+                                    marginRight: 4,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                  }}
+                                  title="Edit asset"
+                                >
+                                  ✏️
+                                </button>
+                                <button
+                                  onClick={() => removeAsset(asset.id)}
+                                  style={{
+                                    padding: '4px 6px',
+                                    background: 'rgba(239, 68, 68, 0.2)',
+                                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                                    borderRadius: 4,
+                                    color: '#f87171',
+                                    fontSize: 12,
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                  }}
+                                  title="Remove asset"
+                                >
+                                  🗑️
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -1073,12 +1094,10 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                   </button>
                 )}
               </div>
-            </>
+            </div>
           )}
         </div>
       </div>
-
-
     </>
   );
 }; 
