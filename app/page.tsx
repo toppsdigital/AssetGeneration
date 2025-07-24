@@ -61,13 +61,22 @@ export default function Home() {
       ? template.split('/').pop()?.replace(/\.json$/i, '') || ''
       : template.display_name || template.file_name?.replace(/\.psd$/i, '') || '';
     
+    // Get the JSON URL from the template data
+    const jsonUrl = typeof template === 'string' 
+      ? template // For backward compatibility with old string format
+      : template.json_url;
+    
     reset();
     
     // Check if the edit page exists before navigating
     try {
       const res = await fetch(`/${psdfile}/edit`, { method: 'HEAD' });
       if (res.ok) {
-        router.push(`/${psdfile}/edit`);
+        // Pass the JSON URL as a query parameter
+        const editUrl = jsonUrl 
+          ? `/${psdfile}/edit?jsonUrl=${encodeURIComponent(jsonUrl)}`
+          : `/${psdfile}/edit`;
+        router.push(editUrl);
       } else {
         alert('Edit page not found for this template.');
       }
