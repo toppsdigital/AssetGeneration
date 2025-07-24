@@ -735,7 +735,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                             fontWeight: 600,
                             color: '#f8f8f8'
                           }}>
-                            Step 2: Select Spot Layer & Color
+                            Select Spot Layer & Color
                           </label>
                           <button
                             onClick={() => {
@@ -924,7 +924,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                           color: '#f8f8f8',
                           marginBottom: 8
                         }}>
-                          Step 2: Select Layer
+                          Select Layer
                           {(() => {
                             const layersForType = getLayersByType(currentCardType);
                             return layersForType.length === 1 ? (
@@ -974,7 +974,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                     color: '#f8f8f8',
                           marginBottom: 8
                         }}>
-                          Step 3: Select VFX Texture
+                          Select VFX Texture
                           <span style={{ 
                             fontSize: 12, 
                             color: '#9ca3af', 
@@ -1025,7 +1025,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                               color: '#f8f8f8',
                               marginBottom: 8
                             }}>
-                              Step 4: Select WP_INV Layer
+                              Select WP_INV Layer
                             </label>
                             <select
                               value={currentConfig.layer || ''}
