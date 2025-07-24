@@ -566,8 +566,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                   fontSize: 18,
                   fontWeight: 600,
                   color: '#f8f8f8',
-                  marginBottom: 16,
-                  margin: 0
+                  margin: '0 0 16px 0'
                 }}>
                   Select Card Type
                 </h3>
@@ -940,8 +939,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                   fontSize: 18,
                   fontWeight: 600,
                   color: '#f8f8f8',
-                  marginBottom: 16,
-                  margin: 0
+                  margin: '0 0 16px 0'
                 }}>
                   Assets to Generate ({configuredAssets.length})
                 </h3>
