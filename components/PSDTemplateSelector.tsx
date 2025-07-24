@@ -622,62 +622,8 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                 {/* Dynamic Configuration based on Card Type */}
                 {currentCardType && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                    {/* Layer Selection */}
-                    <div>
-                      <label style={{
-                        display: 'block',
-                        fontSize: 14,
-                        fontWeight: 600,
-                        color: '#f8f8f8',
-                        marginBottom: 8
-                      }}>
-                        {currentCardType === 'front-parallel' ? 'Step 2: Select Spot Layer' : 'Step 2: Select Layer'}
-                        {(() => {
-                          const layersForType = currentCardType === 'front-parallel' ? getSpotLayers() : getLayersByType(currentCardType);
-                          return layersForType.length === 1 ? (
-                            <span style={{ 
-                              fontSize: 12, 
-                              color: '#10b981', 
-                              fontWeight: 400,
-                              marginLeft: 8 
-                            }}>
-                              (auto-selected)
-                            </span>
-                          ) : null;
-                        })()}
-                      </label>
-                      <select
-                        value={currentCardType === 'front-parallel' ? (currentConfig.spot || '') : (currentConfig.layer || '')}
-                        onChange={(e) => {
-                          if (currentCardType === 'front-parallel') {
-                            setCurrentConfig(prev => ({ ...prev, spot: e.target.value, layer: e.target.value }));
-                          } else {
-                            setCurrentConfig(prev => ({ ...prev, layer: e.target.value }));
-                          }
-                        }}
-                        style={{
-                          width: '100%',
-                          padding: '8px 12px',
-                          background: 'rgba(255, 255, 255, 0.08)',
-                          border: '1px solid rgba(255, 255, 255, 0.2)',
-                          borderRadius: 8,
-                          color: '#f8f8f8',
-                          fontSize: 14
-                        }}
-                      >
-                        <option value="" style={{ background: '#1f2937' }}>
-                          {currentCardType === 'front-parallel' ? 'Select spot layer...' : 'Select layer...'}
-                        </option>
-                        {(currentCardType === 'front-parallel' ? getSpotLayers() : getLayersByType(currentCardType)).map(layer => (
-                          <option key={layer} value={layer} style={{ background: '#1f2937' }}>
-                            {layer}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Step 3: Color Selection (front-parallel + spot selected) */}
-                    {currentCardType === 'front-parallel' && currentConfig.spot && (
+                    {/* Layer Selection - Different layout for parallel vs others */}
+                    {currentCardType === 'front-parallel' ? (
                       <div>
                         <label style={{
                           display: 'block',
@@ -686,20 +632,121 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                           color: '#f8f8f8',
                           marginBottom: 8
                         }}>
-                          Step 3: Select Color
+                          Step 2: Select Spot Layer & Color
+                        </label>
+                        <div style={{ display: 'flex', gap: 12 }}>
+                          {/* Spot Layer Selection */}
+                          <div style={{ flex: 1 }}>
+                            <label style={{
+                              display: 'block',
+                              fontSize: 12,
+                              color: '#9ca3af',
+                              marginBottom: 4
+                            }}>
+                              Spot Layer
+                            </label>
+                            <select
+                              value={currentConfig.spot || ''}
+                              onChange={(e) => {
+                                setCurrentConfig(prev => ({ ...prev, spot: e.target.value, layer: e.target.value }));
+                              }}
+                              style={{
+                                width: '100%',
+                                padding: '8px 12px',
+                                background: 'rgba(255, 255, 255, 0.08)',
+                                border: '1px solid rgba(255, 255, 255, 0.2)',
+                                borderRadius: 8,
+                                color: '#f8f8f8',
+                                fontSize: 14
+                              }}
+                            >
+                              <option value="" style={{ background: '#1f2937' }}>Select...</option>
+                              {getSpotLayers().map(layer => (
+                                <option key={layer} value={layer} style={{ background: '#1f2937' }}>
+                                  {layer}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          
+                          {/* Color Selection - Only show if spot is selected */}
+                          {currentConfig.spot && (
+                            <div style={{ flex: 1 }}>
+                              <label style={{
+                                display: 'block',
+                                fontSize: 12,
+                                color: '#9ca3af',
+                                marginBottom: 4
+                              }}>
+                                Color
+                              </label>
+                              <select
+                                value={currentConfig.color ? `${currentConfig.color.id}-${currentConfig.color.name}` : ''}
+                                onChange={(e) => {
+                                  if (e.target.value) {
+                                    const [id, name] = e.target.value.split('-');
+                                    setCurrentConfig(prev => ({ 
+                                      ...prev, 
+                                      color: { id: parseInt(id), name } 
+                                    }));
+                                  } else {
+                                    setCurrentConfig(prev => ({ ...prev, color: undefined }));
+                                  }
+                                }}
+                                style={{
+                                  width: '100%',
+                                  padding: '8px 12px',
+                                  background: 'rgba(255, 255, 255, 0.08)',
+                                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                                  borderRadius: 8,
+                                  color: '#f8f8f8',
+                                  fontSize: 14
+                                }}
+                              >
+                                <option value="" style={{ background: '#1f2937' }}>Select...</option>
+                                {colorVariants.map((colorLayer: any, index: number) => (
+                                  <option 
+                                    key={index} 
+                                    value={`${colorLayer.id}-${colorLayer.name}`} 
+                                    style={{ background: '#1f2937' }}
+                                  >
+                                    {colorLayer.name || `Color ${index + 1}`}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      /* Regular Layer Selection for non-parallel types */
+                      <div>
+                        <label style={{
+                          display: 'block',
+                          fontSize: 14,
+                          fontWeight: 600,
+                          color: '#f8f8f8',
+                          marginBottom: 8
+                        }}>
+                          Step 2: Select Layer
+                          {(() => {
+                            const layersForType = getLayersByType(currentCardType);
+                            return layersForType.length === 1 ? (
+                              <span style={{ 
+                                fontSize: 12, 
+                                color: '#10b981', 
+                                fontWeight: 400,
+                                marginLeft: 8 
+                              }}>
+                                (auto-selected)
+                              </span>
+                            ) : null;
+                          })()}
                         </label>
                         <select
-                          value={currentConfig.color ? `${currentConfig.color.id}-${currentConfig.color.name}` : ''}
+                          value={currentConfig.layer || ''}
                           onChange={(e) => {
-                            if (e.target.value) {
-                              const [id, name] = e.target.value.split('-');
-                              setCurrentConfig(prev => ({ 
-                                ...prev, 
-                                color: { id: parseInt(id), name } 
-                              }));
-                            } else {
-                              setCurrentConfig(prev => ({ ...prev, color: undefined }));
-                            }
+                            setCurrentConfig(prev => ({ ...prev, layer: e.target.value }));
                           }}
                           style={{
                             width: '100%',
@@ -711,21 +758,17 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                             fontSize: 14
                           }}
                         >
-                          <option value="" style={{ background: '#1f2937' }}>Select color...</option>
-                          {colorVariants.map((colorLayer: any, index: number) => (
-                            <option 
-                              key={index} 
-                              value={`${colorLayer.id}-${colorLayer.name}`} 
-                              style={{ background: '#1f2937' }}
-                            >
-                              {colorLayer.name || `Color ${index + 1}`}
+                          <option value="" style={{ background: '#1f2937' }}>Select layer...</option>
+                          {getLayersByType(currentCardType).map(layer => (
+                            <option key={layer} value={layer} style={{ background: '#1f2937' }}>
+                              {layer}
                             </option>
                           ))}
                         </select>
                       </div>
                     )}
 
-                    {/* Step 4: VFX Texture Selection (front-parallel + color selected + wp_inv layers exist) */}
+                    {/* Step 3: VFX Texture Selection (front-parallel + color selected + wp_inv layers exist) */}
                     {currentCardType === 'front-parallel' && currentConfig.color && getWpInvLayers().length > 0 && (
                       <div>
                         <label style={{
@@ -735,7 +778,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                           color: '#f8f8f8',
                           marginBottom: 8
                         }}>
-                          Step 4: Select VFX Texture
+                          Step 3: Select VFX Texture
                           {getWpInvLayers().length === 1 && (
                             <span style={{ 
                               fontSize: 12, 
@@ -778,7 +821,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                               color: '#f8f8f8',
                               marginBottom: 8
                             }}>
-                              Step 5: Select WP_INV Layer
+                              Step 4: Select WP_INV Layer
                             </label>
                             <select
                               value={currentConfig.layer || ''}
