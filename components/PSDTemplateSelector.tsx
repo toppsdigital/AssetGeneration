@@ -555,8 +555,9 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
             <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
               {/* Left Side: Asset Configuration Panel */}
               <div style={{
-                flex: 1,
-                minWidth: 400,
+                flex: '0 0 380px',
+                minWidth: 320,
+                maxWidth: 380,
                 background: 'rgba(255, 255, 255, 0.05)',
                 borderRadius: 12,
                 border: '1px solid rgba(255, 255, 255, 0.1)',
@@ -656,7 +657,6 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                         }}
                         style={{
                           width: '100%',
-                          maxWidth: 300,
                           padding: '8px 12px',
                           background: 'rgba(255, 255, 255, 0.08)',
                           border: '1px solid rgba(255, 255, 255, 0.2)',
@@ -703,7 +703,6 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                           }}
                           style={{
                             width: '100%',
-                            maxWidth: 300,
                             padding: '8px 12px',
                             background: 'rgba(255, 255, 255, 0.08)',
                             border: '1px solid rgba(255, 255, 255, 0.2)',
@@ -753,7 +752,6 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                           onChange={(e) => setCurrentConfig(prev => ({ ...prev, vfx: e.target.value }))}
                           style={{
                             width: '100%',
-                            maxWidth: 300,
                             padding: '8px 12px',
                             background: 'rgba(255, 255, 255, 0.08)',
                             border: '1px solid rgba(255, 255, 255, 0.2)',
@@ -787,7 +785,6 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                               onChange={(e) => setCurrentConfig(prev => ({ ...prev, layer: e.target.value }))}
                               style={{
                                 width: '100%',
-                                maxWidth: 300,
                                 padding: '8px 12px',
                                 background: 'rgba(255, 255, 255, 0.08)',
                                 border: '1px solid rgba(255, 255, 255, 0.2)',
@@ -929,7 +926,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
               {/* Right Side: Configured Assets List */}
               <div style={{
                 flex: 1,
-                minWidth: 500,
+                minWidth: 400,
                 background: 'rgba(255, 255, 255, 0.05)',
                 borderRadius: 12,
                 border: '1px solid rgba(255, 255, 255, 0.1)',
