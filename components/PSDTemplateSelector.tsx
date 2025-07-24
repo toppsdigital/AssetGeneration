@@ -369,7 +369,8 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
   };
 
   const generateAssetName = (config: AssetConfig): string => {
-    const parts = [config.type.replace('-', ' ').toUpperCase()];
+    const typeDisplay = config.type === 'front-base' ? 'BASE' : config.type === 'front-parallel' ? 'PARALLEL' : config.type.toUpperCase();
+    const parts = [typeDisplay];
     
     if (config.spot) parts.push(config.spot);
     if (config.color) parts.push(config.color.name);
@@ -573,15 +574,6 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                 
                 {/* Step 1: Card Type Selection */}
                 <div style={{ marginBottom: 16 }}>
-                  <label style={{
-                    display: 'block',
-                    fontSize: 14,
-                    fontWeight: 600,
-                    color: '#f8f8f8',
-                    marginBottom: 8
-                  }}>
-                    Card Type:
-                  </label>
                   <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                     {(['wp', 'back', 'front-base', 'front-parallel'] as const).map(type => (
                       <button
@@ -621,7 +613,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                           transition: 'all 0.2s'
                         }}
                       >
-                        {type.replace('-', ' ').toUpperCase()}
+                        {type === 'front-base' ? 'BASE' : type === 'front-parallel' ? 'PARALLEL' : type.toUpperCase()}
                       </button>
                     ))}
                   </div>
@@ -984,7 +976,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                               borderBottom: index < configuredAssets.length - 1 ? '1px solid rgba(255, 255, 255, 0.1)' : 'none' 
                             }}>
                               <td style={{ padding: 8, color: '#9ca3af', fontSize: 12 }}>
-                                {asset.type.replace('-', ' ').toUpperCase()}
+                                {asset.type === 'front-base' ? 'BASE' : asset.type === 'front-parallel' ? 'PARALLEL' : asset.type.toUpperCase()}
                               </td>
                               <td style={{ padding: 8, color: '#9ca3af', fontSize: 12 }}>
                                 {layersDisplay}
