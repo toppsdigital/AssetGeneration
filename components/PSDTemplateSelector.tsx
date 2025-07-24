@@ -224,7 +224,14 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       });
     }
     
-    return Array.from(extractedLayerNames).sort();
+    // Filter out layers containing "seq" (case-insensitive)
+    const filteredLayers = Array.from(extractedLayerNames).filter(layerName => 
+      !layerName.toLowerCase().includes('seq')
+    );
+    
+    console.log('🔍 Filtered out seq layers:', Array.from(extractedLayerNames).length - filteredLayers.length, 'of', Array.from(extractedLayerNames).length, 'total layers');
+    
+    return filteredLayers.sort();
   };
 
   const getColorVariants = () => {
