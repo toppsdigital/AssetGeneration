@@ -779,6 +779,14 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                           marginBottom: 8
                         }}>
                           Step 3: Select VFX Texture
+                          <span style={{ 
+                            fontSize: 12, 
+                            color: '#9ca3af', 
+                            fontWeight: 400,
+                            marginLeft: 8 
+                          }}>
+                            (optional)
+                          </span>
                           {getWpInvLayers().length === 1 && (
                             <span style={{ 
                               fontSize: 12, 
@@ -786,7 +794,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                               fontWeight: 400,
                               marginLeft: 8 
                             }}>
-                              (using {getWpInvLayers()[0]})
+                              - using {getWpInvLayers()[0]}
                             </span>
                           )}
                         </label>
@@ -812,7 +820,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                         </select>
                         
                         {/* WP_INV Layer Selection - Only show when multiple wp_inv layers exist */}
-                        {currentConfig.vfx && getWpInvLayers().length > 1 && (
+                        {getWpInvLayers().length > 1 && (
                           <div style={{ marginTop: 12 }}>
                             <label style={{
                               display: 'block',
@@ -894,18 +902,11 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                 validationMessage = 'Select spot layer';
                               } else if (!currentConfig.color) {
                                 validationMessage = 'Select color';
-                              } else if (getWpInvLayers().length > 0) {
-                                if (!currentConfig.vfx) {
-                                  validationMessage = 'Select VFX texture';
-                                } else if (getWpInvLayers().length === 1) {
-                                  canAdd = true; // Auto-select single wp_inv layer
-                                } else if (getWpInvLayers().length > 1 && !currentConfig.layer) {
-                                  validationMessage = 'Select wp_inv layer';
-                                } else {
-                                  canAdd = true;
-                                }
+                              } else if (getWpInvLayers().length > 1 && !currentConfig.layer) {
+                                // Only require wp_inv layer selection if there are multiple
+                                validationMessage = 'Select wp_inv layer';
                               } else {
-                                canAdd = true; // No wp_inv layers required
+                                canAdd = true; // VFX is optional
                               }
                               break;
                           }
