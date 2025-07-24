@@ -18,6 +18,12 @@ interface PSDTemplateSelectorProps {
   setCreatingAssets: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
+// For multiple spot/color selections in parallel mode
+interface SpotColorPair {
+  spot: string;
+  color?: { id: number; name: string };
+}
+
 interface AssetConfig {
   id: string;
   name: string;
@@ -25,6 +31,7 @@ interface AssetConfig {
   layer: string;
   spot?: string;
   color?: { id: number; name: string };
+  spotColorPairs?: SpotColorPair[]; // For PARALLEL cards with multiple combinations
   vfx?: string;
   chrome: boolean;
 }
@@ -46,6 +53,8 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     chrome: false
   });
   const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
+  
+  const [spotColorPairs, setSpotColorPairs] = useState<SpotColorPair[]>([{ spot: '', color: undefined }]);
 
   // Fetch physical JSON files when component becomes visible
   useEffect(() => {
@@ -178,21 +187,35 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       const psdFile = selectedPhysicalFile.split('/').pop()?.replace('.json', '.psd') || '';
       
       // Convert configured assets to API format
-      const layers = configuredAssets.map(asset => {
-        if (asset.type === 'front-parallel') {
-          // For parallel front cards, use the spot layer name
-          return asset.spot || asset.layer;
-        }
-        return asset.layer;
-      });
+      const layers: string[] = [];
+      const colors: { id: number; name: string }[] = [];
       
-      // Collect colors from parallel front cards
-      const colors = configuredAssets
-        .filter(asset => asset.type === 'front-parallel' && asset.color)
-        .map(asset => ({
-          id: asset.color!.id,
-          name: asset.color!.name
-        }));
+      configuredAssets.forEach(asset => {
+        if (asset.type === 'front-parallel' && asset.spotColorPairs) {
+          // Handle new format with multiple spot/color pairs
+          asset.spotColorPairs.forEach(pair => {
+            layers.push(pair.spot);
+            if (pair.color) {
+              colors.push({
+                id: pair.color.id,
+                name: pair.color.name
+              });
+            }
+          });
+        } else if (asset.type === 'front-parallel') {
+          // Handle legacy format
+          layers.push(asset.spot || asset.layer);
+          if (asset.color) {
+            colors.push({
+              id: asset.color.id,
+              name: asset.color.name
+            });
+          }
+        } else {
+          // Other card types
+          layers.push(asset.layer);
+        }
+      });
 
       const payload = {
         colors,
@@ -329,30 +352,71 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     setCurrentConfig({ chrome: false });
     setCurrentCardType(null);
     setEditingAssetId(null);
+    setSpotColorPairs([{ spot: '', color: undefined }]);
   };
 
   const addAsset = () => {
-    if (!currentCardType || !currentConfig.layer) return;
+    if (!currentCardType) return;
+    
+    // Handle front-parallel with multiple spot/color pairs
+    if (currentCardType === 'front-parallel') {
+      const validPairs = spotColorPairs.filter(pair => pair.spot && pair.color);
+      if (validPairs.length === 0) return;
+      
+      // For front-parallel cards, auto-select wp_inv layer if only one exists
+      let finalLayer = currentConfig.layer || validPairs[0].spot;
+      if (getWpInvLayers().length === 1) {
+        finalLayer = getWpInvLayers()[0];
+      } else if (getWpInvLayers().length > 1 && currentConfig.layer) {
+        finalLayer = currentConfig.layer;
+      }
 
-    // For front-parallel cards, auto-select wp_inv layer if only one exists and VFX is selected
-    let finalLayer = currentConfig.layer;
-    if (currentCardType === 'front-parallel' && currentConfig.vfx && getWpInvLayers().length === 1) {
-      finalLayer = getWpInvLayers()[0];
+      const newAsset: AssetConfig = {
+        id: editingAssetId || Date.now().toString(),
+        name: generateAssetName({
+          type: currentCardType,
+          layer: finalLayer,
+          spotColorPairs: validPairs,
+          vfx: currentConfig.vfx,
+          chrome: currentConfig.chrome
+        } as AssetConfig),
+        type: currentCardType,
+        layer: finalLayer,
+        spotColorPairs: validPairs,
+        vfx: currentConfig.vfx,
+        chrome: (currentConfig.chrome && getWpInvLayers().length > 0) || false
+      };
+
+      if (editingAssetId) {
+        // Update existing asset
+        setConfiguredAssets(prev => 
+          prev.map(asset => asset.id === editingAssetId ? newAsset : asset)
+        );
+      } else {
+        // Add new asset
+        setConfiguredAssets(prev => [...prev, newAsset]);
+      }
+      
+      resetCurrentConfig();
+      return;
     }
+
+    // Handle other card types
+    if (!currentConfig.layer) return;
 
     const newAsset: AssetConfig = {
       id: editingAssetId || Date.now().toString(),
       name: generateAssetName({
         ...currentConfig,
         type: currentCardType,
-        layer: finalLayer
+        layer: currentConfig.layer
       } as AssetConfig),
       type: currentCardType,
-      layer: finalLayer,
+      layer: currentConfig.layer,
       spot: currentConfig.spot,
       color: currentConfig.color,
       vfx: currentConfig.vfx,
-      chrome: (currentConfig.chrome && (currentCardType === 'front-base' || currentCardType === 'front-parallel') && getWpInvLayers().length > 0) || false // Chrome only for front cards with wp_inv layers
+      chrome: (currentConfig.chrome && currentCardType === 'front-base' && getWpInvLayers().length > 0) || false
     };
 
     if (editingAssetId) {
@@ -372,8 +436,18 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     const typeDisplay = config.type === 'front-base' ? 'BASE' : config.type === 'front-parallel' ? 'PARALLEL' : config.type.toUpperCase();
     const parts = [typeDisplay];
     
-    if (config.spot) parts.push(config.spot);
-    if (config.color) parts.push(config.color.name);
+    // Handle multiple spot/color pairs for PARALLEL cards
+    if (config.spotColorPairs && config.spotColorPairs.length > 0) {
+      const pairNames = config.spotColorPairs.map(pair => 
+        `${pair.spot}${pair.color ? '-' + pair.color.name : ''}`
+      ).join('+');
+      parts.push(pairNames);
+    } else {
+      // Handle single spot/color for other card types
+      if (config.spot) parts.push(config.spot);
+      if (config.color) parts.push(config.color.name);
+    }
+    
     if (config.chrome && (config.type === 'front-base' || config.type === 'front-parallel') && getWpInvLayers().length > 0) parts.push('Chrome'); // Chrome only for front cards with wp_inv layers
     
     return parts.join(' ');
@@ -387,6 +461,22 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     setCurrentCardType(asset.type);
     setCurrentConfig(asset);
     setEditingAssetId(asset.id);
+    
+    // For parallel assets, populate the spot/color pairs
+    if (asset.type === 'front-parallel') {
+      if (asset.spotColorPairs && asset.spotColorPairs.length > 0) {
+        // New format with multiple pairs
+        setSpotColorPairs(asset.spotColorPairs);
+      } else if (asset.spot && asset.color) {
+        // Legacy format with single spot/color
+        setSpotColorPairs([{
+          spot: asset.spot,
+          color: asset.color
+        }]);
+      }
+      // Clear spot/color from current config since it's in the pairs
+      setCurrentConfig(prev => ({ ...prev, spot: undefined, color: undefined }));
+    }
   };
 
   if (!isVisible) return null;
@@ -582,17 +672,17 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                           setCurrentCardType(type);
                           
                           if (type === 'front-parallel') {
-                            // For front-parallel, auto-select spot layer
-                            const spotLayers = getSpotLayers();
-                            const autoSelectedSpot = spotLayers.length === 1 ? spotLayers[0] : '';
+                            // For front-parallel, initialize with one empty pair
+                            setSpotColorPairs([{ spot: '', color: undefined }]);
                             setCurrentConfig({ 
                               chrome: false,
                               type,
-                              spot: autoSelectedSpot,
-                              layer: autoSelectedSpot // Set layer to spot for front-parallel
+                              spot: '',
+                              layer: ''
                             });
                           } else {
-                            // For other types, auto-select layer
+                            // For other types, clear spot/color pairs
+                            setSpotColorPairs([]);
                             const layersForType = getLayersByType(type);
                             const autoSelectedLayer = layersForType.length === 1 ? layersForType[0] : '';
                             setCurrentConfig({ 
@@ -625,97 +715,194 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                     {/* Layer Selection - Different layout for parallel vs others */}
                     {currentCardType === 'front-parallel' ? (
                       <div>
-                        <label style={{
-                          display: 'block',
-                          fontSize: 14,
-                          fontWeight: 600,
-                          color: '#f8f8f8',
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
                           marginBottom: 8
                         }}>
-                          Step 2: Select Spot Layer & Color
-                        </label>
-                        <div style={{ display: 'flex', gap: 12 }}>
-                          {/* Spot Layer Selection */}
-                          <div style={{ flex: 1 }}>
-                            <label style={{
-                              display: 'block',
-                              fontSize: 12,
-                              color: '#9ca3af',
-                              marginBottom: 4
-                            }}>
-                              Spot Layer
-                            </label>
-                            <select
-                              value={currentConfig.spot || ''}
-                              onChange={(e) => {
-                                setCurrentConfig(prev => ({ ...prev, spot: e.target.value, layer: e.target.value }));
-                              }}
-                              style={{
-                                width: '100%',
-                                padding: '8px 12px',
-                                background: 'rgba(255, 255, 255, 0.08)',
-                                border: '1px solid rgba(255, 255, 255, 0.2)',
-                                borderRadius: 8,
-                                color: '#f8f8f8',
-                                fontSize: 14
-                              }}
-                            >
-                              <option value="" style={{ background: '#1f2937' }}>Select...</option>
-                              {getSpotLayers().map(layer => (
-                                <option key={layer} value={layer} style={{ background: '#1f2937' }}>
-                                  {layer}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          
-                          {/* Color Selection - Only show if spot is selected */}
-                          {currentConfig.spot && (
-                            <div style={{ flex: 1 }}>
-                              <label style={{
-                                display: 'block',
-                                fontSize: 12,
-                                color: '#9ca3af',
-                                marginBottom: 4
-                              }}>
-                                Color
-                              </label>
-                              <select
-                                value={currentConfig.color ? `${currentConfig.color.id}-${currentConfig.color.name}` : ''}
-                                onChange={(e) => {
-                                  if (e.target.value) {
-                                    const [id, name] = e.target.value.split('-');
-                                    setCurrentConfig(prev => ({ 
-                                      ...prev, 
-                                      color: { id: parseInt(id), name } 
-                                    }));
-                                  } else {
-                                    setCurrentConfig(prev => ({ ...prev, color: undefined }));
+                          <label style={{
+                            fontSize: 14,
+                            fontWeight: 600,
+                            color: '#f8f8f8'
+                          }}>
+                            Step 2: Select Spot Layer & Color
+                          </label>
+                          <button
+                            onClick={() => {
+                              setSpotColorPairs(prev => [...prev, { spot: '', color: undefined }]);
+                            }}
+                            disabled={!spotColorPairs[0]?.spot || spotColorPairs.filter(p => p.spot).length >= getSpotLayers().length}
+                            style={{
+                              width: 24,
+                              height: 24,
+                              background: (!spotColorPairs[0]?.spot || spotColorPairs.filter(p => p.spot).length >= getSpotLayers().length)
+                                ? 'rgba(156, 163, 175, 0.3)'
+                                : 'rgba(34, 197, 94, 0.2)',
+                              border: '1px solid ' + ((!spotColorPairs[0]?.spot || spotColorPairs.filter(p => p.spot).length >= getSpotLayers().length)
+                                ? 'rgba(156, 163, 175, 0.3)'
+                                : 'rgba(34, 197, 94, 0.4)'),
+                              borderRadius: 6,
+                              color: (!spotColorPairs[0]?.spot || spotColorPairs.filter(p => p.spot).length >= getSpotLayers().length) ? '#6b7280' : '#86efac',
+                              fontSize: 16,
+                              cursor: (!spotColorPairs[0]?.spot || spotColorPairs.filter(p => p.spot).length >= getSpotLayers().length) ? 'not-allowed' : 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              transition: 'all 0.2s'
+                            }}
+                            onMouseOver={(e) => {
+                              if (spotColorPairs[0]?.spot && spotColorPairs.filter(p => p.spot).length < getSpotLayers().length) {
+                                e.currentTarget.style.background = 'rgba(34, 197, 94, 0.3)';
+                                e.currentTarget.style.borderColor = 'rgba(34, 197, 94, 0.6)';
+                              }
+                            }}
+                            onMouseOut={(e) => {
+                              if (spotColorPairs[0]?.spot && spotColorPairs.filter(p => p.spot).length < getSpotLayers().length) {
+                                e.currentTarget.style.background = 'rgba(34, 197, 94, 0.2)';
+                                e.currentTarget.style.borderColor = 'rgba(34, 197, 94, 0.4)';
+                              }
+                            }}
+                            title={spotColorPairs.filter(p => p.spot).length >= getSpotLayers().length ? "All spots selected" : "Add another spot/color pair"}
+                          >
+                            +
+                          </button>
+                        </div>
+                        
+                        {/* Multiple Spot/Color Rows */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {spotColorPairs.map((pair, index) => (
+                            <div key={index} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                              {/* Spot Layer Selection */}
+                              <div style={{ flex: 1 }}>
+                                {index === 0 && (
+                                  <label style={{
+                                    display: 'block',
+                                    fontSize: 12,
+                                    color: '#9ca3af',
+                                    marginBottom: 4
+                                  }}>
+                                    Spot Layer
+                                  </label>
+                                )}
+                                <select
+                                  value={pair.spot || ''}
+                                  onChange={(e) => {
+                                    const newPairs = [...spotColorPairs];
+                                    newPairs[index] = { ...newPairs[index], spot: e.target.value };
+                                    setSpotColorPairs(newPairs);
+                                  }}
+                                  style={{
+                                    width: '100%',
+                                    padding: '8px 12px',
+                                    background: 'rgba(255, 255, 255, 0.08)',
+                                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                                    borderRadius: 8,
+                                    color: '#f8f8f8',
+                                    fontSize: 14,
+                                    marginTop: index > 0 ? '20px' : '0'
+                                  }}
+                                >
+                                  <option value="" style={{ background: '#1f2937' }}>Select...</option>
+                                  {getSpotLayers()
+                                    .filter(layer => !spotColorPairs.some((p, i) => i !== index && p.spot === layer))
+                                    .map(layer => (
+                                      <option key={layer} value={layer} style={{ background: '#1f2937' }}>
+                                        {layer}
+                                      </option>
+                                  ))}
+                                </select>
+                              </div>
+                              
+                              {/* Color Selection */}
+                              <div style={{ flex: 1 }}>
+                                {index === 0 && (
+                                  <label style={{
+                                    display: 'block',
+                                    fontSize: 12,
+                                    color: '#9ca3af',
+                                    marginBottom: 4
+                                  }}>
+                                    Color
+                                  </label>
+                                )}
+                                <select
+                                  value={pair.color ? `${pair.color.id}-${pair.color.name}` : ''}
+                                  onChange={(e) => {
+                                    if (e.target.value) {
+                                      const [id, ...nameParts] = e.target.value.split('-');
+                                      const name = nameParts.join('-');
+                                      const newPairs = [...spotColorPairs];
+                                      newPairs[index] = { 
+                                        ...newPairs[index], 
+                                        color: { id: parseInt(id), name } 
+                                      };
+                                      setSpotColorPairs(newPairs);
+                                    } else {
+                                      const newPairs = [...spotColorPairs];
+                                      newPairs[index] = { ...newPairs[index], color: undefined };
+                                      setSpotColorPairs(newPairs);
+                                    }
+                                  }}
+                                  disabled={!pair.spot}
+                                  style={{
+                                    width: '100%',
+                                    padding: '8px 12px',
+                                    background: 'rgba(255, 255, 255, 0.08)',
+                                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                                    borderRadius: 8,
+                                    color: '#f8f8f8',
+                                    fontSize: 14,
+                                    marginTop: index > 0 ? '20px' : '0',
+                                    opacity: !pair.spot ? 0.5 : 1
+                                  }}
+                                >
+                                  <option value="" style={{ background: '#1f2937' }}>Select...</option>
+                                  {colorVariants.map((colorLayer: any, idx: number) => (
+                                    <option 
+                                      key={idx} 
+                                      value={`${colorLayer.id}-${colorLayer.name}`} 
+                                      style={{ background: '#1f2937' }}
+                                    >
+                                      {colorLayer.name || `Color ${idx + 1}`}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              
+                              {/* Remove Button */}
+                              <button
+                                onClick={() => {
+                                  if (spotColorPairs.length > 1) {
+                                    setSpotColorPairs(prev => prev.filter((_, i) => i !== index));
                                   }
                                 }}
+                                disabled={spotColorPairs.length === 1}
                                 style={{
-                                  width: '100%',
-                                  padding: '8px 12px',
-                                  background: 'rgba(255, 255, 255, 0.08)',
-                                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                                  borderRadius: 8,
-                                  color: '#f8f8f8',
-                                  fontSize: 14
+                                  width: 32,
+                                  height: 32,
+                                  background: spotColorPairs.length === 1 
+                                    ? 'transparent' 
+                                    : 'rgba(239, 68, 68, 0.1)',
+                                  border: '1px solid ' + (spotColorPairs.length === 1 
+                                    ? 'transparent' 
+                                    : 'rgba(239, 68, 68, 0.2)'),
+                                  borderRadius: 6,
+                                  color: spotColorPairs.length === 1 ? 'transparent' : '#ef4444',
+                                  fontSize: 16,
+                                  cursor: spotColorPairs.length === 1 ? 'default' : 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  transition: 'all 0.2s',
+                                  marginTop: index > 0 ? '20px' : (index === 0 ? '20px' : '0')
                                 }}
+                                title={spotColorPairs.length === 1 ? '' : 'Remove'}
                               >
-                                <option value="" style={{ background: '#1f2937' }}>Select...</option>
-                                {colorVariants.map((colorLayer: any, index: number) => (
-                                  <option 
-                                    key={index} 
-                                    value={`${colorLayer.id}-${colorLayer.name}`} 
-                                    style={{ background: '#1f2937' }}
-                                  >
-                                    {colorLayer.name || `Color ${index + 1}`}
-                                  </option>
-                                ))}
-                              </select>
+                                ×
+                              </button>
                             </div>
-                          )}
+                          ))}
                         </div>
                       </div>
                     ) : (
@@ -768,8 +955,8 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                       </div>
                     )}
 
-                    {/* Step 3: VFX Texture Selection (front-parallel + color selected + wp_inv layers exist) */}
-                    {currentCardType === 'front-parallel' && currentConfig.color && getWpInvLayers().length > 0 && (
+                    {/* Step 3: VFX Texture Selection (front-parallel + at least one spot selected + wp_inv layers exist) */}
+                    {currentCardType === 'front-parallel' && spotColorPairs.some(pair => pair.spot) && getWpInvLayers().length > 0 && (
                       <div>
                         <label style={{
                           display: 'block',
@@ -888,25 +1075,26 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
 
                         if (!currentCardType) {
                           validationMessage = 'Select card type';
-                        } else if (!currentConfig.layer) {
-                          validationMessage = 'Select layer';
                         } else {
                           switch (currentCardType) {
                             case 'wp':
                             case 'back':
                             case 'front-base':
-                              canAdd = true;
+                              if (!currentConfig.layer) {
+                                validationMessage = 'Select layer';
+                              } else {
+                                canAdd = true;
+                              }
                               break;
                             case 'front-parallel':
-                              if (!currentConfig.spot) {
-                                validationMessage = 'Select spot layer';
-                              } else if (!currentConfig.color) {
-                                validationMessage = 'Select color';
+                              const validPairs = spotColorPairs.filter(pair => pair.spot && pair.color);
+                              if (validPairs.length === 0) {
+                                validationMessage = 'Select at least one spot layer and color';
                               } else if (getWpInvLayers().length > 1 && !currentConfig.layer) {
                                 // Only require wp_inv layer selection if there are multiple
                                 validationMessage = 'Select wp_inv layer';
                               } else {
-                                canAdd = true; // VFX is optional
+                                canAdd = true; // Have at least one valid spot/color pair
                               }
                               break;
                           }
@@ -1000,11 +1188,11 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                           background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05))',
                           borderBottom: '2px solid rgba(255, 255, 255, 0.1)'
                         }}>
-                          <th style={{ padding: '10px 12px', textAlign: 'left', color: '#f8f8f8', fontSize: 12, fontWeight: 600, letterSpacing: '0.05em' }}>TYPE</th>
-                          <th style={{ padding: '10px 12px', textAlign: 'left', color: '#f8f8f8', fontSize: 12, fontWeight: 600, letterSpacing: '0.05em' }}>LAYERS</th>
-                          <th style={{ padding: '10px 12px', textAlign: 'left', color: '#f8f8f8', fontSize: 12, fontWeight: 600, letterSpacing: '0.05em' }}>VFX</th>
-                          <th style={{ padding: '10px 12px', textAlign: 'center', color: '#f8f8f8', fontSize: 12, fontWeight: 600, letterSpacing: '0.05em' }}>CHROME</th>
-                          <th style={{ padding: '10px 12px', textAlign: 'center', color: '#f8f8f8', fontSize: 12, fontWeight: 600, letterSpacing: '0.05em' }}>ACTIONS</th>
+                                              <th style={{ padding: '10px 12px', textAlign: 'left', color: '#f8f8f8', fontSize: 13, fontWeight: 600, letterSpacing: '0.05em' }}>TYPE</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#f8f8f8', fontSize: 13, fontWeight: 600, letterSpacing: '0.05em' }}>LAYERS</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#f8f8f8', fontSize: 13, fontWeight: 600, letterSpacing: '0.05em' }}>VFX</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', color: '#f8f8f8', fontSize: 13, fontWeight: 600, letterSpacing: '0.05em' }}>CHROME</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', color: '#f8f8f8', fontSize: 13, fontWeight: 600, letterSpacing: '0.05em' }}>ACTIONS</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1035,64 +1223,111 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                          '#f9a8d4',
                                   padding: '3px 8px',
                                   borderRadius: 4,
-                                  fontSize: 11,
+                                  fontSize: 12,
                                   fontWeight: 600,
                                   letterSpacing: '0.02em'
                                 }}>
                                   {asset.type === 'front-base' ? 'BASE' : asset.type === 'front-parallel' ? 'PARALLEL' : asset.type.toUpperCase()}
                                 </span>
                               </td>
-                              <td style={{ padding: '10px 12px', color: '#e5e7eb', fontSize: 12 }}>
+                              <td style={{ padding: '10px 12px', color: '#e5e7eb', fontSize: 13 }}>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                  {asset.spot && (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                      <code style={{
-                                        background: 'rgba(255, 255, 255, 0.05)',
-                                        padding: '2px 6px',
-                                        borderRadius: 4,
-                                        fontSize: 11,
-                                        fontFamily: 'monospace'
-                                      }}>
-                                        {asset.spot}
-                                      </code>
-                                      {asset.color && (
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                          <span style={{
-                                            width: 10,
-                                            height: 10,
-                                            borderRadius: '50%',
-                                            background: (() => {
-                                              const colorName = asset.color.name.toLowerCase();
-                                              // Map common color names to actual colors
-                                              if (colorName.includes('yellow')) return '#fbbf24';
-                                              if (colorName.includes('gold')) return '#f59e0b';
-                                              if (colorName.includes('silver')) return '#9ca3af';
-                                              if (colorName.includes('pink')) return '#ec4899';
-                                              if (colorName.includes('red')) return '#ef4444';
-                                              if (colorName.includes('blue')) return '#3b82f6';
-                                              if (colorName.includes('green')) return '#10b981';
-                                              if (colorName.includes('purple')) return '#8b5cf6';
-                                              if (colorName.includes('orange')) return '#f97316';
-                                              if (colorName.includes('black')) return '#1f2937';
-                                              if (colorName.includes('white')) return '#f8f8f8';
-                                              if (colorName.includes('gray') || colorName.includes('grey')) return '#6b7280';
-                                              // Default gradient for unknown colors
-                                              return 'linear-gradient(135deg, #fbbf24, #f59e0b)';
-                                            })(),
-                                            display: 'inline-block',
-                                            border: '1px solid rgba(255, 255, 255, 0.2)'
-                                          }} />
-                                          <span style={{ fontSize: 11, color: '#f8f8f8' }}>{asset.color.name}</span>
+                                  {/* Handle multiple spot/color pairs for PARALLEL */}
+                                  {asset.spotColorPairs && asset.spotColorPairs.length > 0 ? (
+                                    asset.spotColorPairs.map((pair, idx) => (
+                                      <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        <code style={{
+                                          padding: '2px 6px',
+                                          borderRadius: 4,
+                                          fontSize: 13,
+                                          fontFamily: 'monospace'
+                                        }}>
+                                          {pair.spot}
+                                        </code>
+                                        {pair.color && (
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                            <span style={{
+                                              width: 10,
+                                              height: 10,
+                                              borderRadius: '50%',
+                                              background: (() => {
+                                                const colorName = pair.color.name.toLowerCase();
+                                                // Map common color names to actual colors
+                                                if (colorName.includes('yellow')) return '#fbbf24';
+                                                if (colorName.includes('gold')) return '#f59e0b';
+                                                if (colorName.includes('silver')) return '#9ca3af';
+                                                if (colorName.includes('pink')) return '#ec4899';
+                                                if (colorName.includes('red')) return '#ef4444';
+                                                if (colorName.includes('blue')) return '#3b82f6';
+                                                if (colorName.includes('green')) return '#10b981';
+                                                if (colorName.includes('purple')) return '#8b5cf6';
+                                                if (colorName.includes('orange')) return '#f97316';
+                                                if (colorName.includes('black')) return '#1f2937';
+                                                if (colorName.includes('white')) return '#f8f8f8';
+                                                if (colorName.includes('gray') || colorName.includes('grey')) return '#6b7280';
+                                                // Default gradient for unknown colors
+                                                return 'linear-gradient(135deg, #fbbf24, #f59e0b)';
+                                              })(),
+                                              display: 'inline-block',
+                                              border: '1px solid rgba(255, 255, 255, 0.2)'
+                                            }} />
+                                            <span style={{ fontSize: 13, color: '#f8f8f8' }}>{pair.color.name}</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    ))
+                                  ) : (
+                                    /* Legacy single spot/color display */
+                                    <>
+                                      {asset.spot && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                          <code style={{
+                                            padding: '2px 6px',
+                                            borderRadius: 4,
+                                            fontSize: 13,
+                                            fontFamily: 'monospace'
+                                          }}>
+                                            {asset.spot}
+                                          </code>
+                                          {asset.color && (
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                              <span style={{
+                                                width: 10,
+                                                height: 10,
+                                                borderRadius: '50%',
+                                                background: (() => {
+                                                  const colorName = asset.color.name.toLowerCase();
+                                                  // Map common color names to actual colors
+                                                  if (colorName.includes('yellow')) return '#fbbf24';
+                                                  if (colorName.includes('gold')) return '#f59e0b';
+                                                  if (colorName.includes('silver')) return '#9ca3af';
+                                                  if (colorName.includes('pink')) return '#ec4899';
+                                                  if (colorName.includes('red')) return '#ef4444';
+                                                  if (colorName.includes('blue')) return '#3b82f6';
+                                                  if (colorName.includes('green')) return '#10b981';
+                                                  if (colorName.includes('purple')) return '#8b5cf6';
+                                                  if (colorName.includes('orange')) return '#f97316';
+                                                  if (colorName.includes('black')) return '#1f2937';
+                                                  if (colorName.includes('white')) return '#f8f8f8';
+                                                  if (colorName.includes('gray') || colorName.includes('grey')) return '#6b7280';
+                                                  // Default gradient for unknown colors
+                                                  return 'linear-gradient(135deg, #fbbf24, #f59e0b)';
+                                                })(),
+                                                display: 'inline-block',
+                                                border: '1px solid rgba(255, 255, 255, 0.2)'
+                                              }} />
+                                              <span style={{ fontSize: 13, color: '#f8f8f8' }}>{asset.color.name}</span>
+                                            </div>
+                                          )}
                                         </div>
                                       )}
-                                    </div>
+                                    </>
                                   )}
-                                  {asset.layer && (!asset.spot || asset.spot !== asset.layer) && (
+                                  {asset.layer && (!asset.spotColorPairs || asset.spotColorPairs.length === 0) && (!asset.spot || asset.spot !== asset.layer) && (
                                     <code style={{
-                                      background: 'rgba(255, 255, 255, 0.05)',
                                       padding: '2px 6px',
                                       borderRadius: 4,
-                                      fontSize: 11,
+                                      fontSize: 13,
                                       fontFamily: 'monospace'
                                     }}>
                                       {asset.layer}
@@ -1100,14 +1335,14 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                   )}
                                                                 </div>
                               </td>
-                              <td style={{ padding: '10px 12px', color: '#e5e7eb', fontSize: 12 }}>
+                              <td style={{ padding: '10px 12px', color: '#e5e7eb', fontSize: 13 }}>
                                 {asset.vfx ? (
                                   <span style={{
                                     background: 'rgba(147, 51, 234, 0.1)',
                                     color: '#c084fc',
                                     padding: '2px 6px',
                                     borderRadius: 4,
-                                    fontSize: 11
+                                    fontSize: 12
                                   }}>
                                     {asset.vfx}
                                   </span>
@@ -1127,7 +1362,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                     color: asset.chrome ? '#86efac' : '#9ca3af',
                                     padding: '3px 8px',
                                     borderRadius: 12,
-                                    fontSize: 10,
+                                    fontSize: 11,
                                     fontWeight: 600
                                   }}>
                                     <span style={{
@@ -1151,7 +1386,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                       border: '1px solid rgba(59, 130, 246, 0.2)',
                                       borderRadius: 6,
                                       color: '#60a5fa',
-                                      fontSize: 12,
+                                      fontSize: 14,
                                       cursor: 'pointer',
                                       display: 'inline-flex',
                                       alignItems: 'center',
@@ -1183,7 +1418,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                       border: '1px solid rgba(239, 68, 68, 0.2)',
                                       borderRadius: 6,
                                       color: '#ef4444',
-                                      fontSize: 12,
+                                      fontSize: 14,
                                       cursor: 'pointer',
                                       display: 'inline-flex',
                                       alignItems: 'center',
