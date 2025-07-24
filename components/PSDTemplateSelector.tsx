@@ -1017,8 +1017,26 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                             width: 10,
                                             height: 10,
                                             borderRadius: '50%',
-                                            background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
-                                            display: 'inline-block'
+                                            background: (() => {
+                                              const colorName = asset.color.name.toLowerCase();
+                                              // Map common color names to actual colors
+                                              if (colorName.includes('yellow')) return '#fbbf24';
+                                              if (colorName.includes('gold')) return '#f59e0b';
+                                              if (colorName.includes('silver')) return '#9ca3af';
+                                              if (colorName.includes('pink')) return '#ec4899';
+                                              if (colorName.includes('red')) return '#ef4444';
+                                              if (colorName.includes('blue')) return '#3b82f6';
+                                              if (colorName.includes('green')) return '#10b981';
+                                              if (colorName.includes('purple')) return '#8b5cf6';
+                                              if (colorName.includes('orange')) return '#f97316';
+                                              if (colorName.includes('black')) return '#1f2937';
+                                              if (colorName.includes('white')) return '#f8f8f8';
+                                              if (colorName.includes('gray') || colorName.includes('grey')) return '#6b7280';
+                                              // Default gradient for unknown colors
+                                              return 'linear-gradient(135deg, #fbbf24, #f59e0b)';
+                                            })(),
+                                            display: 'inline-block',
+                                            border: '1px solid rgba(255, 255, 255, 0.2)'
                                           }} />
                                           <span style={{ fontSize: 11, color: '#f8f8f8' }}>{asset.color.name}</span>
                                         </div>
