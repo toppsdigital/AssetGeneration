@@ -75,8 +75,34 @@ function JobPreviewPageContent() {
 
       console.log(`🔍 Loading ${actualFilePaths.length} ${type} files:`, actualFilePaths);
       
-      // Create simplified asset items
-      const assetItems: AssetItem[] = actualFilePaths.map((filePath: string) => {
+      // Define supported image formats
+      const imageExtensions = [
+        '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', 
+        '.tif', '.tiff', '.svg', '.ico', '.avif', '.heic', '.heif'
+      ];
+      
+      // Filter to only include image files
+      const imageFilePaths = actualFilePaths.filter((filePath: string) => {
+        const filename = filePath.split('/').pop() || filePath;
+        const extension = filename.toLowerCase().substring(filename.lastIndexOf('.'));
+        const isImage = imageExtensions.includes(extension);
+        
+        if (!isImage) {
+          console.log(`🚫 Excluding non-image file: ${filename} (${extension})`);
+        }
+        
+        return isImage;
+      });
+      
+      console.log(`🖼️ Filtered to ${imageFilePaths.length} image files from ${actualFilePaths.length} total files`);
+      
+      if (imageFilePaths.length === 0) {
+        setError(`No image files found in ${type === 'firefly' ? 'digital collectibles' : type + ' files'}`);
+        return;
+      }
+      
+      // Create simplified asset items from filtered image files
+      const assetItems: AssetItem[] = imageFilePaths.map((filePath: string) => {
         const filename = filePath.split('/').pop() || filePath;
         const isTiff = filename.toLowerCase().endsWith('.tif') || filename.toLowerCase().endsWith('.tiff');
         
