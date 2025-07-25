@@ -282,7 +282,7 @@ export default function ExpandedImageModal({
             overflow: 'hidden'
           }}>
             <ImagePreview
-              filePath={image.hasCachedUrl ? image.src : image.src}
+              filePath={image.src}
               alt={image.alt}
               priority={true}
               lazy={false}

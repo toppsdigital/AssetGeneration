@@ -126,12 +126,6 @@ function JobPreviewPageContent() {
 
   // Modal navigation functions
   const handleImageExpand = (imageData: { src: string; alt: string; isTiff: boolean }) => {
-    // Cache the presigned URL for reuse
-    presignedUrlCache.current.set(imageData.alt, {
-      presignedUrl: imageData.src,
-      isTiff: imageData.isTiff
-    });
-    
     // Find the index of the expanded image
     const index = assets.findIndex(asset => asset.filename === imageData.alt);
     setExpandedImageIndex(index >= 0 ? index : 0);
@@ -157,71 +151,21 @@ function JobPreviewPageContent() {
   const expandedImage = expandedImageIndex !== null && assets[expandedImageIndex] 
     ? (() => {
         const asset = assets[expandedImageIndex];
-        const cached = presignedUrlCache.current.get(asset.filename);
-        
-        if (!cached && asset.filePath) {
-          // If URL isn't cached, trigger a fetch and cache it
-          fetch('/api/s3-proxy', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              client_method: 'get',
-              filename: asset.filePath
-            }),
-          })
-          .then(response => response.json())
-          .then(data => {
-            if (data.url) {
-              presignedUrlCache.current.set(asset.filename, {
-                presignedUrl: data.url,
-                isTiff: asset.isTiff
-              });
-            }
-          })
-          .catch(console.error);
-        }
-        
         return {
-          src: cached?.presignedUrl || asset.filePath,
+          src: asset.filePath,
           alt: asset.filename,
-          isTiff: asset.isTiff,
-          hasCachedUrl: !!cached
+          isTiff: asset.isTiff
         };
       })()
     : null;
 
-  // Prefetch URLs for adjacent images
+  // Remove the prefetch effect since we're not using presigned URLs anymore
   useEffect(() => {
-    if (expandedImageIndex === null || !assets.length) return;
-
-    // Prefetch next and previous image URLs
-    [-1, 1].forEach(offset => {
-      const index = expandedImageIndex + offset;
-      if (index >= 0 && index < assets.length) {
-        const asset = assets[index];
-        if (!presignedUrlCache.current.has(asset.filename)) {
-          fetch('/api/s3-proxy', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              client_method: 'get',
-              filename: asset.filePath
-            }),
-          })
-          .then(response => response.json())
-          .then(data => {
-            if (data.url) {
-              presignedUrlCache.current.set(asset.filename, {
-                presignedUrl: data.url,
-                isTiff: asset.isTiff
-              });
-            }
-          })
-          .catch(console.error);
-        }
-      }
-    });
-  }, [expandedImageIndex, assets]);
+    // Cleanup any existing cached URLs when component unmounts
+    return () => {
+      presignedUrlCache.current.clear();
+    };
+  }, []);
 
   if (loading) {
     return (
