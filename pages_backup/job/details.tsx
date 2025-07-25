@@ -1685,12 +1685,20 @@ export default function JobDetailsPage() {
                                 // Extract PSD filename from the selected physical file
                                 const psdFile = selectedPhysicalFile.split('/').pop()?.replace('.json', '.psd') || '';
 
-                                // Use selected extracted layers instead of hardcoded layers
-                                const layers = Array.from(selectedExtractedLayers);
+                                // Convert selected layers and colors to the new assets format
+                                const assets = Array.from(selectedExtractedLayers).map(layer => {
+                                  // Create base asset
+                                  const asset = {
+                                    type: 'front-base' as const,
+                                    layer: layer,
+                                    chrome: false
+                                  };
+
+                                  return asset;
+                                });
 
                                 const payload = {
-                                  colors,
-                                  layers,
+                                  assets,
                                   psd_file: psdFile
                                 };
 
