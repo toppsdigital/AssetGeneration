@@ -46,6 +46,16 @@ function JobDetailsPageContent() {
   const startUpload = searchParams.get('startUpload');
   const createFiles = searchParams.get('createFiles');
   
+  // Force cache invalidation when component mounts
+  useEffect(() => {
+    if (jobId) {
+      console.log('🔄 Forcing cache invalidation for job:', jobId);
+      // Remove both job detail and files caches to ensure fresh data
+      queryClient.removeQueries({ queryKey: jobKeys.detail(jobId) });
+      queryClient.removeQueries({ queryKey: jobKeys.files(jobId) });
+    }
+  }, [jobId]);
+  
   // React Query hooks for smart caching
   const queryClient = useQueryClient();
   
