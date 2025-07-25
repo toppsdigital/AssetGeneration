@@ -59,11 +59,12 @@ const usePresignedUrl = (filePath: string | null, hasCachedUrl: boolean = false,
   return useQuery({
     queryKey: ['presigned-url', filePath],
     queryFn: () => getPresignedUrl(filePath!),
-    enabled: !!filePath && !hasCachedUrl, // Only fetch if we need a URL and don't have cached one
+    enabled: !!filePath && !hasCachedUrl && !cachedUrl, // Only fetch if we need a URL and don't have cached one
     staleTime: 10 * 60 * 1000, // 10 minutes - presigned URLs typically last longer
     gcTime: 15 * 60 * 1000, // Keep in cache for 15 minutes  
     retry: 2,
-    initialData: hasCachedUrl ? cachedUrl : undefined, // Use cached URL if available
+    initialData: hasCachedUrl || cachedUrl ? cachedUrl : undefined, // Use cached URL if available
+    retryDelay: 1000, // Wait 1 second between retries
   });
 };
 
@@ -83,12 +84,26 @@ export default function ExpandedImageModal({
   const { 
     data: presignedUrl, 
     isLoading, 
-    error: queryError 
+    error: queryError,
+    isError
   } = usePresignedUrl(
-    image?.src || null, 
+    image?.hasCachedUrl ? null : image?.src || null, // Don't fetch if we have cached URL
     image?.hasCachedUrl || false,
     image?.hasCachedUrl ? image.src : null
   );
+
+  // Reset error state when image changes
+  useEffect(() => {
+    setError(null);
+  }, [image?.src]);
+
+  // Handle query errors
+  useEffect(() => {
+    if (isError && queryError) {
+      console.error('React Query error fetching presigned URL:', queryError);
+      setError('Failed to load image URL');
+    }
+  }, [isError, queryError]);
 
   // Prefetch adjacent images for smooth navigation
   useEffect(() => {
@@ -116,16 +131,6 @@ export default function ExpandedImageModal({
     const timeoutId = setTimeout(prefetchAdjacentUrls, 300);
     return () => clearTimeout(timeoutId);
   }, [allAssets, currentIndex, totalCount, queryClient]);
-
-  // Handle query errors
-  useEffect(() => {
-    if (queryError) {
-      console.error('React Query error fetching presigned URL:', queryError);
-      setError('Failed to load image URL');
-    } else {
-      setError(null);
-    }
-  }, [queryError]);
 
   // Handle keyboard navigation
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -169,6 +174,9 @@ export default function ExpandedImageModal({
   const showNavigation = totalCount && totalCount > 1;
   const canGoPrevious = onPrevious && currentIndex !== undefined && currentIndex > 0;
   const canGoNext = onNext && currentIndex !== undefined && totalCount !== undefined && currentIndex < totalCount - 1;
+
+  // Use the cached URL directly if available, otherwise use the fetched presigned URL
+  const imageUrl = image?.hasCachedUrl ? image.src : presignedUrl;
 
   return (
     <div
@@ -415,7 +423,7 @@ export default function ExpandedImageModal({
                   {error}
                 </div>
               </div>
-            ) : presignedUrl ? (
+            ) : imageUrl ? (
               <div style={{
                 width: '100%',
                 height: '100%',
@@ -425,7 +433,7 @@ export default function ExpandedImageModal({
               }}>
                 {image.isTiff ? (
                   <TiffImageViewer
-                    src={presignedUrl}
+                    src={imageUrl}
                     alt={image.alt}
                     style={{
                       height: '100%',
@@ -443,18 +451,20 @@ export default function ExpandedImageModal({
                   <div style={{ 
                     position: 'relative', 
                     width: '100%', 
-                    height: '100%' 
+                    height: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
                   }}>
-                    <Image
-                      src={presignedUrl}
+                    <img
+                      src={imageUrl}
                       alt={image.alt}
-                      fill
                       style={{
+                        maxWidth: '100%',
+                        maxHeight: '100%',
                         objectFit: 'contain',
                         borderRadius: 8
                       }}
-                      sizes="60vw" // Matches our modal width
-                      priority // Load immediately for modal images
                       onError={() => {
                         console.error('❌ Expanded image failed to load:', image.alt);
                         setError('Failed to load image');

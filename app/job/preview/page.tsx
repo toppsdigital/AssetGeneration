@@ -159,14 +159,69 @@ function JobPreviewPageContent() {
         const asset = assets[expandedImageIndex];
         const cached = presignedUrlCache.current.get(asset.filename);
         
+        if (!cached && asset.filePath) {
+          // If URL isn't cached, trigger a fetch and cache it
+          fetch('/api/s3-proxy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              client_method: 'get',
+              filename: asset.filePath
+            }),
+          })
+          .then(response => response.json())
+          .then(data => {
+            if (data.url) {
+              presignedUrlCache.current.set(asset.filename, {
+                presignedUrl: data.url,
+                isTiff: asset.isTiff
+              });
+            }
+          })
+          .catch(console.error);
+        }
+        
         return {
-          src: cached?.presignedUrl || asset.filePath, // Use cached URL if available, fallback to file path
+          src: cached?.presignedUrl || asset.filePath,
           alt: asset.filename,
           isTiff: asset.isTiff,
           hasCachedUrl: !!cached
         };
       })()
     : null;
+
+  // Prefetch URLs for adjacent images
+  useEffect(() => {
+    if (expandedImageIndex === null || !assets.length) return;
+
+    // Prefetch next and previous image URLs
+    [-1, 1].forEach(offset => {
+      const index = expandedImageIndex + offset;
+      if (index >= 0 && index < assets.length) {
+        const asset = assets[index];
+        if (!presignedUrlCache.current.has(asset.filename)) {
+          fetch('/api/s3-proxy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              client_method: 'get',
+              filename: asset.filePath
+            }),
+          })
+          .then(response => response.json())
+          .then(data => {
+            if (data.url) {
+              presignedUrlCache.current.set(asset.filename, {
+                presignedUrl: data.url,
+                isTiff: asset.isTiff
+              });
+            }
+          })
+          .catch(console.error);
+        }
+      }
+    });
+  }, [expandedImageIndex, assets]);
 
   if (loading) {
     return (
