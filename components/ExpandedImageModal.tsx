@@ -23,14 +23,19 @@ interface ExpandedImageModalProps {
 // Simple helper to get presigned URL for viewing images
 const getPresignedUrl = async (filePath: string): Promise<string | null> => {
   try {
-    console.log('🔗 Getting presigned URL for modal:', filePath);
+    console.log('🔗 Getting image via content pipeline for:', filePath);
     
-    const response = await fetch('/api/s3-proxy', {
+    // Skip if it's already a full URL
+    if (filePath.startsWith('http') || filePath.startsWith('blob:')) {
+      console.log('✅ URL already processed:', filePath);
+      return filePath;
+    }
+    
+    const response = await fetch('/api/content-pipeline-proxy?operation=s3_download_file', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
-        client_method: 'get',
-        filename: filePath
+        key: filePath
       }),
     });
 
@@ -40,16 +45,65 @@ const getPresignedUrl = async (filePath: string): Promise<string | null> => {
     }
 
     const data = await response.json();
+    console.log('📥 Content pipeline response:', data);
     
-    if (data.url) {
-      console.log('✅ Got presigned URL for modal:', filePath);
-      return data.url;
+    // Check if we have a pre-signed URL in the response
+    if (data.success && data.data?.download_url) {
+      console.log('✅ Got pre-signed URL from content pipeline for:', filePath);
+      return data.data.download_url;
+    } 
+    // Fallback: check if we have base64 file content
+    else if (data.file_content) {
+      console.log('📦 Converting base64 content to blob URL for:', filePath);
+      
+      try {
+        // Detect content type from file extension
+        const extension = filePath.toLowerCase().split('.').pop();
+        let contentType = 'image/jpeg'; // default
+        
+        switch (extension) {
+          case 'png':
+            contentType = 'image/png';
+            break;
+          case 'gif':
+            contentType = 'image/gif';
+            break;
+          case 'webp':
+            contentType = 'image/webp';
+            break;
+          case 'tif':
+          case 'tiff':
+            contentType = 'image/tiff';
+            break;
+          case 'jpg':
+          case 'jpeg':
+            contentType = 'image/jpeg';
+            break;
+        }
+        
+        // Convert base64 to blob
+        const binaryString = atob(data.file_content);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        
+        const blob = new Blob([bytes], { type: contentType });
+        const blobUrl = URL.createObjectURL(blob);
+        
+        console.log('✅ Created blob URL for:', filePath);
+        return blobUrl;
+      } catch (blobError) {
+        console.error('❌ Failed to create blob URL:', blobError);
+        throw new Error('Failed to process image data');
+      }
     } else {
-      throw new Error('No URL in response');
+      console.error('❌ Unexpected response format:', data);
+      throw new Error('No download URL or file content in response');
     }
     
   } catch (error) {
-    console.error(`❌ Failed to get presigned URL for ${filePath}:`, error);
+    console.error(`❌ Failed to get image via content pipeline for ${filePath}:`, error);
     return null;
   }
 };
@@ -79,22 +133,63 @@ export default function ExpandedImageModal({
 }: ExpandedImageModalProps) {
   const [error, setError] = useState<string | null>(null);
   const queryClient = useQueryClient();
+  const [loadAttempt, setLoadAttempt] = useState(0);
+
+  // Log the image data we receive
+  useEffect(() => {
+    if (image) {
+      console.log('📸 Modal image data:', {
+        src: image.src,
+        alt: image.alt,
+        hasCachedUrl: image.hasCachedUrl
+      });
+    }
+  }, [image]);
 
   // Use React Query to cache presigned URLs
   const { 
     data: presignedUrl, 
     isLoading, 
     error: queryError,
-    isError
+    isError,
+    refetch
   } = usePresignedUrl(
-    image?.hasCachedUrl ? null : image?.src || null, // Don't fetch if we have cached URL
+    image?.hasCachedUrl ? null : image?.src || null,
     image?.hasCachedUrl || false,
     image?.hasCachedUrl ? image.src : null
   );
 
-  // Reset error state when image changes
+  // Use React Query to cache presigned URLs
+  const { 
+    data: imageUrl, 
+    isLoading: isLoadingImage, 
+    error: queryErrorImage,
+    isError: isErrorImage,
+    refetch: refetchImage
+  } = useQuery({
+    queryKey: ['modal-image-url', image?.src],
+    queryFn: () => getPresignedUrl(image!.src),
+    enabled: !!image?.src && !image?.hasCachedUrl,
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    gcTime: 15 * 60 * 1000,
+    retry: 2,
+    initialData: image?.hasCachedUrl ? image.src : undefined,
+    retryDelay: 1000
+  });
+
+  // Cleanup blob URLs
+  useEffect(() => {
+    return () => {
+      if (imageUrl && imageUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(imageUrl);
+      }
+    };
+  }, [imageUrl]);
+
+  // Reset error state and load attempt when image changes
   useEffect(() => {
     setError(null);
+    setLoadAttempt(0);
   }, [image?.src]);
 
   // Handle query errors
@@ -104,6 +199,14 @@ export default function ExpandedImageModal({
       setError('Failed to load image URL');
     }
   }, [isError, queryError]);
+
+  // Handle query errors
+  useEffect(() => {
+    if (isErrorImage && queryErrorImage) {
+      console.error('React Query error fetching image URL:', queryErrorImage);
+      setError('Failed to load image URL');
+    }
+  }, [isErrorImage, queryErrorImage]);
 
   // Prefetch adjacent images for smooth navigation
   useEffect(() => {
@@ -169,14 +272,28 @@ export default function ExpandedImageModal({
     }
   }, [image, handleKeyDown]);
 
+  // Handle image load error
+  const handleImageError = () => {
+    console.error('❌ Expanded image failed to load:', {
+      alt: image?.alt,
+      url: imageUrl,
+      attempt: loadAttempt + 1
+    });
+
+    // If we haven't tried too many times, attempt to refetch
+    if (loadAttempt < 2) {
+      setLoadAttempt(prev => prev + 1);
+      refetchImage();
+    } else {
+      setError('Failed to load image');
+    }
+  };
+
   if (!image) return null;
 
   const showNavigation = totalCount && totalCount > 1;
   const canGoPrevious = onPrevious && currentIndex !== undefined && currentIndex > 0;
   const canGoNext = onNext && currentIndex !== undefined && totalCount !== undefined && currentIndex < totalCount - 1;
-
-  // Use the cached URL directly if available, otherwise use the fetched presigned URL
-  const imageUrl = image?.hasCachedUrl ? image.src : presignedUrl;
 
   return (
     <div
@@ -385,7 +502,7 @@ export default function ExpandedImageModal({
             minHeight: '0', // Ensure it can shrink if needed
             overflow: 'hidden' // Debug: add background to see container bounds
           }}>
-            {isLoading ? (
+            {isLoading || isLoadingImage ? (
               <div style={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -442,10 +559,7 @@ export default function ExpandedImageModal({
                       borderRadius: 8,
                       display: 'block'
                     }}
-                    onError={() => {
-                      console.warn('Failed to load expanded TIFF:', image.alt);
-                      setError('Failed to load TIFF image');
-                    }}
+                    onError={handleImageError}
                   />
                 ) : (
                   <div style={{ 
@@ -457,6 +571,7 @@ export default function ExpandedImageModal({
                     justifyContent: 'center'
                   }}>
                     <img
+                      key={`${imageUrl}-${loadAttempt}`} // Force reload on retry
                       src={imageUrl}
                       alt={image.alt}
                       style={{
@@ -465,10 +580,7 @@ export default function ExpandedImageModal({
                         objectFit: 'contain',
                         borderRadius: 8
                       }}
-                      onError={() => {
-                        console.error('❌ Expanded image failed to load:', image.alt);
-                        setError('Failed to load image');
-                      }}
+                      onError={handleImageError}
                     />
                   </div>
                 )}
