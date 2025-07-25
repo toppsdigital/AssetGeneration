@@ -1,13 +1,12 @@
 import { useEffect, useCallback, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import Image from 'next/image';
-import TiffImageViewer from './TiffImageViewer';
+import ImagePreview from './ImagePreview';
 
 interface ExpandedImageData {
   src: string;
   alt: string;
   isTiff: boolean;
-  hasCachedUrl?: boolean; // Flag to indicate if src is already a presigned URL
+  hasCachedUrl?: boolean;
 }
 
 interface ExpandedImageModalProps {
@@ -17,110 +16,8 @@ interface ExpandedImageModalProps {
   onPrevious?: () => void;
   currentIndex?: number;
   totalCount?: number;
-  allAssets?: Array<{ filePath: string; filename: string; isTiff: boolean }>; // For prefetching
+  allAssets?: Array<{ filePath: string; filename: string; isTiff: boolean }>;
 }
-
-// Simple helper to get presigned URL for viewing images
-const getPresignedUrl = async (filePath: string): Promise<string | null> => {
-  try {
-    console.log('🔗 Getting image via content pipeline for:', filePath);
-    
-    // Skip if it's already a full URL
-    if (filePath.startsWith('http') || filePath.startsWith('blob:')) {
-      console.log('✅ URL already processed:', filePath);
-      return filePath;
-    }
-    
-    const response = await fetch('/api/content-pipeline-proxy?operation=s3_download_file', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        key: filePath
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => 'Unknown error');
-      throw new Error(`${response.status} ${response.statusText}: ${errorText}`);
-    }
-
-    const data = await response.json();
-    console.log('📥 Content pipeline response:', data);
-    
-    // Check if we have a pre-signed URL in the response
-    if (data.success && data.data?.download_url) {
-      console.log('✅ Got pre-signed URL from content pipeline for:', filePath);
-      return data.data.download_url;
-    } 
-    // Fallback: check if we have base64 file content
-    else if (data.file_content) {
-      console.log('📦 Converting base64 content to blob URL for:', filePath);
-      
-      try {
-        // Detect content type from file extension
-        const extension = filePath.toLowerCase().split('.').pop();
-        let contentType = 'image/jpeg'; // default
-        
-        switch (extension) {
-          case 'png':
-            contentType = 'image/png';
-            break;
-          case 'gif':
-            contentType = 'image/gif';
-            break;
-          case 'webp':
-            contentType = 'image/webp';
-            break;
-          case 'tif':
-          case 'tiff':
-            contentType = 'image/tiff';
-            break;
-          case 'jpg':
-          case 'jpeg':
-            contentType = 'image/jpeg';
-            break;
-        }
-        
-        // Convert base64 to blob
-        const binaryString = atob(data.file_content);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-        
-        const blob = new Blob([bytes], { type: contentType });
-        const blobUrl = URL.createObjectURL(blob);
-        
-        console.log('✅ Created blob URL for:', filePath);
-        return blobUrl;
-      } catch (blobError) {
-        console.error('❌ Failed to create blob URL:', blobError);
-        throw new Error('Failed to process image data');
-      }
-    } else {
-      console.error('❌ Unexpected response format:', data);
-      throw new Error('No download URL or file content in response');
-    }
-    
-  } catch (error) {
-    console.error(`❌ Failed to get image via content pipeline for ${filePath}:`, error);
-    return null;
-  }
-};
-
-// Custom hook to cache presigned URLs with React Query
-const usePresignedUrl = (filePath: string | null, hasCachedUrl: boolean = false, cachedUrl: string | null = null) => {
-  return useQuery({
-    queryKey: ['presigned-url', filePath],
-    queryFn: () => getPresignedUrl(filePath!),
-    enabled: !!filePath && !hasCachedUrl && !cachedUrl, // Only fetch if we need a URL and don't have cached one
-    staleTime: 10 * 60 * 1000, // 10 minutes - presigned URLs typically last longer
-    gcTime: 15 * 60 * 1000, // Keep in cache for 15 minutes  
-    retry: 2,
-    initialData: hasCachedUrl || cachedUrl ? cachedUrl : undefined, // Use cached URL if available
-    retryDelay: 1000, // Wait 1 second between retries
-  });
-};
 
 export default function ExpandedImageModal({
   image,
@@ -133,107 +30,6 @@ export default function ExpandedImageModal({
 }: ExpandedImageModalProps) {
   const [error, setError] = useState<string | null>(null);
   const queryClient = useQueryClient();
-  const [loadAttempt, setLoadAttempt] = useState(0);
-
-  // Log the image data we receive
-  useEffect(() => {
-    if (image) {
-      console.log('📸 Modal image data:', {
-        src: image.src,
-        alt: image.alt,
-        hasCachedUrl: image.hasCachedUrl
-      });
-    }
-  }, [image]);
-
-  // Use React Query to cache presigned URLs
-  const { 
-    data: presignedUrl, 
-    isLoading, 
-    error: queryError,
-    isError,
-    refetch
-  } = usePresignedUrl(
-    image?.hasCachedUrl ? null : image?.src || null,
-    image?.hasCachedUrl || false,
-    image?.hasCachedUrl ? image.src : null
-  );
-
-  // Use React Query to cache presigned URLs
-  const { 
-    data: imageUrl, 
-    isLoading: isLoadingImage, 
-    error: queryErrorImage,
-    isError: isErrorImage,
-    refetch: refetchImage
-  } = useQuery({
-    queryKey: ['modal-image-url', image?.src],
-    queryFn: () => getPresignedUrl(image!.src),
-    enabled: !!image?.src && !image?.hasCachedUrl,
-    staleTime: 10 * 60 * 1000, // 10 minutes
-    gcTime: 15 * 60 * 1000,
-    retry: 2,
-    initialData: image?.hasCachedUrl ? image.src : undefined,
-    retryDelay: 1000
-  });
-
-  // Cleanup blob URLs
-  useEffect(() => {
-    return () => {
-      if (imageUrl && imageUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(imageUrl);
-      }
-    };
-  }, [imageUrl]);
-
-  // Reset error state and load attempt when image changes
-  useEffect(() => {
-    setError(null);
-    setLoadAttempt(0);
-  }, [image?.src]);
-
-  // Handle query errors
-  useEffect(() => {
-    if (isError && queryError) {
-      console.error('React Query error fetching presigned URL:', queryError);
-      setError('Failed to load image URL');
-    }
-  }, [isError, queryError]);
-
-  // Handle query errors
-  useEffect(() => {
-    if (isErrorImage && queryErrorImage) {
-      console.error('React Query error fetching image URL:', queryErrorImage);
-      setError('Failed to load image URL');
-    }
-  }, [isErrorImage, queryErrorImage]);
-
-  // Prefetch adjacent images for smooth navigation
-  useEffect(() => {
-    if (!allAssets || currentIndex === undefined || totalCount === undefined) return;
-
-    const prefetchAdjacentUrls = () => {
-      // Prefetch 2 images in each direction
-      for (let offset = -2; offset <= 2; offset++) {
-        const index = currentIndex + offset;
-        if (index >= 0 && index < totalCount && index !== currentIndex) {
-          const asset = allAssets[index];
-          if (asset) {
-            // Prefetch the presigned URL
-            queryClient.prefetchQuery({
-              queryKey: ['presigned-url', asset.filePath],
-              queryFn: () => getPresignedUrl(asset.filePath),
-              staleTime: 10 * 60 * 1000,
-            });
-          }
-        }
-      }
-    };
-
-    // Delay prefetching to prioritize current image
-    const timeoutId = setTimeout(prefetchAdjacentUrls, 300);
-    return () => clearTimeout(timeoutId);
-  }, [allAssets, currentIndex, totalCount, queryClient]);
 
   // Handle keyboard navigation
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -272,23 +68,6 @@ export default function ExpandedImageModal({
     }
   }, [image, handleKeyDown]);
 
-  // Handle image load error
-  const handleImageError = () => {
-    console.error('❌ Expanded image failed to load:', {
-      alt: image?.alt,
-      url: imageUrl,
-      attempt: loadAttempt + 1
-    });
-
-    // If we haven't tried too many times, attempt to refetch
-    if (loadAttempt < 2) {
-      setLoadAttempt(prev => prev + 1);
-      refetchImage();
-    } else {
-      setError('Failed to load image');
-    }
-  };
-
   if (!image) return null;
 
   const showNavigation = totalCount && totalCount > 1;
@@ -303,12 +82,12 @@ export default function ExpandedImageModal({
         left: 0,
         right: 0,
         bottom: 0,
-        background: 'rgba(0, 0, 0, 0.85)', // Slightly more transparent to show background
+        background: 'rgba(0, 0, 0, 0.85)',
         zIndex: 1000,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '20px', // Restored padding for better spacing
+        padding: '20px',
         animation: 'fadeIn 0.2s ease-out'
       }}
       onClick={onClose}
@@ -316,7 +95,7 @@ export default function ExpandedImageModal({
       <div
         style={{
           position: 'relative',
-          width: '60vw', // Further reduced from 75vw for even narrower, more focused container
+          width: '60vw',
           height: '90vh',
           maxWidth: '60vw',
           maxHeight: '90vh',
@@ -489,109 +268,38 @@ export default function ExpandedImageModal({
         }}>
           <div style={{
             width: '100%',
-            height: 'calc(100% - 55px - 55px)', // Top and bottom spacing now match
+            height: 'calc(100% - 55px - 55px)',
             display: 'flex',
-            alignItems: 'stretch', // Let image fill the space instead of center
+            alignItems: 'stretch',
             justifyContent: 'center',
             position: 'relative',
-            marginTop: '55px', // Header clearance
-            marginBottom: '55px', // Bottom spacing to match top
+            marginTop: '55px',
+            marginBottom: '55px',
             paddingLeft: '12px',
             paddingRight: '12px',
             boxSizing: 'border-box',
-            minHeight: '0', // Ensure it can shrink if needed
-            overflow: 'hidden' // Debug: add background to see container bounds
+            minHeight: '0',
+            overflow: 'hidden'
           }}>
-            {isLoading || isLoadingImage ? (
-              <div style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'rgba(255, 255, 255, 0.7)',
-                width: '100%',
-                height: '100%'
-              }}>
-                <div style={{
-                  width: 40,
-                  height: 40,
-                  border: '3px solid rgba(255, 255, 255, 0.2)',
-                  borderTop: '3px solid #3b82f6',
-                  borderRadius: '50%',
-                  animation: 'spin 1s linear infinite',
-                  marginBottom: 16
-                }} />
-                <div>Loading image...</div>
-              </div>
-            ) : error ? (
-              <div style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'rgba(255, 255, 255, 0.7)',
-                textAlign: 'center',
-                width: '100%',
-                height: '100%'
-              }}>
-                <div style={{ fontSize: '3rem', marginBottom: 16 }}>🖼️</div>
-                <div style={{ fontSize: '1.1rem', marginBottom: 8 }}>Image Unavailable</div>
-                <div style={{ fontSize: '0.9rem', color: 'rgba(255, 255, 255, 0.5)' }}>
-                  {error}
-                </div>
-              </div>
-            ) : imageUrl ? (
-              <div style={{
+            <ImagePreview
+              filePath={image.hasCachedUrl ? image.src : image.src}
+              alt={image.alt}
+              priority={true}
+              lazy={false}
+              style={{
                 width: '100%',
                 height: '100%',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center'
-              }}>
-                {image.isTiff ? (
-                  <TiffImageViewer
-                    src={imageUrl}
-                    alt={image.alt}
-                    style={{
-                      height: '100%',
-                      width: '100%',
-                      objectFit: 'contain',
-                      borderRadius: 8,
-                      display: 'block'
-                    }}
-                    onError={handleImageError}
-                  />
-                ) : (
-                  <div style={{ 
-                    position: 'relative', 
-                    width: '100%', 
-                    height: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}>
-                    <img
-                      key={`${imageUrl}-${loadAttempt}`} // Force reload on retry
-                      src={imageUrl}
-                      alt={image.alt}
-                      style={{
-                        maxWidth: '100%',
-                        maxHeight: '100%',
-                        objectFit: 'contain',
-                        borderRadius: 8
-                      }}
-                      onError={handleImageError}
-                    />
-                  </div>
-                )}
-              </div>
-            ) : null}
+              }}
+            />
           </div>
           
           {/* Fixed title area at bottom */}
           <div style={{
             position: 'absolute',
-            bottom: '15px', // Centered within the 55px bottom space
+            bottom: '15px',
             left: '50%',
             transform: 'translateX(-50%)',
             display: 'flex',
