@@ -988,14 +988,15 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                   </div>
                 )}
 
-                    {/* Step 3: VFX Texture Selection (front-parallel + at least one spot selected + wp_inv layers exist) */}
-                    {currentCardType === 'front-parallel' && spotColorPairs.some(pair => pair.spot) && getWpInvLayers().length > 0 && (
+                    {/* Step 3: VFX Texture Selection */}
+                    {((currentCardType === 'front-parallel' && spotColorPairs.some(pair => pair.spot)) || 
+                      currentCardType === 'front-base') && getWpInvLayers().length > 0 && (
                       <div>
-                  <label style={{
-                    display: 'block',
+                        <label style={{
+                          display: 'block',
                           fontSize: 14,
-                    fontWeight: 600,
-                    color: '#f8f8f8',
+                          fontWeight: 600,
+                          color: '#f8f8f8',
                           marginBottom: 8
                         }}>
                           Select VFX Texture
@@ -1017,7 +1018,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                               - using {getWpInvLayers()[0]}
                             </span>
                           )}
-                  </label>
+                        </label>
                         <select
                           value={currentConfig.vfx || ''}
                           onChange={(e) => setCurrentConfig(prev => ({ ...prev, vfx: e.target.value }))}
@@ -1040,7 +1041,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                         </select>
                         
                         {/* WP_INV Layer Selection - Only show when multiple wp_inv layers exist */}
-                        {getWpInvLayers().length > 1 && (
+                        {currentCardType === 'front-parallel' && getWpInvLayers().length > 1 && (
                           <div style={{ marginTop: 12 }}>
                             <label style={{
                               display: 'block',
