@@ -188,42 +188,66 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       
       // Convert configured assets to API format
       const assets = configuredAssets.map(asset => {
-        if (asset.type === 'front-parallel' && asset.spotColorPairs) {
-          // Handle new format with multiple spot/color pairs
-          return {
+        if (asset.type === 'front-parallel') {
+          // Handle front-parallel with spot color pairs
+          const basePayload: any = {
             type: asset.type,
-            layer: asset.layer,
-            spot_color_pairs: asset.spotColorPairs.map(pair => ({
+            spot_color_pairs: asset.spotColorPairs?.map(pair => ({
               spot: pair.spot,
               color: pair.color ? {
                 id: pair.color.id,
                 name: pair.color.name
               } : undefined
-            })),
-            vfx: asset.vfx,
-            chrome: asset.chrome
+            }))
           };
-        } else if (asset.type === 'front-parallel') {
-          // Handle legacy format
-          return {
-            type: asset.type,
-            layer: asset.layer,
-            spot: asset.spot,
-            color: asset.color ? {
-              id: asset.color.id,
-              name: asset.color.name
-            } : undefined,
-            vfx: asset.vfx,
-            chrome: asset.chrome
-          };
+
+          // Add optional properties only if they exist and are needed
+          if (asset.vfx || asset.chrome) {
+            if (asset.vfx) {
+              basePayload.vfx = asset.vfx;
+            }
+            if (asset.chrome) {
+              basePayload.chrome = true;
+            }
+            if (asset.layer) {
+              basePayload.wp_inv_layer = asset.layer;
+            }
+          }
+
+          return basePayload;
         } else {
-          // Other card types
-          return {
-            type: asset.type,
-            layer: asset.layer,
-            vfx: asset.vfx,
-            chrome: asset.chrome
+          // Other card types (wp, back, front-base)
+          const basePayload: any = {
+            type: asset.type
           };
+
+          // Add layer only if it exists
+          if (asset.layer) {
+            basePayload.layer = asset.layer;
+          }
+
+          // Add VFX if it exists for any card type
+          if (asset.vfx) {
+            basePayload.vfx = asset.vfx;
+            // For front-base with VFX, we need wp_inv_layer
+            if (asset.type === 'front-base') {
+              const wpInvLayers = getWpInvLayers();
+              if (wpInvLayers.length > 0) {
+                basePayload.wp_inv_layer = wpInvLayers[0];
+              }
+            }
+          }
+
+          // For front-base, add chrome and wp_inv_layer if chrome is enabled
+          if (asset.type === 'front-base' && asset.chrome) {
+            basePayload.chrome = true;
+            const wpInvLayers = getWpInvLayers();
+            if (wpInvLayers.length > 0) {
+              basePayload.wp_inv_layer = wpInvLayers[0];
+            }
+          }
+
+          return basePayload;
         }
       });
 
