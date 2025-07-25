@@ -308,10 +308,11 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
   };
 
   const getColorVariants = () => {
-    const spotGroup = jsonData?.layers?.find((layer: any) => 
+    // Get all spot groups
+    const spotGroups = jsonData?.layers?.filter((layer: any) => 
       layer.name?.toLowerCase().includes('spot group')
-    );
-    
+    ) || [];
+
     const collectSolidColorLayers = (layer: any): any[] => {
       const layers: any[] = [];
       if (layer.type === 'solidcolorfill') {
@@ -324,8 +325,12 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       }
       return layers;
     };
-    
-    return spotGroup ? collectSolidColorLayers(spotGroup) : [];
+
+    // Map each spot group to its colors
+    return spotGroups.map((group, index) => ({
+      groupName: `SPOT GROUP ${index + 1}`,
+      colors: collectSolidColorLayers(group)
+    }));
   };
 
   // Helper functions for new UI
@@ -763,40 +768,42 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                           </label>
                           <button
                             onClick={() => {
-                              setSpotColorPairs(prev => [...prev, { spot: '', color: undefined }]);
+                              if (spotColorPairs.length < 3) {
+                                setSpotColorPairs(prev => [...prev, { spot: '', color: undefined }]);
+                              }
                             }}
-                            disabled={!spotColorPairs[0]?.spot || spotColorPairs.filter(p => p.spot).length >= getSpotLayers().length}
+                            disabled={!spotColorPairs[0]?.spot || spotColorPairs.length >= 3}
                             style={{
                               width: 24,
                               height: 24,
-                              background: (!spotColorPairs[0]?.spot || spotColorPairs.filter(p => p.spot).length >= getSpotLayers().length)
+                              background: (!spotColorPairs[0]?.spot || spotColorPairs.length >= 3)
                                 ? 'rgba(156, 163, 175, 0.3)'
                                 : 'rgba(34, 197, 94, 0.2)',
-                              border: '1px solid ' + ((!spotColorPairs[0]?.spot || spotColorPairs.filter(p => p.spot).length >= getSpotLayers().length)
+                              border: '1px solid ' + ((!spotColorPairs[0]?.spot || spotColorPairs.length >= 3)
                                 ? 'rgba(156, 163, 175, 0.3)'
                                 : 'rgba(34, 197, 94, 0.4)'),
                               borderRadius: 6,
-                              color: (!spotColorPairs[0]?.spot || spotColorPairs.filter(p => p.spot).length >= getSpotLayers().length) ? '#6b7280' : '#86efac',
+                              color: (!spotColorPairs[0]?.spot || spotColorPairs.length >= 3) ? '#6b7280' : '#86efac',
                               fontSize: 16,
-                              cursor: (!spotColorPairs[0]?.spot || spotColorPairs.filter(p => p.spot).length >= getSpotLayers().length) ? 'not-allowed' : 'pointer',
+                              cursor: (!spotColorPairs[0]?.spot || spotColorPairs.length >= 3) ? 'not-allowed' : 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                               justifyContent: 'center',
                               transition: 'all 0.2s'
                             }}
                             onMouseOver={(e) => {
-                              if (spotColorPairs[0]?.spot && spotColorPairs.filter(p => p.spot).length < getSpotLayers().length) {
+                              if (spotColorPairs[0]?.spot && spotColorPairs.length < 3) {
                                 e.currentTarget.style.background = 'rgba(34, 197, 94, 0.3)';
                                 e.currentTarget.style.borderColor = 'rgba(34, 197, 94, 0.6)';
                               }
                             }}
                             onMouseOut={(e) => {
-                              if (spotColorPairs[0]?.spot && spotColorPairs.filter(p => p.spot).length < getSpotLayers().length) {
+                              if (spotColorPairs[0]?.spot && spotColorPairs.length < 3) {
                                 e.currentTarget.style.background = 'rgba(34, 197, 94, 0.2)';
                                 e.currentTarget.style.borderColor = 'rgba(34, 197, 94, 0.4)';
                               }
                             }}
-                            title={spotColorPairs.filter(p => p.spot).length >= getSpotLayers().length ? "All spots selected" : "Add another spot/color pair"}
+                            title={spotColorPairs.length >= 3 ? "Maximum 3 spots allowed" : "Add another spot/color pair"}
                           >
                             +
                           </button>
@@ -804,80 +811,82 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                         
                         {/* Multiple Spot/Color Rows */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                          {spotColorPairs.map((pair, index) => (
-                            <div key={index} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                              {/* Spot Layer Selection */}
-                              <div style={{ flex: 1 }}>
-                                {index === 0 && (
-                                  <label style={{
-                                    display: 'block',
-                                    fontSize: 12,
-                                    color: '#9ca3af',
-                                    marginBottom: 4
-                                  }}>
-                                    Spot Layer
-                                  </label>
-                                )}
-                                <select
-                                  value={pair.spot || ''}
-                                  onChange={(e) => {
-                                    const newPairs = [...spotColorPairs];
-                                    newPairs[index] = { ...newPairs[index], spot: e.target.value };
-                                    setSpotColorPairs(newPairs);
-                                  }}
-                                  style={{
-                                    width: '100%',
+                          {spotColorPairs.map((pair, index) => {
+                            const spotGroup = getColorVariants()[index];
+                            return (
+                              <div key={index} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                                {/* Spot Layer Selection */}
+                                <div style={{ flex: 1 }}>
+                                  {index === 0 && (
+                                    <label style={{
+                                      display: 'block',
+                                      fontSize: 12,
+                                      color: '#9ca3af',
+                                      marginBottom: 4
+                                    }}>
+                                      Spot Layer
+                                    </label>
+                                  )}
+                                  <select
+                                    value={pair.spot || ''}
+                                    onChange={(e) => {
+                                      const newPairs = [...spotColorPairs];
+                                      newPairs[index] = { ...newPairs[index], spot: e.target.value };
+                                      setSpotColorPairs(newPairs);
+                                    }}
+                                    style={{
+                                      width: '100%',
                         padding: '8px 12px',
-                                    background: 'rgba(255, 255, 255, 0.08)',
-                                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                                    borderRadius: 8,
-                                    color: '#f8f8f8',
-                                    fontSize: 14,
-                                    marginTop: index > 0 ? '20px' : '0'
-                                  }}
-                                >
-                                  <option value="" style={{ background: '#1f2937' }}>Select...</option>
-                                  {getSpotLayers()
-                                    .filter(layer => !spotColorPairs.some((p, i) => i !== index && p.spot === layer))
-                                    .map(layer => (
-                                      <option key={layer} value={layer} style={{ background: '#1f2937' }}>
-                                        {layer}
-                                      </option>
+                                      background: 'rgba(255, 255, 255, 0.08)',
+                                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                                      borderRadius: 8,
+                                      color: '#f8f8f8',
+                                      fontSize: 14,
+                                      marginTop: index > 0 ? '20px' : '0'
+                                    }}
+                                  >
+                                    <option value="" style={{ background: '#1f2937' }}>Select...</option>
+                                    {getSpotLayers()
+                                      .filter(layer => !spotColorPairs.some((p, i) => i !== index && p.spot === layer))
+                                      .map(layer => (
+                                        <option key={layer} value={layer} style={{ background: '#1f2937' }}>
+                                          {layer}
+                                        </option>
                                   ))}
-                                </select>
-                              </div>
-                              
-                              {/* Color Selection */}
-                              <div style={{ flex: 1 }}>
-                                {index === 0 && (
-                                  <label style={{
-                                    display: 'block',
-                                    fontSize: 12,
-                                    color: '#9ca3af',
-                                    marginBottom: 4
-                                  }}>
-                                    Color
-                                  </label>
-                                )}
-                                <select
-                                  value={pair.color ? `${pair.color.id}-${pair.color.name}` : ''}
-                                  onChange={(e) => {
-                                    if (e.target.value) {
-                                      const [id, ...nameParts] = e.target.value.split('-');
-                                      const name = nameParts.join('-');
-                                      const newPairs = [...spotColorPairs];
-                                      newPairs[index] = { 
-                                        ...newPairs[index], 
-                                        color: { id: parseInt(id), name } 
-                                      };
-                                      setSpotColorPairs(newPairs);
-                            } else {
-                                      const newPairs = [...spotColorPairs];
-                                      newPairs[index] = { ...newPairs[index], color: undefined };
-                                      setSpotColorPairs(newPairs);
-                            }
-                          }}
-                                  disabled={!pair.spot}
+                                  </select>
+                                </div>
+                                
+                                {/* Color Selection */}
+                                <div style={{ flex: 1 }}>
+                                  {index === 0 && (
+                                    <label style={{
+                                      display: 'block',
+                                      fontSize: 12,
+                                      color: '#9ca3af',
+                                      marginBottom: 4
+                                    }}>
+                                      Color ({spotGroup?.groupName || `SPOT GROUP ${index + 1}`})
+                                    </label>
+                                  )}
+                                  <select
+                                    value={pair.color ? `${pair.color.id}-${pair.color.name}` : ''}
+                                    onChange={(e) => {
+                                      if (e.target.value) {
+                                        const [id, ...nameParts] = e.target.value.split('-');
+                                        const name = nameParts.join('-');
+                                        const newPairs = [...spotColorPairs];
+                                        newPairs[index] = { 
+                                          ...newPairs[index], 
+                                          color: { id: parseInt(id), name } 
+                                        };
+                                        setSpotColorPairs(newPairs);
+                                      } else {
+                                        const newPairs = [...spotColorPairs];
+                                        newPairs[index] = { ...newPairs[index], color: undefined };
+                                        setSpotColorPairs(newPairs);
+                                      }
+                                    }}
+                                    disabled={!pair.spot}
                           style={{
                                     width: '100%',
                                     padding: '8px 12px',
@@ -891,7 +900,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                   }}
                                 >
                                   <option value="" style={{ background: '#1f2937' }}>Select...</option>
-                                  {colorVariants.map((colorLayer: any, idx: number) => (
+                                  {spotGroup?.colors.map((colorLayer: any, idx: number) => (
                                     <option 
                                       key={idx} 
                                       value={`${colorLayer.id}-${colorLayer.name}`} 
@@ -935,7 +944,8 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                 ×
                               </button>
                             </div>
-                          ))}
+                          );
+                        })}
                         </div>
                   </div>
                 ) : (
