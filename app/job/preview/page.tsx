@@ -224,7 +224,8 @@ function JobPreviewPageContent() {
         <title>Preview {type === 'extracted' ? 'Extracted Layers' : 'Digital Collectibles'}</title>
       </Head>
       <div className={styles.pageContainer}>
-      
+        <PageTitle title={getPageTitle()} />
+        
         <div className={styles.editContainer}>
           <main className={styles.mainContent}>
             <div style={{
@@ -237,8 +238,6 @@ function JobPreviewPageContent() {
               padding: 32,
               boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
             }}>
-              {/* Page Title */}
-              <PageTitle title={getPageTitle()} />
               
               {/* Image Grid */}
               {assets.length > 0 && (

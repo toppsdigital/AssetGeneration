@@ -6,6 +6,7 @@ import styles from '../../../styles/Review.module.css';
 import PsdCanvas from '../../../components/PsdCanvas';
 import { usePsdStore } from '../../../web/store/psdStore';
 import { collectLayerParameters, buildFireflyLayersPayload } from '../../../web/utils/firefly';
+import PageTitle from '../../../components/PageTitle';
 
 export default function ReviewPage() {
   const router = useRouter();
@@ -131,29 +132,9 @@ export default function ReviewPage() {
 
   return (
     <div className={styles.pageContainer}>
+      <PageTitle title="Review" />
       <div className={styles.reviewContainer}>
         <main className={styles.mainContent}>
-          {/* Header with title */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            marginBottom: '2rem',
-            paddingBottom: '1rem',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
-          }}>
-            <h1 style={{
-              fontSize: '2rem',
-              fontWeight: 600,
-              color: '#f8f8f8',
-              margin: 0,
-              letterSpacing: '-0.025em',
-              textShadow: '0 2px 4px rgba(0, 0, 0, 0.5)',
-              textAlign: 'center',
-              width: '100%'
-            }}>
-              Review
-            </h1>
-          </div>
           
           <div style={{ display: 'flex', justifyContent: 'center', margin: '8px 0 24px 0' }}>
             <div className={styles.canvasWrapper}>
