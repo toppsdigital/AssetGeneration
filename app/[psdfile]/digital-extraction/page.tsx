@@ -4,7 +4,6 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import styles from '../../../styles/Edit.module.css';
 import { usePsdStore } from '../../../web/store/psdStore';
-import NavBar from '../../../components/NavBar';
 import Spinner from '../../../components/Spinner';
 
 interface Layer {
@@ -347,11 +346,6 @@ export default function DigitalExtractionPage() {
 
   return (
     <div className={styles.pageContainer}>
-      <NavBar
-        showHome
-        onHome={() => router.push('/')}
-        title={`Digital Extraction: ${displayName}`}
-      />
       
       {/* Upload Loading Overlay */}
       {uploadLoading && (

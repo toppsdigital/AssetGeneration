@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import styles from '../styles/Home.module.css';
-import NavBar from '../components/NavBar';
 import { usePsdStore } from '../web/store/psdStore';
 
 export default function Home() {
@@ -88,9 +87,6 @@ export default function Home() {
 
   return (
     <div className={styles.container}>
-      <NavBar 
-        title="Content Production Hub" 
-      />
       <div className={styles.content}>
         <div className={styles.mainSections}>
           {/* Physical to Digital Pipeline Section */}

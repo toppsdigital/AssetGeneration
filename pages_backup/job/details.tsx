@@ -1,6 +1,5 @@
 import { useRouter } from 'next/router';
 import { useEffect, useState, useCallback } from 'react';
-import NavBar from '../../components/NavBar';
 import styles from '../../styles/Edit.module.css';
 import Spinner from '../../components/Spinner';
 import { contentPipelineApi, JobData, FileData } from '../../web/utils/contentPipelineApi';
@@ -1114,14 +1113,6 @@ export default function JobDetailsPage() {
   if (loading) {
     return (
       <div className={styles.pageContainer}>
-        <NavBar
-          showHome
-          showBackToEdit
-          onHome={() => router.push('/')}
-          onBackToEdit={() => router.push('/jobs')}
-          backLabel="Back to Jobs"
-          title="Loading Job Details..."
-        />
         <div className={styles.loading}>
           <Spinner />
           <p>Loading job details...</p>
@@ -1133,14 +1124,6 @@ export default function JobDetailsPage() {
   if (error) {
     return (
       <div className={styles.pageContainer}>
-        <NavBar
-          showHome
-          showBackToEdit
-          onHome={() => router.push('/')}
-          onBackToEdit={() => router.push('/jobs')}
-          backLabel="Back to Jobs"
-          title="Job Details"
-        />
         <div className={styles.loading}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>❌</div>
           <h2>Error Loading Job Details</h2>
@@ -1167,14 +1150,6 @@ export default function JobDetailsPage() {
   if (!jobData) {
     return (
       <div className={styles.pageContainer}>
-        <NavBar
-          showHome
-          showBackToEdit
-          onHome={() => router.push('/')}
-          onBackToEdit={() => router.push('/jobs')}
-          backLabel="Back to Jobs"
-          title="Job Details"
-        />
         <div className={styles.loading}>
           <h2>No Job Data Found</h2>
           <button 
@@ -1198,14 +1173,6 @@ export default function JobDetailsPage() {
 
   return (
     <div className={styles.pageContainer}>
-      <NavBar
-        showHome
-        showBackToEdit
-        onHome={() => router.push('/')}
-        onBackToEdit={() => router.push('/jobs')}
-        backLabel="Back to Jobs"
-        title={getJobTitle()}
-      />
       
       <div className={styles.editContainer}>
         <main className={styles.mainContent}>

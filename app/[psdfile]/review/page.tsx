@@ -3,7 +3,6 @@
 import React, { useEffect } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import styles from '../../../styles/Review.module.css';
-import NavBar from '../../../components/NavBar';
 import PsdCanvas from '../../../components/PsdCanvas';
 import { usePsdStore } from '../../../web/store/psdStore';
 import { collectLayerParameters, buildFireflyLayersPayload } from '../../../web/utils/firefly';
@@ -132,18 +131,6 @@ export default function ReviewPage() {
 
   return (
     <div className={styles.pageContainer}>
-      <NavBar
-        showHome
-        showBackToEdit
-        showGenerate
-        onHome={() => router.push('/')}
-        onBackToEdit={() => {
-          console.log('ReviewPage navigating back to Edit with psdfile:', psdfile);
-          router.push(`/${psdfile}/edit`);
-        }}
-        onGenerate={() => router.push(`/${psdfile}/generating`)}
-        title={`Review: ${displayName}`}
-      />
       <div className={styles.reviewContainer}>
         <main className={styles.mainContent}>
           <div style={{ display: 'flex', justifyContent: 'center', margin: '8px 0 24px 0' }}>
