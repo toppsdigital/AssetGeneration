@@ -312,7 +312,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     const spotGroups = jsonData?.layers?.filter((layer: any) => 
       layer.name?.toLowerCase().includes('spot group')
     ) || [];
-
+    
     const collectSolidColorLayers = (layer: any): any[] => {
       const layers: any[] = [];
       if (layer.type === 'solidcolorfill') {
@@ -325,7 +325,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       }
       return layers;
     };
-
+    
     // Map each spot group to its colors
     return spotGroups.map((group, index) => ({
       groupName: `SPOT GROUP ${index + 1}`,
@@ -769,7 +769,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                           <button
                             onClick={() => {
                               if (spotColorPairs.length < 3) {
-                                setSpotColorPairs(prev => [...prev, { spot: '', color: undefined }]);
+                              setSpotColorPairs(prev => [...prev, { spot: '', color: undefined }]);
                               }
                             }}
                             disabled={!spotColorPairs[0]?.spot || spotColorPairs.length >= 3}
@@ -814,79 +814,79 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                           {spotColorPairs.map((pair, index) => {
                             const spotGroup = getColorVariants()[index];
                             return (
-                              <div key={index} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                                {/* Spot Layer Selection */}
-                                <div style={{ flex: 1 }}>
-                                  {index === 0 && (
-                                    <label style={{
-                                      display: 'block',
-                                      fontSize: 12,
-                                      color: '#9ca3af',
-                                      marginBottom: 4
-                                    }}>
-                                      Spot Layer
-                                    </label>
-                                  )}
-                                  <select
-                                    value={pair.spot || ''}
-                                    onChange={(e) => {
-                                      const newPairs = [...spotColorPairs];
-                                      newPairs[index] = { ...newPairs[index], spot: e.target.value };
-                                      setSpotColorPairs(newPairs);
-                                    }}
-                                    style={{
-                                      width: '100%',
+                            <div key={index} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                              {/* Spot Layer Selection */}
+                              <div style={{ flex: 1 }}>
+                                {index === 0 && (
+                                  <label style={{
+                                    display: 'block',
+                                    fontSize: 12,
+                                    color: '#9ca3af',
+                                    marginBottom: 4
+                                  }}>
+                                    Spot Layer
+                                  </label>
+                                )}
+                                <select
+                                  value={pair.spot || ''}
+                                  onChange={(e) => {
+                                    const newPairs = [...spotColorPairs];
+                                    newPairs[index] = { ...newPairs[index], spot: e.target.value };
+                                    setSpotColorPairs(newPairs);
+                                  }}
+                                  style={{
+                                    width: '100%',
                         padding: '8px 12px',
-                                      background: 'rgba(255, 255, 255, 0.08)',
-                                      border: '1px solid rgba(255, 255, 255, 0.2)',
-                                      borderRadius: 8,
-                                      color: '#f8f8f8',
-                                      fontSize: 14,
-                                      marginTop: index > 0 ? '20px' : '0'
-                                    }}
-                                  >
-                                    <option value="" style={{ background: '#1f2937' }}>Select...</option>
-                                    {getSpotLayers()
-                                      .filter(layer => !spotColorPairs.some((p, i) => i !== index && p.spot === layer))
-                                      .map(layer => (
-                                        <option key={layer} value={layer} style={{ background: '#1f2937' }}>
-                                          {layer}
-                                        </option>
+                                    background: 'rgba(255, 255, 255, 0.08)',
+                                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                                    borderRadius: 8,
+                                    color: '#f8f8f8',
+                                    fontSize: 14,
+                                    marginTop: index > 0 ? '20px' : '0'
+                                  }}
+                                >
+                                  <option value="" style={{ background: '#1f2937' }}>Select...</option>
+                                  {getSpotLayers()
+                                    .filter(layer => !spotColorPairs.some((p, i) => i !== index && p.spot === layer))
+                                    .map(layer => (
+                                      <option key={layer} value={layer} style={{ background: '#1f2937' }}>
+                                        {layer}
+                                      </option>
                                   ))}
-                                  </select>
-                                </div>
-                                
-                                {/* Color Selection */}
-                                <div style={{ flex: 1 }}>
-                                  {index === 0 && (
-                                    <label style={{
-                                      display: 'block',
-                                      fontSize: 12,
-                                      color: '#9ca3af',
-                                      marginBottom: 4
-                                    }}>
+                                </select>
+                              </div>
+                              
+                              {/* Color Selection */}
+                              <div style={{ flex: 1 }}>
+                                {index === 0 && (
+                                  <label style={{
+                                    display: 'block',
+                                    fontSize: 12,
+                                    color: '#9ca3af',
+                                    marginBottom: 4
+                                  }}>
                                       Color ({spotGroup?.groupName || `SPOT GROUP ${index + 1}`})
-                                    </label>
-                                  )}
-                                  <select
-                                    value={pair.color ? `${pair.color.id}-${pair.color.name}` : ''}
-                                    onChange={(e) => {
-                                      if (e.target.value) {
-                                        const [id, ...nameParts] = e.target.value.split('-');
-                                        const name = nameParts.join('-');
-                                        const newPairs = [...spotColorPairs];
-                                        newPairs[index] = { 
-                                          ...newPairs[index], 
-                                          color: { id: parseInt(id), name } 
-                                        };
-                                        setSpotColorPairs(newPairs);
-                                      } else {
-                                        const newPairs = [...spotColorPairs];
-                                        newPairs[index] = { ...newPairs[index], color: undefined };
-                                        setSpotColorPairs(newPairs);
-                                      }
-                                    }}
-                                    disabled={!pair.spot}
+                                  </label>
+                                )}
+                                <select
+                                  value={pair.color ? `${pair.color.id}-${pair.color.name}` : ''}
+                                  onChange={(e) => {
+                                    if (e.target.value) {
+                                      const [id, ...nameParts] = e.target.value.split('-');
+                                      const name = nameParts.join('-');
+                                      const newPairs = [...spotColorPairs];
+                                      newPairs[index] = { 
+                                        ...newPairs[index], 
+                                        color: { id: parseInt(id), name } 
+                                      };
+                                      setSpotColorPairs(newPairs);
+                            } else {
+                                      const newPairs = [...spotColorPairs];
+                                      newPairs[index] = { ...newPairs[index], color: undefined };
+                                      setSpotColorPairs(newPairs);
+                            }
+                          }}
+                                  disabled={!pair.spot}
                           style={{
                                     width: '100%',
                                     padding: '8px 12px',
@@ -1002,11 +1002,11 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                     {((currentCardType === 'front-parallel' && spotColorPairs.some(pair => pair.spot)) || 
                       currentCardType === 'front-base') && getWpInvLayers().length > 0 && (
                       <div>
-                        <label style={{
-                          display: 'block',
+                  <label style={{
+                    display: 'block',
                           fontSize: 14,
-                          fontWeight: 600,
-                          color: '#f8f8f8',
+                    fontWeight: 600,
+                    color: '#f8f8f8',
                           marginBottom: 8
                         }}>
                           Select VFX Texture
@@ -1028,7 +1028,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                               - using {getWpInvLayers()[0]}
                             </span>
                           )}
-                        </label>
+                  </label>
                         <select
                           value={currentConfig.vfx || ''}
                           onChange={(e) => setCurrentConfig(prev => ({ ...prev, vfx: e.target.value }))}

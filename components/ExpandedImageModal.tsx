@@ -292,8 +292,8 @@ export default function ExpandedImageModal({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center'
-              }}
-            />
+                    }}
+                  />
           </div>
           
           {/* Fixed title area at bottom */}
