@@ -1,13 +1,11 @@
 'use client';
 
 import SignInButton from './SignInButton';
-import PageTitle from './PageTitle';
 import styles from '../styles/Home.module.css';
 
 export default function SignInPage() {
   return (
     <div className={styles.container}>
-      <PageTitle title="Content Production Hub" />
       <div className={styles.content}>
         <div className={styles.mainSections}>
           {/* Welcome Section */}
