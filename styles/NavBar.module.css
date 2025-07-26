@@ -149,4 +149,64 @@
   color: #ec4899;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(244, 114, 182, 0.3);
+}
+
+.userProfile {
+  position: relative;
+  margin-left: 16px;
+}
+
+.userProfileBtn {
+  background: rgba(244, 114, 182, 0.15);
+  color: #fce7f3;
+  border: 1px solid rgba(244, 114, 182, 0.25);
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-weight: 500;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.userProfileBtn:hover {
+  background: rgba(244, 114, 182, 0.25);
+  border-color: rgba(168, 85, 247, 0.5);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(168, 85, 247, 0.25);
+}
+
+.userDropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: linear-gradient(135deg, #2d1b69 0%, #11092b 100%);
+  border: 1px solid rgba(244, 114, 182, 0.25);
+  border-radius: 8px;
+  padding: 8px;
+  min-width: 150px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(20px);
+  z-index: 1000;
+}
+
+.signOutBtn {
+  width: 100%;
+  background: transparent;
+  color: #fce7f3;
+  border: none;
+  padding: 8px 16px;
+  text-align: left;
+  font-size: 0.95rem;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.signOutBtn:hover {
+  background: rgba(244, 114, 182, 0.15);
+  color: #f472b6;
 } 

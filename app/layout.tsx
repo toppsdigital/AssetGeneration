@@ -1,7 +1,7 @@
 import '../styles/globals.css';
 import type { Metadata } from 'next';
 import { auth } from './auth';
-import { SignIn } from '../components/SignInButton';
+import SignInPage from '../components/SignInPage';
 import QueryProvider from '../components/QueryProvider';
 
 export const metadata: Metadata = {
@@ -19,8 +19,11 @@ export default async function RootLayout({
   if (!session) {
     return (
       <html lang="en">
-        <body style={{ paddingBottom: '2rem' }}><SignIn/></body>
-      </html>)
+        <body style={{ paddingBottom: '2rem' }}>
+          <SignInPage />
+        </body>
+      </html>
+    );
   }
 
   return (
