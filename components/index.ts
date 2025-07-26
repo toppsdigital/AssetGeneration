@@ -8,8 +8,10 @@ export { default as PsdCanvas } from './PsdCanvas';
 export { PSDTemplateSelector } from './PSDTemplateSelector';
 export { default as QueryProvider } from './QueryProvider';
 export { default as RegularImageViewer } from './RegularImageViewer';
+export { default as SignOutButton } from './SignOutButton';
 export { default as Spinner } from './Spinner';
 export { default as TiffImageViewer } from './TiffImageViewer';
+export { default as UserSessionHeader } from './UserSessionHeader';
 export { default as ExpandedImageModal } from './ExpandedImageModal';
 export { DownloadSection } from './DownloadSection';
 

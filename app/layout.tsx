@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { auth } from './auth';
 import SignInPage from '../components/SignInPage';
 import QueryProvider from '../components/QueryProvider';
+import UserSessionHeader from '../components/UserSessionHeader';
 
 export const metadata: Metadata = {
   title: 'Asset Generation',
@@ -30,6 +31,7 @@ export default async function RootLayout({
     <html lang="en">
       <body style={{ paddingBottom: '2rem' }}>
         <QueryProvider>
+          <UserSessionHeader session={session} />
           {children}
         </QueryProvider>
       </body>
