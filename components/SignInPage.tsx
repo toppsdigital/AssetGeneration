@@ -1,47 +1,32 @@
-import { SignIn } from './SignInButton';
+'use client';
+
+import SignInButton from './SignInButton';
 import NavBar from './NavBar';
+import styles from '../styles/Home.module.css';
 
 export default function SignInPage() {
   return (
-    <div style={{ 
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      display: 'flex',
-      flexDirection: 'column'
-    }}>
+    <div className={styles.container}>
       <NavBar title="Content Production Hub" />
-      <div style={{
-        flex: 1,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '2rem'
-      }}>
-        <div style={{
-          background: 'rgba(255, 255, 255, 0.95)',
-          padding: '3rem',
-          borderRadius: '16px',
-          boxShadow: '0 20px 40px rgba(0, 0, 0, 0.1)',
-          textAlign: 'center',
-          maxWidth: '400px',
-          width: '100%'
-        }}>
-          <h1 style={{
-            fontSize: '2rem',
-            fontWeight: '600',
-            color: '#1f2937',
-            marginBottom: '0.5rem'
+      <div className={styles.content}>
+        <div className={styles.mainSections}>
+          {/* Welcome Section */}
+          <div className={styles.prominentSection} style={{ 
+            textAlign: 'center',
+            padding: '4rem 3rem',
+            maxWidth: '600px',
+            margin: '3rem auto'
           }}>
-            Welcome Back
-          </h1>
-          <p style={{
-            color: '#6b7280',
-            marginBottom: '2rem',
-            fontSize: '1rem'
-          }}>
-            Sign in to access your content production workspace
-          </p>
-          <SignIn />
+            <div className={styles.sectionHeader}>
+              <h2 style={{ fontSize: '2.5rem', marginBottom: '1.5rem' }}>Welcome Back</h2>
+              <p style={{ fontSize: '1.2rem', marginBottom: '3rem' }}>
+                Sign in to access your content production workspace and start creating amazing digital assets.
+              </p>
+            </div>
+            <div className={styles.buttonGroup} style={{ marginTop: '2rem' }}>
+              <SignInButton />
+            </div>
+          </div>
         </div>
       </div>
     </div>

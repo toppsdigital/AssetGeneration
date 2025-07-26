@@ -1,20 +1,30 @@
-import { signIn } from "../app/auth"
- 
-export function SignIn() {
+'use client';
+
+import React from 'react';
+import styles from '../styles/Home.module.css';
+
+const SignInButton = () => {
+  const handleSignIn = () => {
+    window.location.href = '/auth/signin';
+  };
+
   return (
-    <form
-      action={async () => {
-        "use server"
-        await signIn()
+    <button 
+      onClick={handleSignIn}
+      type="button"
+      className={styles.primaryButton}
+      style={{
+        fontSize: '1.4rem',
+        padding: '1.5rem 3rem',
+        minWidth: '280px',
+        height: '70px',
+        fontWeight: '700'
       }}
     >
-      <button type="submit">Sign in</button>
-    </form>
-  )
-}
+      <span className={styles.buttonIcon} style={{ fontSize: '1.6rem' }}>🔐</span>
+      Sign in with Okta
+    </button>
+  );
+};
 
-
-
-
-
-
+export default SignInButton;
