@@ -5,6 +5,7 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import styles from '../../../styles/Edit.module.css';
 import { usePsdStore } from '../../../web/store/psdStore';
 import PsdCanvas from '../../../components/PsdCanvas';
+import PageTitle from '../../../components/PageTitle';
 import Spinner from '../../../components/Spinner';
 
 interface Layer {
@@ -447,6 +448,7 @@ export default function EditPage() {
 
   return (
     <div className={styles.pageContainer}>
+      <PageTitle title={`Edit Template: ${displayName}`} />
       <div className={styles.editContainer}>
         <main className={styles.mainContent}>
           <div className={styles.canvasWrapper}>

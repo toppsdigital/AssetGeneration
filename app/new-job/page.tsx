@@ -4,6 +4,7 @@ import React, { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import styles from '../../styles/Home.module.css';
+import PageTitle from '../../components/PageTitle';
 import Spinner from '../../components/Spinner';
 import contentPipelineApi from '../../web/utils/contentPipelineApi';
 import { createCacheClearingCallback } from '../../web/hooks/useJobData';
@@ -277,6 +278,10 @@ function NewJobPageContent() {
 
   return (
     <div className={styles.container}>
+      <PageTitle 
+        title="Create New Job"
+        subtitle="Upload physical PDFs and convert them into layered, production-ready digital assets."
+      />
       <div className={styles.content}>
         <div style={{ maxWidth: 800, margin: '0 auto', padding: '24px' }}>
           <div style={{ marginBottom: 32, marginTop: 16 }}>
