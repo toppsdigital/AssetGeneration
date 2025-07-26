@@ -492,8 +492,53 @@ export default function EditPage() {
           </div>
         </main>
         <aside className={styles.sidebar}>
-          <h2>Layers</h2>
-          {renderLayerTree(data.layers)}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                    <h2 style={{ margin: 0 }}>Layers</h2>
+            {hasAnyChanges() && (
+              <button
+                onClick={handleReview}
+                style={{
+                  padding: '6px 12px',
+                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                  boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-1px)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.4)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(16, 185, 129, 0.3)';
+                }}
+                title="Review all layer changes"
+              >
+                <span>👁️</span>
+                Review
+              </button>
+            )}
+          </div>
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.06)',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: 16,
+            padding: '1rem',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+          }}>
+            <div style={{ paddingLeft: '0.5rem' }}>
+              {renderLayerTree(data.layers)}
+            </div>
+          </div>
         </aside>
       </div>
     </div>

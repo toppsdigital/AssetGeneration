@@ -17,21 +17,17 @@
 }
 
 .sidebar {
-  width: 350px;
-  background: rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(20px);
+  width: 450px;
   border-right: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 2rem 1.5rem 2rem 2rem;
+  padding: 1rem 2rem 2rem 2rem;
   overflow-y: auto;
   height: 100%;
   flex-shrink: 0;
-  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.2);
 }
 
 .sidebar h2 {
   font-size: 1.25rem;
   font-weight: 600;
-  margin-bottom: 1.5rem;
   color: #f8f8f8;
   letter-spacing: -0.025em;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
