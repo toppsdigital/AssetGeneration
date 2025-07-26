@@ -27,21 +27,14 @@ const PageTitle: React.FC<PageTitleProps> = ({ title, subtitle }) => {
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '6px',
-            padding: '8px 12px',
-            background: 'rgba(255, 255, 255, 0.1)',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            borderRadius: '6px',
+            padding: '8px',
             color: '#e5e7eb',
             textDecoration: 'none',
-            fontSize: '14px',
-            fontWeight: '500',
             transition: 'all 0.2s ease',
             cursor: 'pointer'
           }}
         >
-          <span style={{ fontSize: '16px' }}>🏠</span>
-          Home
+          <span style={{ fontSize: '20px' }}>🏠</span>
         </Link>
         
         <Link
