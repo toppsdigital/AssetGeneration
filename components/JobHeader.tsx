@@ -37,88 +37,101 @@ export const JobHeader = ({
     return parts.join(' - ') || 'Unknown Job';
   };
 
+  const getJobDisplayTitle = () => {
+    if (!jobData) return 'Loading...';
+    const parts = [
+      jobData.app_name,
+      jobData.filename_prefix
+    ].filter(Boolean);
+    return parts.join(' ') || 'Unknown Job';
+  };
+
   return (
     <div 
       className={className}
       style={{ 
         marginBottom: 48,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
         paddingBottom: 16,
         borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
       }}
     >
-      {/* Status Badge */}
-      <JobStatusBadge 
-        status={jobData.job_status || 'Unknown'}
-        totalPdfFiles={totalPdfFiles}
-        uploadedPdfFiles={uploadedPdfFiles}
-      />
-      
-      {/* Metadata - Less prominent */}
+      {/* Status, Title and Metadata Row */}
       <div style={{
         display: 'flex',
-        gap: 16,
-        fontSize: 12,
-        color: '#6b7280'
+        alignItems: 'center',
+        justifyContent: 'space-between'
       }}>
-        <span>
-          Files: <span style={{ color: '#9ca3af' }}>
-            {jobData.content_pipeline_files?.length || 0}
-          </span>
-        </span>
-        {jobData.created_at && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          {/* Status Badge - Top Left */}
+          <JobStatusBadge 
+            status={jobData.job_status || 'Unknown'}
+            totalPdfFiles={totalPdfFiles}
+            uploadedPdfFiles={uploadedPdfFiles}
+          />
+          
+          {/* Job Title - Horizontally aligned */}
+          <h1 style={{
+            fontSize: 20,
+            fontWeight: 500,
+            color: '#e5e7eb',
+            margin: 0,
+            lineHeight: 1.3
+          }}>
+            {getJobDisplayTitle()}
+          </h1>
+        </div>
+        
+        {/* Metadata - Less prominent */}
+        <div style={{
+          display: 'flex',
+          gap: 16,
+          fontSize: 12,
+          color: '#6b7280'
+        }}>
           <span>
-            Created: <span style={{ color: '#9ca3af' }}>
-              {new Date(jobData.created_at).toLocaleDateString()}
+            Files: <span style={{ color: '#9ca3af' }}>
+              {jobData.content_pipeline_files?.length || 0}
             </span>
           </span>
-        )}
-        {jobData.job_id && (
-          <span style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-          <span>
-            ID: <span style={{ 
-              color: '#9ca3af', 
-              fontFamily: 'monospace', 
-              fontSize: 11 
-            }}>
-              {jobData.job_id}
+          {jobData.created_at && (
+            <span>
+              Created: <span style={{ color: '#9ca3af' }}>
+                {new Date(jobData.created_at).toLocaleDateString()}
+              </span>
             </span>
-            </span>
-            {onRerunJob && (
-              <button
-                onClick={onRerunJob}
-                style={{
-                  padding: '1px 6px',
-                  background: 'rgba(245, 158, 11, 0.1)',
-                  border: '1px solid rgba(245, 158, 11, 0.3)',
-                  borderRadius: 3,
-                  color: '#f59e0b',
-                  fontSize: 10,
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 3,
-                  verticalAlign: 'baseline',
-                  lineHeight: 1
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(245, 158, 11, 0.2)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(245, 158, 11, 0.1)';
-                }}
-                title="Re-run this job with new files"
-              >
-                <span style={{ fontSize: 12, color: '#d1d5db' }}>⟲</span>
-                Re-run
-              </button>
-            )}
-          </span>
-        )}
+          )}
+          {onRerunJob && (
+            <button
+              onClick={onRerunJob}
+              style={{
+                padding: '1px 6px',
+                background: 'rgba(245, 158, 11, 0.1)',
+                border: '1px solid rgba(245, 158, 11, 0.3)',
+                borderRadius: 3,
+                color: '#f59e0b',
+                fontSize: 10,
+                fontWeight: 500,
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 3,
+                verticalAlign: 'baseline',
+                lineHeight: 1
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(245, 158, 11, 0.2)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(245, 158, 11, 0.1)';
+              }}
+              title="Re-run this job with new files"
+            >
+              <span style={{ fontSize: 12, color: '#d1d5db' }}>⟲</span>
+              Re-run
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
