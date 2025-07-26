@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React from 'react';
 import { useRouter } from 'next/navigation';
 import styles from '../styles/NavBar.module.css';
 
@@ -42,36 +42,6 @@ const NavBar: React.FC<NavBarProps> = ({
   children,
 }) => {
   const router = useRouter();
-  const [showDropdown, setShowDropdown] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setShowDropdown(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
-
-  const handleSignOut = async () => {
-    try {
-      // Call the auth endpoint to sign out
-      await fetch('/auth/signout', { method: 'POST' });
-      // Redirect to home page
-      window.location.href = '/';
-    } catch (error) {
-      console.error('Sign out error:', error);
-    }
-  };
-
-  // For now, let's use a simple user indicator - we'll improve this when we test
-  const mockUser = { name: 'Test User' }; // This would come from session context
 
   return (
     <nav className={styles.navBar}>
@@ -118,23 +88,6 @@ const NavBar: React.FC<NavBarProps> = ({
           <button className={styles.generateBtn} onClick={onViewJobs}>View Jobs</button>
         )}
         {children}
-        {mockUser && (
-          <div className={styles.userProfile} ref={dropdownRef}>
-            <button 
-              className={styles.userProfileBtn} 
-              onClick={() => setShowDropdown(!showDropdown)}
-            >
-              {mockUser.name || 'User'}
-            </button>
-            {showDropdown && (
-              <div className={styles.userDropdown}>
-                <button onClick={handleSignOut} className={styles.signOutBtn}>
-                  Sign Out
-                </button>
-              </div>
-            )}
-          </div>
-        )}
       </div>
     </nav>
   );
