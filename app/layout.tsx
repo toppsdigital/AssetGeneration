@@ -20,7 +20,7 @@ export default async function RootLayout({
   if (!session) {
     return (
       <html lang="en">
-        <body style={{ paddingBottom: '2rem' }}>
+        <body>
           <SignInPage />
         </body>
       </html>
@@ -29,7 +29,7 @@ export default async function RootLayout({
 
   return (
     <html lang="en">
-      <body style={{ paddingBottom: '2rem' }}>
+      <body>
         <QueryProvider>
           <UserSessionHeader session={session} />
           {children}
