@@ -1,11 +1,17 @@
 // Content Pipeline API utility for job and file management
 // This utility provides a clean interface to interact with the content-pipeline-proxy API
 
+// Cache clearing callback type for rerun operations
+export type CacheClearingCallback = (
+  sourceJobId: string, 
+  newJobId: string, 
+  deletedFiles?: string[]
+) => void;
+
 export interface JobData {
   job_id?: string;
   app_name: string;
-  release_name: string;
-  subset_name: string;
+  filename_prefix: string;
   source_folder: string;
   files?: string[];
   description?: string;
@@ -73,6 +79,7 @@ export interface FileListResponse {
 
 export interface BatchCreateResponse {
   created_files: FileData[];
+  existing_files?: FileData[];
   failed_files: Array<{
     filename: string;
     error: string;
@@ -317,6 +324,32 @@ class ContentPipelineAPI {
     return response.json();
   }
 
+  // Update multiple PDF file statuses within original_files in a single API call
+  async batchUpdatePdfFileStatus(
+    groupFilename: string, 
+    pdfUpdates: Array<{
+      pdf_filename: string;
+      status: 'uploading' | 'uploaded' | 'upload-failed';
+    }>
+  ): Promise<FileResponse> {
+    const response = await fetch(`${this.baseUrl}?operation=batch_update_pdf_status&id=${encodeURIComponent(groupFilename)}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        pdf_updates: pdfUpdates
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || `Failed to batch update PDF status: ${response.status}`);
+    }
+
+    return response.json();
+  }
+
   // Get recent jobs for dashboard
   async getRecentJobs(limit: number = 10): Promise<JobListResponse> {
     return this.listJobs({
@@ -326,12 +359,70 @@ class ContentPipelineAPI {
     });
   }
 
+  // Re-run a job with new parameters
+  async rerunJob(
+    jobId: string, 
+    jobData: Omit<JobData, 'job_id' | 'created_at' | 'last_updated' | 'job_status'>,
+    onCacheClear?: CacheClearingCallback
+  ): Promise<JobResponse> {
+    // Calculate total PDF files based on grouped filenames
+    // Each grouped filename represents 2 PDF files (front and back)
+    const totalPdfFiles = (jobData.files || []).length * 2;
+    
+    const jobPayload = {
+      ...jobData,
+      job_status: 'uploading',
+      files: jobData.files || [],
+      original_files_total_count: totalPdfFiles,
+      original_files_completed_count: 0,
+      original_files_failed_count: 0
+    };
+
+    const response = await fetch(`${this.baseUrl}?operation=rerun_job&id=${encodeURIComponent(jobId)}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(jobPayload),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || `Failed to rerun job: ${response.status}`);
+    }
+
+    const result = await response.json();
+    
+    // Clear relevant caches after successful rerun
+    if (onCacheClear && result.job?.job_id) {
+      console.log('🔄 Clearing caches after successful job rerun');
+      
+      // Extract deleted files from the response for specific cache clearing
+      const deletedFiles = result.file_deletion_details?.deleted_files || [];
+      console.log('📁 Files deleted during rerun:', deletedFiles);
+      
+      onCacheClear(jobId, result.job.job_id, deletedFiles);
+    }
+
+    return result;
+  }
+
   // Generate assets for a job
   async generateAssets(
     jobId: string,
     payload: {
-      colors: Array<{ id: number; name: string }>;
-      layers: string[];
+      assets: Array<{
+        type: 'wp' | 'back' | 'front-base' | 'front-parallel';
+        layer: string;
+        spot?: string;
+        color?: { id: number; name: string };
+        spot_color_pairs?: Array<{
+          spot: string;
+          color?: { id: number; name: string };
+        }>;
+        vfx?: string;
+        chrome: boolean;
+      }>;
       psd_file: string;
     }
   ): Promise<any> {
@@ -346,6 +437,38 @@ class ContentPipelineAPI {
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.error || `Failed to generate assets: ${response.status}`);
+    }
+
+    return response.json();
+  }
+
+  // Download completed job output files from S3
+  async downloadJobOutputFolder(jobId: string): Promise<{
+    success: boolean;
+    message: string;
+    data?: {
+      download_url: string;
+      expires_in: number;
+      zip_key: string;
+      source_folder: string;
+      files_count: number;
+    };
+  }> {
+    const folder = `asset_generator/dev/uploads/Output/${jobId}`;
+    
+    const response = await fetch(`${this.baseUrl}?operation=s3_download_folder`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        folder: folder
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || `Failed to download job output folder: ${response.status}`);
     }
 
     return response.json();

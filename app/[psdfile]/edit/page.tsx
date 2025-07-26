@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, type ReactNode, useRef } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import styles from '../../../styles/Edit.module.css';
 import { usePsdStore } from '../../../web/store/psdStore';
 import NavBar from '../../../components/NavBar';
@@ -39,11 +39,16 @@ interface Change {
 export default function EditPage() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const psdfile = params.psdfile;
   let templateStr = Array.isArray(psdfile) ? psdfile[0] : psdfile;
   if (templateStr && !templateStr.endsWith('.json')) {
     templateStr = `${templateStr}.json`;
   }
+  
+  // Get JSON URL from query parameters (preferred) or construct from templateStr (fallback)
+  const jsonUrl = searchParams.get('jsonUrl') || templateStr;
+  
   const {
     data,
     edits,
@@ -67,33 +72,39 @@ export default function EditPage() {
   const [status, setStatus] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!templateStr) {
-      console.log('[EditPage] No templateStr, skipping fetch.');
+    if (!jsonUrl) {
+      console.log('[EditPage] No jsonUrl, skipping fetch.');
       return;
     }
-    if (lastLoadedTemplate !== templateStr) {
-      console.log('[EditPage] Resetting store and starting JSON fetch for:', templateStr);
+    if (lastLoadedTemplate !== jsonUrl) {
+      console.log('[EditPage] Resetting store and starting JSON fetch for:', jsonUrl);
       reset();
       setLoading(true);
       setStatus('Loading layer data from JSON...');
+      
+      // Use proxy to fetch JSON data to avoid CORS errors
       fetch('/api/s3-proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_method: 'get', filename: templateStr, download: true }),
+        body: JSON.stringify({
+          client_method: 'get',
+          filename: jsonUrl,
+          download: true,
+          direct_url: true
+        }),
       })
         .then(async res => {
-          console.log('[EditPage] /api/s3-proxy response:', res);
+          console.log('[EditPage] Proxy fetch response:', res);
           if (!res.ok) {
-            const errJson = await res.json().catch(() => ({}));
-            console.error('[EditPage] S3 proxy error:', errJson.error || 'Failed to fetch JSON data.');
-            throw new Error(errJson.error || 'Failed to fetch JSON data.');
+            const errorData = await res.json().catch(() => ({}));
+            throw new Error(`Failed to fetch JSON data via proxy: ${res.status} ${res.statusText} - ${errorData.error || 'Unknown error'}`);
           }
           return res.json();
         })
         .then(json => {
           console.log('[EditPage] Downloaded JSON content:', json);
           setData(json);
-          const psdFileName = templateStr.replace(/\.json$/i, '');
+          const psdFileName = templateStr?.replace(/\.json$/i, '') || 'template';
           setTempDir(`https://topps-nexus-powertools.s3.us-east-1.amazonaws.com/asset_generator/dev/public/${psdFileName}/assets/`);
           if (!originals.visibility || Object.keys(originals.visibility).length === 0 || (data && data.json_file !== (json.json_file || ''))) {
             const vis: Record<number, boolean> = {};
@@ -119,7 +130,7 @@ export default function EditPage() {
           setEdits({ visibility: {}, text: {}, smartObjects: {} });
           setLoading(false);
           setStatus(null);
-          setLastLoadedTemplate(templateStr);
+          setLastLoadedTemplate(jsonUrl);
           console.log('[EditPage] JSON loaded and state set.');
         })
         .catch(err => {
@@ -130,14 +141,14 @@ export default function EditPage() {
         });
     } else {
       // Even if template is already loaded, ensure tempDir is set
-      const psdFileName = templateStr.replace(/\.json$/i, '');
+      const psdFileName = templateStr?.replace(/\.json$/i, '') || 'template';
       setTempDir(`https://topps-nexus-powertools.s3.us-east-1.amazonaws.com/asset_generator/dev/public/${psdFileName}/assets/`);
       setLoading(false);
       setStatus(null);
-      console.log('[EditPage] Already loaded template:', templateStr);
+      console.log('[EditPage] Already loaded template:', jsonUrl);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [templateStr, lastLoadedTemplate]);
+  }, [jsonUrl, lastLoadedTemplate]);
 
   const toggleVisibility = (id: number) => {
     const effectiveVisible = edits.visibility.hasOwnProperty(id)

@@ -141,8 +141,7 @@ export default function NewJobPage() {
     try {
       const response = await contentPipelineApi.createJob({
         app_name: jobData.appName,
-        release_name: jobData.releaseName,
-        subset_name: jobData.subsetName,
+        filename_prefix: jobData.releaseName, // Map releaseName to filename_prefix
         source_folder: jobData.sourceFolder,
         files: jobData.files,
         description: jobData.description
@@ -239,8 +238,8 @@ export default function NewJobPage() {
       const queryParams = new URLSearchParams({
         jobId: createdJob.job_id!,
         appName: createdJob.app_name || formData.appName,
-        releaseName: createdJob.release_name || formData.releaseName,
-        subsetName: createdJob.subset_name || formData.subsetName,
+        releaseName: createdJob.filename_prefix || formData.releaseName,
+        subsetName: '', // No longer used
         sourceFolder: createdJob.source_folder || generateFilePath(formData.appName),
         status: createdJob.job_status || 'Upload started',
         createdAt: createdJob.created_at || new Date().toISOString(),

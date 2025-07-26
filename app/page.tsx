@@ -36,14 +36,7 @@ export default function Home() {
       // { files: [{ file_name: "...", display_name: "...", json_url: "..." }], total_count: ... }
       const psdFiles = data.files || [];
       
-      // Filter out files with "physical" in their name if needed
-      const filteredFiles = psdFiles.filter((file: any) => {
-        const fileName = file.file_name || file.name || '';
-        const hasPhysical = fileName.toLowerCase().includes('physical');
-        return !hasPhysical;
-      });
-      
-      setSingleAssetTemplates(filteredFiles);
+      setSingleAssetTemplates(psdFiles);
     } catch (err) {
       alert('Error fetching templates: ' + (err as Error).message);
     } finally {
@@ -61,13 +54,22 @@ export default function Home() {
       ? template.split('/').pop()?.replace(/\.json$/i, '') || ''
       : template.display_name || template.file_name?.replace(/\.psd$/i, '') || '';
     
+    // Get the JSON URL from the template data
+    const jsonUrl = typeof template === 'string' 
+      ? template // For backward compatibility with old string format
+      : template.json_url;
+    
     reset();
     
     // Check if the edit page exists before navigating
     try {
       const res = await fetch(`/${psdfile}/edit`, { method: 'HEAD' });
       if (res.ok) {
-        router.push(`/${psdfile}/edit`);
+        // Pass the JSON URL as a query parameter
+        const editUrl = jsonUrl 
+          ? `/${psdfile}/edit?jsonUrl=${encodeURIComponent(jsonUrl)}`
+          : `/${psdfile}/edit`;
+        router.push(editUrl);
       } else {
         alert('Edit page not found for this template.');
       }
@@ -87,7 +89,7 @@ export default function Home() {
   return (
     <div className={styles.container}>
       <NavBar 
-        title="Digital Content Production" 
+        title="Content Production Hub" 
       />
       <div className={styles.content}>
         <div className={styles.mainSections}>
@@ -95,7 +97,7 @@ export default function Home() {
           <div className={styles.prominentSection}>
             <div className={styles.sectionHeader}>
               <h2>Physical to Digital Pipeline</h2>
-              <p>Transform physical PDF assets into digital collectibles</p>
+              <p>Upload physical PDFs, and convert them into layered, production-ready assets.</p>
             </div>
             <div className={styles.buttonGroup}>
               <button
@@ -115,11 +117,11 @@ export default function Home() {
             </div>
           </div>
 
-          {/* In App Content Creation Section */}
+          {/* Create New Digital Assets Section */}
           <div className={styles.prominentSection}>
             <div className={styles.sectionHeader}>
-              <h2>In App Content Creation</h2>
-              <p>Select a PSD to start creating a new asset</p>
+              <h2>Create New Digital Assets</h2>
+              <p>Select a PSD template to generate an image for in-app use.</p>
             </div>
             <div className={styles.templatesList}>
               {loadingFiles ? (

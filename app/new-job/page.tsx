@@ -1,22 +1,30 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import styles from '../../styles/Home.module.css';
 import NavBar from '../../components/NavBar';
 import Spinner from '../../components/Spinner';
 import contentPipelineApi from '../../web/utils/contentPipelineApi';
+import { createCacheClearingCallback } from '../../web/hooks/useJobData';
 
 interface NewJobFormData {
   appName: string;
-  releaseName: string;
-  subsetName: string;
+  filenamePrefix: string;
+  description: string;
   uploadFolder: string;
   selectedFiles: FileList | null;
 }
 
-export default function NewJobPage() {
+function NewJobPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
+  
+  // Check if this is a re-run operation
+  const isRerun = searchParams.get('rerun') === 'true';
+  const sourceJobId = searchParams.get('sourceJobId');
   
   // Helper function to generate S3 file paths based on app and optional filename
   const generateFilePath = (appName: string, filename?: string): string => {
@@ -28,10 +36,11 @@ export default function NewJobPage() {
     return filename ? `${basePath}/${filename}` : basePath;
   };
   
+  // Initialize form data - pre-fill if this is a re-run
   const [formData, setFormData] = useState<NewJobFormData>({
-    appName: '',
-    releaseName: '',
-    subsetName: '',
+    appName: isRerun ? (searchParams.get('appName') || '') : '',
+    filenamePrefix: isRerun ? (searchParams.get('filenamePrefix') || '') : '',
+    description: isRerun ? (searchParams.get('description') || '') : '',
     uploadFolder: '',
     selectedFiles: null
   });
@@ -42,9 +51,12 @@ export default function NewJobPage() {
 
   // Handle input changes
   const handleInputChange = (field: keyof NewJobFormData, value: string) => {
+    // Convert filename prefix to lowercase automatically
+    const processedValue = field === 'filenamePrefix' ? value.toLowerCase() : value;
+    
     setFormData(prev => ({
       ...prev,
-      [field]: value
+      [field]: processedValue
     }));
     
     // Clear error when user starts typing
@@ -99,8 +111,8 @@ export default function NewJobPage() {
   const isFormValid = (): boolean => {
     return !!(
       formData.appName.trim() &&
-      formData.releaseName.trim() &&
-      formData.subsetName.trim() &&
+      formData.filenamePrefix.trim() &&
+      formData.description.trim() &&
       formData.uploadFolder.trim() &&
       formData.selectedFiles &&
       formData.selectedFiles.length > 0
@@ -115,12 +127,12 @@ export default function NewJobPage() {
       newErrors.appName = 'App name is required';
     }
 
-    if (!formData.releaseName.trim()) {
-      newErrors.releaseName = 'Release name is required';
+    if (!formData.filenamePrefix.trim()) {
+      newErrors.filenamePrefix = 'Filename prefix is required';
     }
 
-    if (!formData.subsetName.trim()) {
-      newErrors.subsetName = 'Subset name is required';
+    if (!formData.description.trim()) {
+      newErrors.description = 'Description is required';
     }
 
     if (!formData.uploadFolder.trim()) {
@@ -131,29 +143,43 @@ export default function NewJobPage() {
     return Object.keys(newErrors).length === 0;
   };
 
-  // Create job using Content Pipeline API
+  // Create or rerun job using Content Pipeline API
   const createJob = async (jobData: {
     appName: string;
-    releaseName: string;
-    subsetName: string;
+    filenamePrefix: string;
     sourceFolder: string;
     files: string[];
     description?: string;
   }) => {
     try {
-      const response = await contentPipelineApi.createJob({
+      let response;
+      
+      if (isRerun && sourceJobId) {
+        // Use rerun API for re-run operations with cache clearing
+        const cacheClearingCallback = createCacheClearingCallback(queryClient);
+        response = await contentPipelineApi.rerunJob(sourceJobId, {
         app_name: jobData.appName,
-        release_name: jobData.releaseName,
-        subset_name: jobData.subsetName,
+          filename_prefix: jobData.filenamePrefix,
+          source_folder: jobData.sourceFolder,
+          files: jobData.files,
+          description: jobData.description
+        }, cacheClearingCallback);
+        console.log('Job re-run successfully via Content Pipeline API:', response.job.job_id);
+      } else {
+        // Use create API for new jobs
+        response = await contentPipelineApi.createJob({
+          app_name: jobData.appName,
+          filename_prefix: jobData.filenamePrefix,
         source_folder: jobData.sourceFolder,
         files: jobData.files,
         description: jobData.description
       });
-
       console.log('Job created successfully via Content Pipeline API:', response.job.job_id);
+      }
+      
       return response.job;
     } catch (error) {
-      console.error('Error creating job via API:', error);
+      console.error(`Error ${isRerun ? 're-running' : 'creating'} job via API:`, error);
       throw error;
     }
   };
@@ -201,11 +227,10 @@ export default function NewJobPage() {
       // Create job using Content Pipeline API
       const createdJob = await createJob({
         appName: formData.appName,
-        releaseName: formData.releaseName,
-        subsetName: formData.subsetName,
+        filenamePrefix: formData.filenamePrefix,
         sourceFolder: generateFilePath(formData.appName),
         files: filenames,
-        description: `${formData.subsetName} - Processing PDFs into digital assets`
+        description: formData.description
       });
 
       setJobCreated(createdJob);
@@ -215,8 +240,8 @@ export default function NewJobPage() {
       const uploadSession = {
         jobId: createdJob.job_id,
         appName: formData.appName,
-        releaseName: formData.releaseName,
-        subsetName: formData.subsetName,
+        filenamePrefix: formData.filenamePrefix,
+        description: formData.description,
         files: Array.from(formData.selectedFiles!).map(file => ({
           name: file.name,
           size: file.size,
@@ -235,17 +260,9 @@ export default function NewJobPage() {
       console.log('Stored upload session data and files for job:', createdJob.job_id);
       console.log('File count:', formData.selectedFiles!.length);
       
-      // Navigate to job details page with job data to avoid API call
+      // Navigate to job details page - React Query will handle data fetching
       const queryParams = new URLSearchParams({
         jobId: createdJob.job_id!,
-        appName: createdJob.app_name || formData.appName,
-        releaseName: createdJob.release_name || formData.releaseName,
-        subsetName: createdJob.subset_name || formData.subsetName,
-        sourceFolder: createdJob.source_folder || generateFilePath(formData.appName),
-        status: createdJob.job_status || 'Upload started',
-        createdAt: createdJob.created_at || new Date().toISOString(),
-        files: JSON.stringify(createdJob.files || filenames),
-        description: createdJob.description || `${formData.subsetName} - Processing PDFs into digital assets`,
         startUpload: 'true',
         createFiles: 'true'
       });
@@ -253,8 +270,8 @@ export default function NewJobPage() {
       router.push(`/job/details?${queryParams.toString()}`);
       
     } catch (error) {
-      console.error('Error creating job:', error);
-      alert('Failed to create job: ' + (error as Error).message);
+      console.error(`Error ${isRerun ? 're-running' : 'creating'} job:`, error);
+      alert(`Failed to ${isRerun ? 're-run' : 'create'} job: ` + (error as Error).message);
       setIsSubmitting(false);
     }
   };
@@ -264,7 +281,7 @@ export default function NewJobPage() {
       <NavBar 
         showHome
         onHome={() => router.push('/')}
-        title="Create New Job"
+        title={isRerun ? "Re-run Job" : "Create New Job"}
         showViewJobs
         onViewJobs={() => router.push('/jobs')}
       />
@@ -277,8 +294,30 @@ export default function NewJobPage() {
               margin: 0,
               textAlign: 'center'
             }}>
-              Set up a new job for processing PDFs into digital assets
+              {isRerun 
+                ? "Re-run an existing job with new files but same configuration" 
+                : "Set up a new job for processing PDFs into digital assets"
+              }
             </p>
+            {isRerun && (
+              <div style={{
+                marginTop: 16,
+                padding: 12,
+                background: 'rgba(59, 130, 246, 0.1)',
+                border: '1px solid rgba(59, 130, 246, 0.3)',
+                borderRadius: 8,
+                textAlign: 'center'
+              }}>
+                <p style={{
+                  color: '#60a5fa',
+                  fontSize: 14,
+                  margin: 0,
+                  fontWeight: 500
+                }}>
+                  🔄 Re-running job from: {sourceJobId}
+                </p>
+              </div>
+            )}
           </div>
 
           <form onSubmit={handleSubmit}>
@@ -363,7 +402,7 @@ export default function NewJobPage() {
                   )}
                 </div>
 
-                {/* Release Name */}
+                {/* Filename Prefix */}
                 <div>
                   <label style={{
                     display: 'block',
@@ -372,18 +411,18 @@ export default function NewJobPage() {
                     color: '#f3f4f6',
                     marginBottom: 8
                   }}>
-                    Release Name *
+                    Filename Prefix *
                   </label>
                   <input
                     type="text"
-                    value={formData.releaseName}
-                    onChange={(e) => handleInputChange('releaseName', e.target.value)}
-                    placeholder="e.g., 2024 Spring Release, Season 1, Wave 3"
+                      value={formData.filenamePrefix}
+                      onChange={(e) => handleInputChange('filenamePrefix', e.target.value)}
+                      placeholder="e.g., bunt25_25tcbb_chrome"
                     style={{
                       width: '100%',
                       padding: '12px 16px',
                       background: 'rgba(255, 255, 255, 0.08)',
-                      border: `1px solid ${errors.releaseName ? '#ef4444' : 'rgba(255, 255, 255, 0.2)'}`,
+                      border: `1px solid ${errors.filenamePrefix ? '#ef4444' : 'rgba(255, 255, 255, 0.2)'}`,
                       borderRadius: 8,
                       color: '#f8f8f8',
                       fontSize: 14,
@@ -392,28 +431,28 @@ export default function NewJobPage() {
                       boxSizing: 'border-box'
                     }}
                     onFocus={(e) => {
-                      if (!errors.releaseName) {
+                      if (!errors.filenamePrefix) {
                         e.target.style.borderColor = '#60a5fa';
                       }
                     }}
                     onBlur={(e) => {
-                      if (!errors.releaseName) {
+                      if (!errors.filenamePrefix) {
                         e.target.style.borderColor = 'rgba(255, 255, 255, 0.2)';
                       }
                     }}
                   />
-                  {errors.releaseName && (
+                  {errors.filenamePrefix && (
                     <p style={{ 
                       color: '#ef4444', 
                       fontSize: 12, 
                       margin: '4px 0 0 0' 
                     }}>
-                      {errors.releaseName}
+                      {errors.filenamePrefix}
                     </p>
                   )}
                 </div>
 
-                {/* Subset Name */}
+                {/* Description */}
                 <div>
                   <label style={{
                     display: 'block',
@@ -422,43 +461,44 @@ export default function NewJobPage() {
                     color: '#f3f4f6',
                     marginBottom: 8
                   }}>
-                    Subset Name *
+                    Description *
                   </label>
-                  <input
-                    type="text"
-                    value={formData.subsetName}
-                    onChange={(e) => handleInputChange('subsetName', e.target.value)}
-                    placeholder="e.g., Base Cards, Inserts, Parallels"
+                  <textarea
+                    value={formData.description}
+                    onChange={(e) => handleInputChange('description', e.target.value)}
+                    placeholder="e.g., Processing NBA base cards for digital assets with enhanced backgrounds"
+                    rows={3}
                     style={{
                       width: '100%',
                       padding: '12px 16px',
                       background: 'rgba(255, 255, 255, 0.08)',
-                      border: `1px solid ${errors.subsetName ? '#ef4444' : 'rgba(255, 255, 255, 0.2)'}`,
+                      border: `1px solid ${errors.description ? '#ef4444' : 'rgba(255, 255, 255, 0.2)'}`,
                       borderRadius: 8,
                       color: '#f8f8f8',
                       fontSize: 14,
                       outline: 'none',
                       transition: 'border-color 0.2s',
-                      boxSizing: 'border-box'
+                      boxSizing: 'border-box',
+                      resize: 'vertical'
                     }}
                     onFocus={(e) => {
-                      if (!errors.subsetName) {
+                      if (!errors.description) {
                         e.target.style.borderColor = '#60a5fa';
                       }
                     }}
                     onBlur={(e) => {
-                      if (!errors.subsetName) {
+                      if (!errors.description) {
                         e.target.style.borderColor = 'rgba(255, 255, 255, 0.2)';
                       }
                     }}
-                  />
-                  {errors.subsetName && (
+                  ></textarea>
+                  {errors.description && (
                     <p style={{ 
                       color: '#ef4444', 
                       fontSize: 12, 
                       margin: '4px 0 0 0' 
                     }}>
-                      {errors.subsetName}
+                      {errors.description}
                     </p>
                   )}
                 </div>
@@ -695,7 +735,10 @@ export default function NewJobPage() {
                       animation: 'spin 1s linear infinite'
                     }} />
                   )}
-                  {isSubmitting ? 'Creating Job...' : 'Create Job'}
+                  {isSubmitting 
+                    ? (isRerun ? 'Re-running Job...' : 'Creating Job...')
+                    : (isRerun ? 'Re-run Job' : 'Create Job')
+                  }
                 </button>
               </div>
             </div>
@@ -841,3 +884,24 @@ export default function NewJobPage() {
     </div>
   );
 } 
+
+export default function NewJobPage() {
+  return (
+    <Suspense fallback={
+      <div style={{
+        minHeight: '100vh',
+        backgroundColor: '#0f172a',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <Spinner />
+          <p style={{ marginTop: 16, color: '#e0e0e0' }}>Loading...</p>
+        </div>
+      </div>
+    }>
+      <NewJobPageContent />
+    </Suspense>
+  );
+}

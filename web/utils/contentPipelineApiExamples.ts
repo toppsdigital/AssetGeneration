@@ -15,8 +15,7 @@ export async function createNewJob(jobData: {
   try {
     const response = await contentPipelineApi.createJob({
       app_name: jobData.appName,
-      release_name: jobData.releaseName,
-      subset_name: jobData.subsetName,
+      filename_prefix: jobData.releaseName, // Map releaseName to filename_prefix
       source_folder: jobData.sourceFolder,
       files: jobData.files,
       description: jobData.description
@@ -66,8 +65,7 @@ export async function createNewJobFromFileList(jobData: {
     
     const response = await contentPipelineApi.createJob({
       app_name: jobData.appName,
-      release_name: jobData.releaseName,
-      subset_name: jobData.subsetName,
+      filename_prefix: jobData.releaseName, // Map releaseName to filename_prefix
       source_folder: jobData.sourceFolder,
       files: groupedFilenames,
       description: jobData.description
