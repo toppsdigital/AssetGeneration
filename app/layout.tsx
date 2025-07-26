@@ -14,7 +14,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>
+      <body style={{ paddingBottom: '2rem' }}>
         <QueryProvider>
           {children}
         </QueryProvider>
