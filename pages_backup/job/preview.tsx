@@ -1,7 +1,6 @@
 import { useRouter } from 'next/router';
 import { useEffect, useState, useRef } from 'react';
 import Head from 'next/head';
-import NavBar from '../../components/NavBar';
 import styles from '../../styles/Edit.module.css';
 
 // Preload UTIF for better performance
@@ -499,11 +498,6 @@ export default function JobPreviewPage() {
   if (loading) {
     return (
       <div className={styles.pageContainer}>
-        <NavBar
-          showHome
-          onHome={() => router.push('/')}
-          title="Loading Assets..."
-        />
         <div className={styles.loading}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>🔄</div>
           <h2>Loading Generated Assets...</h2>
@@ -516,11 +510,6 @@ export default function JobPreviewPage() {
   if (error) {
     return (
       <div className={styles.pageContainer}>
-        <NavBar
-          showHome
-          onHome={() => router.push('/')}
-          title="Preview Assets"
-        />
         <div className={styles.loading}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>❌</div>
           <h2>Error Loading Assets</h2>
@@ -550,14 +539,6 @@ export default function JobPreviewPage() {
         <title>Preview {type === 'extracted' ? 'Extracted Layers' : 'Firefly Assets'}</title>
       </Head>
       <div className={styles.pageContainer}>
-        <NavBar
-          showHome
-          onHome={() => router.push('/')}
-          showBackToEdit
-          onBackToEdit={() => router.push(`/job/details?jobId=${encodeURIComponent(jobPath as string)}`)}
-          backLabel="Job Details"
-          title={`${displayName} ${type === 'extracted' ? 'Extracted Layers' : 'Generated Assets'}`}
-        />
       
       <div className={styles.editContainer}>
         <main className={styles.mainContent}>

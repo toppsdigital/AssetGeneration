@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/router';
 import styles from '../styles/Home.module.css';
-import NavBar from '../components/NavBar';
 import Spinner from '../components/Spinner';
 import contentPipelineApi from '../web/utils/contentPipelineApi';
 
@@ -260,13 +259,6 @@ export default function NewJobPage() {
 
   return (
     <div className={styles.container}>
-      <NavBar 
-        showHome
-        onHome={() => router.push('/')}
-        title="Create New Job"
-        showViewJobs
-        onViewJobs={() => router.push('/jobs')}
-      />
       <div className={styles.content}>
         <div style={{ maxWidth: 800, margin: '0 auto', padding: '24px' }}>
           <div style={{ marginBottom: 32, marginTop: 16 }}>

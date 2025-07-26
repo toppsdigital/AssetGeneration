@@ -2,7 +2,6 @@ import React, { useEffect, useState, type ReactNode, useRef } from 'react';
 import { useRouter } from 'next/router';
 import styles from '../../styles/Edit.module.css';
 import { usePsdStore } from '../../web/store/psdStore';
-import NavBar from '../../components/NavBar';
 import PsdCanvas from '../../components/PsdCanvas';
 import Spinner from '../../components/Spinner';
 
@@ -436,14 +435,6 @@ export default function EditPage() {
 
   return (
     <div className={styles.pageContainer}>
-      <NavBar
-        showHome
-        showReview
-        reviewDisabled={!hasAnyChanges()}
-        onHome={() => router.push('/')}
-        onReview={handleReview}
-        title={`Editing: ${displayName}`}
-      />
       <div className={styles.editContainer}>
         <main className={styles.mainContent}>
           <div className={styles.canvasWrapper}>

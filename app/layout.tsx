@@ -17,22 +17,12 @@ export default async function RootLayout({
 }) {
   const session = await auth();
 
-  if (!session) {
-    return (
-      <html lang="en">
-        <body style={{ paddingBottom: '2rem' }}>
-          <SignInPage />
-        </body>
-      </html>
-    );
-  }
-
   return (
     <html lang="en">
-      <body style={{ paddingBottom: '2rem' }}>
+      <body>
         <QueryProvider>
           <UserSessionHeader session={session} />
-          {children}
+          {!session ? <SignInPage /> : children}
         </QueryProvider>
       </body>
     </html>

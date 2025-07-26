@@ -3,10 +3,10 @@
 import React, { useEffect } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import styles from '../../../styles/Review.module.css';
-import NavBar from '../../../components/NavBar';
 import PsdCanvas from '../../../components/PsdCanvas';
 import { usePsdStore } from '../../../web/store/psdStore';
 import { collectLayerParameters, buildFireflyLayersPayload } from '../../../web/utils/firefly';
+import PageTitle from '../../../components/PageTitle';
 
 export default function ReviewPage() {
   const router = useRouter();
@@ -132,20 +132,10 @@ export default function ReviewPage() {
 
   return (
     <div className={styles.pageContainer}>
-      <NavBar
-        showHome
-        showBackToEdit
-        showGenerate
-        onHome={() => router.push('/')}
-        onBackToEdit={() => {
-          console.log('ReviewPage navigating back to Edit with psdfile:', psdfile);
-          router.push(`/${psdfile}/edit`);
-        }}
-        onGenerate={() => router.push(`/${psdfile}/generating`)}
-        title={`Review: ${displayName}`}
-      />
+      <PageTitle title="Review" />
       <div className={styles.reviewContainer}>
         <main className={styles.mainContent}>
+          
           <div style={{ display: 'flex', justifyContent: 'center', margin: '8px 0 24px 0' }}>
             <div className={styles.canvasWrapper}>
               <PsdCanvas
@@ -159,6 +149,44 @@ export default function ReviewPage() {
               />
             </div>
           </div>
+          
+          {/* Generate button below image */}
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '2rem' }}>
+            <button
+              onClick={() => {
+                // Navigate to generating page
+                router.push(`/${psdfile}/generating`);
+              }}
+              style={{
+                padding: '14px 32px',
+                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                color: 'white',
+                border: 'none',
+                borderRadius: 8,
+                cursor: 'pointer',
+                fontSize: 16,
+                fontWeight: 600,
+                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 6px 16px rgba(16, 185, 129, 0.4)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.3)';
+              }}
+              title="Generate final assets with current changes"
+            >
+              <span>🚀</span>
+              Generate
+            </button>
+          </div>
+          
           <div className={styles.treeCard}>
             <div className={styles.treeHeader}>Layer State & Changes</div>
             {renderChangedLayerTree(data.layers)}

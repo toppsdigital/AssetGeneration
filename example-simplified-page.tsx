@@ -1,141 +1,58 @@
 'use client';
 
-import { Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { 
-  NavBar, 
-  JobHeader, 
-  PSDTemplateSelector, 
-  FilesSection, 
-  JobHeaderSkeleton, 
-  Spinner 
+import React from 'react';
+import {
+  PsdCanvas,
+  FileCard,
+  Spinner,
+  JobStatusBadge,
+  TiffImageViewer,
+  RegularImageViewer,
+  ExpandedImageModal
 } from './components';
-import { useJobData, useFileUpload } from './hooks';
-import styles from '../styles/Edit.module.css';
 
-function JobDetailsPageContent() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  
-  // Extract query parameters
-  const jobId = searchParams.get('jobId');
-  const createFiles = searchParams.get('createFiles');
-  
-  // Custom hooks handle all the complex logic
-  const { 
-    data: jobData, 
-    isLoading, 
-    error 
-  } = useJobData(jobId);
-  
-  const uploadState = useFileUpload();
-
-  // Simple loading and error states
-  if (isLoading) {
-    return (
-      <div className={styles.pageContainer}>
-        <NavBar 
-          showHome
-          showBackToEdit
-          onHome={() => router.push('/')}
-          onBackToEdit={() => router.push('/jobs')}
-          backLabel="Back to Jobs"
-          title="Loading Job Details..."
-        />
-        <div className={styles.editContainer}>
-          <main className={styles.mainContent}>
-            <div className="container">
-              <JobHeaderSkeleton />
-              <div>Loading...</div>
-            </div>
-          </main>
-        </div>
-      </div>
-    );
-  }
-
-  if (error || !jobData) {
-    return (
-      <div className={styles.pageContainer}>
-        <NavBar 
-          showHome
-          showBackToEdit
-          onHome={() => router.push('/')}
-          onBackToEdit={() => router.push('/jobs')}
-          backLabel="Back to Jobs"
-          title="Job Details"
-        />
-        <div className={styles.loading}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>❌</div>
-          <h2>Error Loading Job Details</h2>
-          <p>{error?.message || 'Job not found'}</p>
-        </div>
-      </div>
-    );
-  }
-
-  const getJobTitle = () => {
-    const parts = [
-      jobData.app_name,
-      jobData.filename_prefix,
-      jobData.source_folder // Use source_folder as the subset equivalent
-    ].filter(Boolean);
-    return parts.join(' - ') || 'Unknown Job';
-  };
-
+// This is a simplified example page showing how to use our components
+export default function ExamplePage() {
   return (
-    <div className={styles.pageContainer}>
-      <NavBar
-        showHome
-        showBackToEdit
-        onHome={() => router.push('/')}
-        onBackToEdit={() => router.push('/jobs')}
-        backLabel="Back to Jobs"
-        title={getJobTitle()}
-      />
+    <div style={{ padding: '20px' }}>
+      <h1>Component Examples</h1>
       
-      <div className={styles.editContainer}>
-        <main className={styles.mainContent}>
-          <div className="container">
-            
-            {/* Job Header - Clean and simple */}
-            <JobHeader 
-              jobData={jobData}
-              totalPdfFiles={uploadState.totalPdfFiles}
-              uploadedPdfFiles={uploadState.uploadedPdfFiles}
-            />
+      {/* File Card Examples */}
+      <section style={{ marginBottom: '40px' }}>
+        <h2>File Cards</h2>
+        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+          {/* Example file cards would go here */}
+        </div>
+      </section>
 
-            {/* PSD Configuration - Only when needed */}
-            <PSDTemplateSelector
-              jobData={jobData}
-              mergedJobData={jobData}
-              isVisible={jobData.job_status?.toLowerCase() === 'extracted'}
-              creatingAssets={false}
-              setCreatingAssets={() => {}}
-            />
+      {/* Loading Spinner */}
+      <section style={{ marginBottom: '40px' }}>
+        <h2>Loading States</h2>
+        <Spinner />
+      </section>
 
-            {/* Files Section - All complexity hidden */}
-            <FilesSection
-              mergedJobData={jobData}
-              jobData={jobData}
-              uploadingFiles={uploadState.uploadingFiles}
-              loadingFiles={isLoading}
-              filesLoaded={!!jobData.content_pipeline_files?.length}
-              loadingStep={1}
-              loadingMessage="Loading files..."
-            />
+      {/* Job Status Badges */}
+      <section style={{ marginBottom: '40px' }}>
+        <h2>Status Indicators</h2>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <JobStatusBadge status="uploading" />
+          <JobStatusBadge status="processing" />
+          <JobStatusBadge status="completed" />
+          <JobStatusBadge status="error" />
+        </div>
+      </section>
 
-          </div>
-        </main>
-      </div>
+      {/* Image Viewers */}
+      <section style={{ marginBottom: '40px' }}>
+        <h2>Image Viewers</h2>
+        {/* TiffImageViewer and RegularImageViewer examples would go here */}
+      </section>
+
+      {/* PSD Canvas */}
+      <section style={{ marginBottom: '40px' }}>
+        <h2>PSD Canvas</h2>
+        {/* PsdCanvas example would go here */}
+      </section>
     </div>
-  );
-}
-
-export default function JobDetailsPage() {
-  return (
-    <Suspense fallback={<Spinner />}>
-      <JobDetailsPageContent />
-    </Suspense>
   );
 } 

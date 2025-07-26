@@ -4,7 +4,7 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import styles from '../../styles/Home.module.css';
-import NavBar from '../../components/NavBar';
+import PageTitle from '../../components/PageTitle';
 import Spinner from '../../components/Spinner';
 import { contentPipelineApi, JobData } from '../../web/utils/contentPipelineApi';
 
@@ -124,11 +124,7 @@ export default function JobsPage() {
   if (isLoading) {
     return (
       <div className={styles.container}>
-        <NavBar 
-          showHome
-          onHome={() => router.push('/')}
-          title="Physical to Digital Jobs"
-        />
+        <PageTitle title="Physical to Digital Jobs" />
         <div className={styles.content}>
           <div style={{ textAlign: 'center', padding: '48px 0' }}>
             <Spinner />
@@ -142,11 +138,7 @@ export default function JobsPage() {
   if (error) {
     return (
       <div className={styles.container}>
-        <NavBar 
-          showHome
-          onHome={() => router.push('/')}
-          title="Physical to Digital Jobs"
-        />
+        <PageTitle title="Physical to Digital Jobs" />
         <div className={styles.content}>
           <div style={{ textAlign: 'center', padding: '48px 0' }}>
             <h2 style={{ color: '#ef4444', marginBottom: 16 }}>❌ Error Loading Jobs</h2>
@@ -175,11 +167,7 @@ export default function JobsPage() {
 
   return (
     <div className={styles.container}>
-      <NavBar 
-        showHome
-        onHome={() => router.push('/')}
-        title="Physical to Digital Jobs"
-      />
+      <PageTitle title="Physical to Digital Jobs" />
       <div className={styles.content}>
         <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px' }}>
           <div style={{ 

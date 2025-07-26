@@ -3,9 +3,9 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, Suspense, useRef } from 'react';
 import Head from 'next/head';
-import NavBar from '../../../components/NavBar';
 import ImagePreview from '../../../components/ImagePreview';
 import ExpandedImageModal from '../../../components/ExpandedImageModal';
+import { PageTitle } from '../../../components';
 import styles from '../../../styles/Edit.module.css';
 
 interface AssetItem {
@@ -159,6 +159,19 @@ function JobPreviewPageContent() {
       })()
     : null;
 
+  // Generate page title based on type and data
+  const getPageTitle = () => {
+    const assetTypeLabel = type === 'firefly' ? 'Final' : 'Extracted';
+    const assetCount = assets.length;
+    const assetWord = assetCount === 1 ? 'asset' : 'assets';
+    
+    if (displayName) {
+      return `${displayName} • ${assetCount} ${assetTypeLabel} ${assetWord}`;
+    } else {
+      return `${assetCount} ${assetTypeLabel} ${assetWord}`;
+    }
+  };
+
   // Remove the prefetch effect since we're not using presigned URLs anymore
   useEffect(() => {
     // Cleanup any existing cached URLs when component unmounts
@@ -170,11 +183,6 @@ function JobPreviewPageContent() {
   if (loading) {
     return (
       <div className={styles.pageContainer}>
-        <NavBar
-          showHome
-          onHome={() => router.push('/')}
-          title="Loading Assets..."
-        />
         <div className={styles.loading}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>🔄</div>
           <h2>Loading Generated Assets...</h2>
@@ -187,11 +195,6 @@ function JobPreviewPageContent() {
   if (error) {
     return (
       <div className={styles.pageContainer}>
-        <NavBar
-          showHome
-          onHome={() => router.push('/')}
-          title="Preview Assets"
-        />
         <div className={styles.loading}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>❌</div>
           <h2>Error Loading Assets</h2>
@@ -221,15 +224,8 @@ function JobPreviewPageContent() {
         <title>Preview {type === 'extracted' ? 'Extracted Layers' : 'Digital Collectibles'}</title>
       </Head>
       <div className={styles.pageContainer}>
-        <NavBar
-          showHome
-          onHome={() => router.push('/')}
-          showBackToEdit
-          onBackToEdit={() => router.push(`/job/details?jobId=${encodeURIComponent(jobPath as string)}`)}
-          backLabel="Job Details"
-          title={`${displayName} ${type === 'extracted' ? 'Extracted Layers' : 'Digital Collectibles'}`}
-        />
-      
+        <PageTitle title={getPageTitle()} />
+        
         <div className={styles.editContainer}>
           <main className={styles.mainContent}>
             <div style={{
@@ -242,6 +238,7 @@ function JobPreviewPageContent() {
               padding: 32,
               boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
             }}>
+              
               {/* Image Grid */}
               {assets.length > 0 && (
                 <div style={{

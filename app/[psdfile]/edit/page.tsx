@@ -4,8 +4,8 @@ import React, { useEffect, useState, type ReactNode, useRef } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import styles from '../../../styles/Edit.module.css';
 import { usePsdStore } from '../../../web/store/psdStore';
-import NavBar from '../../../components/NavBar';
 import PsdCanvas from '../../../components/PsdCanvas';
+import PageTitle from '../../../components/PageTitle';
 import Spinner from '../../../components/Spinner';
 
 interface Layer {
@@ -70,6 +70,25 @@ export default function EditPage() {
   const [loading, setLoading] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [windowDimensions, setWindowDimensions] = useState({ width: 0, height: 0 });
+
+  // Track window dimensions for responsive canvas sizing
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const updateDimensions = () => {
+        setWindowDimensions({ width: window.innerWidth, height: window.innerHeight });
+      };
+      
+      // Set initial dimensions
+      updateDimensions();
+      
+      // Add resize listener
+      window.addEventListener('resize', updateDimensions);
+      
+      // Cleanup
+      return () => window.removeEventListener('resize', updateDimensions);
+    }
+  }, []);
 
   useEffect(() => {
     if (!jsonUrl) {
@@ -448,14 +467,7 @@ export default function EditPage() {
 
   return (
     <div className={styles.pageContainer}>
-      <NavBar
-        showHome
-        showReview
-        reviewDisabled={!hasAnyChanges()}
-        onHome={() => router.push('/')}
-        onReview={handleReview}
-        title={`Editing: ${displayName}`}
-      />
+      <PageTitle title={`Edit: ${displayName}`} />
       <div className={styles.editContainer}>
         <main className={styles.mainContent}>
           <div className={styles.canvasWrapper}>
@@ -475,15 +487,58 @@ export default function EditPage() {
               {showDebug ? 'Hide' : 'Show'} Debug BBoxes
             </button>
             <div className={styles.canvasInfo}>
-              📐 {canvasWidth} × {canvasHeight}px<br />
-              🎨 {colorMode ? (colorMode === '3' ? 'RGB' : `Color Mode ${colorMode}`) : ''}<br />
-              Depth: {depth}
+              📐 {canvasWidth} × {canvasHeight}px • 🎨 {colorMode ? (colorMode === '3' ? 'RGB' : `Color Mode ${colorMode}`) : ''} • Depth: {depth}
             </div>
           </div>
         </main>
         <aside className={styles.sidebar}>
-          <h2>Layers</h2>
-          {renderLayerTree(data.layers)}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                    <h2 style={{ margin: 0 }}>Layers</h2>
+            {hasAnyChanges() && (
+              <button
+                onClick={handleReview}
+                style={{
+                  padding: '8px 16px',
+                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                  boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-1px)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.4)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(16, 185, 129, 0.3)';
+                }}
+                title="Review all layer changes"
+              >
+                <span>👁️</span>
+                Review
+              </button>
+            )}
+          </div>
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.06)',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: 16,
+            padding: '1rem',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+          }}>
+            <div style={{ paddingLeft: '0.5rem' }}>
+              {renderLayerTree(data.layers)}
+            </div>
+          </div>
         </aside>
       </div>
     </div>
