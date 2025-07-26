@@ -133,6 +133,28 @@ export default function ReviewPage() {
     <div className={styles.pageContainer}>
       <div className={styles.reviewContainer}>
         <main className={styles.mainContent}>
+          {/* Header with title */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            marginBottom: '2rem',
+            paddingBottom: '1rem',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
+          }}>
+            <h1 style={{
+              fontSize: '2rem',
+              fontWeight: 600,
+              color: '#f8f8f8',
+              margin: 0,
+              letterSpacing: '-0.025em',
+              textShadow: '0 2px 4px rgba(0, 0, 0, 0.5)',
+              textAlign: 'center',
+              width: '100%'
+            }}>
+              Review
+            </h1>
+          </div>
+          
           <div style={{ display: 'flex', justifyContent: 'center', margin: '8px 0 24px 0' }}>
             <div className={styles.canvasWrapper}>
               <PsdCanvas
@@ -146,6 +168,44 @@ export default function ReviewPage() {
               />
             </div>
           </div>
+          
+          {/* Generate button below image */}
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '2rem' }}>
+            <button
+              onClick={() => {
+                // Navigate to generating page
+                router.push(`/${psdfile}/generating`);
+              }}
+              style={{
+                padding: '14px 32px',
+                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                color: 'white',
+                border: 'none',
+                borderRadius: 8,
+                cursor: 'pointer',
+                fontSize: 16,
+                fontWeight: 600,
+                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 6px 16px rgba(16, 185, 129, 0.4)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.3)';
+              }}
+              title="Generate final assets with current changes"
+            >
+              <span>🚀</span>
+              Generate
+            </button>
+          </div>
+          
           <div className={styles.treeCard}>
             <div className={styles.treeHeader}>Layer State & Changes</div>
             {renderChangedLayerTree(data.layers)}

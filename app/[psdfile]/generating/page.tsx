@@ -6,6 +6,7 @@ import styles from '../../../styles/Review.module.css';
 import { usePsdStore } from '../../../web/store/psdStore';
 import { getPresignedUrl, uploadFileToPresignedUrl } from '../../../web/utils/s3Presigned';
 import { getFireflyToken, createFireflyAsset, collectLayerParameters, buildFireflyLayersPayload } from '../../../web/utils/firefly';
+import PageTitle from '../../../components/PageTitle';
 
 const baseSteps = [
   'Uploading replaced smart objects',
@@ -381,10 +382,11 @@ export default function GeneratingPage() {
 
   return (
     <div className={styles.pageContainer}>
+      <PageTitle title={currentStep >= 6 ? "Generated" : "Generating"} />
       <div className={styles.reviewContainer} style={{ justifyContent: 'flex-start' }}>
         {/* Show generated asset image between title and steps only when ready, with larger size and tighter spacing */}
         {currentStep >= 6 && outputImageUrl && (
-          <div style={{ margin: '16px 0 24px 0', textAlign: 'center' }}>
+          <div style={{ margin: '8px 0 12px 0', textAlign: 'center' }}>
             <img 
               src={outputImageUrl} 
               alt="Generated asset" 

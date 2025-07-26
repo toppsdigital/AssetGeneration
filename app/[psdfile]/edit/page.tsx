@@ -498,13 +498,13 @@ export default function EditPage() {
               <button
                 onClick={handleReview}
                 style={{
-                  padding: '6px 12px',
+                  padding: '8px 16px',
                   background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                   color: 'white',
                   border: 'none',
                   borderRadius: 6,
                   cursor: 'pointer',
-                  fontSize: 12,
+                  fontSize: 14,
                   fontWeight: 600,
                   transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                   boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)',

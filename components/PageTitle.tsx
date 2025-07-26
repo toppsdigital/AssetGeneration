@@ -19,7 +19,8 @@ const PageTitle: React.FC<PageTitleProps> = ({ title, subtitle }) => {
         color: '#fce7f3',
         margin: 0,
         letterSpacing: '-0.025em',
-        textShadow: '0 2px 4px rgba(157, 23, 77, 0.3)'
+        textShadow: '0 2px 4px rgba(157, 23, 77, 0.3)',
+        textAlign: 'center'
       }}>
         {title}
       </h1>
@@ -28,7 +29,8 @@ const PageTitle: React.FC<PageTitleProps> = ({ title, subtitle }) => {
           fontSize: '1rem',
           color: 'rgba(252, 231, 243, 0.7)',
           margin: '8px 0 0 0',
-          fontWeight: '400'
+          fontWeight: '400',
+          textAlign: 'center'
         }}>
           {subtitle}
         </p>
