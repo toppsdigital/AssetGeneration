@@ -1,4 +1,4 @@
-import React, { type ReactNode, useMemo, useState, useCallback, useEffect } from 'react';
+import React, { type ReactNode, useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { usePsdStore } from '../web/store/psdStore';
 
 interface Layer {
@@ -323,11 +323,44 @@ const renderCanvasLayers = (
 const PsdCanvas: React.FC<PsdCanvasProps> = ({ layers, tempDir = '', width, height, showDebug = false, maxWidth, maxHeight, isThumbnail = false }) => {
   const { edits, originals } = usePsdStore();
   const [objectUrls, setObjectUrls] = useState<Record<number, string>>({});
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerDimensions, setContainerDimensions] = useState({ width: 0, height: 0 });
 
   const handleImageError = useCallback((layerId: number, originalUrl: string) => {
     console.log(`Image load failed for layer ${layerId}:`, originalUrl);
     // Since we're using public S3 URLs now, we just log the error without attempting refresh
   }, []);
+
+  // Measure container dimensions
+  useEffect(() => {
+    const measureContainer = () => {
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        setContainerDimensions({ width: rect.width, height: rect.height });
+      }
+    };
+
+    // Initial measurement
+    measureContainer();
+
+    // Add resize observer for dynamic measurement
+    if (typeof window !== 'undefined' && window.ResizeObserver) {
+      const resizeObserver = new ResizeObserver(measureContainer);
+      if (containerRef.current) {
+        resizeObserver.observe(containerRef.current);
+      }
+      
+      return () => {
+        resizeObserver.disconnect();
+      };
+    } else {
+      // Fallback to window resize
+      window.addEventListener('resize', measureContainer);
+      return () => window.removeEventListener('resize', measureContainer);
+    }
+  }, []);
+
+
 
   // Create and manage object URLs for replaced smart objects
   useEffect(() => {
@@ -356,26 +389,63 @@ const PsdCanvas: React.FC<PsdCanvasProps> = ({ layers, tempDir = '', width, heig
     };
   }, [edits.smartObjects]); // Only depend on smartObjects to avoid cleanup issues
 
-  // Calculate scale to fit canvas in available space
-  // Use provided maxWidth/maxHeight or default to viewport-based calculation
-  const availableWidth = maxWidth || (typeof window !== 'undefined' ? window.innerWidth * 0.6 : 800); // 60% for main content area
-  const availableHeight = maxHeight || (typeof window !== 'undefined' ? window.innerHeight * 0.7 : 600); // 70% for canvas area
-  
-  const scaleX = availableWidth / width;
-  const scaleY = availableHeight / height;
-  const scale = Math.min(scaleX, scaleY, 1); // Don't scale up, only down
-  
-  const scaledWidth = width * scale;
-  const scaledHeight = height * scale;
+    // Responsive aspect fit calculation using measured container
+  const getContainerSize = () => {
+    if (maxWidth && maxHeight) {
+      // Use explicit container dimensions
+      const scaleX = maxWidth / width;
+      const scaleY = maxHeight / height;
+      const scale = Math.min(scaleX, scaleY);
+      
+      return {
+        scale,
+        scaledWidth: width * scale,
+        scaledHeight: height * scale,
+        containerWidth: maxWidth,
+        containerHeight: maxHeight,
+      };
+    } else if (isThumbnail) {
+      // Thumbnail size
+      const scaleX = 300 / width;
+      const scaleY = 200 / height;
+      const scale = Math.min(scaleX, scaleY);
+      
+      return {
+        scale,
+        scaledWidth: width * scale,
+        scaledHeight: height * scale,
+        containerWidth: 300,
+        containerHeight: 200,
+      };
+    } else {
+      // Use measured container dimensions with fallback
+      const availableWidth = containerDimensions.width > 0 ? containerDimensions.width : 800;
+      const availableHeight = containerDimensions.height > 0 ? containerDimensions.height : 600;
+      
+      const scaleX = availableWidth / width;
+      const scaleY = availableHeight / height;
+      const scale = Math.min(scaleX, scaleY);
+      
+      return {
+        scale,
+        scaledWidth: width * scale,
+        scaledHeight: height * scale,
+        containerWidth: availableWidth,
+        containerHeight: availableHeight,
+      };
+    }
+  };
+    
+    const { scale, scaledWidth, scaledHeight, containerWidth, containerHeight } = getContainerSize();
 
-  const canvasLayers = useMemo(() => renderCanvasLayers(layers, tempDir, width, height, scale, edits, originals, showDebug, handleImageError, objectUrls), [layers, tempDir, width, height, scale, edits, originals, showDebug, handleImageError, objectUrls]);
+  const canvasLayers = useMemo(() => renderCanvasLayers(layers, tempDir, width, height, scale, edits, originals, showDebug, handleImageError, objectUrls), [layers, tempDir, width, height, scale, edits, originals, showDebug, handleImageError, objectUrls, containerDimensions]);
   
   // Check if there are any changes that need warnings (only show if not thumbnail)
   const hasSmartObjectChanges = !isThumbnail && Object.keys(edits.smartObjects).length > 0;
   const hasTextChanges = !isThumbnail && Object.keys(edits.text).length > 0;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', width: '100%', height: '100%' }}>
       <div
         style={{
           width: scaledWidth,

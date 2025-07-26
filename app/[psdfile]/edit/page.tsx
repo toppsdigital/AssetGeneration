@@ -70,6 +70,25 @@ export default function EditPage() {
   const [loading, setLoading] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [windowDimensions, setWindowDimensions] = useState({ width: 0, height: 0 });
+
+  // Track window dimensions for responsive canvas sizing
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const updateDimensions = () => {
+        setWindowDimensions({ width: window.innerWidth, height: window.innerHeight });
+      };
+      
+      // Set initial dimensions
+      updateDimensions();
+      
+      // Add resize listener
+      window.addEventListener('resize', updateDimensions);
+      
+      // Cleanup
+      return () => window.removeEventListener('resize', updateDimensions);
+    }
+  }, []);
 
   useEffect(() => {
     if (!jsonUrl) {
@@ -448,7 +467,7 @@ export default function EditPage() {
 
   return (
     <div className={styles.pageContainer}>
-      <PageTitle title={`Edit Template: ${displayName}`} />
+      <PageTitle title={`Edit: ${displayName}`} />
       <div className={styles.editContainer}>
         <main className={styles.mainContent}>
           <div className={styles.canvasWrapper}>
@@ -468,9 +487,7 @@ export default function EditPage() {
               {showDebug ? 'Hide' : 'Show'} Debug BBoxes
             </button>
             <div className={styles.canvasInfo}>
-              📐 {canvasWidth} × {canvasHeight}px<br />
-              🎨 {colorMode ? (colorMode === '3' ? 'RGB' : `Color Mode ${colorMode}`) : ''}<br />
-              Depth: {depth}
+              📐 {canvasWidth} × {canvasHeight}px • 🎨 {colorMode ? (colorMode === '3' ? 'RGB' : `Color Mode ${colorMode}`) : ''} • Depth: {depth}
             </div>
           </div>
         </main>

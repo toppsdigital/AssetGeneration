@@ -10,14 +10,16 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
       queries: {
         // Cache data for 5 minutes
         gcTime: 5 * 60 * 1000,
-        // Consider data fresh for 1 minute to reduce unnecessary refetches
-        staleTime: 60 * 1000,
+        // Consider data fresh for 5 minutes to prevent white flashes during navigation
+        staleTime: 5 * 60 * 1000,
         // Retry failed requests 2 times (reduced from 3)
         retry: 2,
         // Reduce aggressive refetching
         refetchOnWindowFocus: false,
-        // Only refetch if data is stale
-        refetchOnMount: 'always',
+        // Only refetch if data is stale - this prevents unnecessary loading states during navigation
+        refetchOnMount: false,
+        // Reduce network-based refetching during navigation
+        refetchOnReconnect: false,
       },
     },
   }));
