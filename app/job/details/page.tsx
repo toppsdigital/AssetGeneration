@@ -920,6 +920,31 @@ function JobDetailsPageContent() {
 
   // Utility functions now imported from utils/fileOperations.ts
 
+  // Handle regenerate assets - reset status to extracted and reload
+  const handleRegenerateAssets = async (): Promise<void> => {
+    if (!mergedJobData?.job_id) return;
+    
+    try {
+      console.log('🔄 Regenerating assets - changing status to extracted');
+      
+      // Update job status to extracted
+      await updateJobStatus('extracted');
+      
+      // Force cache invalidation and refetch fresh data
+      console.log('🔄 Forcing cache invalidation and refetch after regeneration');
+      queryClient.removeQueries({ queryKey: jobKeys.detail(mergedJobData.job_id) });
+      queryClient.removeQueries({ queryKey: jobKeys.files(mergedJobData.job_id) });
+      
+      // Trigger refetch
+      await refetchJobData();
+      
+      console.log('✅ Assets regeneration initiated - status changed to extracted');
+    } catch (error) {
+      console.error('❌ Error regenerating assets:', error);
+      throw error; // Re-throw to be handled by the component
+    }
+  };
+
   if (loading) {
     return (
       <div className={styles.pageContainer}>
@@ -1108,6 +1133,7 @@ function JobDetailsPageContent() {
             <DownloadSection
               jobData={mergedJobData}
               isVisible={['complete', 'completed'].includes(mergedJobData?.job_status?.toLowerCase() || '') && !loading && !loadingFiles}
+              onRegenerateAssets={handleRegenerateAssets}
             />
 
             {/* Files Section - Now uses FilesSection component */}

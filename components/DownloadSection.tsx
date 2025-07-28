@@ -6,9 +6,10 @@ import { useDownloadArchive } from '../web/hooks/useJobData';
 interface DownloadSectionProps {
   jobData: any;
   isVisible: boolean;
+  onRegenerateAssets?: () => Promise<void>;
 }
 
-export const DownloadSection = ({ jobData, isVisible }: DownloadSectionProps) => {
+export const DownloadSection = ({ jobData, isVisible, onRegenerateAssets }: DownloadSectionProps) => {
   // Use React Query hook for smart caching with expiry management
   const { 
     data: archiveData, 
@@ -19,6 +20,7 @@ export const DownloadSection = ({ jobData, isVisible }: DownloadSectionProps) =>
 
   // Local state only for download progress
   const [downloadingArchive, setDownloadingArchive] = useState(false);
+  const [regeneratingAssets, setRegeneratingAssets] = useState(false);
 
   const handleDownloadArchive = async () => {
     if (!archiveData) return;
@@ -42,6 +44,21 @@ export const DownloadSection = ({ jobData, isVisible }: DownloadSectionProps) =>
       alert(`Failed to download archive: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setDownloadingArchive(false);
+    }
+  };
+
+  const handleRegenerateAssets = async () => {
+    if (!onRegenerateAssets) return;
+    
+    setRegeneratingAssets(true);
+    
+    try {
+      await onRegenerateAssets();
+    } catch (error) {
+      console.error('❌ Error regenerating assets:', error);
+      alert(`Failed to regenerate assets: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setRegeneratingAssets(false);
     }
   };
 
@@ -186,10 +203,10 @@ export const DownloadSection = ({ jobData, isVisible }: DownloadSectionProps) =>
           }}>
             <button
               onClick={handleDownloadArchive}
-              disabled={downloadingArchive}
+              disabled={downloadingArchive || regeneratingAssets}
               style={{
                 padding: '20px 40px',
-                background: downloadingArchive
+                background: (downloadingArchive || regeneratingAssets)
                   ? 'rgba(156, 163, 175, 0.3)'
                   : 'linear-gradient(135deg, #10b981, #059669)',
                 border: 'none',
@@ -197,9 +214,9 @@ export const DownloadSection = ({ jobData, isVisible }: DownloadSectionProps) =>
                 color: 'white',
                 fontSize: 18,
                 fontWeight: 700,
-                cursor: downloadingArchive ? 'not-allowed' : 'pointer',
+                cursor: (downloadingArchive || regeneratingAssets) ? 'not-allowed' : 'pointer',
                 transition: 'all 0.2s',
-                boxShadow: downloadingArchive
+                boxShadow: (downloadingArchive || regeneratingAssets)
                   ? 'none' 
                   : '0 12px 32px rgba(16, 185, 129, 0.4)',
                 minHeight: 70,
@@ -231,14 +248,89 @@ export const DownloadSection = ({ jobData, isVisible }: DownloadSectionProps) =>
             </button>
           </div>
 
+          {/* Re-Generate Assets Button */}
+          {onRegenerateAssets && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 16,
+              marginTop: -8
+            }}>
+              <button
+                onClick={handleRegenerateAssets}
+                disabled={downloadingArchive || regeneratingAssets}
+                style={{
+                  padding: '12px 24px',
+                  background: regeneratingAssets
+                    ? 'rgba(156, 163, 175, 0.3)'
+                    : 'rgba(168, 85, 247, 0.1)',
+                  border: regeneratingAssets
+                    ? '1px solid rgba(156, 163, 175, 0.3)'
+                    : '1px solid rgba(168, 85, 247, 0.3)',
+                  borderRadius: 12,
+                  color: regeneratingAssets ? '#9ca3af' : '#c4b5fd',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: (downloadingArchive || regeneratingAssets) ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  opacity: regeneratingAssets ? 0.6 : 1
+                }}
+                onMouseEnter={(e) => {
+                  if (!downloadingArchive && !regeneratingAssets) {
+                    e.currentTarget.style.background = 'rgba(168, 85, 247, 0.2)';
+                    e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.5)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!downloadingArchive && !regeneratingAssets) {
+                    e.currentTarget.style.background = 'rgba(168, 85, 247, 0.1)';
+                    e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.3)';
+                  }
+                }}
+              >
+                {regeneratingAssets ? (
+                  <>
+                    <div style={{
+                      width: 16,
+                      height: 16,
+                      border: '2px solid rgba(156, 163, 175, 0.3)',
+                      borderTop: '2px solid #9ca3af',
+                      borderRadius: '50%',
+                      animation: 'spin 1s linear infinite'
+                    }} />
+                    Regenerating...
+                  </>
+                ) : (
+                  <>
+                    <span style={{ fontSize: 16 }}>🔄</span>
+                    Re-Generate Assets
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+
           {/* Additional Info */}
           <div style={{
             textAlign: 'center',
             fontSize: 12,
             color: '#9ca3af',
-            marginTop: -8
+            marginTop: onRegenerateAssets ? -8 : -8
           }}>
             Archive contains all generated digital assets from this job • Expires in {formatExpirationTime(archiveData.expires_in)}
+            {onRegenerateAssets && (
+              <>
+                <br />
+                <span style={{ fontSize: 11, opacity: 0.8 }}>
+                  Need different assets? Re-generate to go back to template selection
+                </span>
+              </>
+            )}
           </div>
         </div>
       )}
