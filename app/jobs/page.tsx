@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
@@ -16,6 +16,23 @@ export default function JobsPage() {
   // Filter states
   const [userFilter, setUserFilter] = useState<'all' | 'my'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'in-progress' | 'completed'>('all');
+
+  // Track state changes with useEffect
+  useEffect(() => {
+    console.log('📊 userFilter state changed:', { 
+      userFilter, 
+      sessionStatus, 
+      hasSessionEmail: !!session?.user?.email,
+      timestamp: new Date().toISOString()
+    });
+  }, [userFilter, sessionStatus, session?.user?.email]);
+
+  useEffect(() => {
+    console.log('📊 statusFilter state changed:', { 
+      statusFilter, 
+      timestamp: new Date().toISOString()
+    });
+  }, [statusFilter]);
 
   // Debug logging for filter changes
   console.log('🔍 Filter state:', { 
@@ -34,9 +51,15 @@ export default function JobsPage() {
     refetch,
     isRefetching 
   } = useQuery({
-    queryKey: ['jobs', userFilter, statusFilter, session?.user?.email], // Include session in queryKey
+    queryKey: ['jobs', userFilter, statusFilter], // Remove session from queryKey - userFilter change is sufficient
     queryFn: async () => {
-      console.log('🚀 React Query queryFn triggered with filters:', { userFilter, statusFilter });
+      console.log('🚀 React Query queryFn triggered with filters:', { 
+        userFilter, 
+        statusFilter,
+        sessionStatus,
+        hasSessionEmail: !!session?.user?.email,
+        timestamp: new Date().toISOString()
+      });
       
       // Handle "My Jobs" filter when no session is available
       if (userFilter === 'my' && !session?.user?.email) {
@@ -264,7 +287,15 @@ export default function JobsPage() {
                      }}>
                        <button
                          onClick={() => {
-                           console.log('🔄 User filter changed:', { from: userFilter, to: 'all' });
+                           console.log('🔄 User filter changed:', { 
+                             from: userFilter, 
+                             to: 'all',
+                             sessionStatus,
+                             hasSession: !!session,
+                             hasSessionEmail: !!session?.user?.email,
+                             userEmail: session?.user?.email,
+                             timestamp: new Date().toISOString()
+                           });
                            setUserFilter('all');
                          }}
                          style={{
@@ -309,7 +340,15 @@ export default function JobsPage() {
                        </button>
                        <button
                          onClick={() => {
-                           console.log('🔄 User filter changed:', { from: userFilter, to: 'my' });
+                           console.log('🔄 User filter changed:', { 
+                             from: userFilter, 
+                             to: 'my',
+                             sessionStatus,
+                             hasSession: !!session,
+                             hasSessionEmail: !!session?.user?.email,
+                             userEmail: session?.user?.email,
+                             timestamp: new Date().toISOString()
+                           });
                            setUserFilter('my');
                          }}
                          style={{
