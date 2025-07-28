@@ -38,6 +38,12 @@ export default function JobsPage() {
     queryFn: async () => {
       console.log('🚀 React Query queryFn triggered with filters:', { userFilter, statusFilter });
       
+      // Handle "My Jobs" filter when no session is available
+      if (userFilter === 'my' && !session?.user?.email) {
+        console.log('❌ "My Jobs" selected but no user session - returning empty results');
+        return []; // Return empty array instead of making API call
+      }
+      
       // Build filter options
       const filterOptions: any = {};
       
@@ -49,37 +55,40 @@ export default function JobsPage() {
         statusFilter 
       });
       
+      // Add user filter
       if (userFilter === 'my' && session?.user?.email) {
         filterOptions.user_id = session.user.email;
-        console.log('Setting user_id filter:', session.user.email);
-      } else if (userFilter === 'my') {
-        console.log('WARNING: userFilter is "my" but no session email found');
+        console.log('✅ Setting user_id filter:', session.user.email);
+      } else {
+        console.log('📋 No user filter (showing all users)');
       }
       
+      // Add status filter  
       if (statusFilter === 'in-progress') {
         filterOptions.status = 'in-progress';
-        console.log('Setting status filter to in-progress');
+        console.log('✅ Setting status filter to in-progress');
       } else if (statusFilter === 'completed') {
         filterOptions.status = 'completed';
-        console.log('Setting status filter to completed');
+        console.log('✅ Setting status filter to completed');
       } else {
-        console.log('No status filter applied (showing all)');
+        console.log('📋 No status filter (showing all statuses)');
       }
       
-      console.log('Final filterOptions being sent:', filterOptions);
+      console.log('🌐 Final filterOptions being sent to API:', filterOptions);
       
       const response = await contentPipelineApi.listJobs(filterOptions);
-      console.log('Jobs fetched:', response);
+      console.log('📥 Jobs fetched from API:', response);
       
       // Sort jobs by creation date (most recent first)
       const sortedJobs = response.jobs.sort((a, b) => 
         new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
       );
       
+      console.log('📊 Final sorted jobs count:', sortedJobs.length);
       return sortedJobs;
     },
-    // Simplified enabled condition - always enabled unless waiting for session for "my" jobs
-    enabled: userFilter === 'all' || (userFilter === 'my' && sessionStatus !== 'loading' && !!session?.user?.email),
+    // Always enabled - but handle missing session gracefully in the queryFn
+    enabled: true,
     // Refetch every 5 seconds for real-time updates
     refetchInterval: 5000,
     // Keep previous data while refetching to prevent UI flicker
@@ -254,7 +263,10 @@ export default function JobsPage() {
                        border: '1px solid rgba(255, 255, 255, 0.08)'
                      }}>
                        <button
-                         onClick={() => setUserFilter('all')}
+                         onClick={() => {
+                           console.log('🔄 User filter changed:', { from: userFilter, to: 'all' });
+                           setUserFilter('all');
+                         }}
                          style={{
                            width: '110px',
                            padding: '14px 0',
@@ -296,7 +308,10 @@ export default function JobsPage() {
                          All Jobs
                        </button>
                        <button
-                         onClick={() => setUserFilter('my')}
+                         onClick={() => {
+                           console.log('🔄 User filter changed:', { from: userFilter, to: 'my' });
+                           setUserFilter('my');
+                         }}
                          style={{
                            width: '110px',
                            padding: '14px 0',
