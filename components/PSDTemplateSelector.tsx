@@ -561,7 +561,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
               color: '#f8f8f8',
               margin: '0 0 8px 0'
             }}>
-              🎯 Action Required: Configure Digital Assets
+              ⚡ Action Required: Configure Digital Assets
             </h2>
             <p style={{
               fontSize: '1rem',

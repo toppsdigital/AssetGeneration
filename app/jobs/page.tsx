@@ -336,7 +336,23 @@ export default function JobsPage() {
                       )}
                     </div>
                     
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+                      {/* Action Required indicator for extracted jobs */}
+                      {job.job_status?.toLowerCase() === 'extracted' && (
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          fontSize: 12,
+                          fontWeight: 500,
+                          color: '#f59e0b',
+                          fontStyle: 'italic'
+                        }}>
+                          <span style={{ fontSize: 14 }}>⚡</span>
+                          Action Required
+                        </div>
+                      )}
+                      
                       <button
                         onClick={() => viewJobDetails(job)}
                         style={{
