@@ -110,7 +110,7 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
             fontSize: 48,
             marginBottom: 16
           }}>
-            {confirmButtonStyle === 'danger' ? '⚠️' : confirmButtonStyle === 'warning' ? '🔄' : '❓'}
+            {confirmButtonStyle === 'danger' ? '⚠️' : confirmButtonStyle === 'warning' ? '🔄' : '⚠️'}
           </div>
           <h2 style={{
             fontSize: 24,
