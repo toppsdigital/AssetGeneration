@@ -11,11 +11,20 @@ import { contentPipelineApi, JobData } from '../../web/utils/contentPipelineApi'
 
 export default function JobsPage() {
   const router = useRouter();
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   
   // Filter states
   const [userFilter, setUserFilter] = useState<'all' | 'my'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'in-progress' | 'completed'>('all');
+
+  // Debug logging for filter changes
+  console.log('🔍 Filter state:', { 
+    userFilter, 
+    statusFilter, 
+    hasSession: !!session, 
+    sessionStatus,
+    userEmail: session?.user?.email 
+  });
 
   // React Query to fetch and cache jobs data
   const { 
@@ -25,8 +34,10 @@ export default function JobsPage() {
     refetch,
     isRefetching 
   } = useQuery({
-    queryKey: ['jobs', userFilter, statusFilter],
+    queryKey: ['jobs', userFilter, statusFilter, session?.user?.email], // Include session in queryKey
     queryFn: async () => {
+      console.log('🚀 React Query queryFn triggered with filters:', { userFilter, statusFilter });
+      
       // Build filter options
       const filterOptions: any = {};
       
@@ -47,8 +58,12 @@ export default function JobsPage() {
       
       if (statusFilter === 'in-progress') {
         filterOptions.status = 'in-progress';
+        console.log('Setting status filter to in-progress');
       } else if (statusFilter === 'completed') {
         filterOptions.status = 'completed';
+        console.log('Setting status filter to completed');
+      } else {
+        console.log('No status filter applied (showing all)');
       }
       
       console.log('Final filterOptions being sent:', filterOptions);
@@ -63,8 +78,8 @@ export default function JobsPage() {
       
       return sortedJobs;
     },
-    // Only run query when we have session data for "my" jobs
-    enabled: userFilter === 'all' || (userFilter === 'my' && !!session?.user?.email),
+    // Simplified enabled condition - always enabled unless waiting for session for "my" jobs
+    enabled: userFilter === 'all' || (userFilter === 'my' && sessionStatus !== 'loading' && !!session?.user?.email),
     // Refetch every 5 seconds for real-time updates
     refetchInterval: 5000,
     // Keep previous data while refetching to prevent UI flicker
@@ -334,7 +349,11 @@ export default function JobsPage() {
                    }}>
                      <select
                        value={statusFilter}
-                       onChange={(e) => setStatusFilter(e.target.value as 'all' | 'in-progress' | 'completed')}
+                       onChange={(e) => {
+                         const newStatus = e.target.value as 'all' | 'in-progress' | 'completed';
+                         console.log('🔄 Status filter changed:', { from: statusFilter, to: newStatus });
+                         setStatusFilter(newStatus);
+                       }}
                        style={{
                          padding: '12px 40px 12px 16px',
                          background: 'rgba(255, 255, 255, 0.04)',
