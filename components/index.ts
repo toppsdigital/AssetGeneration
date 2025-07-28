@@ -14,6 +14,7 @@ export { default as TiffImageViewer } from './TiffImageViewer';
 export { default as UserSessionHeader } from './UserSessionHeader';
 export { default as ExpandedImageModal } from './ExpandedImageModal';
 export { DownloadSection } from './DownloadSection';
+export { ConfirmationModal } from './ConfirmationModal';
 
 // Skeleton components
 export { JobHeaderSkeleton } from './skeletons/JobHeaderSkeleton';

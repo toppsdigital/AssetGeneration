@@ -1,4 +1,6 @@
+import React, { useState } from 'react';
 import { JobStatusBadge } from './JobStatusBadge';
+import { ConfirmationModal } from './ConfirmationModal';
 
 interface JobHeaderProps {
   jobData: {
@@ -27,6 +29,9 @@ export const JobHeader = ({
   className = '',
   onRerunJob
 }: JobHeaderProps) => {
+  const [showRerunModal, setShowRerunModal] = useState(false);
+  const [isProcessingRerun, setIsProcessingRerun] = useState(false);
+
   const getJobTitle = () => {
     if (!jobData) return 'Loading...';
     const parts = [
@@ -44,6 +49,24 @@ export const JobHeader = ({
       jobData.filename_prefix
     ].filter(Boolean);
     return parts.join(' ') || 'Unknown Job';
+  };
+
+  const handleRerunClick = () => {
+    setShowRerunModal(true);
+  };
+
+  const handleConfirmRerun = async () => {
+    if (!onRerunJob) return;
+    
+    setIsProcessingRerun(true);
+    try {
+      onRerunJob();
+      setShowRerunModal(false);
+    } catch (error) {
+      console.error('Error during rerun:', error);
+    } finally {
+      setIsProcessingRerun(false);
+    }
   };
 
   return (
@@ -102,7 +125,7 @@ export const JobHeader = ({
           )}
           {onRerunJob && (
             <button
-              onClick={onRerunJob}
+              onClick={handleRerunClick}
               style={{
                 padding: '1px 6px',
                 background: 'rgba(245, 158, 11, 0.1)',
@@ -133,6 +156,19 @@ export const JobHeader = ({
           )}
         </div>
       </div>
+
+      {/* Re-run Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showRerunModal}
+        onClose={() => setShowRerunModal(false)}
+        onConfirm={handleConfirmRerun}
+        title="Re-run Job"
+        message={`Are you sure you want to re-run "${getJobDisplayTitle()}"? This will create a new job with the same configuration but allow you to upload new files.`}
+        confirmText="Yes, Re-run Job"
+        cancelText="Cancel"
+        confirmButtonStyle="warning"
+        isLoading={isProcessingRerun}
+      />
     </div>
   );
 }; 

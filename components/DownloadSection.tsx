@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useDownloadArchive } from '../web/hooks/useJobData';
+import { ConfirmationModal } from './ConfirmationModal';
 
 interface DownloadSectionProps {
   jobData: any;
@@ -21,6 +22,7 @@ export const DownloadSection = ({ jobData, isVisible, onRegenerateAssets }: Down
   // Local state only for download progress
   const [downloadingArchive, setDownloadingArchive] = useState(false);
   const [regeneratingAssets, setRegeneratingAssets] = useState(false);
+  const [showRegenerateModal, setShowRegenerateModal] = useState(false);
 
   const handleDownloadArchive = async () => {
     if (!archiveData) return;
@@ -47,13 +49,18 @@ export const DownloadSection = ({ jobData, isVisible, onRegenerateAssets }: Down
     }
   };
 
-  const handleRegenerateAssets = async () => {
+  const handleRegenerateClick = () => {
+    setShowRegenerateModal(true);
+  };
+
+  const handleConfirmRegenerate = async () => {
     if (!onRegenerateAssets) return;
     
     setRegeneratingAssets(true);
     
     try {
       await onRegenerateAssets();
+      setShowRegenerateModal(false);
     } catch (error) {
       console.error('❌ Error regenerating assets:', error);
       alert(`Failed to regenerate assets: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -254,41 +261,38 @@ export const DownloadSection = ({ jobData, isVisible, onRegenerateAssets }: Down
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: 16,
-              marginTop: -8
+              marginTop: 12
             }}>
               <button
-                onClick={handleRegenerateAssets}
+                onClick={handleRegenerateClick}
                 disabled={downloadingArchive || regeneratingAssets}
                 style={{
-                  padding: '12px 24px',
-                  background: regeneratingAssets
-                    ? 'rgba(156, 163, 175, 0.3)'
-                    : 'rgba(168, 85, 247, 0.1)',
+                  padding: '8px 16px',
+                  background: 'transparent',
                   border: regeneratingAssets
                     ? '1px solid rgba(156, 163, 175, 0.3)'
                     : '1px solid rgba(168, 85, 247, 0.3)',
-                  borderRadius: 12,
+                  borderRadius: 8,
                   color: regeneratingAssets ? '#9ca3af' : '#c4b5fd',
                   fontSize: 14,
-                  fontWeight: 600,
+                  fontWeight: 500,
                   cursor: (downloadingArchive || regeneratingAssets) ? 'not-allowed' : 'pointer',
                   transition: 'all 0.2s',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: 8,
-                  opacity: regeneratingAssets ? 0.6 : 1
+                  gap: 6,
+                  opacity: regeneratingAssets ? 0.6 : 0.8
                 }}
                 onMouseEnter={(e) => {
                   if (!downloadingArchive && !regeneratingAssets) {
-                    e.currentTarget.style.background = 'rgba(168, 85, 247, 0.2)';
+                    e.currentTarget.style.opacity = '1';
                     e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.5)';
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (!downloadingArchive && !regeneratingAssets) {
-                    e.currentTarget.style.background = 'rgba(168, 85, 247, 0.1)';
+                    e.currentTarget.style.opacity = '0.8';
                     e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.3)';
                   }
                 }}
@@ -296,10 +300,10 @@ export const DownloadSection = ({ jobData, isVisible, onRegenerateAssets }: Down
                 {regeneratingAssets ? (
                   <>
                     <div style={{
-                      width: 16,
-                      height: 16,
-                      border: '2px solid rgba(156, 163, 175, 0.3)',
-                      borderTop: '2px solid #9ca3af',
+                      width: 14,
+                      height: 14,
+                      border: '1px solid rgba(156, 163, 175, 0.5)',
+                      borderTop: '1px solid #9ca3af',
                       borderRadius: '50%',
                       animation: 'spin 1s linear infinite'
                     }} />
@@ -307,7 +311,7 @@ export const DownloadSection = ({ jobData, isVisible, onRegenerateAssets }: Down
                   </>
                 ) : (
                   <>
-                    <span style={{ fontSize: 16 }}>🔄</span>
+                    <span style={{ fontSize: 14 }}>🔄</span>
                     Re-Generate Assets
                   </>
                 )}
@@ -320,7 +324,7 @@ export const DownloadSection = ({ jobData, isVisible, onRegenerateAssets }: Down
             textAlign: 'center',
             fontSize: 12,
             color: '#9ca3af',
-            marginTop: onRegenerateAssets ? -8 : -8
+            marginTop: -8
           }}>
             Archive contains all generated digital assets from this job • Expires in {formatExpirationTime(archiveData.expires_in)}
             {onRegenerateAssets && (
@@ -374,6 +378,19 @@ export const DownloadSection = ({ jobData, isVisible, onRegenerateAssets }: Down
           100% { transform: rotate(360deg); }
         }
       `}</style>
+
+      {/* Re-generate Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showRegenerateModal}
+        onClose={() => setShowRegenerateModal(false)}
+        onConfirm={handleConfirmRegenerate}
+        title="Re-Generate Assets"
+        message="Are you sure you want to re-generate assets? This will reset the job status to 'extracted' and allow you to select a different template and generate new assets."
+        confirmText="Yes, Re-Generate"
+        cancelText="Cancel"
+        confirmButtonStyle="primary"
+        isLoading={regeneratingAssets}
+      />
     </div>
   );
 }; 
