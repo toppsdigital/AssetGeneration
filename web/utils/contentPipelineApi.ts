@@ -21,6 +21,10 @@ export interface JobData {
   original_files_total_count?: number;
   original_files_completed_count?: number;
   original_files_failed_count?: number;
+  user_id?: string;
+  user_name?: string;
+  updated_by_user_id?: string;
+  updated_by_user_name?: string;
 }
 
 export interface FileData {

@@ -317,6 +317,11 @@ export default function JobsPage() {
                         <span style={{ color: '#9ca3af', fontSize: 12 }}>
                           📁 {job.files?.length || 0} files
                         </span>
+                        {job.user_name && (
+                          <span style={{ color: '#9ca3af', fontSize: 14 }}>
+                            👤 {job.user_name}
+                          </span>
+                        )}
                       </div>
                       {job.description && (
                         <p style={{ 
