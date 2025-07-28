@@ -186,3 +186,80 @@ export const handleApiResponse = async (response: Response): Promise<any> => {
   
   return response.json();
 }; 
+
+/**
+ * UI Status Filtering Utilities
+ * Maps UI-level status concepts to actual job statuses for filtering
+ */
+
+export type UIStatusFilter = 'all' | 'in-progress' | 'completed';
+
+/**
+ * Map UI status filter to actual job statuses
+ */
+export const getJobStatusesForUIFilter = (uiStatus: UIStatusFilter): string[] | null => {
+  switch (uiStatus) {
+    case 'in-progress':
+      return [
+        'uploading',
+        'extracting', 
+        'generating'
+      ];
+    case 'completed':
+      return [
+        'uploaded',
+        'extracted',
+        'generated',
+        'completed'
+      ];
+    case 'all':
+    default:
+      return null; // Return null to indicate no filtering needed
+  }
+};
+
+/**
+ * Check if a job status matches a UI status filter
+ */
+export const doesJobMatchUIStatusFilter = (jobStatus: string | undefined, uiFilter: UIStatusFilter): boolean => {
+  if (!jobStatus || uiFilter === 'all') return true;
+  
+  const allowedStatuses = getJobStatusesForUIFilter(uiFilter);
+  if (!allowedStatuses) return true;
+  
+  return allowedStatuses.includes(jobStatus.toLowerCase());
+};
+
+/**
+ * Get display label for UI status filter
+ */
+export const getUIStatusFilterLabel = (uiStatus: UIStatusFilter): string => {
+  switch (uiStatus) {
+    case 'in-progress':
+      return 'In Progress';
+    case 'completed':
+      return 'Completed';
+    case 'all':
+    default:
+      return 'All Jobs';
+  }
+};
+
+/**
+ * Determine UI status category for a given job status
+ */
+export const getUIStatusFromJobStatus = (jobStatus: string | undefined): 'in-progress' | 'completed' | 'unknown' => {
+  if (!jobStatus) return 'unknown';
+  
+  const lowerStatus = jobStatus.toLowerCase();
+  
+  if (['uploading', 'extracting', 'generating'].includes(lowerStatus)) {
+    return 'in-progress';
+  }
+  
+  if (['uploaded', 'extracted', 'generated', 'completed'].includes(lowerStatus)) {
+    return 'completed';
+  }
+  
+  return 'unknown';
+}; 

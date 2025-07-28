@@ -205,6 +205,29 @@ async function handleRequest(request: NextRequest, method: string) {
         if (searchParams.get('recent_only')) jobParams.append('recent_only', searchParams.get('recent_only')!);
         if (searchParams.get('last_modified_only')) jobParams.append('last_modified_only', searchParams.get('last_modified_only')!);
         if (searchParams.get('exclusive_start_key')) jobParams.append('exclusive_start_key', searchParams.get('exclusive_start_key')!);
+        // Handle user_id parameter - either passed directly or get from session for "my jobs"
+        if (searchParams.get('user_id')) {
+          jobParams.append('user_id', searchParams.get('user_id')!);
+        } else if (searchParams.get('my_jobs')) {
+          // Fallback: For my_jobs filter, get the current user's ID from session
+          try {
+            const session = await auth();
+            if (session?.user) {
+              const userId = session.user.id || session.user.email || 'unknown';
+              jobParams.append('user_id', userId);
+            }
+          } catch (error) {
+            console.warn('Failed to get session for my_jobs filter:', error);
+          }
+        }
+        // Map 'status' parameter to 'sk_status' for API compatibility
+        if (searchParams.get('status')) {
+          jobParams.append('sk_status', searchParams.get('status')!);
+          console.log('🔍 Status filter mapped:', {
+            frontend_status: searchParams.get('status'),
+            api_sk_status: searchParams.get('status')
+          });
+        }
         if (jobParams.toString()) {
           apiUrl += `?${jobParams.toString()}`;
         }
