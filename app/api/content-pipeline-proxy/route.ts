@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '../../auth';
 
 // Types matching the contentPipelineApi.ts structure
 interface JobData {
@@ -11,6 +12,10 @@ interface JobData {
   job_status?: 'uploading' | 'uploaded' | 'upload-failed' | 'extracting' | 'extracted' | 'extraction-failed' | 'generating' | 'generated' | 'generation-failed' | 'completed';
   created_at?: string;
   last_updated?: string;
+  user_id?: string;
+  user_name?: string;
+  updated_by_user_id?: string;
+  updated_by_user_name?: string;
 }
 
 interface FileData {
@@ -141,6 +146,25 @@ async function handleRequest(request: NextRequest, method: string) {
       case 'create_job':
         apiUrl += '/jobs';
         apiMethod = 'POST';
+        // Get session and add user information
+        try {
+          const session = await auth();
+          if (session?.user) {
+            console.log('🔍 Session user object:', {
+              id: session.user.id,
+              email: session.user.email,
+              name: session.user.name,
+              available_fields: Object.keys(session.user)
+            });
+            apiBody = {
+              ...apiBody,
+              user_id: session.user.id || session.user.email || 'unknown',
+              user_name: session.user.name || session.user.email || 'Unknown User'
+            };
+          }
+        } catch (error) {
+          console.warn('Failed to get session for job creation:', error);
+        }
         break;
         
       case 'get_job':
@@ -157,6 +181,19 @@ async function handleRequest(request: NextRequest, method: string) {
         }
         apiUrl += `/jobs/${id}`;
         apiMethod = 'PUT';
+        // Get session and add user information for audit trail
+        try {
+          const session = await auth();
+          if (session?.user) {
+            apiBody = {
+              ...apiBody,
+              updated_by_user_id: session.user.id || session.user.email || 'unknown',
+              updated_by_user_name: session.user.name || session.user.email || 'Unknown User'
+            };
+          }
+        } catch (error) {
+          console.warn('Failed to get session for job update:', error);
+        }
         break;
         
       case 'list_jobs':
@@ -423,6 +460,19 @@ async function handleRequest(request: NextRequest, method: string) {
         }
         apiUrl += `/jobs/${id}/rerun`;
         apiMethod = 'POST';
+        // Get session and add user information
+        try {
+          const session = await auth();
+          if (session?.user) {
+            apiBody = {
+              ...apiBody,
+              user_id: session.user.id || session.user.email || 'unknown',
+              user_name: session.user.name || session.user.email || 'Unknown User'
+            };
+          }
+        } catch (error) {
+          console.warn('Failed to get session for job rerun:', error);
+        }
         break;
         
       case 'generate_assets':
@@ -435,6 +485,19 @@ async function handleRequest(request: NextRequest, method: string) {
         // colors is optional - only required for spot layers
         apiUrl += `/jobs/${id}/generate-assets`;
         apiMethod = 'POST';
+        // Get session and add user information for asset generation tracking
+        try {
+          const session = await auth();
+          if (session?.user) {
+            apiBody = {
+              ...apiBody,
+              generated_by_user_id: session.user.id || session.user.email || 'unknown',
+              generated_by_user_name: session.user.name || session.user.email || 'Unknown User'
+            };
+          }
+        } catch (error) {
+          console.warn('Failed to get session for asset generation:', error);
+        }
         break;
         
       default:
@@ -470,6 +533,21 @@ async function handleRequest(request: NextRequest, method: string) {
     console.log('Request headers:', JSON.stringify(headers, null, 2));
     if (apiBody) {
       console.log('Request body:', JSON.stringify(apiBody, null, 2));
+      // Log user information for job operations
+      if (operation === 'create_job' || operation === 'rerun_job' || operation === 'update_job' || operation === 'generate_assets') {
+        if (apiBody.user_id || apiBody.updated_by_user_id || apiBody.generated_by_user_id) {
+          console.log(`✅ User context included for ${operation}:`, {
+            user_id: apiBody.user_id,
+            user_name: apiBody.user_name,
+            updated_by_user_id: apiBody.updated_by_user_id,
+            updated_by_user_name: apiBody.updated_by_user_name,
+            generated_by_user_id: apiBody.generated_by_user_id,
+            generated_by_user_name: apiBody.generated_by_user_name
+          });
+        } else {
+          console.log(`⚠️ No user context found for ${operation}`);
+        }
+      }
     }
     
     const response = await fetch(apiUrl, fetchOptions);
