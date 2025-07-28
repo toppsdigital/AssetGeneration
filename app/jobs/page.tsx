@@ -1,8 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
+import { useSession } from 'next-auth/react';
 import styles from '../../styles/Home.module.css';
 import PageTitle from '../../components/PageTitle';
 import Spinner from '../../components/Spinner';
@@ -10,6 +11,11 @@ import { contentPipelineApi, JobData } from '../../web/utils/contentPipelineApi'
 
 export default function JobsPage() {
   const router = useRouter();
+  const { data: session } = useSession();
+  
+  // Filter states
+  const [userFilter, setUserFilter] = useState<'all' | 'my'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'in-progress' | 'completed'>('all');
 
   // React Query to fetch and cache jobs data
   const { 
@@ -19,10 +25,35 @@ export default function JobsPage() {
     refetch,
     isRefetching 
   } = useQuery({
-    queryKey: ['jobs'],
+    queryKey: ['jobs', userFilter, statusFilter],
     queryFn: async () => {
-      console.log('Fetching jobs from Content Pipeline API...');
-      const response = await contentPipelineApi.listJobs();
+      // Build filter options
+      const filterOptions: any = {};
+      
+      console.log('Session debug:', { 
+        hasSession: !!session, 
+        hasUser: !!session?.user, 
+        email: session?.user?.email,
+        userFilter,
+        statusFilter 
+      });
+      
+      if (userFilter === 'my' && session?.user?.email) {
+        filterOptions.user_id = session.user.email;
+        console.log('Setting user_id filter:', session.user.email);
+      } else if (userFilter === 'my') {
+        console.log('WARNING: userFilter is "my" but no session email found');
+      }
+      
+      if (statusFilter === 'in-progress') {
+        filterOptions.status = 'in-progress';
+      } else if (statusFilter === 'completed') {
+        filterOptions.status = 'completed';
+      }
+      
+      console.log('Final filterOptions being sent:', filterOptions);
+      
+      const response = await contentPipelineApi.listJobs(filterOptions);
       console.log('Jobs fetched:', response);
       
       // Sort jobs by creation date (most recent first)
@@ -32,7 +63,9 @@ export default function JobsPage() {
       
       return sortedJobs;
     },
-    // Refetch every 5 seconds to match the original background refresh
+    // Only run query when we have session data for "my" jobs
+    enabled: userFilter === 'all' || (userFilter === 'my' && !!session?.user?.email),
+    // Refetch every 5 seconds for real-time updates
     refetchInterval: 5000,
     // Keep previous data while refetching to prevent UI flicker
     placeholderData: (previousData) => previousData,
@@ -170,72 +203,287 @@ export default function JobsPage() {
       <PageTitle title="Physical to Digital Jobs" />
       <div className={styles.content}>
         <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px' }}>
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'center', 
-            marginBottom: 24 
+          {/* Enhanced Header Section */}
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.005))',
+            border: '1px solid rgba(255, 255, 255, 0.06)',
+            borderRadius: 24,
+            padding: '32px',
+            marginBottom: 16,
+            backdropFilter: 'blur(24px)',
+            boxShadow: '0 12px 40px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
           }}>
-            <h1 style={{ fontSize: '2rem', fontWeight: 600, color: '#f8f8f8' }}>
-              All Jobs ({jobs.length})
-            </h1>
-            <div style={{ display: 'flex', gap: 12 }}>
-              <button
-                onClick={() => router.push('/new-job')}
-                style={{
-                  padding: '10px 20px',
-                  background: 'linear-gradient(135deg, #10b981, #059669)',
-                  border: 'none',
-                  borderRadius: 8,
-                  color: 'white',
-                  cursor: 'pointer',
-                  fontSize: 14,
-                  fontWeight: 600,
-                  transition: 'all 0.2s'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'scale(1.05)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'scale(1)';
-                }}
-              >
-                ➕ New Job
-              </button>
-              <button
-                onClick={handleRefresh}
-                disabled={isRefetching}
-                style={{
-                  padding: '8px 16px',
-                  background: isRefetching ? 'rgba(59, 130, 246, 0.05)' : 'rgba(59, 130, 246, 0.1)',
-                  border: '1px solid rgba(59, 130, 246, 0.3)',
-                  borderRadius: 8,
-                  color: isRefetching ? '#9ca3af' : '#60a5fa',
-                  cursor: isRefetching ? 'not-allowed' : 'pointer',
-                  fontSize: 14,
-                  transition: 'all 0.2s',
-                  opacity: isRefetching ? 0.6 : 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6
-                }}
-              >
-                <div style={{ width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {isRefetching ? (
-                    <div style={{
-                      width: 16,
-                      height: 16,
-                      border: '2px solid transparent',
-                      borderTop: '2px solid currentColor',
-                      borderRadius: '50%',
-                      animation: 'spin 1s linear infinite'
-                    }} />
-                  ) : (
-                    <span style={{ fontSize: 16 }}>🔄</span>
-                  )}
-                </div>
-                Refresh
-              </button>
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'flex-start'
+            }}>
+              {/* Left side: Navigation and Metadata */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                 {/* Navigation Controls - Independent Layout */}
+                 <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+                   {/* Navigation Toggle - Fixed Width */}
+                   <div style={{ 
+                     width: 'fit-content',
+                     display: 'flex',
+                     alignItems: 'center'
+                   }}>
+                     {/* Enhanced Navigation Tabs */}
+                     <div style={{ 
+                       display: 'flex', 
+                       gap: 0,
+                       background: 'rgba(255, 255, 255, 0.03)',
+                       borderRadius: 12,
+                       padding: 4,
+                       backdropFilter: 'blur(8px)',
+                       border: '1px solid rgba(255, 255, 255, 0.08)'
+                     }}>
+                       <button
+                         onClick={() => setUserFilter('all')}
+                         style={{
+                           width: '110px',
+                           padding: '14px 0',
+                           background: userFilter === 'all' 
+                             ? 'linear-gradient(135deg, #3b82f6, #1e40af)' 
+                             : 'transparent',
+                           border: 'none',
+                           borderRadius: 8,
+                           color: userFilter === 'all' ? '#ffffff' : '#94a3b8',
+                           fontSize: '1rem',
+                           fontWeight: 600,
+                           cursor: 'pointer',
+                           transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                           letterSpacing: '-0.01em',
+                           whiteSpace: 'nowrap',
+                           textAlign: 'center',
+                           boxShadow: userFilter === 'all' 
+                             ? '0 4px 12px rgba(59, 130, 246, 0.3)' 
+                             : 'none',
+                           textShadow: userFilter === 'all' 
+                             ? '0 1px 2px rgba(0, 0, 0, 0.1)' 
+                             : 'none'
+                         }}
+                         onMouseEnter={(e) => {
+                           if (userFilter !== 'all') {
+                             e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                             e.currentTarget.style.color = '#e2e8f0';
+                             e.currentTarget.style.transform = 'translateY(-1px)';
+                           }
+                         }}
+                         onMouseLeave={(e) => {
+                           if (userFilter !== 'all') {
+                             e.currentTarget.style.background = 'transparent';
+                             e.currentTarget.style.color = '#94a3b8';
+                             e.currentTarget.style.transform = 'translateY(0)';
+                           }
+                         }}
+                       >
+                         All Jobs
+                       </button>
+                       <button
+                         onClick={() => setUserFilter('my')}
+                         style={{
+                           width: '110px',
+                           padding: '14px 0',
+                           background: userFilter === 'my' 
+                             ? 'linear-gradient(135deg, #3b82f6, #1e40af)' 
+                             : 'transparent',
+                           border: 'none',
+                           borderRadius: 8,
+                           color: userFilter === 'my' ? '#ffffff' : '#94a3b8',
+                           fontSize: '1rem',
+                           fontWeight: 600,
+                           cursor: 'pointer',
+                           transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                           letterSpacing: '-0.01em',
+                           whiteSpace: 'nowrap',
+                           textAlign: 'center',
+                           boxShadow: userFilter === 'my' 
+                             ? '0 4px 12px rgba(59, 130, 246, 0.3)' 
+                             : 'none',
+                           textShadow: userFilter === 'my' 
+                             ? '0 1px 2px rgba(0, 0, 0, 0.1)' 
+                             : 'none'
+                         }}
+                         onMouseEnter={(e) => {
+                           if (userFilter !== 'my') {
+                             e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                             e.currentTarget.style.color = '#e2e8f0';
+                             e.currentTarget.style.transform = 'translateY(-1px)';
+                           }
+                         }}
+                         onMouseLeave={(e) => {
+                           if (userFilter !== 'my') {
+                             e.currentTarget.style.background = 'transparent';
+                             e.currentTarget.style.color = '#94a3b8';
+                             e.currentTarget.style.transform = 'translateY(0)';
+                           }
+                         }}
+                       >
+                         My Jobs
+                       </button>
+                     </div>
+                   </div>
+
+                   {/* Status Filter - Independent Width */}
+                   <div style={{ 
+                     position: 'relative',
+                     width: 'fit-content',
+                     display: 'flex',
+                     alignItems: 'center'
+                   }}>
+                     <select
+                       value={statusFilter}
+                       onChange={(e) => setStatusFilter(e.target.value as 'all' | 'in-progress' | 'completed')}
+                       style={{
+                         padding: '12px 40px 12px 16px',
+                         background: 'rgba(255, 255, 255, 0.04)',
+                         border: '1px solid rgba(255, 255, 255, 0.1)',
+                         borderRadius: 10,
+                         color: '#e2e8f0',
+                         fontSize: 14,
+                         fontWeight: 500,
+                         cursor: 'pointer',
+                         outline: 'none',
+                         appearance: 'none',
+                         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                         width: '140px',
+                         height: '46px',
+                         backdropFilter: 'blur(8px)',
+                         boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
+                       }}
+                       onMouseEnter={(e) => {
+                         e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+                         e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                         e.currentTarget.style.transform = 'translateY(-1px)';
+                         e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+                       }}
+                       onMouseLeave={(e) => {
+                         e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)';
+                         e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                         e.currentTarget.style.transform = 'translateY(0)';
+                         e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)';
+                       }}
+                     >
+                       <option value="all" style={{ background: '#1f2937', color: '#f8f8f8' }}>All Status</option>
+                       <option value="in-progress" style={{ background: '#1f2937', color: '#f8f8f8' }}>In Progress</option>
+                       <option value="completed" style={{ background: '#1f2937', color: '#f8f8f8' }}>Completed</option>
+                     </select>
+                     <div style={{
+                       position: 'absolute',
+                       right: 12,
+                       top: '50%',
+                       transform: 'translateY(-50%)',
+                       pointerEvents: 'none',
+                       color: '#94a3b8',
+                       fontSize: 12,
+                       transition: 'transform 0.2s ease'
+                     }}>
+                       ▼
+                     </div>
+                     {(statusFilter !== 'all') && (
+                       <div style={{
+                         position: 'absolute',
+                         top: -8,
+                         right: 8,
+                         width: 8,
+                         height: 8,
+                         borderRadius: '50%',
+                         background: '#f59e0b',
+                         border: '2px solid rgba(0, 0, 0, 0.1)'
+                       }} />
+                     )}
+                   </div>
+                 </div>
+
+                 {/* Secondary Info - Independent Layout */}
+                 <div style={{ 
+                   display: 'flex', 
+                   alignItems: 'center', 
+                   gap: 20,
+                   marginTop: -2,
+                   width: 'fit-content'
+                 }}>
+                   {/* Job Count */}
+                   <div style={{
+                     display: 'flex',
+                     alignItems: 'center',
+                     gap: 8,
+                     color: '#64748b',
+                     fontSize: 12
+                   }}>
+                     <div style={{
+                       width: 8,
+                       height: 8,
+                       borderRadius: '50%',
+                       background: '#3b82f6'
+                     }} />
+                     <span style={{ fontWeight: 500 }}>
+                       {jobs.length} {jobs.length === 1 ? 'Job' : 'Jobs'}
+                     </span>
+                   </div>
+
+                   {/* Vertical Divider */}
+                   <div style={{
+                     width: 1,
+                     height: 20,
+                     background: 'linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.1), transparent)'
+                   }} />
+
+                   {/* Last Updated */}
+                   <div style={{
+                     display: 'flex',
+                     alignItems: 'center',
+                     gap: 8,
+                     color: '#64748b',
+                     fontSize: 12
+                   }}>
+                     <div style={{
+                       width: 8,
+                       height: 8,
+                       borderRadius: '50%',
+                       background: '#10b981'
+                     }} />
+                     <span style={{ fontWeight: 500 }}>
+                       Last updated {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                     </span>
+                   </div>
+                 </div>
+               </div>
+
+               {/* Enhanced Action Section */}
+               <div>
+                <button
+                  onClick={() => router.push('/new-job')}
+                  style={{
+                    padding: '14px 28px',
+                    background: 'linear-gradient(135deg, #10b981, #059669)',
+                    border: 'none',
+                    borderRadius: 14,
+                    color: 'white',
+                    cursor: 'pointer',
+                    fontSize: 16,
+                    fontWeight: 700,
+                    transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                    boxShadow: '0 8px 24px rgba(16, 185, 129, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
+                    letterSpacing: '-0.01em',
+                    textShadow: '0 1px 2px rgba(0, 0, 0, 0.1)',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    height: '46px'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-2px) scale(1.02)';
+                    e.currentTarget.style.boxShadow = '0 12px 32px rgba(16, 185, 129, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0) scale(1)';
+                    e.currentTarget.style.boxShadow = '0 8px 24px rgba(16, 185, 129, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2)';
+                  }}
+                >
+                  <span style={{ position: 'relative', zIndex: 1 }}>➕ New</span>
+                </button>
+              </div>
             </div>
           </div>
 

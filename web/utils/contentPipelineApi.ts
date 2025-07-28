@@ -167,6 +167,9 @@ class ContentPipelineAPI {
     recentOnly?: boolean;
     lastModifiedOnly?: boolean;
     exclusiveStartKey?: string;
+    my_jobs?: boolean;
+    user_id?: string;
+    status?: string;
   } = {}): Promise<JobListResponse> {
     const params = new URLSearchParams();
     params.append('operation', 'list_jobs');
@@ -175,6 +178,9 @@ class ContentPipelineAPI {
     if (options.recentOnly) params.append('recent_only', 'true');
     if (options.lastModifiedOnly) params.append('last_modified_only', 'true');
     if (options.exclusiveStartKey) params.append('exclusive_start_key', options.exclusiveStartKey);
+    if (options.my_jobs) params.append('my_jobs', 'true');
+    if (options.user_id) params.append('user_id', options.user_id);
+    if (options.status) params.append('status', options.status);
 
     const response = await fetch(`${this.baseUrl}?${params.toString()}`);
 
