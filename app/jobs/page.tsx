@@ -299,6 +299,11 @@ export default function JobsPage() {
                         }}>
                           {getJobDisplayName(job)}
                         </h3>
+                        {job.user_name && (
+                          <span style={{ color: '#9ca3af', fontSize: 14 }}>
+                            Created by: {job.user_name}
+                          </span>
+                        )}
                       </div>
                       <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
                         <span style={{ color: '#9ca3af', fontSize: 14 }}>
@@ -317,11 +322,6 @@ export default function JobsPage() {
                         <span style={{ color: '#9ca3af', fontSize: 12 }}>
                           📁 {job.files?.length || 0} files
                         </span>
-                        {job.user_name && (
-                          <span style={{ color: '#9ca3af', fontSize: 14 }}>
-                            👤 {job.user_name}
-                          </span>
-                        )}
                       </div>
                       {job.description && (
                         <p style={{ 
