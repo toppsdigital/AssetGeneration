@@ -197,6 +197,60 @@ const getImageUrl = async (filePath: string): Promise<string | null> => {
   }
 };
 
+// Global URL cache - shared across all ImagePreview instances
+const globalUrlCache = new Map<string, { url: string; timestamp: number }>();
+const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
+
+// Helper to get cached URL if still valid
+const getCachedUrl = (filePath: string): string | null => {
+  const cached = globalUrlCache.get(filePath);
+  if (cached && (Date.now() - cached.timestamp < CACHE_DURATION)) {
+    console.log('🎯 Using cached URL for:', filePath);
+    return cached.url;
+  }
+  if (cached) {
+    // Cleanup expired cache entry
+    if (cached.url.startsWith('blob:')) {
+      URL.revokeObjectURL(cached.url);
+    }
+    globalUrlCache.delete(filePath);
+  }
+  return null;
+};
+
+// Helper to cache URL
+const setCachedUrl = (filePath: string, url: string): void => {
+  // Clean up old URL if it was a blob
+  const existing = globalUrlCache.get(filePath);
+  if (existing && existing.url.startsWith('blob:')) {
+    URL.revokeObjectURL(existing.url);
+  }
+  
+  globalUrlCache.set(filePath, { url, timestamp: Date.now() });
+  console.log('💾 Cached URL for:', filePath);
+};
+
+// Export function to get URL with cache (for use in modal)
+export const getImageUrlWithCache = async (filePath: string): Promise<string | null> => {
+  // Check cache first
+  const cachedUrl = getCachedUrl(filePath);
+  if (cachedUrl) {
+    return cachedUrl;
+  }
+  
+  // Fetch new URL
+  const url = await getImageUrl(filePath);
+  if (url) {
+    setCachedUrl(filePath, url);
+  }
+  return url;
+};
+
+// Export function to get cached URL without fetching (for immediate use)
+export const getCachedImageUrl = (filePath: string): string | null => {
+  return getCachedUrl(filePath);
+};
+
 export default function ImagePreview({
   filePath,
   alt,
@@ -262,15 +316,25 @@ export default function ImagePreview({
     return () => observer.disconnect();
   }, [lazy, priority]);
 
-  // Fetch presigned URL when visible
+  // Fetch presigned URL when visible (with global cache)
   useEffect(() => {
     if (!isVisible || imageUrl) return;
 
     const fetchUrl = async () => {
       try {
         setError(null);
+        
+        // Check cache first
+        const cachedUrl = getCachedUrl(filePath);
+        if (cachedUrl) {
+          setImageUrl(cachedUrl);
+          return;
+        }
+        
+        // Fetch new URL
         const url = await getImageUrl(filePath);
         if (url) {
+          setCachedUrl(filePath, url);
           setImageUrl(url);
         } else {
           setError('Failed to get image URL');
@@ -284,11 +348,20 @@ export default function ImagePreview({
     fetchUrl();
   }, [isVisible, filePath, imageUrl]);
 
-  // Preload URLs for priority images
+  // Preload URLs for priority images (with global cache)
   useEffect(() => {
     if (priority && filePath) {
+      // Check cache first
+      const cachedUrl = getCachedUrl(filePath);
+      if (cachedUrl) {
+        setImageUrl(cachedUrl);
+        return;
+      }
+      
+      // Fetch and cache new URL
       getImageUrl(filePath).then(url => {
         if (url) {
+          setCachedUrl(filePath, url);
           setImageUrl(url);
         }
       }).catch(console.error);

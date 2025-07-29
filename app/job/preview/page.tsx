@@ -147,12 +147,12 @@ function JobPreviewPageContent() {
     }
   };
 
-  // Get current expanded image data with cached presigned URL if available
+  // Get current expanded image data (filePath will be resolved by modal's cache logic)
   const expandedImage = expandedImageIndex !== null && assets[expandedImageIndex] 
     ? (() => {
         const asset = assets[expandedImageIndex];
         return {
-          src: asset.filePath,
+          src: asset.filePath, // Modal will check cache and use optimized URL
           alt: asset.filename,
           isTiff: asset.isTiff
         };

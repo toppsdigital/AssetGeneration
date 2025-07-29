@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import ImagePreview from './ImagePreview';
+import ImagePreview, { getCachedImageUrl, getImageUrlWithCache } from './ImagePreview';
 
 interface ExpandedImageData {
   src: string;
@@ -30,6 +30,33 @@ export default function ExpandedImageModal({
 }: ExpandedImageModalProps) {
   const [isControlsVisible, setIsControlsVisible] = useState(true);
   const [isImageLoading, setIsImageLoading] = useState(true);
+  const [optimizedImageUrl, setOptimizedImageUrl] = useState<string | null>(null);
+
+  // Check for cached URL when image changes
+  useEffect(() => {
+    if (!image) {
+      setOptimizedImageUrl(null);
+      return;
+    }
+
+    // First, check if we already have a cached URL for instant display
+    const cachedUrl = getCachedImageUrl(image.src);
+    if (cachedUrl) {
+      console.log('🚀 Using cached URL for modal:', image.src);
+      setOptimizedImageUrl(cachedUrl);
+      setIsImageLoading(false);
+    } else {
+      // If no cache, fetch URL but don't block modal opening
+      setIsImageLoading(true);
+      getImageUrlWithCache(image.src).then(url => {
+        if (url) {
+          console.log('📥 Got fresh URL for modal:', image.src);
+          setOptimizedImageUrl(url);
+          setIsImageLoading(false);
+        }
+      }).catch(console.error);
+    }
+  }, [image?.src]);
 
   // Auto-hide controls after 3 seconds of no mouse movement
   useEffect(() => {
@@ -274,19 +301,71 @@ export default function ExpandedImageModal({
           justifyContent: 'center',
           position: 'relative'
         }}>
-          <ImagePreview
-            filePath={image.src}
-            alt={image.alt}
-            priority={true}
-            lazy={false}
-            style={{
-              maxWidth: '100%',
-              maxHeight: '100%',
-              objectFit: 'contain',
-              borderRadius: '4px',
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.8)'
-            }}
-          />
+          {optimizedImageUrl ? (
+            // Use cached/optimized URL directly for faster loading
+            <img
+              src={optimizedImageUrl}
+              alt={image.alt}
+              style={{
+                maxWidth: '100%',
+                maxHeight: '100%',
+                objectFit: 'contain',
+                borderRadius: '4px',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.8)',
+                opacity: isImageLoading ? 0.5 : 1,
+                transition: 'opacity 0.3s ease'
+              }}
+              onLoad={() => setIsImageLoading(false)}
+              onError={() => {
+                console.error('Failed to load optimized image, falling back to ImagePreview');
+                setOptimizedImageUrl(null);
+              }}
+            />
+          ) : (
+            // Fallback to ImagePreview component for full functionality
+            <ImagePreview
+              filePath={image.src}
+              alt={image.alt}
+              priority={true}
+              lazy={false}
+              style={{
+                maxWidth: '100%',
+                maxHeight: '100%',
+                objectFit: 'contain',
+                borderRadius: '4px',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.8)'
+              }}
+            />
+          )}
+          
+          {/* Loading indicator for modal */}
+          {isImageLoading && (
+            <div style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              background: 'rgba(0, 0, 0, 0.8)',
+              color: 'white',
+              padding: '12px 20px',
+              borderRadius: '20px',
+              fontSize: '14px',
+              fontWeight: '500',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <div style={{
+                width: '16px',
+                height: '16px',
+                border: '2px solid rgba(255, 255, 255, 0.3)',
+                borderTop: '2px solid white',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite'
+              }} />
+              Loading...
+            </div>
+          )}
         </div>
 
         {/* Filename at bottom */}
@@ -319,6 +398,11 @@ export default function ExpandedImageModal({
         @keyframes fadeIn {
           from { opacity: 0; }
           to { opacity: 1; }
+        }
+        
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
         }
       `}</style>
     </div>
