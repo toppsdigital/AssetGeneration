@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { createPortal } from 'react-dom';
 
 interface ConfirmationModalProps {
   isOpen: boolean;
@@ -74,7 +75,7 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
     }
   };
 
-  return (
+  const modalContent = (
     <div 
       style={{
         position: 'fixed',
@@ -82,12 +83,11 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        zIndex: 9999,
-        backdropFilter: 'blur(4px)'
+        zIndex: 1500
       }}
       onClick={handleBackdropClick}
     >
@@ -141,10 +141,10 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
             disabled={isLoading}
             style={{
               padding: '12px 24px',
-              background: 'rgba(107, 114, 128, 0.2)',
-              border: '1px solid rgba(107, 114, 128, 0.3)',
+              background: '#f3f4f6', // Light gray background
+              border: '1px solid #d1d5db',
               borderRadius: 8,
-              color: '#d1d5db',
+              color: '#374151', // Dark text
               fontSize: 14,
               fontWeight: 500,
               cursor: isLoading ? 'not-allowed' : 'pointer',
@@ -198,4 +198,12 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
       </div>
     </div>
   );
+
+  // Use portal to render modal outside of any container with overflow restrictions
+  if (typeof document !== 'undefined') {
+    return createPortal(modalContent, document.body);
+  }
+  
+  // Fallback for SSR
+  return modalContent;
 }; 

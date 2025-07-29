@@ -1069,14 +1069,14 @@ function JobDetailsPageContent() {
           top: 80, // Below the navbar
           left: 0,
           right: 0,
-          background: 'linear-gradient(90deg, rgba(245, 158, 11, 0.95), rgba(217, 119, 6, 0.95))',
+          background: 'linear-gradient(90deg, rgba(245, 158, 11, 0.98), rgba(217, 119, 6, 0.98))', // Slightly more opaque to compensate
           color: 'white',
           padding: '12px 24px',
           textAlign: 'center',
           fontSize: 14,
           fontWeight: 500,
-          zIndex: 1000,
-          backdropFilter: 'blur(10px)',
+          zIndex: 100, // Lowered to allow browser dialogs above
+          // Removed backdropFilter to prevent interference with native confirm dialogs
           border: '1px solid rgba(245, 158, 11, 0.3)',
           boxShadow: '0 4px 20px rgba(245, 158, 11, 0.2)'
         }}>
@@ -1188,13 +1188,12 @@ function JobDetailsPageContent() {
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          backgroundColor: 'rgba(0, 0, 0, 0.85)', // Slightly darker to compensate for removed blur
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          zIndex: 9999,
-          backdropFilter: 'blur(4px)'
+          zIndex: 1000 // Lowered from 9999 to allow browser dialogs to show above
         }}>
           <div style={{
             backgroundColor: '#1f2937',

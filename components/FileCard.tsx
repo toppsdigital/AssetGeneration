@@ -198,34 +198,45 @@ const FileCard: React.FC<FileCardProps> = ({
           </div>
         </div>
 
-        {/* Extracted Layers - Only show if there are extracted files */}
-        {file.extracted_files && Object.keys(file.extracted_files).length > 0 && (
-          <div>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: 10 // Reduced from 12
-            }}>
-              <h4 style={{
-                color: '#60a5fa',
-                fontSize: 15, // Slightly smaller
-                fontWeight: 600,
-                margin: 0
+        {/* Extracted Layers - Only show if there are extracted files (excluding seq and seq_bb) */}
+        {(() => {
+          // Filter out seq and seq_bb layer types
+          const filteredExtractedFiles = file.extracted_files ? 
+            Object.fromEntries(
+              Object.entries(file.extracted_files).filter(([_, extractedFile]) => 
+                !['seq', 'seq_bb'].includes(extractedFile.layer_type)
+              )
+            ) : {};
+          
+          // Only render if there are filtered files
+          if (Object.keys(filteredExtractedFiles).length === 0) return null;
+          
+          // Check if all filtered extracted files have "uploaded" status (case insensitive)
+          const allUploaded = Object.values(filteredExtractedFiles).every(
+            extractedFile => extractedFile.status.toLowerCase() === 'uploaded'
+          );
+          
+          return (
+            <div>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: 10 // Reduced from 12
               }}>
-                🖼️ Extracted Layers ({Object.keys(file.extracted_files).length})
-              </h4>
-              {(() => {
-                // Check if all extracted files have "uploaded" status (case insensitive)
-                const allUploaded = Object.values(file.extracted_files || {}).every(
-                  extractedFile => extractedFile.status.toLowerCase() === 'uploaded'
-                );
-                
-                return allUploaded ? (
+                <h4 style={{
+                  color: '#60a5fa',
+                  fontSize: 15, // Slightly smaller
+                  fontWeight: 600,
+                  margin: 0
+                }}>
+                  🖼️ Extracted Layers ({Object.keys(filteredExtractedFiles).length})
+                </h4>
+                {allUploaded ? (
                   <button
                     onClick={() => {
-                      // Collect file paths from extracted files
-                      const filePaths = Object.values(file.extracted_files || {}).map(extractedFile => 
+                      // Collect file paths from filtered extracted files
+                      const filePaths = Object.values(filteredExtractedFiles).map(extractedFile => 
                         extractedFile.file_path
                       ).filter(path => path);
                       
@@ -268,69 +279,69 @@ const FileCard: React.FC<FileCardProps> = ({
                   }}>
                     ⏳ Processing...
                   </span>
-                );
-              })()}
-            </div>
-            <div style={{
-              background: 'rgba(59, 130, 246, 0.1)',
-              border: '1px solid rgba(59, 130, 246, 0.3)',
-              borderRadius: 8,
-              padding: 10, // Reduced from 12
-              maxHeight: 180, // Reduced from 200
-              overflowY: 'auto'
-            }}>
-              {Object.entries(file.extracted_files).map(([filename, extractedFile], extIndex) => {
-                // Show status when there are NO firefly assets (job hasn't reached generating/complete), or file is actively uploading
-                const hasFireflyAssets = file.firefly_assets && Object.keys(file.firefly_assets).length > 0;
-                const showStatus = uploadingFiles.has(filename) || !hasFireflyAssets;
-                
-                return (
-                  <div key={extIndex} style={{
-                    marginBottom: 6, // Reduced from 8
-                    fontSize: 12, // Reduced from 13
-                    color: '#bfdbfe',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center'
-                  }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}> {/* Reduced gap */}
-                      <span>🖼️</span>
-                      <span>{filename}</span>
-                    </span>
-                    <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}> {/* Reduced gap, always show */}
-                      {/* Always show layer type */}
-                      <span style={{ 
-                        background: 'rgba(59, 130, 246, 0.2)', 
-                        padding: '1px 4px', // Reduced padding
-                        borderRadius: 3, // Reduced border radius
-                        color: '#60a5fa',
-                        fontSize: 10 // Reduced from 11
-                      }}>
-                        {extractedFile.layer_type}
+                )}
+              </div>
+              <div style={{
+                background: 'rgba(59, 130, 246, 0.1)',
+                border: '1px solid rgba(59, 130, 246, 0.3)',
+                borderRadius: 8,
+                padding: 10, // Reduced from 12
+                maxHeight: 180, // Reduced from 200
+                overflowY: 'auto'
+              }}>
+                {Object.entries(filteredExtractedFiles).map(([filename, extractedFile], extIndex) => {
+                  // Show status when there are NO firefly assets (job hasn't reached generating/complete), or file is actively uploading
+                  const hasFireflyAssets = file.firefly_assets && Object.keys(file.firefly_assets).length > 0;
+                  const showStatus = uploadingFiles.has(filename) || !hasFireflyAssets;
+                  
+                  return (
+                    <div key={extIndex} style={{
+                      marginBottom: 6, // Reduced from 8
+                      fontSize: 12, // Reduced from 13
+                      color: '#bfdbfe',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
+                    }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}> {/* Reduced gap */}
+                        <span>🖼️</span>
+                        <span>{filename}</span>
                       </span>
-                      {/* Only show status if needed */}
-                      {showStatus && (
-                        <span style={{
-                          fontSize: 10, // Reduced from 11
+                      <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}> {/* Reduced gap, always show */}
+                        {/* Always show layer type */}
+                        <span style={{ 
+                          background: 'rgba(59, 130, 246, 0.2)', 
                           padding: '1px 4px', // Reduced padding
                           borderRadius: 3, // Reduced border radius
-                          background: extractedFile.status.toLowerCase() === 'uploaded' 
-                            ? 'rgba(16, 185, 129, 0.2)' 
-                            : 'rgba(249, 115, 22, 0.2)',
-                          color: extractedFile.status.toLowerCase() === 'uploaded' 
-                            ? '#34d399' 
-                            : '#fdba74'
+                          color: '#60a5fa',
+                          fontSize: 10 // Reduced from 11
                         }}>
-                          {capitalizeStatus(extractedFile.status)}
+                          {extractedFile.layer_type}
                         </span>
-                      )}
+                        {/* Only show status if needed */}
+                        {showStatus && (
+                          <span style={{
+                            fontSize: 10, // Reduced from 11
+                            padding: '1px 4px', // Reduced padding
+                            borderRadius: 3, // Reduced border radius
+                            background: extractedFile.status.toLowerCase() === 'uploaded' 
+                              ? 'rgba(16, 185, 129, 0.2)' 
+                              : 'rgba(249, 115, 22, 0.2)',
+                            color: extractedFile.status.toLowerCase() === 'uploaded' 
+                              ? '#34d399' 
+                              : '#fdba74'
+                          }}>
+                            {capitalizeStatus(extractedFile.status)}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Digital Collectibles - Only show if there are firefly assets */}
         {file.firefly_assets && Object.keys(file.firefly_assets).length > 0 && (
