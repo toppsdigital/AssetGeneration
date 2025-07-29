@@ -17,23 +17,6 @@ export default function JobsPage() {
   const [userFilter, setUserFilter] = useState<'all' | 'my'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'in-progress' | 'completed'>('all');
 
-  // Track state changes with useEffect
-  useEffect(() => {
-    console.log('📊 userFilter state changed:', { 
-      userFilter, 
-      sessionStatus, 
-      hasSessionEmail: !!session?.user?.email,
-      timestamp: new Date().toISOString()
-    });
-  }, [userFilter, sessionStatus, session?.user?.email]);
-
-  useEffect(() => {
-    console.log('📊 statusFilter state changed:', { 
-      statusFilter, 
-      timestamp: new Date().toISOString()
-    });
-  }, [statusFilter]);
-
   // Debug logging for filter changes
   console.log('🔍 Filter state:', { 
     userFilter, 
@@ -61,12 +44,6 @@ export default function JobsPage() {
         timestamp: new Date().toISOString()
       });
       
-      // Handle "My Jobs" filter when no session is available
-      if (userFilter === 'my' && !session?.user?.email) {
-        console.log('❌ "My Jobs" selected but no user session - returning empty results');
-        return []; // Return empty array instead of making API call
-      }
-      
       // Build filter options
       const filterOptions: any = {};
       
@@ -78,10 +55,11 @@ export default function JobsPage() {
         statusFilter 
       });
       
-      // Add user filter
-      if (userFilter === 'my' && session?.user?.email) {
-        filterOptions.user_id = session.user.email;
-        console.log('✅ Setting user_id filter:', session.user.email);
+      // Add user filter 
+      if (userFilter === 'my') {
+        // Use my_jobs parameter - let server handle all session logic (same as job creation)
+        filterOptions.my_jobs = true;
+        console.log('✅ Setting my_jobs filter: true (server will handle session validation)');
       } else {
         console.log('📋 No user filter (showing all users)');
       }
@@ -125,6 +103,31 @@ export default function JobsPage() {
     // Refetch on window focus for real-time updates
     refetchOnWindowFocus: true,
   });
+
+  // Track state changes with useEffect
+  useEffect(() => {
+    console.log('📊 userFilter state changed:', { 
+      userFilter, 
+      sessionStatus, 
+      hasSessionEmail: !!session?.user?.email,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Force refetch when userFilter changes to ensure fresh API call
+    console.log('🔄 Manually triggering refetch due to userFilter change');
+    refetch();
+  }, [userFilter, refetch]);
+
+  useEffect(() => {
+    console.log('📊 statusFilter state changed:', { 
+      statusFilter, 
+      timestamp: new Date().toISOString()
+    });
+    
+    // Force refetch when statusFilter changes
+    console.log('🔄 Manually triggering refetch due to statusFilter change');
+    refetch();
+  }, [statusFilter, refetch]);
 
   // Navigate to job details page - React Query will handle data fetching
   const viewJobDetails = (job: JobData) => {
