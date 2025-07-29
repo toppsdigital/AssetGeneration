@@ -225,7 +225,7 @@ function JobPreviewPageContent() {
       </Head>
       <div className={styles.pageContainer}>
         <PageTitle title={getPageTitle()} />
-        
+      
         <div className={styles.editContainer}>
           <main className={styles.mainContent}>
             <div style={{
@@ -239,65 +239,85 @@ function JobPreviewPageContent() {
               boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
             }}>
               
-              {/* Image Grid */}
+              {/* Image Grid - Google Photos Style */}
               {assets.length > 0 && (
                 <div style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-                  gap: 24,
-                  marginBottom: 32,
-                  alignItems: 'start'
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 240px))',
+                  gap: 16,
+                  marginBottom: 24,
+                  justifyContent: 'center',
+                  padding: '0 8px'
                 }}>
                   {assets.map((asset, index) => (
                     <div
                       key={index}
                       style={{
-                        background: 'rgba(255, 255, 255, 0.05)',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        background: 'rgba(255, 255, 255, 0.03)',
                         borderRadius: 12,
-                        padding: 16,
-                        textAlign: 'center',
-                        transition: 'transform 0.2s ease',
-                        cursor: 'pointer'
+                        overflow: 'hidden',
+                        transition: 'all 0.2s ease',
+                        cursor: 'pointer',
+                        width: '100%',
+                        maxWidth: '240px',
+                        minWidth: '220px',
+                        height: 'auto',
+                        position: 'relative',
+                        padding: '8px'
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.transform = 'scale(1.02)';
+                        e.currentTarget.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.4)';
+                        e.currentTarget.style.zIndex = '10';
+                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)';
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.transform = 'scale(1)';
+                        e.currentTarget.style.boxShadow = 'none';
+                        e.currentTarget.style.zIndex = '1';
+                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
                       }}
                       onClick={() => setExpandedImageIndex(index)}
                     >
                       <div style={{
                         width: '100%',
-                        marginBottom: 12,
+                        aspectRatio: '5/7', // Trading card aspect ratio
                         borderRadius: 8,
                         overflow: 'hidden',
-                        background: 'rgba(0, 0, 0, 0.2)'
+                        background: 'rgba(0, 0, 0, 0.1)',
+                        position: 'relative',
+                        marginBottom: '12px'
                       }}>
                         <ImagePreview
                           filePath={asset.filePath}
                           alt={asset.filename}
                           onExpand={handleImageExpand}
-                          lazy={index >= 6} // Load first 6 images immediately for better performance
-                          priority={index < 3} // Preload first 3 images for instant loading
+                          lazy={index >= 12} // Load first 12 images immediately
+                          priority={index < 6} // Preload first 6 images for instant loading
                         />
                       </div>
                       
-                      <h3 style={{
-                        fontSize: '0.85rem',
-                        fontWeight: 600,
-                        color: '#f8f8f8',
-                        marginBottom: 8,
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        width: '100%'
-                      }}
-                      title={asset.filename}
-                      >
-                        {asset.filename}
-                      </h3>
+                      {/* Filename below image */}
+                      <div style={{
+                        padding: '0 4px 4px 4px',
+                        textAlign: 'center'
+                      }}>
+                        <h3 style={{
+                          fontSize: '13px',
+                          fontWeight: 500,
+                          color: '#e5e7eb',
+                          margin: 0,
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          width: '100%',
+                          lineHeight: '1.3'
+                        }}
+                        title={asset.filename}
+                        >
+                          {asset.filename}
+                        </h3>
+                      </div>
                     </div>
                   ))}
                 </div>
