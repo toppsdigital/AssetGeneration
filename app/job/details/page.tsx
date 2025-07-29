@@ -45,20 +45,28 @@ function JobDetailsPageContent() {
   const startUpload = searchParams.get('startUpload');
   const createFiles = searchParams.get('createFiles');
   
-  // Force cache invalidation when component mounts
-  useEffect(() => {
-    if (jobId) {
-      console.log('🔄 Forcing cache invalidation for job:', jobId);
-      // Remove both job detail and files caches to ensure fresh data
-      queryClient.removeQueries({ queryKey: jobKeys.detail(jobId) });
-      queryClient.removeQueries({ queryKey: jobKeys.files(jobId) });
-    }
-  }, [jobId]);
-  
   // React Query hooks for smart caching
   const queryClient = useQueryClient();
   
-  // React Query hooks for smart caching
+  // Smart cache invalidation - skip for completed jobs since they don't change
+  useEffect(() => {
+    if (jobId) {
+      // Check if we have cached job data to determine if it's completed
+      const cachedJobData = queryClient.getQueryData<UIJobData>(jobKeys.detail(jobId));
+      const isCompleted = ['complete', 'completed'].includes(cachedJobData?.job_status?.toLowerCase() || '');
+      
+      if (isCompleted) {
+        console.log('✅ Job is completed - skipping cache invalidation (only download URLs may need refresh)');
+        // Note: For completed jobs, only download URLs (presigned S3 URLs) may expire and need refreshing
+        // This should be handled at the component level when downloads fail, not here
+      } else {
+        console.log('🔄 Forcing cache invalidation for active job:', jobId);
+        // Remove both job detail and files caches to ensure fresh data for active jobs
+        queryClient.removeQueries({ queryKey: jobKeys.detail(jobId) });
+        queryClient.removeQueries({ queryKey: jobKeys.files(jobId) });
+      }
+    }
+  }, [jobId, queryClient]);
   
   // Always use React Query caching - let it handle cached data automatically
   const { 
@@ -82,7 +90,7 @@ function JobDetailsPageContent() {
       timestamp: new Date().toISOString()
     });
   
-    // Check if we have fresher data in jobs list cache and sync it
+        // Check if we have fresher data in jobs list cache and sync it
     if (jobId && jobData) {
       const jobsListData = queryClient.getQueryData<JobData[]>(jobKeys.all);
       const freshJobFromList = jobsListData?.find(job => job.job_id === jobId);
@@ -94,16 +102,21 @@ function JobDetailsPageContent() {
           jobId
       });
       
-                 // Update the individual job cache with fresh data from jobs list
-         syncJobDataAcrossCaches(queryClient, jobId, (prevJobData) => ({
-           ...prevJobData,
-           job_status: freshJobFromList.job_status,
-           last_updated: freshJobFromList.last_updated || new Date().toISOString()
-         }));
-         
-         // Also force a refetch to get the absolute latest data from the server
-         console.log('🔄 Force refetching job data to ensure absolute freshness');
-         refetchJobData();
+        // Update the individual job cache with fresh data from jobs list
+        syncJobDataAcrossCaches(queryClient, jobId, (prevJobData) => ({
+          ...prevJobData,
+          job_status: freshJobFromList.job_status,
+          last_updated: freshJobFromList.last_updated || new Date().toISOString()
+        }));
+        
+        // Only force refetch for non-completed jobs since completed jobs don't change
+        const isCompleted = ['complete', 'completed'].includes(freshJobFromList.job_status?.toLowerCase() || '');
+        if (!isCompleted) {
+          console.log('🔄 Force refetching job data to ensure absolute freshness');
+          refetchJobData();
+        } else {
+          console.log('✅ Job is completed - skipping refetch (data is stable)');
+        }
       }
     }
   }, [jobId, jobData, isLoadingJob, isRefetchingJob, jobError, queryClient]);
