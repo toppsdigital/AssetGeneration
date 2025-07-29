@@ -151,7 +151,7 @@ export default function ExpandedImageModal({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: '40px',
+          padding: '80px 40px',
           boxSizing: 'border-box'
         }}
         onClick={(e) => e.stopPropagation()}
@@ -294,12 +294,13 @@ export default function ExpandedImageModal({
 
         {/* Main image */}
         <div style={{
-          maxWidth: '90%',
-          maxHeight: '90%',
+          width: 'calc(100vw - 120px)',
+          height: 'calc(100vh - 200px)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          position: 'relative'
+          position: 'relative',
+          margin: '60px auto'
         }}>
           {optimizedImageUrl ? (
             // Use cached/optimized URL directly for faster loading
