@@ -246,6 +246,34 @@ export const getUIStatusFilterLabel = (uiStatus: UIStatusFilter): string => {
 };
 
 /**
+ * Get app icon based on app name
+ */
+export const getAppIcon = (appName: string | undefined): string => {
+  if (!appName) return '📱';
+  
+  const lowerAppName = appName.toLowerCase();
+  
+  if (lowerAppName.includes('bunt')) return '⚾';
+  if (lowerAppName.includes('slam')) return '🤼';
+  if (lowerAppName.includes('disney')) return '🏰';
+  if (lowerAppName.includes('starwars') || lowerAppName.includes('star wars')) return '⭐';
+  if (lowerAppName.includes('marvel')) return '🦸';
+  if (lowerAppName.includes('nba')) return '🏀';
+  if (lowerAppName.includes('nfl')) return '🏈';
+  
+  // Default app icon
+  return '📱';
+};
+
+/**
+ * Get app display name with icon
+ */
+export const getAppDisplayName = (appName: string | undefined): string => {
+  if (!appName) return '📱 Unknown App';
+  return `${getAppIcon(appName)} ${appName}`;
+};
+
+/**
  * Determine UI status category for a given job status
  */
 export const getUIStatusFromJobStatus = (jobStatus: string | undefined): 'in-progress' | 'completed' | 'unknown' => {

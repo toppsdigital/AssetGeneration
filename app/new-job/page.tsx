@@ -8,6 +8,7 @@ import PageTitle from '../../components/PageTitle';
 import Spinner from '../../components/Spinner';
 import contentPipelineApi from '../../web/utils/contentPipelineApi';
 import { createCacheClearingCallback } from '../../web/hooks/useJobData';
+import { getAppIcon } from '../../utils/fileOperations';
 
 interface NewJobFormData {
   appName: string;
@@ -367,25 +368,25 @@ function NewJobPageContent() {
                       Select an app...
                     </option>
                     <option value="BUNT" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                      BUNT
+                      ⚾ BUNT
                     </option>
                     <option value="DISNEY" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                      DISNEY
+                      🏰 DISNEY
                     </option>
                     <option value="MARVEL" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                      MARVEL
+                      🦸 MARVEL
                     </option>
                     <option value="SLAM" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                      SLAM
+                      🤼 SLAM
                     </option>
                     <option value="STAR WARS" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                      STAR WARS
+                      ⭐ STAR WARS
                     </option>
                     <option value="NBA" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                      NBA
+                      🏀 NBA
                     </option>
                     <option value="NFL" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                      NFL
+                      🏈 NFL
                     </option>
                   </select>
                   {errors.appName && (

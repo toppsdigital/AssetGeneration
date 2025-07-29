@@ -8,6 +8,7 @@ import styles from '../../styles/Home.module.css';
 import PageTitle from '../../components/PageTitle';
 import Spinner from '../../components/Spinner';
 import { contentPipelineApi, JobData } from '../../web/utils/contentPipelineApi';
+import { getAppIcon, getAppDisplayName } from '../../utils/fileOperations';
 
 export default function JobsPage() {
   const router = useRouter();
@@ -155,7 +156,10 @@ export default function JobsPage() {
       parts.push(subsetName);
     }
     
-    return parts.length > 0 ? parts.join(' - ') : 'Untitled Job';
+    const displayName = parts.length > 0 ? parts.join(' - ') : 'Untitled Job';
+    const appIcon = getAppIcon(job.app_name);
+    
+    return `${appIcon} ${displayName}`;
   };
 
   const getStatusColor = (status: string | undefined) => {
@@ -623,11 +627,6 @@ export default function JobsPage() {
                         }}>
                           {getJobDisplayName(job)}
                         </h3>
-                        {job.user_name && (
-                          <span style={{ color: '#9ca3af', fontSize: 14 }}>
-                            Created by: {job.user_name}
-                          </span>
-                        )}
                       </div>
                       <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
                         <span style={{ color: '#9ca3af', fontSize: 14 }}>
@@ -644,7 +643,7 @@ export default function JobsPage() {
                           {getStatusIcon(job.job_status)} {capitalizeStatus(job.job_status || 'Unknown Status')}
                         </span>
                         <span style={{ color: '#9ca3af', fontSize: 12 }}>
-                          📁 {job.files?.length || 0} files
+                          📁 {job.files?.length || 0}
                         </span>
                       </div>
                       {job.description && (
@@ -699,6 +698,11 @@ export default function JobsPage() {
                       >
                         📋 View Details
                       </button>
+                      {job.user_name && (
+                        <span style={{ color: '#9ca3af', fontSize: 12, marginTop: 8 }}>
+                          Created by: {job.user_name}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
