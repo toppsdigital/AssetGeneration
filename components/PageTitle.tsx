@@ -67,20 +67,20 @@ const PageTitle: React.FC<PageTitleProps> = ({ title, subtitle }) => {
         textAlign: 'center'
       }}>
         <h1 style={{
-          fontSize: '1.75rem',
+          fontSize: '1.25rem',
           fontWeight: '600',
-          color: '#fce7f3',
+          color: '#e5e7eb',
           margin: 0,
           letterSpacing: '-0.025em',
-          textShadow: '0 2px 4px rgba(157, 23, 77, 0.3)'
+          textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)'
         }}>
           {title}
         </h1>
         {subtitle && (
           <p style={{
-            fontSize: '1rem',
-            color: 'rgba(252, 231, 243, 0.7)',
-            margin: '8px 0 0 0',
+            fontSize: '0.9rem',
+            color: '#9ca3af',
+            margin: '4px 0 0 0',
             fontWeight: '400'
           }}>
             {subtitle}
