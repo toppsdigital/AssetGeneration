@@ -285,38 +285,26 @@ function NewJobPageContent() {
       />
       <div className={styles.content}>
         <div style={{ maxWidth: 800, margin: '0 auto', padding: '24px' }}>
-          <div style={{ marginBottom: 32, marginTop: 16 }}>
-            <p style={{ 
-              color: '#9ca3af', 
-              fontSize: 16,
-              margin: 0,
+          {isRerun && (
+            <div style={{
+              marginBottom: 32,
+              marginTop: 16,
+              padding: 12,
+              background: 'rgba(59, 130, 246, 0.1)',
+              border: '1px solid rgba(59, 130, 246, 0.3)',
+              borderRadius: 8,
               textAlign: 'center'
             }}>
-              {isRerun 
-                ? "Re-run an existing job with new files but same configuration" 
-                : "Set up a new job for processing PDFs into digital assets"
-              }
-            </p>
-            {isRerun && (
-              <div style={{
-                marginTop: 16,
-                padding: 12,
-                background: 'rgba(59, 130, 246, 0.1)',
-                border: '1px solid rgba(59, 130, 246, 0.3)',
-                borderRadius: 8,
-                textAlign: 'center'
+              <p style={{
+                color: '#60a5fa',
+                fontSize: 14,
+                margin: 0,
+                fontWeight: 500
               }}>
-                <p style={{
-                  color: '#60a5fa',
-                  fontSize: 14,
-                  margin: 0,
-                  fontWeight: 500
-                }}>
-                  🔄 Re-running job from: {sourceJobId}
-                </p>
-              </div>
-            )}
-          </div>
+                🔄 Re-running job from: {sourceJobId}
+              </p>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit}>
             <div style={{
