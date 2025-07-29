@@ -228,28 +228,19 @@ function JobPreviewPageContent() {
       
         <div className={styles.editContainer}>
           <main className={styles.mainContent}>
-            <div style={{
-              maxWidth: 1200,
-              width: '100%',
-              background: 'rgba(255, 255, 255, 0.06)',
-              backdropFilter: 'blur(20px)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: 16,
-              padding: 32,
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
-            }}>
-              
-              {/* Image Grid - Google Photos Style */}
-              {assets.length > 0 && (
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 240px))',
-                  gap: 16,
-                  marginBottom: 24,
-                  justifyContent: 'center',
-                  padding: '0 8px'
-                }}>
-                  {assets.map((asset, index) => (
+            {/* Image Grid - Google Photos Style */}
+            {assets.length > 0 && (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 240px))',
+                gap: 16,
+                marginBottom: 24,
+                justifyContent: 'center',
+                padding: '24px',
+                maxWidth: '100%',
+                width: '100%'
+              }}>
+                {assets.map((asset, index) => (
                     <div
                       key={index}
                       style={{
@@ -319,29 +310,29 @@ function JobPreviewPageContent() {
                         </h3>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
+                ))}
+              </div>
+            )}
 
-              {/* No Assets Message */}
-              {assets.length === 0 && (
-                <div style={{
-                  textAlign: 'center',
-                  padding: '48px 0',
-                  background: 'rgba(255, 255, 255, 0.05)',
-                  borderRadius: 12,
-                  border: '1px solid rgba(255, 255, 255, 0.1)'
-                }}>
-                  <div style={{ fontSize: 48, marginBottom: 16 }}>📷</div>
-                  <h3 style={{ color: '#9ca3af', fontSize: 18, marginBottom: 8 }}>
-                    No {type === 'firefly' ? 'Digital Collectibles' : 'Assets'} Found
-                  </h3>
-                  <p style={{ color: '#6b7280', fontSize: 14 }}>
-                    This job doesn't have any {type === 'firefly' ? 'digital collectibles' : 'generated assets'} yet.
-                  </p>
-                </div>
-              )}
-            </div>
+            {/* No Assets Message */}
+            {assets.length === 0 && (
+              <div style={{
+                textAlign: 'center',
+                padding: '48px 24px',
+                margin: '24px',
+                background: 'rgba(255, 255, 255, 0.05)',
+                borderRadius: 12,
+                border: '1px solid rgba(255, 255, 255, 0.1)'
+              }}>
+                <div style={{ fontSize: 48, marginBottom: 16 }}>📷</div>
+                <h3 style={{ color: '#9ca3af', fontSize: 18, marginBottom: 8 }}>
+                  No {type === 'firefly' ? 'Digital Collectibles' : 'Assets'} Found
+                </h3>
+                <p style={{ color: '#6b7280', fontSize: 14 }}>
+                  This job doesn't have any {type === 'firefly' ? 'digital collectibles' : 'generated assets'} yet.
+                </p>
+              </div>
+            )}
           </main>
         </div>
 
