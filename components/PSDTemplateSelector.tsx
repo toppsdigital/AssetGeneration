@@ -27,7 +27,7 @@ interface SpotColorPair {
 interface AssetConfig {
   id: string;
   name: string;
-  type: 'wp' | 'back' | 'front-base' | 'front-parallel';
+  type: 'wp' | 'back' | 'base' | 'parallel' | 'multi-parallel';
   layer: string;
   spot?: string;
   color?: { id: number; name: string };
@@ -48,7 +48,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
   
   // New asset configuration state
   const [configuredAssets, setConfiguredAssets] = useState<AssetConfig[]>([]);
-  const [currentCardType, setCurrentCardType] = useState<'wp' | 'back' | 'front-base' | 'front-parallel' | null>(null);
+  const [currentCardType, setCurrentCardType] = useState<'wp' | 'back' | 'base' | 'parallel' | 'multi-parallel' | null>(null);
   const [currentConfig, setCurrentConfig] = useState<Partial<AssetConfig>>({
     chrome: false
   });
@@ -188,8 +188,8 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       
       // Convert configured assets to API format
       const assets = configuredAssets.map(asset => {
-        if (asset.type === 'front-parallel') {
-          // Handle front-parallel with spot color pairs
+        if (asset.type === 'parallel' || asset.type === 'multi-parallel') {
+          // Handle parallel/multi-parallel with spot color pairs
           const basePayload: any = {
             type: asset.type,
             spot_color_pairs: asset.spotColorPairs?.map(pair => ({
@@ -216,7 +216,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
 
           return basePayload;
         } else {
-          // Other card types (wp, back, front-base)
+          // Other card types (wp, back, base)
           const basePayload: any = {
             type: asset.type
           };
@@ -229,8 +229,8 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
           // Add VFX if it exists for any card type
           if (asset.vfx) {
             basePayload.vfx = asset.vfx;
-            // For front-base with VFX, we need wp_inv_layer
-            if (asset.type === 'front-base') {
+            // For base with VFX, we need wp_inv_layer
+            if (asset.type === 'base') {
               const wpInvLayers = getWpInvLayers();
               if (wpInvLayers.length > 0) {
                 basePayload.wp_inv_layer = wpInvLayers[0];
@@ -238,8 +238,8 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
             }
           }
 
-          // For front-base, add chrome and wp_inv_layer if chrome is enabled
-          if (asset.type === 'front-base' && asset.chrome) {
+          // For base, add chrome and wp_inv_layer if chrome is enabled
+          if (asset.type === 'base' && asset.chrome) {
             basePayload.chrome = true;
             const wpInvLayers = getWpInvLayers();
             if (wpInvLayers.length > 0) {
@@ -334,7 +334,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
   };
 
   // Helper functions for new UI
-  const getLayersByType = (type: 'wp' | 'back' | 'front-base' | 'front-parallel') => {
+  const getLayersByType = (type: 'wp' | 'back' | 'base' | 'parallel' | 'multi-parallel') => {
     const extractedLayers = getExtractedLayers();
     console.log('🔍 All extracted layers:', extractedLayers);
     
@@ -345,9 +345,10 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
           return lowerLayer.includes('wp') && !lowerLayer.includes('inv'); // Include wp but exclude wp_inv
         case 'back': 
           return lowerLayer.startsWith('bk') || lowerLayer.includes('back');
-        case 'front-base':
+        case 'base':
           return lowerLayer.includes('fr_cmyk') || (lowerLayer.startsWith('fr') && lowerLayer.includes('cmyk'));
-        case 'front-parallel':
+        case 'parallel':
+        case 'multi-parallel':
           return lowerLayer.includes('spot') && (lowerLayer.startsWith('fr') || lowerLayer.includes('front'));
         default:
           return false;
@@ -396,12 +397,12 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
   const addAsset = () => {
     if (!currentCardType) return;
     
-    // Handle front-parallel with multiple spot/color pairs
-    if (currentCardType === 'front-parallel') {
+    // Handle parallel/multi-parallel with multiple spot/color pairs
+    if (currentCardType === 'parallel' || currentCardType === 'multi-parallel') {
       const validPairs = spotColorPairs.filter(pair => pair.spot && pair.color);
       if (validPairs.length === 0) return;
       
-      // For front-parallel cards, auto-select wp_inv layer if only one exists
+      // For parallel/multi-parallel cards, auto-select wp_inv layer if only one exists
       let finalLayer = currentConfig.layer || validPairs[0].spot;
       if (getWpInvLayers().length === 1) {
         finalLayer = getWpInvLayers()[0];
@@ -454,7 +455,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       spot: currentConfig.spot,
       color: currentConfig.color,
       vfx: currentConfig.vfx,
-      chrome: (currentConfig.chrome && currentCardType === 'front-base' && getWpInvLayers().length > 0) || false
+      chrome: (currentConfig.chrome && currentCardType === 'base' && getWpInvLayers().length > 0) || false
     };
 
     if (editingAssetId) {
@@ -471,7 +472,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
   };
 
   const generateAssetName = (config: AssetConfig): string => {
-    const typeDisplay = config.type === 'front-base' ? 'BASE' : config.type === 'front-parallel' ? 'PARALLEL' : config.type.toUpperCase();
+    const typeDisplay = config.type === 'base' ? 'BASE' : (config.type === 'parallel' || config.type === 'multi-parallel') ? 'PARALLEL' : config.type.toUpperCase();
     const parts = [typeDisplay];
     
     // Handle multiple spot/color pairs for PARALLEL cards
@@ -486,7 +487,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       if (config.color) parts.push(config.color.name);
     }
     
-    if (config.chrome && (config.type === 'front-base' || config.type === 'front-parallel') && getWpInvLayers().length > 0) parts.push('Chrome'); // Chrome only for front cards with wp_inv layers
+    if (config.chrome && (config.type === 'base' || config.type === 'parallel' || config.type === 'multi-parallel') && getWpInvLayers().length > 0) parts.push('Chrome'); // Chrome only for front cards with wp_inv layers
     
     return parts.join(' ');
   };
@@ -501,7 +502,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     setEditingAssetId(asset.id);
     
     // For parallel assets, populate the spot/color pairs
-    if (asset.type === 'front-parallel') {
+    if (asset.type === 'parallel' || asset.type === 'multi-parallel') {
       if (asset.spotColorPairs && asset.spotColorPairs.length > 0) {
         // New format with multiple pairs
         setSpotColorPairs(asset.spotColorPairs);
@@ -703,14 +704,14 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                 {/* Step 1: Card Type Selection */}
                 <div style={{ marginBottom: 16 }}>
                   <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                    {(['wp', 'back', 'front-base', 'front-parallel'] as const).map(type => (
+                    {(['wp', 'back', 'base', 'parallel', 'multi-parallel'] as const).map(type => (
                       <button
                         key={type}
                         onClick={() => {
                           setCurrentCardType(type);
                           
-                          if (type === 'front-parallel') {
-                            // For front-parallel, initialize with one empty pair
+                                      if (type === 'parallel' || type === 'multi-parallel') {
+              // For parallel/multi-parallel, initialize with one empty pair
                             setSpotColorPairs([{ spot: '', color: undefined }]);
                             setCurrentConfig({ 
                               chrome: false,
@@ -741,7 +742,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                           transition: 'all 0.2s'
                         }}
                       >
-                        {type === 'front-base' ? 'BASE' : type === 'front-parallel' ? 'PARALLEL' : type.toUpperCase()}
+                        {type === 'base' ? 'BASE' : (type === 'parallel' || type === 'multi-parallel') ? 'PARALLEL' : type.toUpperCase()}
                       </button>
                     ))}
                   </div>
@@ -751,7 +752,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                 {currentCardType && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                     {/* Layer Selection - Different layout for parallel vs others */}
-                    {currentCardType === 'front-parallel' ? (
+                    {(currentCardType === 'parallel' || currentCardType === 'multi-parallel') ? (
                       <div>
                   <div style={{
                     display: 'flex',
@@ -999,8 +1000,8 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                 )}
 
                     {/* Step 3: VFX Texture Selection */}
-                    {((currentCardType === 'front-parallel' && spotColorPairs.some(pair => pair.spot)) || 
-                      currentCardType === 'front-base') && getWpInvLayers().length > 0 && (
+                            {(((currentCardType === 'parallel' || currentCardType === 'multi-parallel') && spotColorPairs.some(pair => pair.spot)) ||
+        currentCardType === 'base') && getWpInvLayers().length > 0 && (
                       <div>
                   <label style={{
                     display: 'block',
@@ -1051,7 +1052,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                         </select>
                         
                         {/* WP_INV Layer Selection - Only show when multiple wp_inv layers exist */}
-                        {currentCardType === 'front-parallel' && getWpInvLayers().length > 1 && (
+                        {(currentCardType === 'parallel' || currentCardType === 'multi-parallel') && getWpInvLayers().length > 1 && (
                           <div style={{ marginTop: 12 }}>
                             <label style={{
                               display: 'block',
@@ -1088,7 +1089,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                     )}
 
                     {/* Chrome Toggle - Only for front cards with wp_inv layers */}
-                    {(currentCardType === 'front-base' || currentCardType === 'front-parallel') && getWpInvLayers().length > 0 && (
+                    {(currentCardType === 'base' || currentCardType === 'parallel' || currentCardType === 'multi-parallel') && getWpInvLayers().length > 0 && (
                       <div>
                         <label style={{
                             display: 'flex',
@@ -1123,14 +1124,15 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                           switch (currentCardType) {
                             case 'wp':
                             case 'back':
-                            case 'front-base':
+                            case 'base':
                               if (!currentConfig.layer) {
                                 validationMessage = 'Select layer';
                               } else {
                                 canAdd = true;
                               }
                               break;
-                            case 'front-parallel':
+                            case 'parallel':
+                            case 'multi-parallel':
                               const validPairs = spotColorPairs.filter(pair => pair.spot && pair.color);
                               if (validPairs.length === 0) {
                                 validationMessage = 'Select at least one spot layer and color';
@@ -1259,11 +1261,11 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                 <span style={{
                                   background: asset.type === 'wp' ? 'rgba(34, 197, 94, 0.2)' : 
                                              asset.type === 'back' ? 'rgba(168, 85, 247, 0.2)' :
-                                             asset.type === 'front-base' ? 'rgba(59, 130, 246, 0.2)' :
+                                             asset.type === 'base' ? 'rgba(59, 130, 246, 0.2)' :
                                              'rgba(236, 72, 153, 0.2)',
                                   color: asset.type === 'wp' ? '#86efac' : 
                                          asset.type === 'back' ? '#c084fc' :
-                                         asset.type === 'front-base' ? '#93c5fd' :
+                                         asset.type === 'base' ? '#93c5fd' :
                                          '#f9a8d4',
                                   padding: '3px 8px',
                                   borderRadius: 4,
@@ -1271,7 +1273,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                   fontWeight: 600,
                                   letterSpacing: '0.02em'
                                 }}>
-                                  {asset.type === 'front-base' ? 'BASE' : asset.type === 'front-parallel' ? 'PARALLEL' : asset.type.toUpperCase()}
+                                  {asset.type === 'base' ? 'BASE' : (asset.type === 'parallel' || asset.type === 'multi-parallel') ? 'PARALLEL' : asset.type.toUpperCase()}
                             </span>
                               </td>
                               <td style={{ padding: '10px 12px', color: '#e5e7eb', fontSize: 13 }}>

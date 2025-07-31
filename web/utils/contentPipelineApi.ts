@@ -422,7 +422,7 @@ class ContentPipelineAPI {
     jobId: string,
     payload: {
       assets: Array<{
-        type: 'wp' | 'back' | 'front-base' | 'front-parallel';
+        type: 'wp' | 'back' | 'base' | 'parallel' | 'multi-parallel';
         layer: string;
         spot?: string;
         color?: { id: number; name: string };
