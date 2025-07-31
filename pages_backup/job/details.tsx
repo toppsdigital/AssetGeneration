@@ -1656,7 +1656,7 @@ export default function JobDetailsPage() {
                                 const assets = Array.from(selectedExtractedLayers).map(layer => {
                                   // Create base asset
                                   const asset = {
-                                    type: 'front-base' as const,
+                                    type: 'base' as const,
                                     layer: layer,
                                     chrome: false
                                   };
