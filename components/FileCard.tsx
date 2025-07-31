@@ -361,9 +361,9 @@ const FileCard: React.FC<FileCardProps> = ({
                 🎨 Digital Collectibles ({Object.keys(file.firefly_assets).length})
               </h4>
               {(() => {
-                // Check if all digital collectibles have "succeeded" status (case insensitive)
+                // Check if all digital collectibles have "succeeded" or "completed" status (case insensitive)
                 const allSucceeded = Object.values(file.firefly_assets || {}).every(
-                  asset => asset.status.toLowerCase() === 'succeeded'
+                  asset => ['succeeded', 'completed'].includes(asset.status.toLowerCase())
                 );
                 
                 return allSucceeded ? (
@@ -451,8 +451,8 @@ const FileCard: React.FC<FileCardProps> = ({
                         {asset.card_type}
                       </span>
                     )}
-                    {/* Only show status if NOT succeeded */}
-                    {asset.status.toLowerCase() !== 'succeeded' && (
+                    {/* Only show status if NOT succeeded or completed */}
+                    {!['succeeded', 'completed'].includes(asset.status.toLowerCase()) && (
                       <span style={{
                         fontSize: 10, // Reduced from 11
                         padding: '1px 4px', // Reduced padding
