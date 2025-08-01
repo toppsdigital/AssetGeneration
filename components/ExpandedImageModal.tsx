@@ -1,7 +1,6 @@
 import { useEffect, useCallback, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import ImagePreview, { getCachedImageUrl, getImageUrlWithCache } from './ImagePreview';
-import TiffImageViewer from './TiffImageViewer';
 import RegularImageViewer from './RegularImageViewer';
 
 interface ExpandedImageData {
@@ -304,45 +303,26 @@ export default function ExpandedImageModal({
           position: 'relative',
           margin: '60px auto'
         }}>
-          {optimizedImageUrl ? (
-            // Use the same approach as grid display - proper viewer for each file type
-            image.isTiff ? (
-              <TiffImageViewer
-                src={optimizedImageUrl}
-                alt={image.alt}
-                onLoad={() => setIsImageLoading(false)}
-                onError={() => {
-                  console.error('Failed to load TIFF in modal, falling back to ImagePreview');
-                  setOptimizedImageUrl(null);
-                }}
-                style={{
-                  maxWidth: '100%',
-                  maxHeight: '100%',
-                  objectFit: 'contain',
-                  borderRadius: '4px',
-                  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.8)'
-                }}
-              />
-            ) : (
-              <RegularImageViewer
-                src={optimizedImageUrl}
-                alt={image.alt}
-                onLoad={() => setIsImageLoading(false)}
-                onError={() => {
-                  console.error('Failed to load image in modal, falling back to ImagePreview');
-                  setOptimizedImageUrl(null);
-                }}
-                style={{
-                  maxWidth: '100%',
-                  maxHeight: '100%',
-                  objectFit: 'contain',
-                  borderRadius: '4px',
-                  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.8)'
-                }}
-              />
-            )
+          {optimizedImageUrl && !image.isTiff ? (
+            // Use optimized URL for non-TIFF images only
+            <RegularImageViewer
+              src={optimizedImageUrl}
+              alt={image.alt}
+              onLoad={() => setIsImageLoading(false)}
+              onError={() => {
+                console.error('Failed to load image in modal, falling back to ImagePreview');
+                setOptimizedImageUrl(null);
+              }}
+              style={{
+                maxWidth: '100%',
+                maxHeight: '100%',
+                objectFit: 'contain',
+                borderRadius: '4px',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.8)'
+              }}
+            />
           ) : (
-            // Fallback to ImagePreview component for full functionality
+            // Use ImagePreview for TIFF files and fallback cases - handles TIFF conversion properly
             <ImagePreview
               filePath={image.src}
               alt={image.alt}
@@ -358,8 +338,8 @@ export default function ExpandedImageModal({
             />
           )}
           
-          {/* Loading indicator for modal */}
-          {isImageLoading && (
+          {/* Loading indicator for modal - only show for non-TIFF when using optimized URL */}
+          {isImageLoading && optimizedImageUrl && !image.isTiff && (
             <div style={{
               position: 'absolute',
               top: '50%',
