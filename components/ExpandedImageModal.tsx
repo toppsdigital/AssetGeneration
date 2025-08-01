@@ -40,7 +40,15 @@ export default function ExpandedImageModal({
       return;
     }
 
-    // First, check if we already have a cached URL for instant display
+    // If image.src is already a blob URL (from grid conversion), use it directly
+    if (image.src.startsWith('blob:')) {
+      console.log('🚀 Using pre-converted blob URL for modal:', image.src);
+      setOptimizedImageUrl(image.src);
+      setIsImageLoading(false);
+      return;
+    }
+
+    // Otherwise, check cache or fetch for file paths
     const cachedUrl = getCachedImageUrl(image.src);
     if (cachedUrl) {
       console.log('🚀 Using cached URL for modal:', image.src);
