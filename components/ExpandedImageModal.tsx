@@ -312,7 +312,7 @@ export default function ExpandedImageModal({
           margin: '60px auto',
           // Add subtle background for TIFF images to improve visibility
           ...(image.isTiff && {
-            background: '#2d3748',
+            background: 'rgba(45, 55, 72, 0.3)',
             borderRadius: '8px',
             padding: '20px'
           })
@@ -347,7 +347,11 @@ export default function ExpandedImageModal({
                 maxHeight: '100%',
                 objectFit: 'contain',
                 borderRadius: '4px',
-                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.8)'
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.8)',
+                // Override any background from ImagePreview for TIFF files in modal
+                ...(image.isTiff && {
+                  background: 'transparent'
+                })
               }}
             />
           )}
