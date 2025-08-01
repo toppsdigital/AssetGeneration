@@ -472,10 +472,10 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
   };
 
   const generateAssetName = (config: AssetConfig): string => {
-    const typeDisplay = config.type === 'base' ? 'BASE' : (config.type === 'parallel' || config.type === 'multi-parallel') ? 'PARALLEL' : config.type.toUpperCase();
+    const typeDisplay = config.type === 'base' ? 'BASE' : config.type === 'parallel' ? 'PARALLEL' : config.type === 'multi-parallel' ? 'MULTI-PARALLEL' : config.type.toUpperCase();
     const parts = [typeDisplay];
     
-    // Handle multiple spot/color pairs for PARALLEL cards
+    // Handle multiple spot/color pairs for PARALLEL/MULTI-PARALLEL cards
     if (config.spotColorPairs && config.spotColorPairs.length > 0) {
       const pairNames = config.spotColorPairs.map(pair => 
         `${pair.spot}${pair.color ? '-' + pair.color.name : ''}`
@@ -742,7 +742,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                           transition: 'all 0.2s'
                         }}
                       >
-                        {type === 'base' ? 'BASE' : (type === 'parallel' || type === 'multi-parallel') ? 'PARALLEL' : type.toUpperCase()}
+                        {type === 'base' ? 'BASE' : type === 'parallel' ? 'PARALLEL' : type === 'multi-parallel' ? 'MULTI-PARALLEL' : type.toUpperCase()}
                       </button>
                     ))}
                   </div>
@@ -773,38 +773,38 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                               setSpotColorPairs(prev => [...prev, { spot: '', color: undefined }]);
                               }
                             }}
-                            disabled={!spotColorPairs[0]?.spot || spotColorPairs.length >= 3}
+                            disabled={!spotColorPairs[0]?.spot || spotColorPairs.length >= 3 || currentCardType !== 'multi-parallel'}
                             style={{
                               width: 24,
                               height: 24,
-                              background: (!spotColorPairs[0]?.spot || spotColorPairs.length >= 3)
+                              background: (!spotColorPairs[0]?.spot || spotColorPairs.length >= 3 || currentCardType !== 'multi-parallel')
                                 ? 'rgba(156, 163, 175, 0.3)'
                                 : 'rgba(34, 197, 94, 0.2)',
-                              border: '1px solid ' + ((!spotColorPairs[0]?.spot || spotColorPairs.length >= 3)
+                              border: '1px solid ' + ((!spotColorPairs[0]?.spot || spotColorPairs.length >= 3 || currentCardType !== 'multi-parallel')
                                 ? 'rgba(156, 163, 175, 0.3)'
                                 : 'rgba(34, 197, 94, 0.4)'),
                               borderRadius: 6,
-                              color: (!spotColorPairs[0]?.spot || spotColorPairs.length >= 3) ? '#6b7280' : '#86efac',
+                              color: (!spotColorPairs[0]?.spot || spotColorPairs.length >= 3 || currentCardType !== 'multi-parallel') ? '#6b7280' : '#86efac',
                               fontSize: 16,
-                              cursor: (!spotColorPairs[0]?.spot || spotColorPairs.length >= 3) ? 'not-allowed' : 'pointer',
+                              cursor: (!spotColorPairs[0]?.spot || spotColorPairs.length >= 3 || currentCardType !== 'multi-parallel') ? 'not-allowed' : 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                               justifyContent: 'center',
                               transition: 'all 0.2s'
                             }}
                             onMouseOver={(e) => {
-                              if (spotColorPairs[0]?.spot && spotColorPairs.length < 3) {
+                              if (spotColorPairs[0]?.spot && spotColorPairs.length < 3 && currentCardType === 'multi-parallel') {
                                 e.currentTarget.style.background = 'rgba(34, 197, 94, 0.3)';
                                 e.currentTarget.style.borderColor = 'rgba(34, 197, 94, 0.6)';
                               }
                             }}
                             onMouseOut={(e) => {
-                              if (spotColorPairs[0]?.spot && spotColorPairs.length < 3) {
+                              if (spotColorPairs[0]?.spot && spotColorPairs.length < 3 && currentCardType === 'multi-parallel') {
                                 e.currentTarget.style.background = 'rgba(34, 197, 94, 0.2)';
                                 e.currentTarget.style.borderColor = 'rgba(34, 197, 94, 0.4)';
                               }
                             }}
-                            title={spotColorPairs.length >= 3 ? "Maximum 3 spots allowed" : "Add another spot/color pair"}
+                            title={spotColorPairs.length >= 3 ? "Maximum 3 spots allowed" : currentCardType !== 'multi-parallel' ? "Only available for Multi-Parallel" : "Add another spot/color pair"}
                           >
                             +
                           </button>
@@ -1273,12 +1273,12 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                   fontWeight: 600,
                                   letterSpacing: '0.02em'
                                 }}>
-                                  {asset.type === 'base' ? 'BASE' : (asset.type === 'parallel' || asset.type === 'multi-parallel') ? 'PARALLEL' : asset.type.toUpperCase()}
+                                  {asset.type === 'base' ? 'BASE' : asset.type === 'parallel' ? 'PARALLEL' : asset.type === 'multi-parallel' ? 'MULTI-PARALLEL' : asset.type.toUpperCase()}
                             </span>
                               </td>
                               <td style={{ padding: '10px 12px', color: '#e5e7eb', fontSize: 13 }}>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                  {/* Handle multiple spot/color pairs for PARALLEL */}
+                                  {/* Handle multiple spot/color pairs for PARALLEL/MULTI-PARALLEL */}
                                   {asset.spotColorPairs && asset.spotColorPairs.length > 0 ? (
                                     asset.spotColorPairs.map((pair, idx) => (
                                       <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
