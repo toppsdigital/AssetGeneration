@@ -310,9 +310,9 @@ export default function ExpandedImageModal({
           justifyContent: 'center',
           position: 'relative',
           margin: '60px auto',
-          // Add solid black background for TIFF images to improve visibility
+          // Add solid background for TIFF images to improve visibility
           ...(image.isTiff && {
-            background: '#000000',
+            background: '#2d3748',
             borderRadius: '8px',
             padding: '20px'
           })
