@@ -767,47 +767,49 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                           }}>
                             Select Spot Layer & Color
                           </label>
-                          <button
-                            onClick={() => {
-                              if (spotColorPairs.length < 3) {
-                              setSpotColorPairs(prev => [...prev, { spot: '', color: undefined }]);
-                              }
-                            }}
-                            disabled={!spotColorPairs[0]?.spot || spotColorPairs.length >= 3 || currentCardType !== 'multi-parallel'}
-                            style={{
-                              width: 24,
-                              height: 24,
-                              background: (!spotColorPairs[0]?.spot || spotColorPairs.length >= 3 || currentCardType !== 'multi-parallel')
-                                ? 'rgba(156, 163, 175, 0.3)'
-                                : 'rgba(34, 197, 94, 0.2)',
-                              border: '1px solid ' + ((!spotColorPairs[0]?.spot || spotColorPairs.length >= 3 || currentCardType !== 'multi-parallel')
-                                ? 'rgba(156, 163, 175, 0.3)'
-                                : 'rgba(34, 197, 94, 0.4)'),
-                              borderRadius: 6,
-                              color: (!spotColorPairs[0]?.spot || spotColorPairs.length >= 3 || currentCardType !== 'multi-parallel') ? '#6b7280' : '#86efac',
-                              fontSize: 16,
-                              cursor: (!spotColorPairs[0]?.spot || spotColorPairs.length >= 3 || currentCardType !== 'multi-parallel') ? 'not-allowed' : 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                              justifyContent: 'center',
-                              transition: 'all 0.2s'
-                            }}
-                            onMouseOver={(e) => {
-                              if (spotColorPairs[0]?.spot && spotColorPairs.length < 3 && currentCardType === 'multi-parallel') {
-                                e.currentTarget.style.background = 'rgba(34, 197, 94, 0.3)';
-                                e.currentTarget.style.borderColor = 'rgba(34, 197, 94, 0.6)';
-                              }
-                            }}
-                            onMouseOut={(e) => {
-                              if (spotColorPairs[0]?.spot && spotColorPairs.length < 3 && currentCardType === 'multi-parallel') {
-                                e.currentTarget.style.background = 'rgba(34, 197, 94, 0.2)';
-                                e.currentTarget.style.borderColor = 'rgba(34, 197, 94, 0.4)';
-                              }
-                            }}
-                            title={spotColorPairs.length >= 3 ? "Maximum 3 spots allowed" : currentCardType !== 'multi-parallel' ? "Only available for Multi-Parallel" : "Add another spot/color pair"}
-                          >
-                            +
-                          </button>
+                          {currentCardType === 'multi-parallel' && (
+                            <button
+                              onClick={() => {
+                                if (spotColorPairs.length < 3) {
+                                setSpotColorPairs(prev => [...prev, { spot: '', color: undefined }]);
+                                }
+                              }}
+                              disabled={!spotColorPairs[0]?.spot || spotColorPairs.length >= 3}
+                              style={{
+                                width: 24,
+                                height: 24,
+                                background: (!spotColorPairs[0]?.spot || spotColorPairs.length >= 3)
+                                  ? 'rgba(156, 163, 175, 0.3)'
+                                  : 'rgba(34, 197, 94, 0.2)',
+                                border: '1px solid ' + ((!spotColorPairs[0]?.spot || spotColorPairs.length >= 3)
+                                  ? 'rgba(156, 163, 175, 0.3)'
+                                  : 'rgba(34, 197, 94, 0.4)'),
+                                borderRadius: 6,
+                                color: (!spotColorPairs[0]?.spot || spotColorPairs.length >= 3) ? '#6b7280' : '#86efac',
+                                fontSize: 16,
+                                cursor: (!spotColorPairs[0]?.spot || spotColorPairs.length >= 3) ? 'not-allowed' : 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                                justifyContent: 'center',
+                                transition: 'all 0.2s'
+                              }}
+                              onMouseOver={(e) => {
+                                if (spotColorPairs[0]?.spot && spotColorPairs.length < 3) {
+                                  e.currentTarget.style.background = 'rgba(34, 197, 94, 0.3)';
+                                  e.currentTarget.style.borderColor = 'rgba(34, 197, 94, 0.6)';
+                                }
+                              }}
+                              onMouseOut={(e) => {
+                                if (spotColorPairs[0]?.spot && spotColorPairs.length < 3) {
+                                  e.currentTarget.style.background = 'rgba(34, 197, 94, 0.2)';
+                                  e.currentTarget.style.borderColor = 'rgba(34, 197, 94, 0.4)';
+                                }
+                              }}
+                              title={spotColorPairs.length >= 3 ? "Maximum 3 spots allowed" : "Add another spot/color pair"}
+                            >
+                              +
+                            </button>
+                          )}
                         </div>
                         
                         {/* Multiple Spot/Color Rows */}
