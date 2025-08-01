@@ -815,7 +815,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                         {/* Multiple Spot/Color Rows */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                           {spotColorPairs.map((pair, index) => {
-                            const spotGroup = getColorVariants()[index];
+                            const spotGroup = getColorVariants()[0]; // Always use first spot group
                             return (
                             <div key={index} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
                               {/* Spot Layer Selection */}
@@ -868,7 +868,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                     color: '#9ca3af',
                                     marginBottom: 4
                                   }}>
-                                      Color ({spotGroup?.groupName || `SPOT GROUP ${index + 1}`})
+                                      Color
                                   </label>
                                 )}
                                 <select
