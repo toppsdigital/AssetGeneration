@@ -309,7 +309,13 @@ export default function ExpandedImageModal({
           alignItems: 'center',
           justifyContent: 'center',
           position: 'relative',
-          margin: '60px auto'
+          margin: '60px auto',
+          // Add subtle background for TIFF images to improve visibility
+          ...(image.isTiff && {
+            background: '#2d3748',
+            borderRadius: '8px',
+            padding: '20px'
+          })
         }}>
           {optimizedImageUrl && !image.isTiff ? (
             // Use optimized URL for non-TIFF images only
