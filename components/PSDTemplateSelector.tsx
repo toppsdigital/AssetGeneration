@@ -375,7 +375,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     if (vfxGroup && vfxGroup.children) {
       return vfxGroup.children
         .map((child: any) => child.name || 'Unnamed Texture')
-        .filter((textureName: string) => !textureName.toLowerCase().includes('wpc v')); // Filter out "wpc v"
+        .filter((textureName: string) => !textureName.toLowerCase().includes('wpcv')); // Filter out "wpcv"
     }
     return [];
   };
