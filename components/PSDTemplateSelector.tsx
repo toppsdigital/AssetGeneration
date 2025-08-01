@@ -478,13 +478,13 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     // Handle multiple spot/color pairs for PARALLEL/MULTI-PARALLEL cards
     if (config.spotColorPairs && config.spotColorPairs.length > 0) {
       const pairNames = config.spotColorPairs.map(pair => 
-        `${pair.spot}${pair.color ? '-' + pair.color.name : ''}`
+        `${pair.spot}${pair.color ? '-' + pair.color.name.replace(/\d+$/, '') : ''}`
       ).join('+');
       parts.push(pairNames);
     } else {
       // Handle single spot/color for other card types
       if (config.spot) parts.push(config.spot);
-      if (config.color) parts.push(config.color.name);
+      if (config.color) parts.push(config.color.name.replace(/\d+$/, ''));
     }
     
     if (config.chrome && (config.type === 'base' || config.type === 'parallel' || config.type === 'multi-parallel') && getWpInvLayers().length > 0) parts.push('Chrome'); // Chrome only for front cards with wp_inv layers
@@ -909,7 +909,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                       value={`${colorLayer.id}-${colorLayer.name}`} 
                                       style={{ background: '#1f2937' }}
                                     >
-                                      {colorLayer.name || `Color ${idx + 1}`}
+                                      {(colorLayer.name || `Color ${idx + 1}`).replace(/\d+$/, '')}
                                     </option>
                                   ))}
                                 </select>
@@ -1299,7 +1299,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                               height: 10,
                                               borderRadius: '50%',
                                               background: (() => {
-                                                const colorName = pair.color.name.toLowerCase();
+                                                const colorName = pair.color.name.replace(/\d+$/, '').toLowerCase();
                                                 // Map common color names to actual colors
                                                 if (colorName.includes('yellow')) return '#fbbf24';
                                                 if (colorName.includes('gold')) return '#f59e0b';
@@ -1319,7 +1319,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                               display: 'inline-block',
                                               border: '1px solid rgba(255, 255, 255, 0.2)'
                                             }} />
-                                            <span style={{ fontSize: 13, color: '#f8f8f8' }}>{pair.color.name}</span>
+                                            <span style={{ fontSize: 13, color: '#f8f8f8' }}>{pair.color.name.replace(/\d+$/, '')}</span>
                                           </div>
                                         )}
                                       </div>
@@ -1344,7 +1344,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                                 height: 10,
                                                 borderRadius: '50%',
                                                 background: (() => {
-                                                  const colorName = asset.color.name.toLowerCase();
+                                                  const colorName = asset.color.name.replace(/\d+$/, '').toLowerCase();
                                                   // Map common color names to actual colors
                                                   if (colorName.includes('yellow')) return '#fbbf24';
                                                   if (colorName.includes('gold')) return '#f59e0b';
@@ -1364,7 +1364,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                                 display: 'inline-block',
                                                 border: '1px solid rgba(255, 255, 255, 0.2)'
                                               }} />
-                                              <span style={{ fontSize: 13, color: '#f8f8f8' }}>{asset.color.name}</span>
+                                              <span style={{ fontSize: 13, color: '#f8f8f8' }}>{asset.color.name.replace(/\d+$/, '')}</span>
                                             </div>
                                           )}
                                         </div>
