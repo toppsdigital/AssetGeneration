@@ -32,6 +32,7 @@ export default function ExpandedImageModal({
   const [isControlsVisible, setIsControlsVisible] = useState(true);
   const [isImageLoading, setIsImageLoading] = useState(true);
   const [optimizedImageUrl, setOptimizedImageUrl] = useState<string | null>(null);
+  const [availableHeight, setAvailableHeight] = useState<number>(0);
 
   // Check for cached URL when image changes
   useEffect(() => {
@@ -89,6 +90,31 @@ export default function ExpandedImageModal({
       clearTimeout(hideTimeout);
     };
   }, [image]);
+
+  // Calculate available height based on viewport and bottom elements
+  useEffect(() => {
+    const calculateHeight = () => {
+      const viewportHeight = window.innerHeight;
+      
+      // Work backwards from viewport height
+      const filenameBottomSpace = 20; // bottom: '20px' 
+      const filenameHeight = 40; // Approximate height of filename element (padding + text)
+      const bottomBuffer = 30; // Buffer between image and filename
+      const topMargin = 40; // Top margin for image container
+      const extraSafety = 40; // Additional safety buffer to prevent overflow
+      
+      // Total space reserved for bottom elements and margins
+      const reservedSpace = filenameBottomSpace + filenameHeight + bottomBuffer + topMargin + extraSafety;
+      
+      const calculatedHeight = viewportHeight - reservedSpace;
+      setAvailableHeight(Math.max(calculatedHeight, 200)); // Minimum height of 200px
+    };
+
+    calculateHeight();
+    window.addEventListener('resize', calculateHeight);
+    
+    return () => window.removeEventListener('resize', calculateHeight);
+  }, []);
 
   // Handle keyboard navigation
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -304,18 +330,12 @@ export default function ExpandedImageModal({
         {/* Main image */}
         <div style={{
           width: 'calc(100vw - 120px)',
-          height: 'calc(100vh - 200px)',
+          height: `${availableHeight}px`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           position: 'relative',
-          margin: '60px auto',
-          // Add solid background for TIFF images to improve visibility
-          ...(image.isTiff && {
-            background: '#2d3748',
-            borderRadius: '8px',
-            padding: '20px'
-          })
+          margin: '40px auto'
         }}>
           {optimizedImageUrl && !image.isTiff ? (
             // Use optimized URL for non-TIFF images only
@@ -329,7 +349,9 @@ export default function ExpandedImageModal({
               }}
               style={{
                 maxWidth: '100%',
-                maxHeight: '100%',
+                maxHeight: `${availableHeight}px`,
+                width: 'auto',
+                height: 'auto',
                 objectFit: 'contain',
                 borderRadius: '4px',
                 boxShadow: '0 8px 32px rgba(0, 0, 0, 0.8)'
@@ -345,13 +367,13 @@ export default function ExpandedImageModal({
               style={{
                 maxWidth: '100%',
                 maxHeight: '100%',
+                height: `${availableHeight}px`,
                 objectFit: 'contain',
                 borderRadius: '4px',
                 boxShadow: '0 8px 32px rgba(0, 0, 0, 0.8)',
-                // Override any background from ImagePreview for TIFF files in modal
-                ...(image.isTiff && {
-                  background: 'transparent'
-                })
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center'
               }}
             />
           )}
@@ -387,26 +409,27 @@ export default function ExpandedImageModal({
         </div>
 
         {/* Filename at bottom */}
-        <div style={{
-          position: 'absolute',
-          bottom: '20px',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          background: 'rgba(0, 0, 0, 0.6)',
-          color: 'white',
-          padding: '8px 16px',
-          borderRadius: '20px',
-          fontSize: '14px',
-          fontWeight: '500',
-          maxWidth: 'calc(100% - 80px)',
-          textAlign: 'center',
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          opacity: isControlsVisible ? 1 : 0,
-          transition: 'opacity 0.2s ease',
-          zIndex: 1001
-        }}>
+        <div 
+          style={{
+            position: 'absolute',
+            bottom: '20px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'rgba(0, 0, 0, 0.6)',
+            color: 'white',
+            padding: '8px 16px',
+            borderRadius: '20px',
+            fontSize: '14px',
+            fontWeight: '500',
+            maxWidth: 'calc(100% - 80px)',
+            textAlign: 'center',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            opacity: isControlsVisible ? 1 : 0,
+            transition: 'opacity 0.2s ease',
+            zIndex: 1001
+          }}>
           {image.alt}
         </div>
       </div>
