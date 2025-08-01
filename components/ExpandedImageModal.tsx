@@ -1,6 +1,8 @@
 import { useEffect, useCallback, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import ImagePreview, { getCachedImageUrl, getImageUrlWithCache } from './ImagePreview';
+import TiffImageViewer from './TiffImageViewer';
+import RegularImageViewer from './RegularImageViewer';
 
 interface ExpandedImageData {
   src: string;
@@ -303,25 +305,42 @@ export default function ExpandedImageModal({
           margin: '60px auto'
         }}>
           {optimizedImageUrl ? (
-            // Use cached/optimized URL directly for faster loading
-            <img
-              src={optimizedImageUrl}
-              alt={image.alt}
-              style={{
-                maxWidth: '100%',
-                maxHeight: '100%',
-                objectFit: 'contain',
-                borderRadius: '4px',
-                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.8)',
-                opacity: isImageLoading ? 0.5 : 1,
-                transition: 'opacity 0.3s ease'
-              }}
-              onLoad={() => setIsImageLoading(false)}
-              onError={() => {
-                console.error('Failed to load optimized image, falling back to ImagePreview');
-                setOptimizedImageUrl(null);
-              }}
-            />
+            // Use the same approach as grid display - proper viewer for each file type
+            image.isTiff ? (
+              <TiffImageViewer
+                src={optimizedImageUrl}
+                alt={image.alt}
+                onLoad={() => setIsImageLoading(false)}
+                onError={() => {
+                  console.error('Failed to load TIFF in modal, falling back to ImagePreview');
+                  setOptimizedImageUrl(null);
+                }}
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: '100%',
+                  objectFit: 'contain',
+                  borderRadius: '4px',
+                  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.8)'
+                }}
+              />
+            ) : (
+              <RegularImageViewer
+                src={optimizedImageUrl}
+                alt={image.alt}
+                onLoad={() => setIsImageLoading(false)}
+                onError={() => {
+                  console.error('Failed to load image in modal, falling back to ImagePreview');
+                  setOptimizedImageUrl(null);
+                }}
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: '100%',
+                  objectFit: 'contain',
+                  borderRadius: '4px',
+                  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.8)'
+                }}
+              />
+            )
           ) : (
             // Fallback to ImagePreview component for full functionality
             <ImagePreview
