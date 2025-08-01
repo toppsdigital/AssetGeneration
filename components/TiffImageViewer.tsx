@@ -293,7 +293,6 @@ export default function TiffImageViewer({
         style={{
           width: '100%',
           height: 'auto',
-          maxHeight: '400px',
           objectFit: 'contain',
           display: 'block',
           borderRadius: 8,

@@ -101,13 +101,17 @@ export default function RegularImageViewer({
         onError={handleError}
         onClick={onClick}
         style={{
-          width: '100%',
-          height: 'auto',
-          maxHeight: '400px',
+          // Use passed styles first, then fallback to defaults
           objectFit: 'contain',
           display: 'block',
           borderRadius: 8,
-          cursor: onClick ? 'pointer' : 'default'
+          cursor: onClick ? 'pointer' : 'default',
+          // Default fallbacks only if not provided in style
+          ...((!style?.width && !style?.height) && {
+            width: '100%',
+            height: 'auto'
+          }),
+          ...style
         }}
       />
     </div>

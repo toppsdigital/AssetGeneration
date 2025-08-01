@@ -468,7 +468,7 @@ export default function ImagePreview({
         <div
           style={{
             width: '100%',
-            height: style?.height ? '100%' : 'auto',
+            height: '100%',
             opacity: isImageLoaded ? 1 : 0,
             transition: 'opacity 0.3s ease',
             position: isImageLoaded ? 'relative' : 'absolute',
@@ -477,11 +477,10 @@ export default function ImagePreview({
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
-            // Add background for TIFF images in expanded state only
+            // Add background for TIFF images in expanded state only  
             ...(isTiff && style?.height && {
               background: '#2d3748',
-              borderRadius: '8px',
-              padding: '12px'
+              borderRadius: '8px'
             })
           }}
         >
@@ -492,13 +491,12 @@ export default function ImagePreview({
               onLoad={handleImageLoad}
               onError={() => handleImageError('Failed to load TIFF image')}
               style={{
-                maxWidth: '100%',
-                maxHeight: style?.height ? '100%' : (style?.maxHeight || 'none'),
-                width: style?.height ? 'auto' : '100%',
-                height: 'auto',
-                borderRadius: 8,
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                borderRadius: 4,
                 display: 'block',
-                objectFit: 'contain'
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.8)'
               }}
             />
           ) : (
@@ -508,13 +506,12 @@ export default function ImagePreview({
               onLoad={handleImageLoad}
               onError={() => handleImageError('Failed to load image')}
               style={{
-                maxWidth: '100%',
-                maxHeight: style?.height ? '100%' : (style?.maxHeight || 'none'),
-                width: style?.height ? 'auto' : '100%',
-                height: 'auto',
-                borderRadius: 8,
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                borderRadius: 4,
                 display: 'block',
-                objectFit: 'contain'
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.8)'
               }}
             />
           )}

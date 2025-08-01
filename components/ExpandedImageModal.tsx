@@ -99,15 +99,16 @@ export default function ExpandedImageModal({
       // Work backwards from viewport height
       const filenameBottomSpace = 20; // bottom: '20px' 
       const filenameHeight = 40; // Approximate height of filename element (padding + text)
-      const bottomBuffer = 30; // Buffer between image and filename
-      const topMargin = 40; // Top margin for image container
-      const extraSafety = 40; // Additional safety buffer to prevent overflow
+      const bottomBuffer = 60; // Buffer between image and filename
+      const topMargin = 20; // Top margin for image container (reduced from 40px)
+      const extraSafety = 80; // Additional safety buffer to prevent overflow
       
       // Total space reserved for bottom elements and margins
       const reservedSpace = filenameBottomSpace + filenameHeight + bottomBuffer + topMargin + extraSafety;
       
       const calculatedHeight = viewportHeight - reservedSpace;
-      setAvailableHeight(Math.max(calculatedHeight, 200)); // Minimum height of 200px
+      const finalHeight = Math.max(calculatedHeight, 200);
+      setAvailableHeight(finalHeight);
     };
 
     calculateHeight();
@@ -335,48 +336,27 @@ export default function ExpandedImageModal({
           alignItems: 'center',
           justifyContent: 'center',
           position: 'relative',
-          margin: '40px auto'
+          margin: '20px auto'
         }}>
-          {optimizedImageUrl && !image.isTiff ? (
-            // Use optimized URL for non-TIFF images only
-            <RegularImageViewer
-              src={optimizedImageUrl}
-              alt={image.alt}
-              onLoad={() => setIsImageLoading(false)}
-              onError={() => {
-                console.error('Failed to load image in modal, falling back to ImagePreview');
-                setOptimizedImageUrl(null);
-              }}
-              style={{
-                maxWidth: '100%',
-                maxHeight: `${availableHeight}px`,
-                width: 'auto',
-                height: 'auto',
-                objectFit: 'contain',
-                borderRadius: '4px',
-                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.8)'
-              }}
-            />
-          ) : (
-            // Use ImagePreview for TIFF files and fallback cases - handles TIFF conversion properly
+          <div style={{
+            width: '100%',
+            height: `${availableHeight}px`,
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center'
+          }}>
+            {/* Always use ImagePreview for consistency */}
             <ImagePreview
               filePath={image.src}
               alt={image.alt}
               priority={true}
               lazy={false}
               style={{
-                maxWidth: '100%',
-                maxHeight: '100%',
-                height: `${availableHeight}px`,
-                objectFit: 'contain',
-                borderRadius: '4px',
-                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.8)',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center'
+                width: '100%',
+                height: '100%'
               }}
             />
-          )}
+          </div>
           
           {/* Loading indicator for modal - only show for non-TIFF when using optimized URL */}
           {isImageLoading && optimizedImageUrl && !image.isTiff && (
