@@ -22,16 +22,15 @@ interface PSDTemplateSelectorProps {
 // For multiple spot/color selections in parallel mode
 interface SpotColorPair {
   spot: string;
-  color?: { name: string };
+  color?: string;
 }
 
 interface AssetConfig {
   id: string;
-  name: string;
   type: 'wp' | 'back' | 'base' | 'parallel' | 'multi-parallel';
   layer: string;
   spot?: string;
-  color?: { name: string };
+  color?: string;
   spotColorPairs?: SpotColorPair[]; // For PARALLEL cards with multiple combinations
   vfx?: string;
   chrome: boolean;
@@ -407,7 +406,6 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     
     const assets = Object.entries(mergedJobData.assets).map(([assetId, assetData]: [string, any]) => ({
       id: assetId,
-      name: assetData.name || 'Unnamed Asset',
       type: assetData.type || 'wp',
       layer: assetData.layer || '',
       spot: assetData.spot,
@@ -472,15 +470,9 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
         };
       }
 
-      const assetName = generateAssetName({
-        ...assetConfig,
-        id: editingAssetId || 'temp'
-      } as AssetConfig);
-
-      // Add the generated name to the asset config
+      // Asset payload without name field - backend will generate ID and manage names
       const assetPayload = {
-        ...assetConfig,
-        name: assetName
+        ...assetConfig
       };
 
       let response;
@@ -527,26 +519,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     }
   };
 
-  const generateAssetName = (config: AssetConfig): string => {
-    const typeDisplay = config.type === 'base' ? 'BASE' : config.type === 'parallel' ? 'PARALLEL' : config.type === 'multi-parallel' ? 'MULTI-PARALLEL' : config.type.toUpperCase();
-    const parts = [typeDisplay];
-    
-    // Handle multiple spot/color pairs for PARALLEL/MULTI-PARALLEL cards
-    if (config.spotColorPairs && config.spotColorPairs.length > 0) {
-      const pairNames = config.spotColorPairs.map(pair => 
-        `${pair.spot}${pair.color ? '-' + pair.color.name.replace(/\d+$/, '') : ''}`
-      ).join('+');
-      parts.push(pairNames);
-    } else {
-      // Handle single spot/color for other card types
-      if (config.spot) parts.push(config.spot);
-      if (config.color) parts.push(config.color.name.replace(/\d+$/, ''));
-    }
-    
-    if (config.chrome && (config.type === 'base' || config.type === 'parallel' || config.type === 'multi-parallel') && getWpInvLayers().length > 0) parts.push('Chrome'); // Chrome only for front cards with wp_inv layers
-    
-    return parts.join(' ');
-  };
+
 
   const removeAsset = async (id: string) => {
     if (!jobData?.job_id || savingAsset) return;
@@ -970,14 +943,13 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                   </label>
                                 )}
                                 <select
-                                  value={pair.color ? pair.color.name : ''}
+                                  value={pair.color || ''}
                                   onChange={(e) => {
                                     if (e.target.value) {
-                                      const name = e.target.value;
                                       const newPairs = [...spotColorPairs];
                                                                             newPairs[index] = { 
                                         ...newPairs[index], 
-                                        color: { name }
+                                        color: e.target.value
                                       };
                                       setSpotColorPairs(newPairs);
                             } else {
@@ -1409,7 +1381,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                               height: 10,
                                               borderRadius: '50%',
                                               background: (() => {
-                                                const colorName = pair.color.name.replace(/\d+$/, '').toLowerCase();
+                                                const colorName = (pair.color || '').replace(/\d+$/, '').toLowerCase();
                                                 // Map common color names to actual colors
                                                 if (colorName.includes('yellow')) return '#fbbf24';
                                                 if (colorName.includes('gold')) return '#f59e0b';
@@ -1429,7 +1401,9 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                               display: 'inline-block',
                                               border: '1px solid rgba(255, 255, 255, 0.2)'
                                             }} />
-                                            <span style={{ fontSize: 13, color: '#f8f8f8' }}>{pair.color.name.replace(/\d+$/, '')}</span>
+                                            <span style={{ fontSize: 13, color: '#f8f8f8' }}>
+                                              {(pair.color || '').replace(/\d+$/, '')}
+                                            </span>
                                           </div>
                                         )}
                                       </div>
@@ -1454,7 +1428,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                                 height: 10,
                                                 borderRadius: '50%',
                                                 background: (() => {
-                                                  const colorName = asset.color.name.replace(/\d+$/, '').toLowerCase();
+                                                  const colorName = (asset.color || '').replace(/\d+$/, '').toLowerCase();
                                                   // Map common color names to actual colors
                                                   if (colorName.includes('yellow')) return '#fbbf24';
                                                   if (colorName.includes('gold')) return '#f59e0b';
@@ -1474,7 +1448,9 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                                 display: 'inline-block',
                                                 border: '1px solid rgba(255, 255, 255, 0.2)'
                                               }} />
-                                              <span style={{ fontSize: 13, color: '#f8f8f8' }}>{asset.color.name.replace(/\d+$/, '')}</span>
+                                              <span style={{ fontSize: 13, color: '#f8f8f8' }}>
+                                                {(asset.color || '').replace(/\d+$/, '')}
+                                              </span>
                                             </div>
                                           )}
                                         </div>
