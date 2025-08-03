@@ -551,9 +551,26 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       console.log('🗑️ Removing asset:', id);
       const response = await contentPipelineApi.deleteAsset(jobData.job_id, id);
       
-      if (response.success && response.job && onJobDataUpdate) {
-        console.log('✅ Asset removed successfully:', response);
-        onJobDataUpdate(response.job);
+      if (response.success) {
+        console.log('✅ Asset removed successfully:', {
+          success: response.success,
+          hasJob: !!response.job,
+          fullResponse: response
+        });
+        
+        if (response.job && onJobDataUpdate) {
+          console.log('🔄 Calling onJobDataUpdate with job data from delete response');
+          onJobDataUpdate(response.job);
+        } else if (onJobDataUpdate) {
+          console.log('🔄 No job data in delete response, triggering refetch to get updated asset list');
+          // Asset deleted successfully but no job data returned - trigger a refetch
+          onJobDataUpdate({ _forceRefetch: true, job_id: jobData.job_id });
+        }
+      } else {
+        console.log('❌ Asset deletion failed:', {
+          success: response.success,
+          response: response
+        });
       }
     } catch (error) {
       console.error('❌ Error removing asset:', error);

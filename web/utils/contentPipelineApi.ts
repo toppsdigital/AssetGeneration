@@ -634,23 +634,47 @@ class ContentPipelineAPI {
     message: string;
     job?: JobData;
   }> {
-    console.log(`🗑️ Deleting asset ${assetId} for job: ${jobId}`);
+    const requestUrl = `${this.baseUrl}?operation=delete_asset&id=${encodeURIComponent(jobId)}&asset_id=${encodeURIComponent(assetId)}`;
     
-    const response = await fetch(`${this.baseUrl}?operation=delete_asset&id=${encodeURIComponent(jobId)}&asset_id=${encodeURIComponent(assetId)}`, {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
+    console.log(`🗑️ Deleting asset ${assetId} for job: ${jobId}`);
+    console.log(`📤 DELETE request URL: ${requestUrl}`);
+    console.log(`📤 DELETE request headers:`, { 'Content-Type': 'application/json' });
+    
+    try {
+      const response = await fetch(requestUrl, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      console.log(`📥 DELETE response status: ${response.status}`);
+      console.log(`📥 DELETE response headers:`, Object.fromEntries(response.headers.entries()));
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || `Failed to delete asset: ${response.status}`);
+      if (!response.ok) {
+        console.error(`❌ DELETE request failed with status: ${response.status}`);
+        const errorText = await response.text();
+        console.error(`❌ DELETE error response:`, errorText);
+        
+        let error;
+        try {
+          error = JSON.parse(errorText);
+        } catch {
+          error = { error: errorText, message: `HTTP ${response.status}` };
+        }
+        throw new Error(error.error || error.message || `Failed to delete asset: ${response.status}`);
+      }
+
+      const resultText = await response.text();
+      console.log(`📥 DELETE response body:`, resultText);
+      
+      const result = JSON.parse(resultText);
+      console.log(`✅ Asset deleted:`, result);
+      return result;
+    } catch (fetchError) {
+      console.error(`❌ DELETE request failed:`, fetchError);
+      throw fetchError;
     }
-
-    const result = await response.json();
-    console.log(`✅ Asset deleted:`, result);
-    return result;
   }
 }
 

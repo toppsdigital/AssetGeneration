@@ -214,6 +214,10 @@ export async function PUT(request: NextRequest) {
   return handleRequest(request, 'PUT');
 }
 
+export async function DELETE(request: NextRequest) {
+  return handleRequest(request, 'DELETE');
+}
+
 async function handleRequest(request: NextRequest, method: string) {
   const { searchParams } = new URL(request.url);
   let body: any = {};
@@ -720,19 +724,8 @@ async function handleRequest(request: NextRequest, method: string) {
         }
         apiUrl += `/jobs/${id}/assets/${deleteAssetId}`;
         apiMethod = 'DELETE';
-        // Get session and add user information for asset deletion tracking
-        try {
-          const session = await auth();
-          if (session?.user) {
-            apiBody = {
-              ...apiBody,
-              deleted_by_user_id: session.user.id || session.user.email || 'unknown',
-              deleted_by_user_name: session.user.name || session.user.email || 'Unknown User'
-            };
-          }
-        } catch (error) {
-          console.warn('Failed to get session for asset deletion:', error);
-        }
+        // Don't send body with DELETE request - some backends don't accept it
+        apiBody = {}; // Empty body for DELETE
         break;
         
       default:
@@ -760,7 +753,7 @@ async function handleRequest(request: NextRequest, method: string) {
       headers,
     };
     
-    // Add body for POST/PUT requests
+    // Add body for POST/PUT requests only (DELETE typically doesn't have body)
     if (apiMethod === 'POST' || apiMethod === 'PUT') {
       fetchOptions.body = JSON.stringify(apiBody);
     }
@@ -793,6 +786,23 @@ async function handleRequest(request: NextRequest, method: string) {
     console.log(`Response status: ${response.status}`);
     console.log('Response headers:', Object.fromEntries(response.headers.entries()));
     
+    // Check if response has specific headers that indicate source (proxy vs API)
+    const server = response.headers.get('server');
+    const poweredBy = response.headers.get('x-powered-by');
+    const via = response.headers.get('via');
+    const apiGateway = response.headers.get('x-amzn-requestid') || response.headers.get('x-amz-apigw-id');
+    
+    console.log('🔍 Response source indicators:', {
+      server,
+      poweredBy, 
+      via,
+      apiGateway,
+      isLikelyProxy: !!via || server?.toLowerCase().includes('proxy'),
+      isLikelyAWS: !!apiGateway,
+      url: apiUrl,
+      method: apiMethod
+    });
+    
     // Get response text to handle both JSON and non-JSON responses
     const responseText = await response.text();
     console.log('Response body:', responseText);
@@ -805,6 +815,19 @@ async function handleRequest(request: NextRequest, method: string) {
         responseData = { success: false, message: 'Empty response from backend API' };
       } else {
         responseData = JSON.parse(responseText);
+        
+        // Add extra debugging for authentication errors
+        if (response.status === 403 && responseData.message?.includes('Authentication')) {
+          console.error('🚨 Authentication error analysis:', {
+            errorMessage: responseData.message,
+            isProxy: !!via || server?.toLowerCase().includes('proxy'),
+            isAWSAPI: !!apiGateway,
+            responseHeaders: Object.fromEntries(response.headers.entries()),
+            requestUrl: apiUrl,
+            requestHeaders: headers,
+            likely_source: apiGateway ? 'AWS API Gateway' : via ? 'Proxy Layer' : server ? `Server: ${server}` : 'Unknown'
+          });
+        }
       }
     } catch (parseError) {
       console.error('❌ Failed to parse backend API response as JSON:', parseError);
