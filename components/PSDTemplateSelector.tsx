@@ -460,12 +460,14 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
           vfx: currentConfig.vfx
         };
       } else {
-        // Handle other card types (wp, back, base)
+        // Handle other card types
         if (!currentConfig.layer) return;
         
         assetConfig = {
           ...assetConfig,
           layer: currentConfig.layer,
+          spot: currentConfig.spot,
+          color: currentConfig.color,
           vfx: currentConfig.vfx
         };
       }
