@@ -673,6 +673,11 @@ async function handleRequest(request: NextRequest, method: string) {
         }
         apiUrl += `/jobs/${id}/assets`;
         apiMethod = 'POST';
+        // Transform asset config to match backend expectations
+        // Add temporary key field if not present (backend transition support)
+        if (!apiBody.key) {
+          apiBody.key = `asset_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        }
         // Get session and add user information for asset creation tracking
         try {
           const session = await auth();
@@ -698,6 +703,11 @@ async function handleRequest(request: NextRequest, method: string) {
         }
         apiUrl += `/jobs/${id}/assets/${assetId}`;
         apiMethod = 'PUT';
+        // Transform asset config to match backend expectations
+        // Add temporary key field if not present (backend transition support)
+        if (!apiBody.key) {
+          apiBody.key = assetId; // Use the existing asset ID as the key for updates
+        }
         // Get session and add user information for asset update tracking
         try {
           const session = await auth();
