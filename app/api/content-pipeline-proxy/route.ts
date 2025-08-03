@@ -12,6 +12,9 @@ interface JobData {
   job_status?: 'uploading' | 'uploaded' | 'upload-failed' | 'extracting' | 'extracted' | 'extraction-failed' | 'generating' | 'generated' | 'generation-failed' | 'completed';
   created_at?: string;
   last_updated?: string;
+  original_files_total_count?: number;
+  original_files_completed_count?: number;
+  original_files_failed_count?: number;
   user_id?: string;
   user_name?: string;
   updated_by_user_id?: string;
@@ -19,6 +22,7 @@ interface JobData {
   download_url?: string;
   download_url_expires?: string;
   download_url_created?: string;
+  assets?: Record<string, any>; // Asset configurations with server-generated IDs
 }
 
 interface FileData {
@@ -673,24 +677,7 @@ async function handleRequest(request: NextRequest, method: string) {
         }
         apiUrl += `/jobs/${id}/assets`;
         apiMethod = 'POST';
-        // Transform asset config to match backend expectations
-        // Add temporary key field if not present (backend transition support)
-        if (!apiBody.key) {
-          apiBody.key = `asset_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        }
-        // Get session and add user information for asset creation tracking
-        try {
-          const session = await auth();
-          if (session?.user) {
-            apiBody = {
-              ...apiBody,
-              created_by_user_id: session.user.id || session.user.email || 'unknown',
-              created_by_user_name: session.user.name || session.user.email || 'Unknown User'
-            };
-          }
-        } catch (error) {
-          console.warn('Failed to get session for asset creation:', error);
-        }
+        // Pass asset_config directly to backend - server will generate ID
         break;
 
       case 'update_asset':

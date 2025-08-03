@@ -22,7 +22,9 @@ export function syncJobDataAcrossCaches(
   // Update individual job detail cache
   queryClient.setQueryData(jobKeys.detail(jobId), (old: UIJobData | undefined) => {
     if (!old) return old;
-    return updater(old) as UIJobData;
+    const updated = updater(old) as UIJobData;
+    console.log('🔄 Updated job detail cache:', { old: old, new: updated });
+    return updated;
   });
   
   // Update jobs list cache
@@ -35,7 +37,11 @@ export function syncJobDataAcrossCaches(
     );
   });
   
-  console.log('✅ Job data synchronized across all caches for job:', jobId);
+  // CRITICAL: Invalidate queries to trigger re-renders
+  queryClient.invalidateQueries({ queryKey: jobKeys.detail(jobId) });
+  queryClient.invalidateQueries({ queryKey: jobKeys.all });
+  
+  console.log('✅ Job data synchronized and invalidated for job:', jobId);
 }
 
 // Cache clearing utility for rerun operations

@@ -389,9 +389,17 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
 
   // Helper function to get assets from job data
   const getConfiguredAssets = (): AssetConfig[] => {
+    console.log('🔍 getConfiguredAssets called:', {
+      hasMergedJobData: !!mergedJobData,
+      hasAssets: !!mergedJobData?.assets,
+      assetsType: typeof mergedJobData?.assets,
+      assetsKeys: mergedJobData?.assets ? Object.keys(mergedJobData.assets) : [],
+      fullMergedJobData: mergedJobData
+    });
+    
     if (!mergedJobData?.assets) return [];
     
-    return Object.entries(mergedJobData.assets).map(([assetId, assetData]: [string, any]) => ({
+    const assets = Object.entries(mergedJobData.assets).map(([assetId, assetData]: [string, any]) => ({
       id: assetId,
       name: assetData.name || 'Unnamed Asset',
       type: assetData.type || 'wp',
@@ -402,6 +410,9 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       vfx: assetData.vfx,
       chrome: assetData.chrome || false
     }));
+    
+    console.log('✅ Parsed assets:', assets);
+    return assets;
   };
 
   const resetCurrentConfig = () => {
@@ -475,9 +486,30 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
         response = await contentPipelineApi.createAsset(jobData.job_id, assetPayload);
       }
 
-      if (response.success && response.job && onJobDataUpdate) {
-        console.log('✅ Asset saved successfully:', response);
-        onJobDataUpdate(response.job);
+      if (response.success) {
+        console.log('✅ Asset saved successfully:', {
+          success: response.success,
+          hasJob: !!response.job,
+          jobAssets: response.job?.assets ? Object.keys(response.job.assets) : 'no job data returned',
+          fullResponse: response
+        });
+        
+        if (response.job && onJobDataUpdate) {
+          console.log('🔄 Calling onJobDataUpdate with job data from response');
+          onJobDataUpdate(response.job);
+        } else if (onJobDataUpdate) {
+          console.log('🔄 No job data in response, triggering refetch to get updated asset list');
+          // Asset created successfully but no job data returned - trigger a refetch
+          // We'll pass a special signal to force a refetch
+          onJobDataUpdate({ _forceRefetch: true, job_id: jobData.job_id });
+        }
+      } else {
+        console.log('❌ Asset creation failed:', {
+          success: response.success,
+          hasJob: !!response.job,
+          hasCallback: !!onJobDataUpdate,
+          response: response
+        });
       }
       
       resetCurrentConfig();
@@ -559,6 +591,13 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
   const colorVariants = getColorVariants();
   const configuredAssets = getConfiguredAssets();
   const canCreateAssets = configuredAssets.length > 0;
+
+  // Debug when component re-renders due to asset changes
+  console.log('🔍 PSDTemplateSelector render:', {
+    configuredAssetsCount: configuredAssets.length,
+    configuredAssetIds: configuredAssets.map(a => a.id),
+    timestamp: new Date().toISOString()
+  });
 
   return (
     <>

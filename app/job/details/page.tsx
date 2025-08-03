@@ -76,6 +76,12 @@ function JobDetailsPageContent() {
     isFetching: isRefetchingJob,
     refetch: refetchJobData
   } = useJobData(jobId || null);
+
+  // Local state to force UI updates when cache doesn't trigger re-render
+  const [localJobData, setLocalJobData] = useState(null);
+  
+  // Use local data if available, otherwise use React Query data
+  const effectiveJobData = localJobData || jobData;
   
   // Debug logging for cache behavior and fresh data synchronization
   useEffect(() => {
@@ -146,12 +152,21 @@ function JobDetailsPageContent() {
   );
   
   // Merge cached job data with fresh file data
-  const mergedJobData = jobData ? {
-    ...jobData,
+  const mergedJobData = effectiveJobData ? {
+    ...effectiveJobData,
     // When createFiles='true', use files from jobData (set by createNewFiles)
     // When createFiles!='true', use fresh fileData from useJobFiles hook
-    content_pipeline_files: createFiles === 'true' ? (jobData.content_pipeline_files || []) : fileData
+    content_pipeline_files: createFiles === 'true' ? (effectiveJobData.content_pipeline_files || []) : fileData
   } : null;
+
+  // Debug assets in mergedJobData
+  console.log('🔍 mergedJobData assets debug:', {
+    hasJobData: !!jobData,
+    hasMergedJobData: !!mergedJobData,
+    jobDataAssets: jobData?.assets ? Object.keys(jobData.assets) : 'no assets',
+    mergedJobDataAssets: mergedJobData?.assets ? Object.keys(mergedJobData.assets) : 'no assets',
+    jobDataTimestamp: new Date().toISOString()
+  });
 
   // Debug logging for upload data flow
   console.log('🔍 Upload Data Flow Debug:', {
@@ -214,10 +229,16 @@ function JobDetailsPageContent() {
     // Update both React Query caches using synchronization utility
     if (jobData?.job_id) {
       syncJobDataAcrossCaches(queryClient, jobData.job_id, updater);
+      
+      // Force a refetch to ensure UI updates
+      setTimeout(() => {
+        console.log('🔄 Force refetching job data to ensure UI update');
+        refetchJobData();
+      }, 100);
     }
     // Also update legacy state for any remaining dependencies
     setJobData(updater);
-  }, [jobData?.job_id, queryClient]);
+  }, [jobData?.job_id, queryClient, refetchJobData]);
 
   // Upload management with comprehensive upload engine
   const uploadEngine = useUploadEngine({ 
@@ -1118,14 +1139,59 @@ function JobDetailsPageContent() {
               creatingAssets={creatingAssets}
               setCreatingAssets={setCreatingAssets}
               onJobDataUpdate={(updatedJobData) => {
-                // Update React Query cache with updated job data from asset operations
+                console.log('🎯 onJobDataUpdate called with:', {
+                  hasUpdatedJobData: !!updatedJobData,
+                  isForceRefetch: !!updatedJobData?._forceRefetch,
+                  updatedJobDataAssets: updatedJobData?.assets ? Object.keys(updatedJobData.assets) : 'no assets',
+                  currentJobDataAssets: jobData?.assets ? Object.keys(jobData.assets) : 'no assets'
+                });
+                
+                // Handle force refetch case (when backend doesn't return job data)
+                if (updatedJobData?._forceRefetch) {
+                  console.log('🔄 Force refetch requested - asset created but no job data returned');
+                  refetchJobData().then((result) => {
+                    console.log('✅ Refetched job data after asset creation:', {
+                      hasData: !!result.data,
+                      assets: result.data?.assets ? Object.keys(result.data.assets) : 'no assets'
+                    });
+                    if (result.data) {
+                      setLocalJobData(result.data);
+                    }
+                  });
+                  return;
+                }
+                
+                // Normal case: Update React Query cache with updated job data from asset operations
                 updateJobDataForUpload((prevJobData) => {
                   console.log('🔄 Updating job data from PSDTemplateSelector:', {
                     previous: Object.keys(prevJobData?.assets || {}),
                     new: Object.keys(updatedJobData?.assets || {}),
-                    jobId: updatedJobData?.job_id
+                    jobId: updatedJobData?.job_id,
+                    updatedJobData: updatedJobData,
+                    prevJobData: prevJobData
                   });
-                  return updatedJobData;
+                  
+                  // Map API response to UIJobData format to preserve UI-specific fields
+                  const mappedJobData = {
+                    ...prevJobData, // Preserve existing UI fields (api_files, content_pipeline_files, etc.)
+                    ...updatedJobData, // Overlay new server data (including updated assets)
+                    api_files: updatedJobData.files || prevJobData?.api_files || [],
+                    Subset_name: updatedJobData.source_folder || prevJobData?.Subset_name,
+                    // Force a new object reference to trigger React re-render
+                    _cacheTimestamp: Date.now()
+                  };
+                  
+                  console.log('✅ Mapped job data:', {
+                    hasAssets: !!mappedJobData.assets,
+                    assetsCount: mappedJobData.assets ? Object.keys(mappedJobData.assets).length : 0,
+                    assetIds: mappedJobData.assets ? Object.keys(mappedJobData.assets) : []
+                  });
+                  
+                  // FORCE UI UPDATE: Also update local state to bypass React Query cache issues
+                  console.log('🚀 Setting local job data to force UI update');
+                  setLocalJobData(mappedJobData);
+                  
+                  return mappedJobData;
                 });
               }}
             />
@@ -1144,7 +1210,16 @@ function JobDetailsPageContent() {
                     new: updatedJobData?.job_status,
                     jobId: updatedJobData?.job_id
                   });
-                  return updatedJobData;
+                  
+                  // Map API response to UIJobData format to preserve UI-specific fields
+                  const mappedJobData = {
+                    ...prevJobData, // Preserve existing UI fields (api_files, content_pipeline_files, etc.)
+                    ...updatedJobData, // Overlay new server data (including updated download URLs, job status, etc.)
+                    api_files: updatedJobData.files || prevJobData?.api_files || [],
+                    Subset_name: updatedJobData.source_folder || prevJobData?.Subset_name
+                  };
+                  
+                  return mappedJobData;
                 });
               }}
             />

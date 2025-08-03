@@ -28,6 +28,7 @@ export interface JobData {
   download_url?: string;
   download_url_expires?: string;
   download_url_created?: string;
+  assets?: Record<string, any>; // Asset configurations with server-generated IDs
 }
 
 export interface FileData {
