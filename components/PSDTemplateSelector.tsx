@@ -16,6 +16,7 @@ interface PSDTemplateSelectorProps {
   isVisible: boolean;
   creatingAssets: boolean;
   setCreatingAssets: React.Dispatch<React.SetStateAction<boolean>>;
+  onJobDataUpdate?: (updatedJobData: any) => void; // Callback to update parent component's job data
 }
 
 // For multiple spot/color selections in parallel mode
@@ -36,7 +37,7 @@ interface AssetConfig {
   chrome: boolean;
 }
 
-export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatingAssets, setCreatingAssets }: PSDTemplateSelectorProps) => {
+export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatingAssets, setCreatingAssets, onJobDataUpdate }: PSDTemplateSelectorProps) => {
   const router = useRouter();
   
   // State management
@@ -47,12 +48,12 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
   const [loadingJsonData, setLoadingJsonData] = useState(false);
   
   // New asset configuration state
-  const [configuredAssets, setConfiguredAssets] = useState<AssetConfig[]>([]);
   const [currentCardType, setCurrentCardType] = useState<'wp' | 'back' | 'base' | 'parallel' | 'multi-parallel' | null>(null);
   const [currentConfig, setCurrentConfig] = useState<Partial<AssetConfig>>({
     chrome: false
   });
   const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
+  const [savingAsset, setSavingAsset] = useState(false);
   
   const [spotColorPairs, setSpotColorPairs] = useState<SpotColorPair[]>([{ spot: '', color: undefined }]);
 
@@ -73,7 +74,6 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     // Clear current configuration when changing files
     setCurrentConfig({ chrome: false });
     setCurrentCardType(null);
-    setConfiguredAssets([]);
   }, [selectedPhysicalFile]);
 
   const fetchPhysicalJsonFiles = async () => {
@@ -387,6 +387,23 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     );
   };
 
+  // Helper function to get assets from job data
+  const getConfiguredAssets = (): AssetConfig[] => {
+    if (!mergedJobData?.assets) return [];
+    
+    return Object.entries(mergedJobData.assets).map(([assetId, assetData]: [string, any]) => ({
+      id: assetId,
+      name: assetData.name || assetData.key || 'Unnamed Asset',
+      type: assetData.config?.type || 'wp',
+      layer: assetData.config?.layer || '',
+      spot: assetData.config?.spot,
+      color: assetData.config?.color,
+      spotColorPairs: assetData.config?.spotColorPairs || [],
+      vfx: assetData.config?.vfx,
+      chrome: assetData.config?.chrome || false
+    }));
+  };
+
   const resetCurrentConfig = () => {
     setCurrentConfig({ chrome: false });
     setCurrentCardType(null);
@@ -394,81 +411,84 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     setSpotColorPairs([{ spot: '', color: undefined }]);
   };
 
-  const addAsset = () => {
-    if (!currentCardType) return;
+  const addAsset = async () => {
+    if (!currentCardType || !jobData?.job_id || savingAsset) return;
     
-    // Handle parallel/multi-parallel with multiple spot/color pairs
-    if (currentCardType === 'parallel' || currentCardType === 'multi-parallel') {
-      const validPairs = spotColorPairs.filter(pair => pair.spot && pair.color);
-      if (validPairs.length === 0) return;
-      
-      // For parallel/multi-parallel cards, auto-select wp_inv layer if only one exists
-      let finalLayer = currentConfig.layer || validPairs[0].spot;
-      if (getWpInvLayers().length === 1) {
-        finalLayer = getWpInvLayers()[0];
-      } else if (getWpInvLayers().length > 1 && currentConfig.layer) {
-        finalLayer = currentConfig.layer;
-      }
-
-      const newAsset: AssetConfig = {
-        id: editingAssetId || Date.now().toString(),
-        name: generateAssetName({
-          type: currentCardType,
-          layer: finalLayer,
-          spotColorPairs: validPairs,
-          vfx: currentConfig.vfx,
-          chrome: currentConfig.chrome
-        } as AssetConfig),
+    setSavingAsset(true);
+    
+    try {
+      // Build asset configuration
+      let assetConfig: any = {
         type: currentCardType,
-        layer: finalLayer,
-        spotColorPairs: validPairs,
-        vfx: currentConfig.vfx,
-        chrome: (currentConfig.chrome && getWpInvLayers().length > 0) || false
+        chrome: (currentConfig.chrome && (currentCardType === 'base' || currentCardType === 'parallel' || currentCardType === 'multi-parallel') && getWpInvLayers().length > 0) || false
       };
 
+      // Handle parallel/multi-parallel with multiple spot/color pairs
+      if (currentCardType === 'parallel' || currentCardType === 'multi-parallel') {
+        const validPairs = spotColorPairs.filter(pair => pair.spot && pair.color);
+        if (validPairs.length === 0) return;
+        
+        // For parallel/multi-parallel cards, auto-select wp_inv layer if only one exists
+        let finalLayer = currentConfig.layer || validPairs[0].spot;
+        if (getWpInvLayers().length === 1) {
+          finalLayer = getWpInvLayers()[0];
+        } else if (getWpInvLayers().length > 1 && currentConfig.layer) {
+          finalLayer = currentConfig.layer;
+        }
+
+        assetConfig = {
+          ...assetConfig,
+          layer: finalLayer,
+          spotColorPairs: validPairs,
+          vfx: currentConfig.vfx
+        };
+      } else {
+        // Handle other card types
+        if (!currentConfig.layer) return;
+        
+        assetConfig = {
+          ...assetConfig,
+          layer: currentConfig.layer,
+          spot: currentConfig.spot,
+          color: currentConfig.color,
+          vfx: currentConfig.vfx
+        };
+      }
+
+      const assetName = generateAssetName({
+        ...assetConfig,
+        id: editingAssetId || 'temp'
+      } as AssetConfig);
+
+      const assetPayload = {
+        key: editingAssetId || `asset_${Date.now()}`,
+        value: {
+          name: assetName,
+          config: assetConfig
+        }
+      };
+
+      let response;
       if (editingAssetId) {
         // Update existing asset
-        setConfiguredAssets(prev => 
-          prev.map(asset => asset.id === editingAssetId ? newAsset : asset)
-        );
+        response = await contentPipelineApi.updateAsset(jobData.job_id, editingAssetId, assetPayload);
       } else {
-        // Add new asset
-        setConfiguredAssets(prev => [...prev, newAsset]);
+        // Create new asset
+        response = await contentPipelineApi.createAsset(jobData.job_id, assetPayload);
+      }
+
+      if (response.success && response.job && onJobDataUpdate) {
+        console.log('✅ Asset saved successfully:', response);
+        onJobDataUpdate(response.job);
       }
       
       resetCurrentConfig();
-      return;
+    } catch (error) {
+      console.error('❌ Error saving asset:', error);
+      alert(`Failed to save asset: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setSavingAsset(false);
     }
-
-    // Handle other card types
-    if (!currentConfig.layer) return;
-
-    const newAsset: AssetConfig = {
-      id: editingAssetId || Date.now().toString(),
-      name: generateAssetName({
-        ...currentConfig,
-        type: currentCardType,
-        layer: currentConfig.layer
-      } as AssetConfig),
-      type: currentCardType,
-      layer: currentConfig.layer,
-      spot: currentConfig.spot,
-      color: currentConfig.color,
-      vfx: currentConfig.vfx,
-      chrome: (currentConfig.chrome && currentCardType === 'base' && getWpInvLayers().length > 0) || false
-    };
-
-    if (editingAssetId) {
-      // Update existing asset
-      setConfiguredAssets(prev => 
-        prev.map(asset => asset.id === editingAssetId ? newAsset : asset)
-      );
-    } else {
-      // Add new asset
-      setConfiguredAssets(prev => [...prev, newAsset]);
-    }
-
-    resetCurrentConfig();
   };
 
   const generateAssetName = (config: AssetConfig): string => {
@@ -492,8 +512,25 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     return parts.join(' ');
   };
 
-  const removeAsset = (id: string) => {
-    setConfiguredAssets(prev => prev.filter(asset => asset.id !== id));
+  const removeAsset = async (id: string) => {
+    if (!jobData?.job_id || savingAsset) return;
+    
+    setSavingAsset(true);
+    
+    try {
+      console.log('🗑️ Removing asset:', id);
+      const response = await contentPipelineApi.deleteAsset(jobData.job_id, id);
+      
+      if (response.success && response.job && onJobDataUpdate) {
+        console.log('✅ Asset removed successfully:', response);
+        onJobDataUpdate(response.job);
+      }
+    } catch (error) {
+      console.error('❌ Error removing asset:', error);
+      alert(`Failed to remove asset: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setSavingAsset(false);
+    }
   };
 
   const editAsset = (asset: AssetConfig) => {
@@ -522,6 +559,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
 
   const extractedLayers = getExtractedLayers();
   const colorVariants = getColorVariants();
+  const configuredAssets = getConfiguredAssets();
   const canCreateAssets = configuredAssets.length > 0;
 
   return (
@@ -1152,21 +1190,34 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                           <>
                             <button
                               onClick={addAsset}
-                              disabled={!canAdd}
+                              disabled={!canAdd || savingAsset}
                               style={{
                                 padding: '12px 24px',
-                                background: !canAdd ? 'rgba(156, 163, 175, 0.3)' : 'linear-gradient(135deg, #10b981, #059669)',
+                                background: (!canAdd || savingAsset) ? 'rgba(156, 163, 175, 0.3)' : 'linear-gradient(135deg, #10b981, #059669)',
                                 border: 'none',
                                 borderRadius: 8,
                                 color: 'white',
                                 fontSize: 14,
                                 fontWeight: 600,
-                                cursor: !canAdd ? 'not-allowed' : 'pointer',
+                                cursor: (!canAdd || savingAsset) ? 'not-allowed' : 'pointer',
                                 transition: 'all 0.2s',
-                                opacity: !canAdd ? 0.6 : 1
+                                opacity: (!canAdd || savingAsset) ? 0.6 : 1,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8
                               }}
                             >
-                              {editingAssetId ? 'Update Asset' : 'Add Asset'}
+                              {savingAsset && (
+                                <div style={{
+                                  width: 14,
+                                  height: 14,
+                                  border: '2px solid rgba(255, 255, 255, 0.3)',
+                                  borderTop: '2px solid white',
+                                  borderRadius: '50%',
+                                  animation: 'spin 1s linear infinite'
+                                }} />
+                              )}
+                              {savingAsset ? 'Saving...' : (editingAssetId ? 'Update Asset' : 'Add Asset')}
                             </button>
                             {editingAssetId && (
                               <button
@@ -1427,63 +1478,75 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                 <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
                                   <button
                                     onClick={() => editAsset(asset)}
+                                    disabled={savingAsset}
                                     style={{
                                       width: 26,
                                       height: 26,
-                                      background: 'rgba(59, 130, 246, 0.1)',
-                                      border: '1px solid rgba(59, 130, 246, 0.2)',
+                                      background: savingAsset ? 'rgba(156, 163, 175, 0.1)' : 'rgba(59, 130, 246, 0.1)',
+                                      border: '1px solid ' + (savingAsset ? 'rgba(156, 163, 175, 0.2)' : 'rgba(59, 130, 246, 0.2)'),
                                       borderRadius: 6,
-                                      color: '#60a5fa',
+                                      color: savingAsset ? '#9ca3af' : '#60a5fa',
                                       fontSize: 14,
-                                      cursor: 'pointer',
+                                      cursor: savingAsset ? 'not-allowed' : 'pointer',
                                       display: 'inline-flex',
                                       alignItems: 'center',
                                       justifyContent: 'center',
                                       transition: 'all 0.2s',
                                       position: 'relative',
-                                      overflow: 'hidden'
+                                      overflow: 'hidden',
+                                      opacity: savingAsset ? 0.5 : 1
                                     }}
                                     onMouseOver={(e) => {
-                                      e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)';
-                                      e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.4)';
-                                      e.currentTarget.style.transform = 'scale(1.05)';
+                                      if (!savingAsset) {
+                                        e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)';
+                                        e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.4)';
+                                        e.currentTarget.style.transform = 'scale(1.05)';
+                                      }
                                     }}
                                     onMouseOut={(e) => {
-                                      e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)';
-                                      e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.2)';
-                                      e.currentTarget.style.transform = 'scale(1)';
+                                      if (!savingAsset) {
+                                        e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)';
+                                        e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.2)';
+                                        e.currentTarget.style.transform = 'scale(1)';
+                                      }
                                     }}
-                                    title="Edit asset"
+                                    title={savingAsset ? "Saving..." : "Edit asset"}
                                   >
                                     ✏️
                                   </button>
                                   <button
                                     onClick={() => removeAsset(asset.id)}
+                                    disabled={savingAsset}
                                     style={{
                                       width: 26,
                                       height: 26,
-                                      background: 'rgba(239, 68, 68, 0.1)',
-                                      border: '1px solid rgba(239, 68, 68, 0.2)',
+                                      background: savingAsset ? 'rgba(156, 163, 175, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                                      border: '1px solid ' + (savingAsset ? 'rgba(156, 163, 175, 0.2)' : 'rgba(239, 68, 68, 0.2)'),
                                       borderRadius: 6,
-                                      color: '#ef4444',
+                                      color: savingAsset ? '#9ca3af' : '#ef4444',
                                       fontSize: 14,
-                                      cursor: 'pointer',
+                                      cursor: savingAsset ? 'not-allowed' : 'pointer',
                                       display: 'inline-flex',
                                       alignItems: 'center',
                                       justifyContent: 'center',
-                                      transition: 'all 0.2s'
+                                      transition: 'all 0.2s',
+                                      opacity: savingAsset ? 0.5 : 1
                                     }}
                                     onMouseOver={(e) => {
-                                      e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
-                                      e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.4)';
-                                      e.currentTarget.style.transform = 'scale(1.05)';
+                                      if (!savingAsset) {
+                                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
+                                        e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+                                        e.currentTarget.style.transform = 'scale(1.05)';
+                                      }
                                     }}
                                     onMouseOut={(e) => {
-                                      e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
-                                      e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.2)';
-                                      e.currentTarget.style.transform = 'scale(1)';
+                                      if (!savingAsset) {
+                                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+                                        e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.2)';
+                                        e.currentTarget.style.transform = 'scale(1)';
+                                      }
                                     }}
-                                    title="Remove asset"
+                                    title={savingAsset ? "Saving..." : "Remove asset"}
                                   >
                                     🗑️
                                   </button>

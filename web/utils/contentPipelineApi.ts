@@ -574,6 +574,95 @@ class ContentPipelineAPI {
       throw new Error(`Invalid JSON response: ${parseError instanceof Error ? parseError.message : 'Unknown parsing error'}`);
     }
   }
+
+  // Asset management operations
+  async createAsset(jobId: string, assetConfig: {
+    key: string;
+    value: {
+      name: string;
+      config: any;
+    };
+  }): Promise<{
+    success: boolean;
+    message: string;
+    asset?: any;
+    job?: JobData;
+  }> {
+    console.log(`🎨 Creating asset for job: ${jobId}`, assetConfig);
+    
+    const response = await fetch(`${this.baseUrl}?operation=create_asset&id=${encodeURIComponent(jobId)}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(assetConfig),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || `Failed to create asset: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log(`✅ Asset created:`, result);
+    return result;
+  }
+
+  async updateAsset(jobId: string, assetId: string, assetConfig: {
+    key: string;
+    value: {
+      name: string;
+      config: any;
+    };
+  }): Promise<{
+    success: boolean;
+    message: string;
+    asset?: any;
+    job?: JobData;
+  }> {
+    console.log(`🔄 Updating asset ${assetId} for job: ${jobId}`, assetConfig);
+    
+    const response = await fetch(`${this.baseUrl}?operation=update_asset&id=${encodeURIComponent(jobId)}&asset_id=${encodeURIComponent(assetId)}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(assetConfig),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || `Failed to update asset: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log(`✅ Asset updated:`, result);
+    return result;
+  }
+
+  async deleteAsset(jobId: string, assetId: string): Promise<{
+    success: boolean;
+    message: string;
+    job?: JobData;
+  }> {
+    console.log(`🗑️ Deleting asset ${assetId} for job: ${jobId}`);
+    
+    const response = await fetch(`${this.baseUrl}?operation=delete_asset&id=${encodeURIComponent(jobId)}&asset_id=${encodeURIComponent(assetId)}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || `Failed to delete asset: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log(`✅ Asset deleted:`, result);
+    return result;
+  }
 }
 
 // Export a singleton instance

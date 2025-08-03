@@ -666,6 +666,77 @@ async function handleRequest(request: NextRequest, method: string) {
             message: error instanceof Error ? error.message : 'Unknown error occurred'
           }, { status: 500 });
         }
+
+      case 'create_asset':
+        if (!id) {
+          return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
+        }
+        apiUrl += `/jobs/${id}/assets`;
+        apiMethod = 'POST';
+        // Get session and add user information for asset creation tracking
+        try {
+          const session = await auth();
+          if (session?.user) {
+            apiBody = {
+              ...apiBody,
+              created_by_user_id: session.user.id || session.user.email || 'unknown',
+              created_by_user_name: session.user.name || session.user.email || 'Unknown User'
+            };
+          }
+        } catch (error) {
+          console.warn('Failed to get session for asset creation:', error);
+        }
+        break;
+
+      case 'update_asset':
+        if (!id) {
+          return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
+        }
+        const assetId = searchParams.get('asset_id');
+        if (!assetId) {
+          return NextResponse.json({ error: 'Asset ID is required' }, { status: 400 });
+        }
+        apiUrl += `/jobs/${id}/assets/${assetId}`;
+        apiMethod = 'PUT';
+        // Get session and add user information for asset update tracking
+        try {
+          const session = await auth();
+          if (session?.user) {
+            apiBody = {
+              ...apiBody,
+              updated_by_user_id: session.user.id || session.user.email || 'unknown',
+              updated_by_user_name: session.user.name || session.user.email || 'Unknown User'
+            };
+          }
+        } catch (error) {
+          console.warn('Failed to get session for asset update:', error);
+        }
+        break;
+
+      case 'delete_asset':
+        if (!id) {
+          return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
+        }
+        const deleteAssetId = searchParams.get('asset_id');
+        if (!deleteAssetId) {
+          return NextResponse.json({ error: 'Asset ID is required' }, { status: 400 });
+        }
+        apiUrl += `/jobs/${id}/assets/${deleteAssetId}`;
+        apiMethod = 'DELETE';
+        // Get session and add user information for asset deletion tracking
+        try {
+          const session = await auth();
+          if (session?.user) {
+            apiBody = {
+              ...apiBody,
+              deleted_by_user_id: session.user.id || session.user.email || 'unknown',
+              deleted_by_user_name: session.user.name || session.user.email || 'Unknown User'
+            };
+          }
+        } catch (error) {
+          console.warn('Failed to get session for asset deletion:', error);
+        }
+        break;
         
       default:
         return NextResponse.json({ 
@@ -675,6 +746,7 @@ async function handleRequest(request: NextRequest, method: string) {
             'create_file', 'get_file', 'update_file', 'list_files',
             'batch_create_files', 'batch_get_files', 'update_pdf_status', 'batch_update_pdf_status',
             'generate_assets', 'regenerate_assets', 'update_download_url',
+            'create_asset', 'update_asset', 'delete_asset',
             's3_download_file', 's3_download_folder', 's3_upload_files'
           ]
         }, { status: 400 });

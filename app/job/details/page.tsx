@@ -1117,6 +1117,17 @@ function JobDetailsPageContent() {
               isVisible={mergedJobData?.job_status?.toLowerCase() === 'extracted' && !loading && !loadingFiles}
               creatingAssets={creatingAssets}
               setCreatingAssets={setCreatingAssets}
+              onJobDataUpdate={(updatedJobData) => {
+                // Update React Query cache with updated job data from asset operations
+                updateJobDataForUpload((prevJobData) => {
+                  console.log('🔄 Updating job data from PSDTemplateSelector:', {
+                    previous: Object.keys(prevJobData?.assets || {}),
+                    new: Object.keys(updatedJobData?.assets || {}),
+                    jobId: updatedJobData?.job_id
+                  });
+                  return updatedJobData;
+                });
+              }}
             />
 
             {/* Download Section - Shows when job is completed */}
