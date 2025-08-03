@@ -576,13 +576,7 @@ class ContentPipelineAPI {
   }
 
   // Asset management operations
-  async createAsset(jobId: string, assetConfig: {
-    key: string;
-    value: {
-      name: string;
-      config: any;
-    };
-  }): Promise<{
+  async createAsset(jobId: string, assetConfig: any): Promise<{
     success: boolean;
     message: string;
     asset?: any;
@@ -608,13 +602,7 @@ class ContentPipelineAPI {
     return result;
   }
 
-  async updateAsset(jobId: string, assetId: string, assetConfig: {
-    key: string;
-    value: {
-      name: string;
-      config: any;
-    };
-  }): Promise<{
+  async updateAsset(jobId: string, assetId: string, assetConfig: any): Promise<{
     success: boolean;
     message: string;
     asset?: any;

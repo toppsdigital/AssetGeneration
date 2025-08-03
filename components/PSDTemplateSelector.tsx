@@ -393,14 +393,14 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     
     return Object.entries(mergedJobData.assets).map(([assetId, assetData]: [string, any]) => ({
       id: assetId,
-      name: assetData.name || assetData.key || 'Unnamed Asset',
-      type: assetData.config?.type || 'wp',
-      layer: assetData.config?.layer || '',
-      spot: assetData.config?.spot,
-      color: assetData.config?.color,
-      spotColorPairs: assetData.config?.spotColorPairs || [],
-      vfx: assetData.config?.vfx,
-      chrome: assetData.config?.chrome || false
+      name: assetData.name || 'Unnamed Asset',
+      type: assetData.type || 'wp',
+      layer: assetData.layer || '',
+      spot: assetData.spot,
+      color: assetData.color,
+      spotColorPairs: assetData.spotColorPairs || [],
+      vfx: assetData.vfx,
+      chrome: assetData.chrome || false
     }));
   };
 
@@ -460,12 +460,10 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
         id: editingAssetId || 'temp'
       } as AssetConfig);
 
+      // Add the generated name to the asset config
       const assetPayload = {
-        key: editingAssetId || `asset_${Date.now()}`,
-        value: {
-          name: assetName,
-          config: assetConfig
-        }
+        ...assetConfig,
+        name: assetName
       };
 
       let response;
@@ -473,7 +471,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
         // Update existing asset
         response = await contentPipelineApi.updateAsset(jobData.job_id, editingAssetId, assetPayload);
       } else {
-        // Create new asset
+        // Create new asset - backend will generate ID and store this config
         response = await contentPipelineApi.createAsset(jobData.job_id, assetPayload);
       }
 
