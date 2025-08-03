@@ -22,7 +22,7 @@ interface PSDTemplateSelectorProps {
 // For multiple spot/color selections in parallel mode
 interface SpotColorPair {
   spot: string;
-  color?: { id: number; name: string };
+  color?: { name: string };
 }
 
 interface AssetConfig {
@@ -31,7 +31,7 @@ interface AssetConfig {
   type: 'wp' | 'back' | 'base' | 'parallel' | 'multi-parallel';
   layer: string;
   spot?: string;
-  color?: { id: number; name: string };
+  color?: { name: string };
   spotColorPairs?: SpotColorPair[]; // For PARALLEL cards with multiple combinations
   vfx?: string;
   chrome: boolean;
@@ -594,23 +594,13 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     // For parallel assets, populate the spot/color pairs
     if (asset.type === 'parallel' || asset.type === 'multi-parallel') {
       if (asset.spotColorPairs && asset.spotColorPairs.length > 0) {
-        // New format with multiple pairs - ensure color.id is integer
-        const normalizedPairs = asset.spotColorPairs.map(pair => ({
-          ...pair,
-          color: pair.color ? {
-            ...pair.color,
-            id: Number.isInteger(pair.color.id) ? pair.color.id : parseInt(String(pair.color.id), 10)
-          } : pair.color
-        }));
-        setSpotColorPairs(normalizedPairs);
+        // New format with multiple pairs
+        setSpotColorPairs(asset.spotColorPairs);
       } else if (asset.spot && asset.color) {
-        // Legacy format with single spot/color - ensure color.id is integer
+        // Legacy format with single spot/color
         setSpotColorPairs([{
           spot: asset.spot,
-          color: {
-            ...asset.color,
-            id: Number.isInteger(asset.color.id) ? asset.color.id : parseInt(String(asset.color.id), 10)
-          }
+          color: asset.color
         }]);
       }
       // Clear spot/color from current config since it's in the pairs
@@ -980,15 +970,14 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                   </label>
                                 )}
                                 <select
-                                  value={pair.color ? `${pair.color.id}-${pair.color.name}` : ''}
+                                  value={pair.color ? pair.color.name : ''}
                                   onChange={(e) => {
                                     if (e.target.value) {
-                                      const [id, ...nameParts] = e.target.value.split('-');
-                                      const name = nameParts.join('-');
+                                      const name = e.target.value;
                                       const newPairs = [...spotColorPairs];
                                                                             newPairs[index] = { 
                                         ...newPairs[index], 
-                                        color: { id: parseInt(id, 10), name }
+                                        color: { name }
                                       };
                                       setSpotColorPairs(newPairs);
                             } else {
@@ -1014,7 +1003,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                   {spotGroup?.colors.map((colorLayer: any, idx: number) => (
                                     <option 
                                       key={idx} 
-                                      value={`${colorLayer.id}-${colorLayer.name}`} 
+                                      value={colorLayer.name} 
                                       style={{ background: '#1f2937' }}
                                     >
                                       {(colorLayer.name || `Color ${idx + 1}`).replace(/\d+$/, '')}
