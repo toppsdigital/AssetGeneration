@@ -494,6 +494,8 @@ class ContentPipelineAPI {
     download_url?: string;
     download_url_expires?: string;
   }> {
+    console.log(`🔄 Manually triggering download URL update for job: ${jobId}`);
+    
     const response = await fetch(`${this.baseUrl}?operation=update_download_url&id=${encodeURIComponent(jobId)}`, {
       method: 'POST',
       headers: {
@@ -501,12 +503,17 @@ class ContentPipelineAPI {
       },
     });
 
+    console.log(`📥 Update download URL response status: ${response.status}`);
+
     if (!response.ok) {
       const error = await response.json();
+      console.error(`❌ Update download URL failed:`, error);
       throw new Error(error.error || `Failed to update download URL: ${response.status}`);
     }
 
-    return response.json();
+    const result = await response.json();
+    console.log(`✅ Update download URL result:`, result);
+    return result;
   }
 }
 

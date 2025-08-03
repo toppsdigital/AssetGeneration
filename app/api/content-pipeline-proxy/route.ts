@@ -151,22 +151,35 @@ async function generateAndSaveDownloadUrl(jobId: string): Promise<{
     console.log(`✅ Generated download URL for job ${jobId}, expires in ${expiresIn} seconds`);
     
     // Update the job object with the download URL
+    const updatePayload = {
+      download_url: downloadUrl,
+      download_url_expires: expiresAt,
+      download_url_created: createdAt,
+      last_updated: createdAt
+    };
+    
+    console.log(`🔄 Attempting to update job ${jobId} with download URL fields:`, updatePayload);
+    
     const updateResponse = await fetch(`${API_BASE_URL}/jobs/${jobId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        download_url: downloadUrl,
-        download_url_expires: expiresAt,
-        download_url_created: createdAt,
-        last_updated: createdAt
-      })
+      body: JSON.stringify(updatePayload)
     });
+    
+    console.log(`📥 Job update response status: ${updateResponse.status}`);
     
     if (!updateResponse.ok) {
       const updateError = await updateResponse.json();
+      console.error(`❌ Job update failed:`, {
+        status: updateResponse.status,
+        error: updateError,
+        payload: updatePayload
+      });
       throw new Error(`Failed to save download URL to job: ${updateError.message || updateResponse.status}`);
     }
     
+    const updateResponseData = await updateResponse.json();
+    console.log(`✅ Job update response data:`, updateResponseData);
     console.log(`✅ Successfully saved download URL to job ${jobId}`);
     
     return {
