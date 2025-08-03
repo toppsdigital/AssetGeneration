@@ -25,6 +25,9 @@ export interface JobData {
   user_name?: string;
   updated_by_user_id?: string;
   updated_by_user_name?: string;
+  download_url?: string;
+  download_url_expires?: string;
+  download_url_created?: string;
 }
 
 export interface FileData {
@@ -479,6 +482,28 @@ class ContentPipelineAPI {
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.error || `Failed to download job output folder: ${response.status}`);
+    }
+
+    return response.json();
+  }
+
+  // Generate and save download URL to job object
+  async updateDownloadUrl(jobId: string): Promise<{
+    success: boolean;
+    message: string;
+    download_url?: string;
+    download_url_expires?: string;
+  }> {
+    const response = await fetch(`${this.baseUrl}?operation=update_download_url&id=${encodeURIComponent(jobId)}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || `Failed to update download URL: ${response.status}`);
     }
 
     return response.json();

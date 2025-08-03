@@ -1,45 +1,137 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useDownloadArchive } from '../web/hooks/useJobData';
 import { ConfirmationModal } from './ConfirmationModal';
+import { contentPipelineApi } from '../web/utils/contentPipelineApi';
 
 interface DownloadSectionProps {
   jobData: any;
   isVisible: boolean;
   onRegenerateAssets?: () => Promise<void>;
+  onJobDataUpdate?: (updatedJobData: any) => void; // Callback to update parent component's job data
 }
 
-export const DownloadSection = ({ jobData, isVisible, onRegenerateAssets }: DownloadSectionProps) => {
-  // Use React Query hook for smart caching with expiry management
+export const DownloadSection = ({ jobData, isVisible, onRegenerateAssets, onJobDataUpdate }: DownloadSectionProps) => {
+  // Check if job object has a valid download URL that hasn't expired
+  const hasValidDownloadUrl = () => {
+    if (!jobData?.download_url || !jobData?.download_url_expires) {
+      return false;
+    }
+    
+    const expiryTime = new Date(jobData.download_url_expires).getTime();
+    const now = Date.now();
+    
+    // Consider valid if not expired (no buffer here, just check actual expiry)
+    return expiryTime > now;
+  };
+
+  // Check if download URL needs refresh (expired or expiring soon)
+  const needsRefresh = () => {
+    if (!jobData?.download_url || !jobData?.download_url_expires) {
+      return false;
+    }
+    
+    const expiryTime = new Date(jobData.download_url_expires).getTime();
+    const now = Date.now();
+    const fiveMinutesFromNow = now + (5 * 60 * 1000);
+    
+    return expiryTime <= fiveMinutesFromNow;
+  };
+
+  const shouldUseFallback = !hasValidDownloadUrl();
+  
+  // Use React Query hook for smart caching with expiry management (fallback for when job doesn't have download_url)
   const { 
     data: archiveData, 
     isLoading: loadingArchive, 
     error: downloadError,
     refetch: refetchArchive
-  } = useDownloadArchive(jobData?.job_id || null, isVisible);
+  } = useDownloadArchive(jobData?.job_id || null, isVisible && shouldUseFallback);
 
   // Local state only for download progress
   const [downloadingArchive, setDownloadingArchive] = useState(false);
   const [regeneratingAssets, setRegeneratingAssets] = useState(false);
   const [showRegenerateModal, setShowRegenerateModal] = useState(false);
+  const [refreshingDownloadUrl, setRefreshingDownloadUrl] = useState(false);
+
+  // Function to refresh download URL when expired
+  const refreshDownloadUrl = async () => {
+    if (!jobData?.job_id || refreshingDownloadUrl) return;
+    
+    console.log('🔄 Download URL expired, generating new one for job:', jobData.job_id);
+    setRefreshingDownloadUrl(true);
+    
+    try {
+      const response = await contentPipelineApi.updateDownloadUrl(jobData.job_id);
+      
+      if (response.success && response.download_url && response.download_url_expires) {
+        console.log('✅ New download URL generated and saved:', response.download_url);
+        
+        // Update the job data with new download URL
+        const updatedJobData = {
+          ...jobData,
+          download_url: response.download_url,
+          download_url_expires: response.download_url_expires,
+          download_url_created: new Date().toISOString()
+        };
+        
+        // Notify parent component to update its job data
+        if (onJobDataUpdate) {
+          onJobDataUpdate(updatedJobData);
+        }
+      } else {
+        console.error('❌ Failed to generate new download URL:', response.message);
+      }
+    } catch (error) {
+      console.error('❌ Error refreshing download URL:', error);
+    } finally {
+      setRefreshingDownloadUrl(false);
+    }
+  };
+
+  // Auto-refresh expired download URLs
+  useEffect(() => {
+    if (!isVisible || !jobData?.job_id) return;
+    
+    if (needsRefresh() && !refreshingDownloadUrl) {
+      console.log('🔄 Download URL expired or expiring soon, auto-refreshing...');
+      refreshDownloadUrl();
+    }
+  }, [isVisible, jobData?.download_url_expires, jobData?.job_id, refreshingDownloadUrl]);
 
   const handleDownloadArchive = async () => {
-    if (!archiveData) return;
+    let downloadUrl: string;
+    let downloadSource: string;
+    
+    // Use download URL from job object if available and valid, otherwise use fallback
+    if (hasValidDownloadUrl()) {
+      downloadUrl = jobData.download_url;
+      downloadSource = 'job object';
+      console.log('🔗 Using download URL from job object');
+    } else if (archiveData) {
+      downloadUrl = archiveData.download_url;
+      downloadSource = 'on-demand generation';
+      console.log('🔗 Using download URL from on-demand generation');
+    } else {
+      console.error('❌ No download URL available');
+      alert('No download URL available. Please try regenerating assets.');
+      return;
+    }
     
     setDownloadingArchive(true);
     
     try {
       // Create a temporary link element and trigger download
       const link = document.createElement('a');
-      link.href = archiveData.download_url;
+      link.href = downloadUrl;
       link.download = `job_${jobData.job_id}_assets.zip`;
       link.target = '_blank';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       
-      console.log(`✅ Initiated download for archive with ${archiveData.files_count} files`);
+      console.log(`✅ Initiated download from ${downloadSource} for job ${jobData.job_id}`);
       
     } catch (error) {
       console.error('❌ Error downloading archive:', error);
@@ -77,6 +169,25 @@ export const DownloadSection = ({ jobData, isVisible, onRegenerateAssets }: Down
       return `${hours}h ${minutes}m`;
     }
     return `${minutes}m`;
+  };
+
+  // Get expiration info for display (supports both job object and fallback data)
+  const getExpirationInfo = () => {
+    if (hasValidDownloadUrl()) {
+      const expiryTime = new Date(jobData.download_url_expires).getTime();
+      const now = Date.now();
+      const expiresInSeconds = Math.floor((expiryTime - now) / 1000);
+      return {
+        expiresIn: expiresInSeconds,
+        source: 'stored'
+      };
+    } else if (archiveData) {
+      return {
+        expiresIn: archiveData.expires_in,
+        source: 'generated'
+      };
+    }
+    return null;
   };
 
   if (!isVisible) return null;
@@ -197,8 +308,8 @@ export const DownloadSection = ({ jobData, isVisible, onRegenerateAssets }: Down
         </div>
       )}
 
-      {/* Archive Available */}
-      {archiveData && !loadingArchive && (
+      {/* Archive Available - either from job object or generated on-demand */}
+      {(hasValidDownloadUrl() || archiveData) && !loadingArchive && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           {/* Download Button */}
           <div style={{
@@ -210,10 +321,10 @@ export const DownloadSection = ({ jobData, isVisible, onRegenerateAssets }: Down
           }}>
             <button
               onClick={handleDownloadArchive}
-              disabled={downloadingArchive || regeneratingAssets}
+              disabled={downloadingArchive || regeneratingAssets || refreshingDownloadUrl}
               style={{
                 padding: '20px 40px',
-                background: (downloadingArchive || regeneratingAssets)
+                background: (downloadingArchive || regeneratingAssets || refreshingDownloadUrl)
                   ? 'rgba(156, 163, 175, 0.3)'
                   : 'linear-gradient(135deg, #10b981, #059669)',
                 border: 'none',
@@ -221,9 +332,9 @@ export const DownloadSection = ({ jobData, isVisible, onRegenerateAssets }: Down
                 color: 'white',
                 fontSize: 18,
                 fontWeight: 700,
-                cursor: (downloadingArchive || regeneratingAssets) ? 'not-allowed' : 'pointer',
+                cursor: (downloadingArchive || regeneratingAssets || refreshingDownloadUrl) ? 'not-allowed' : 'pointer',
                 transition: 'all 0.2s',
-                boxShadow: (downloadingArchive || regeneratingAssets)
+                boxShadow: (downloadingArchive || regeneratingAssets || refreshingDownloadUrl)
                   ? 'none' 
                   : '0 12px 32px rgba(16, 185, 129, 0.4)',
                 minHeight: 70,
@@ -234,7 +345,19 @@ export const DownloadSection = ({ jobData, isVisible, onRegenerateAssets }: Down
                 gap: 12
               }}
             >
-              {downloadingArchive ? (
+              {refreshingDownloadUrl ? (
+                <>
+                  <div style={{
+                    width: 20,
+                    height: 20,
+                    border: '2px solid rgba(255, 255, 255, 0.3)',
+                    borderTop: '2px solid white',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite'
+                  }} />
+                  Refreshing Download Link...
+                </>
+              ) : downloadingArchive ? (
                 <>
                   <div style={{
                     width: 20,
@@ -249,7 +372,7 @@ export const DownloadSection = ({ jobData, isVisible, onRegenerateAssets }: Down
               ) : (
                 <>
                   <span style={{ fontSize: 24 }}>📦</span>
-                  Download ZIP Archive ({archiveData.files_count} files)
+                  Download ZIP Archive ({archiveData?.files_count || 'All'} files)
                 </>
               )}
             </button>
@@ -265,33 +388,33 @@ export const DownloadSection = ({ jobData, isVisible, onRegenerateAssets }: Down
             }}>
               <button
                 onClick={handleRegenerateClick}
-                disabled={downloadingArchive || regeneratingAssets}
+                disabled={downloadingArchive || regeneratingAssets || refreshingDownloadUrl}
                 style={{
                   padding: '8px 16px',
                   background: 'transparent',
-                  border: regeneratingAssets
+                  border: (regeneratingAssets || refreshingDownloadUrl)
                     ? '1px solid rgba(156, 163, 175, 0.3)'
                     : '1px solid rgba(168, 85, 247, 0.3)',
                   borderRadius: 8,
-                  color: regeneratingAssets ? '#9ca3af' : '#c4b5fd',
+                  color: (regeneratingAssets || refreshingDownloadUrl) ? '#9ca3af' : '#c4b5fd',
                   fontSize: 14,
                   fontWeight: 500,
-                  cursor: (downloadingArchive || regeneratingAssets) ? 'not-allowed' : 'pointer',
+                  cursor: (downloadingArchive || regeneratingAssets || refreshingDownloadUrl) ? 'not-allowed' : 'pointer',
                   transition: 'all 0.2s',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: 6,
-                  opacity: regeneratingAssets ? 0.6 : 0.8
+                  opacity: (regeneratingAssets || refreshingDownloadUrl) ? 0.6 : 0.8
                 }}
                 onMouseEnter={(e) => {
-                  if (!downloadingArchive && !regeneratingAssets) {
+                  if (!downloadingArchive && !regeneratingAssets && !refreshingDownloadUrl) {
                     e.currentTarget.style.opacity = '1';
                     e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.5)';
                   }
                 }}
                 onMouseLeave={(e) => {
-                  if (!downloadingArchive && !regeneratingAssets) {
+                  if (!downloadingArchive && !regeneratingAssets && !refreshingDownloadUrl) {
                     e.currentTarget.style.opacity = '0.8';
                     e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.3)';
                   }
@@ -326,7 +449,13 @@ export const DownloadSection = ({ jobData, isVisible, onRegenerateAssets }: Down
             color: '#9ca3af',
             marginTop: -8
           }}>
-            Archive contains all generated digital assets from this job • Expires in {formatExpirationTime(archiveData.expires_in)}
+            {(() => {
+              const expirationInfo = getExpirationInfo();
+              if (expirationInfo) {
+                return `Archive contains all generated digital assets from this job • Expires in ${formatExpirationTime(expirationInfo.expiresIn)}`;
+              }
+              return 'Archive contains all generated digital assets from this job';
+            })()}
             {onRegenerateAssets && (
               <>
                 <br />
@@ -340,7 +469,7 @@ export const DownloadSection = ({ jobData, isVisible, onRegenerateAssets }: Down
       )}
 
       {/* No Archive Available */}
-      {!archiveData && !loadingArchive && !downloadError && (
+      {!hasValidDownloadUrl() && !archiveData && !loadingArchive && !downloadError && !refreshingDownloadUrl && (
         <div style={{
           padding: '24px',
           textAlign: 'center',

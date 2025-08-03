@@ -16,6 +16,9 @@ interface JobData {
   user_name?: string;
   updated_by_user_id?: string;
   updated_by_user_name?: string;
+  download_url?: string;
+  download_url_expires?: string;
+  download_url_created?: string;
 }
 
 interface FileData {
@@ -103,6 +106,83 @@ const S3_BUCKET_NAME = 'topps-nexus-powertools';
 // If no API URL is configured, return mock data for development
 if (!API_BASE_URL) {
   console.warn('CONTENT_PIPELINE_API_URL not configured, using mock data');
+}
+
+// Helper function to generate and save download URL to job object
+async function generateAndSaveDownloadUrl(jobId: string): Promise<{
+  success: boolean;
+  message: string;
+  download_url?: string;
+  download_url_expires?: string;
+}> {
+  try {
+    console.log(`🔄 Generating download URL for job: ${jobId}`);
+    
+    // Generate download URL for the job's output folder
+    const folder = `asset_generator/dev/uploads/Output/${jobId}`;
+    
+    // Call S3 download folder operation to get presigned URL
+    const s3Response = await fetch(`${API_BASE_URL}/s3-files`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mode: 'download',
+        bucket: S3_BUCKET_NAME,
+        folder: folder
+      })
+    });
+    
+    if (!s3Response.ok) {
+      const errorData = await s3Response.json();
+      throw new Error(`Failed to generate download URL: ${errorData.message || s3Response.status}`);
+    }
+    
+    const s3Data = await s3Response.json();
+    
+    if (!s3Data.success || !s3Data.data?.download_url) {
+      throw new Error(`Invalid S3 response: ${s3Data.message || 'No download URL generated'}`);
+    }
+    
+    const downloadUrl = s3Data.data.download_url;
+    const expiresIn = s3Data.data.expires_in || 3600; // Default 1 hour
+    const expiresAt = new Date(Date.now() + (expiresIn * 1000)).toISOString();
+    const createdAt = new Date().toISOString();
+    
+    console.log(`✅ Generated download URL for job ${jobId}, expires in ${expiresIn} seconds`);
+    
+    // Update the job object with the download URL
+    const updateResponse = await fetch(`${API_BASE_URL}/jobs/${jobId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        download_url: downloadUrl,
+        download_url_expires: expiresAt,
+        download_url_created: createdAt,
+        last_updated: createdAt
+      })
+    });
+    
+    if (!updateResponse.ok) {
+      const updateError = await updateResponse.json();
+      throw new Error(`Failed to save download URL to job: ${updateError.message || updateResponse.status}`);
+    }
+    
+    console.log(`✅ Successfully saved download URL to job ${jobId}`);
+    
+    return {
+      success: true,
+      message: 'Download URL generated and saved successfully',
+      download_url: downloadUrl,
+      download_url_expires: expiresAt
+    };
+    
+  } catch (error) {
+    console.error(`❌ Error generating download URL for job ${jobId}:`, error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Unknown error occurred'
+    };
+  }
 }
 
 export async function GET(request: NextRequest) {
@@ -522,6 +602,24 @@ async function handleRequest(request: NextRequest, method: string) {
           console.warn('Failed to get session for asset generation:', error);
         }
         break;
+
+      case 'update_download_url':
+        if (!id) {
+          return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
+        }
+        
+        try {
+          const downloadResult = await generateAndSaveDownloadUrl(id);
+          return NextResponse.json(downloadResult, { 
+            status: downloadResult.success ? 200 : 500 
+          });
+        } catch (error) {
+          console.error('Error in update_download_url:', error);
+          return NextResponse.json({ 
+            success: false,
+            message: error instanceof Error ? error.message : 'Unknown error occurred'
+          }, { status: 500 });
+        }
         
       default:
         return NextResponse.json({ 
@@ -530,7 +628,7 @@ async function handleRequest(request: NextRequest, method: string) {
             'create_job', 'get_job', 'update_job', 'list_jobs', 'rerun_job',
             'create_file', 'get_file', 'update_file', 'list_files',
             'batch_create_files', 'batch_get_files', 'update_pdf_status', 'batch_update_pdf_status',
-            'generate_assets',
+            'generate_assets', 'update_download_url',
             's3_download_file', 's3_download_folder', 's3_upload_files'
           ]
         }, { status: 400 });
@@ -584,6 +682,22 @@ async function handleRequest(request: NextRequest, method: string) {
       console.error('❌ Authentication token required by Content Pipeline API');
       console.error('API URL:', apiUrl);
       console.error('Headers sent:', headers);
+    }
+    
+    // Post-process successful asset generation to create download URL
+    if (operation === 'generate_assets' && response.ok && responseData.success && id) {
+      console.log(`🎨 Asset generation successful for job ${id}, generating download URL...`);
+      
+      // Generate and save download URL in the background (don't wait for it)
+      generateAndSaveDownloadUrl(id).then(downloadResult => {
+        if (downloadResult.success) {
+          console.log(`✅ Download URL saved for job ${id}: ${downloadResult.download_url}`);
+        } else {
+          console.error(`❌ Failed to save download URL for job ${id}: ${downloadResult.message}`);
+        }
+      }).catch(error => {
+        console.error(`❌ Error in background download URL generation for job ${id}:`, error);
+      });
     }
     
     // Return the response with the same status code

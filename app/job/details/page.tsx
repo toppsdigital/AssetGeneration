@@ -1147,6 +1147,10 @@ function JobDetailsPageContent() {
               jobData={mergedJobData}
               isVisible={['complete', 'completed'].includes(mergedJobData?.job_status?.toLowerCase() || '') && !loading && !loadingFiles}
               onRegenerateAssets={handleRegenerateAssets}
+              onJobDataUpdate={(updatedJobData) => {
+                // Update React Query cache with new download URL
+                updateJobDataForUpload(() => updatedJobData);
+              }}
             />
 
             {/* Files Section - Now uses FilesSection component */}
