@@ -532,16 +532,47 @@ class ContentPipelineAPI {
     });
 
     console.log(`📥 Regenerate assets response status: ${response.status}`);
+    console.log(`📥 Response headers:`, Object.fromEntries(response.headers.entries()));
+
+    // Get response text to handle both JSON and non-JSON responses
+    const responseText = await response.text();
+    console.log(`📥 Response body:`, responseText);
 
     if (!response.ok) {
-      const error = await response.json();
-      console.error(`❌ Regenerate assets failed:`, error);
-      throw new Error(error.error || `Failed to regenerate assets: ${response.status}`);
+      let errorMessage = `Failed to regenerate assets: ${response.status} ${response.statusText}`;
+      
+      try {
+        if (responseText.trim()) {
+          const error = JSON.parse(responseText);
+          errorMessage = error.error || error.message || errorMessage;
+        }
+      } catch (parseError) {
+        console.warn('Failed to parse error response as JSON:', parseError);
+        errorMessage = responseText || errorMessage;
+      }
+      
+      console.error(`❌ Regenerate assets failed:`, errorMessage);
+      throw new Error(errorMessage);
     }
 
-    const result = await response.json();
-    console.log(`✅ Regenerate assets result:`, result);
-    return result;
+    // Parse successful response
+    try {
+      if (!responseText.trim()) {
+        console.warn('⚠️ Empty response body, assuming success');
+        return {
+          success: true,
+          message: 'Assets regeneration completed'
+        };
+      }
+
+      const result = JSON.parse(responseText);
+      console.log(`✅ Regenerate assets result:`, result);
+      return result;
+    } catch (parseError) {
+      console.error('❌ Failed to parse successful response:', parseError);
+      console.log('Raw response:', responseText);
+      throw new Error(`Invalid JSON response: ${parseError instanceof Error ? parseError.message : 'Unknown parsing error'}`);
+    }
   }
 }
 

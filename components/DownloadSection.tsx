@@ -50,7 +50,7 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
     isLoading: loadingArchive, 
     error: downloadError,
     refetch: refetchArchive
-  } = useDownloadArchive(jobData?.job_id || null, isVisible && shouldUseFallback);
+  } = useDownloadArchive(jobData?.job_id || null, Boolean(isVisible && shouldUseFallback));
 
   // Local state only for download progress
   const [downloadingArchive, setDownloadingArchive] = useState(false);
@@ -161,20 +161,39 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
       
       console.log('✅ Assets regeneration successful:', response);
       
-      // Invalidate cache to force fresh data fetch
-      queryClient.removeQueries({ queryKey: jobKeys.detail(jobData.job_id) });
+      // If the response contains an updated job object, use it immediately
+      if (response.success && response.job) {
+        console.log('🔄 Updating job data with regenerated job object:', response.job);
+        
+        // Update the parent component with the new job data
+        if (onJobDataUpdate) {
+          onJobDataUpdate(response.job);
+        }
+        
+        // Update React Query cache with the new job data
+        queryClient.setQueryData(jobKeys.detail(jobData.job_id), {
+          job: response.job
+        });
+      }
+      
+      // Also invalidate related caches to ensure consistency
       queryClient.removeQueries({ queryKey: jobKeys.files(jobData.job_id) });
       queryClient.removeQueries({ queryKey: jobKeys.all });
-      
-      // Force refetch by invalidating queries
-      queryClient.invalidateQueries({ queryKey: jobKeys.detail(jobData.job_id) });
+      queryClient.invalidateQueries({ queryKey: jobKeys.files(jobData.job_id) });
+      queryClient.invalidateQueries({ queryKey: jobKeys.all });
       
       setShowRegenerateModal(false);
       
-      console.log('✅ Assets regeneration completed - cache invalidated and data will refresh');
+      console.log('✅ Assets regeneration completed - job data updated and caches refreshed');
     } catch (error) {
       console.error('❌ Error regenerating assets:', error);
-      alert(`Failed to regenerate assets: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ Full error details:', {
+        message: errorMessage,
+        error: error,
+        jobId: jobData.job_id
+      });
+      alert(`Failed to regenerate assets: ${errorMessage}`);
     } finally {
       setRegeneratingAssets(false);
     }

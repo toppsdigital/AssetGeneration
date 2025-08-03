@@ -212,7 +212,19 @@ export async function PUT(request: NextRequest) {
 
 async function handleRequest(request: NextRequest, method: string) {
   const { searchParams } = new URL(request.url);
-  const body = method !== 'GET' ? await request.json() : {};
+  let body: any = {};
+  
+  // Safely parse request body for non-GET requests
+  if (method !== 'GET') {
+    try {
+      const requestText = await request.text();
+      if (requestText.trim()) {
+        body = JSON.parse(requestText);
+      }
+    } catch (parseError) {
+      console.warn('Failed to parse request body as JSON, using empty object:', parseError);
+    }
+  }
   
   // If API URL is not configured, return appropriate error
   if (!API_BASE_URL) {
@@ -689,15 +701,17 @@ async function handleRequest(request: NextRequest, method: string) {
     if (apiBody) {
       console.log('Request body:', JSON.stringify(apiBody, null, 2));
       // Log user information for job operations
-      if (operation === 'create_job' || operation === 'rerun_job' || operation === 'update_job' || operation === 'generate_assets') {
-        if (apiBody.user_id || apiBody.updated_by_user_id || apiBody.generated_by_user_id) {
+      if (operation === 'create_job' || operation === 'rerun_job' || operation === 'update_job' || operation === 'generate_assets' || operation === 'regenerate_assets') {
+        if (apiBody.user_id || apiBody.updated_by_user_id || apiBody.generated_by_user_id || apiBody.regenerated_by_user_id) {
           console.log(`✅ User context included for ${operation}:`, {
             user_id: apiBody.user_id,
             user_name: apiBody.user_name,
             updated_by_user_id: apiBody.updated_by_user_id,
             updated_by_user_name: apiBody.updated_by_user_name,
             generated_by_user_id: apiBody.generated_by_user_id,
-            generated_by_user_name: apiBody.generated_by_user_name
+            generated_by_user_name: apiBody.generated_by_user_name,
+            regenerated_by_user_id: apiBody.regenerated_by_user_id,
+            regenerated_by_user_name: apiBody.regenerated_by_user_name
           });
         } else {
           console.log(`⚠️ No user context found for ${operation}`);
@@ -706,10 +720,35 @@ async function handleRequest(request: NextRequest, method: string) {
     }
     
     const response = await fetch(apiUrl, fetchOptions);
-    const responseData = await response.json();
     
     console.log(`Response status: ${response.status}`);
-    console.log('Response data:', JSON.stringify(responseData, null, 2));
+    console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+    
+    // Get response text to handle both JSON and non-JSON responses
+    const responseText = await response.text();
+    console.log('Response body:', responseText);
+    
+    let responseData: any;
+    
+    try {
+      if (!responseText.trim()) {
+        console.warn('⚠️ Empty response body from backend API');
+        responseData = { success: false, message: 'Empty response from backend API' };
+      } else {
+        responseData = JSON.parse(responseText);
+      }
+    } catch (parseError) {
+      console.error('❌ Failed to parse backend API response as JSON:', parseError);
+      console.log('Raw response:', responseText);
+      responseData = {
+        success: false,
+        error: 'Invalid JSON response from backend API',
+        message: responseText || 'Unknown error',
+        details: parseError instanceof Error ? parseError.message : 'JSON parsing failed'
+      };
+    }
+    
+    console.log('Parsed response data:', JSON.stringify(responseData, null, 2));
     
     // If auth error, log more details
     if (responseData.message === "Missing Authentication Token") {

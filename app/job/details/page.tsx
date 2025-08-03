@@ -1122,10 +1122,19 @@ function JobDetailsPageContent() {
             {/* Download Section - Shows when job is completed */}
             <DownloadSection
               jobData={mergedJobData}
-              isVisible={['complete', 'completed'].includes(mergedJobData?.job_status?.toLowerCase() || '') && !loading && !loadingFiles}
+              isVisible={(['complete', 'completed'].includes(mergedJobData?.job_status?.toLowerCase() || '') ||
+                        (mergedJobData?.download_url && mergedJobData?.download_url_expires)) && 
+                        !loading && !loadingFiles}
               onJobDataUpdate={(updatedJobData) => {
-                // Update React Query cache with new download URL
-                updateJobDataForUpload(() => updatedJobData);
+                // Update React Query cache with updated job data (e.g., new download URL or regenerated job status)
+                updateJobDataForUpload((prevJobData) => {
+                  console.log('🔄 Updating job data from DownloadSection:', {
+                    previous: prevJobData?.job_status,
+                    new: updatedJobData?.job_status,
+                    jobId: updatedJobData?.job_id
+                  });
+                  return updatedJobData;
+                });
               }}
             />
 
