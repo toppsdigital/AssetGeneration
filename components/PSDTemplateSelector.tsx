@@ -64,6 +64,15 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     }
   }, [isVisible]);
 
+  // Auto-select PSD file when only one option is available
+  useEffect(() => {
+    if (physicalJsonFiles.length === 1 && !selectedPhysicalFile && !loadingPhysicalFiles) {
+      const singleFile = physicalJsonFiles[0].name;
+      console.log('🔄 Auto-selecting single PSD file:', singleFile);
+      setSelectedPhysicalFile(singleFile);
+    }
+  }, [physicalJsonFiles, selectedPhysicalFile, loadingPhysicalFiles]);
+
   // Download JSON when file is selected
   useEffect(() => {
     if (selectedPhysicalFile) {
@@ -194,10 +203,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
             type: asset.type,
             spot_color_pairs: asset.spotColorPairs?.map(pair => ({
               spot: pair.spot,
-              color: pair.color ? {
-                id: pair.color.id,
-                name: pair.color.name
-              } : undefined
+              color: pair.color
             }))
           };
 
@@ -588,13 +594,23 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     // For parallel assets, populate the spot/color pairs
     if (asset.type === 'parallel' || asset.type === 'multi-parallel') {
       if (asset.spotColorPairs && asset.spotColorPairs.length > 0) {
-        // New format with multiple pairs
-        setSpotColorPairs(asset.spotColorPairs);
+        // New format with multiple pairs - ensure color.id is integer
+        const normalizedPairs = asset.spotColorPairs.map(pair => ({
+          ...pair,
+          color: pair.color ? {
+            ...pair.color,
+            id: Number.isInteger(pair.color.id) ? pair.color.id : parseInt(String(pair.color.id), 10)
+          } : pair.color
+        }));
+        setSpotColorPairs(normalizedPairs);
       } else if (asset.spot && asset.color) {
-        // Legacy format with single spot/color
+        // Legacy format with single spot/color - ensure color.id is integer
         setSpotColorPairs([{
           spot: asset.spot,
-          color: asset.color
+          color: {
+            ...asset.color,
+            id: Number.isInteger(asset.color.id) ? asset.color.id : parseInt(String(asset.color.id), 10)
+          }
         }]);
       }
       // Clear spot/color from current config since it's in the pairs
@@ -723,7 +739,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                 }}
               >
                 <option value="" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                  Select PSD file...
+                  {physicalJsonFiles.length === 1 ? 'Auto-selected PSD file...' : 'Select PSD file...'}
                 </option>
                 {physicalJsonFiles.map((file, index) => {
                   const filename = file.name.split('/').pop() || file.name;
@@ -970,9 +986,9 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                       const [id, ...nameParts] = e.target.value.split('-');
                                       const name = nameParts.join('-');
                                       const newPairs = [...spotColorPairs];
-                                      newPairs[index] = { 
+                                                                            newPairs[index] = { 
                                         ...newPairs[index], 
-                                        color: { id: parseInt(id), name } 
+                                        color: { id: parseInt(id, 10), name }
                                       };
                                       setSpotColorPairs(newPairs);
                             } else {
