@@ -4,15 +4,18 @@ import { useState, useEffect } from 'react';
 import { useDownloadArchive } from '../web/hooks/useJobData';
 import { ConfirmationModal } from './ConfirmationModal';
 import { contentPipelineApi } from '../web/utils/contentPipelineApi';
+import { useQueryClient } from '@tanstack/react-query';
+import { jobKeys } from '../web/hooks/useJobData';
 
 interface DownloadSectionProps {
   jobData: any;
   isVisible: boolean;
-  onRegenerateAssets?: () => Promise<void>;
   onJobDataUpdate?: (updatedJobData: any) => void; // Callback to update parent component's job data
 }
 
-export const DownloadSection = ({ jobData, isVisible, onRegenerateAssets, onJobDataUpdate }: DownloadSectionProps) => {
+export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: DownloadSectionProps) => {
+  const queryClient = useQueryClient();
+  
   // Check if job object has a valid download URL that hasn't expired
   const hasValidDownloadUrl = () => {
     if (!jobData?.download_url || !jobData?.download_url_expires) {
@@ -146,13 +149,29 @@ export const DownloadSection = ({ jobData, isVisible, onRegenerateAssets, onJobD
   };
 
   const handleConfirmRegenerate = async () => {
-    if (!onRegenerateAssets) return;
+    if (!jobData?.job_id) return;
     
     setRegeneratingAssets(true);
     
     try {
-      await onRegenerateAssets();
+      console.log('🔄 Calling regenerate assets endpoint for job:', jobData.job_id);
+      
+      // Call the regenerate API endpoint
+      const response = await contentPipelineApi.regenerateAssets(jobData.job_id);
+      
+      console.log('✅ Assets regeneration successful:', response);
+      
+      // Invalidate cache to force fresh data fetch
+      queryClient.removeQueries({ queryKey: jobKeys.detail(jobData.job_id) });
+      queryClient.removeQueries({ queryKey: jobKeys.files(jobData.job_id) });
+      queryClient.removeQueries({ queryKey: jobKeys.all });
+      
+      // Force refetch by invalidating queries
+      queryClient.invalidateQueries({ queryKey: jobKeys.detail(jobData.job_id) });
+      
       setShowRegenerateModal(false);
+      
+      console.log('✅ Assets regeneration completed - cache invalidated and data will refresh');
     } catch (error) {
       console.error('❌ Error regenerating assets:', error);
       alert(`Failed to regenerate assets: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -379,7 +398,7 @@ export const DownloadSection = ({ jobData, isVisible, onRegenerateAssets, onJobD
           </div>
 
           {/* Re-Generate Assets Button */}
-          {onRegenerateAssets && (
+          {jobData?.job_id && (
             <div style={{
               display: 'flex',
               alignItems: 'center',
@@ -456,7 +475,7 @@ export const DownloadSection = ({ jobData, isVisible, onRegenerateAssets, onJobD
               }
               return 'Archive contains all generated digital assets from this job';
             })()}
-            {onRegenerateAssets && (
+            {jobData?.job_id && (
               <>
                 <br />
                 <span style={{ fontSize: 11, opacity: 0.8 }}>

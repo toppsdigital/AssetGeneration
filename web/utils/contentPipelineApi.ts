@@ -515,6 +515,34 @@ class ContentPipelineAPI {
     console.log(`✅ Update download URL result:`, result);
     return result;
   }
+
+  // Regenerate assets for a job
+  async regenerateAssets(jobId: string): Promise<{
+    success: boolean;
+    message: string;
+    job?: JobData;
+  }> {
+    console.log(`🔄 Triggering asset regeneration for job: ${jobId}`);
+    
+    const response = await fetch(`${this.baseUrl}?operation=regenerate_assets&id=${encodeURIComponent(jobId)}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    console.log(`📥 Regenerate assets response status: ${response.status}`);
+
+    if (!response.ok) {
+      const error = await response.json();
+      console.error(`❌ Regenerate assets failed:`, error);
+      throw new Error(error.error || `Failed to regenerate assets: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log(`✅ Regenerate assets result:`, result);
+    return result;
+  }
 }
 
 // Export a singleton instance

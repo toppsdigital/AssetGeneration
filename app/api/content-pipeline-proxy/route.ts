@@ -616,6 +616,27 @@ async function handleRequest(request: NextRequest, method: string) {
         }
         break;
 
+      case 'regenerate_assets':
+        if (!id) {
+          return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
+        }
+        apiUrl += `/jobs/${id}/regenerate`;
+        apiMethod = 'POST';
+        // Get session and add user information for regeneration tracking
+        try {
+          const session = await auth();
+          if (session?.user) {
+            apiBody = {
+              ...apiBody,
+              regenerated_by_user_id: session.user.id || session.user.email || 'unknown',
+              regenerated_by_user_name: session.user.name || session.user.email || 'Unknown User'
+            };
+          }
+        } catch (error) {
+          console.warn('Failed to get session for asset regeneration:', error);
+        }
+        break;
+
       case 'update_download_url':
         if (!id) {
           return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
@@ -641,7 +662,7 @@ async function handleRequest(request: NextRequest, method: string) {
             'create_job', 'get_job', 'update_job', 'list_jobs', 'rerun_job',
             'create_file', 'get_file', 'update_file', 'list_files',
             'batch_create_files', 'batch_get_files', 'update_pdf_status', 'batch_update_pdf_status',
-            'generate_assets', 'update_download_url',
+            'generate_assets', 'regenerate_assets', 'update_download_url',
             's3_download_file', 's3_download_folder', 's3_upload_files'
           ]
         }, { status: 400 });
