@@ -33,7 +33,7 @@ interface AssetConfig {
   color?: string;
   spotColorPairs?: SpotColorPair[]; // For PARALLEL cards with multiple combinations
   vfx?: string;
-  chrome: boolean;
+  chrome: string | boolean;
 }
 
 export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatingAssets, setCreatingAssets, onJobDataUpdate }: PSDTemplateSelectorProps) => {
@@ -212,7 +212,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
               basePayload.vfx = asset.vfx;
             }
             if (asset.chrome) {
-              basePayload.chrome = true;
+              basePayload.chrome = asset.chrome;
             }
             if (asset.layer) {
               basePayload.wp_inv_layer = asset.layer;
@@ -245,7 +245,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
 
           // For base, add chrome and wp_inv_layer if chrome is enabled
           if (asset.type === 'base' && asset.chrome) {
-            basePayload.chrome = true;
+            basePayload.chrome = asset.chrome;
             const wpInvLayers = getWpInvLayers();
             if (wpInvLayers.length > 0) {
               basePayload.wp_inv_layer = wpInvLayers[0];
@@ -434,9 +434,13 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     try {
       // Build asset configuration
       let assetConfig: any = {
-        type: currentCardType,
-        chrome: (currentConfig.chrome && (currentCardType === 'base' || currentCardType === 'parallel' || currentCardType === 'multi-parallel') && getWpInvLayers().length > 0) || false
+        type: currentCardType
       };
+      
+      // Only include chrome if it has a value
+      if (currentConfig.chrome) {
+        assetConfig.chrome = currentConfig.chrome;
+      }
 
       // Handle parallel/multi-parallel with multiple spot/color pairs
       if (currentCardType === 'parallel' || currentCardType === 'multi-parallel') {
@@ -1159,26 +1163,59 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                       </div>
                     )}
 
-                    {/* Chrome Toggle - Only for front cards with wp_inv layers */}
+                    {/* Chrome Effect - Toggle for parallel/multi-parallel, dropdown for base */}
                     {(currentCardType === 'base' || currentCardType === 'parallel' || currentCardType === 'multi-parallel') && getWpInvLayers().length > 0 && (
                       <div>
-                        <label style={{
+                        {currentCardType === 'base' ? (
+                          // Dropdown for base card type
+                          <>
+                            <label style={{
+                              display: 'block',
+                              fontSize: 14,
+                              fontWeight: 600,
+                              color: '#f8f8f8',
+                              marginBottom: 8
+                            }}>
+                              Chrome Effect
+                            </label>
+                            <select
+                              value={typeof currentConfig.chrome === 'string' ? currentConfig.chrome : ''}
+                              onChange={(e) => setCurrentConfig(prev => ({ ...prev, chrome: e.target.value || false }))}
+                              style={{
+                                width: '100%',
+                                padding: '8px 12px',
+                                background: 'rgba(255, 255, 255, 0.08)',
+                                border: '1px solid rgba(255, 255, 255, 0.2)',
+                                borderRadius: 8,
+                                color: '#f8f8f8',
+                                fontSize: 14
+                              }}
+                            >
+                              <option value="" style={{ background: '#1f2937' }}>None</option>
+                              <option value="silver" style={{ background: '#1f2937' }}>Silver</option>
+                              <option value="superfractor" style={{ background: '#1f2937' }}>Superfractor</option>
+                            </select>
+                          </>
+                        ) : (
+                          // Toggle for parallel/multi-parallel
+                          <label style={{
                             display: 'flex',
                             alignItems: 'center',
                             gap: 8,
-                          fontSize: 14,
-                          fontWeight: 600,
+                            fontSize: 14,
+                            fontWeight: 600,
                             color: '#f8f8f8',
-                          cursor: 'pointer'
+                            cursor: 'pointer'
                           }}>
                             <input
                               type="checkbox"
-                            checked={currentConfig.chrome || false}
-                            onChange={(e) => setCurrentConfig(prev => ({ ...prev, chrome: e.target.checked }))}
-                            style={{ width: 16, height: 16 }}
-                          />
-                          Chrome Effect
-                        </label>
+                              checked={currentConfig.chrome === 'silver'}
+                              onChange={(e) => setCurrentConfig(prev => ({ ...prev, chrome: e.target.checked ? 'silver' : false }))}
+                              style={{ width: 16, height: 16 }}
+                            />
+                            Chrome Effect (Silver)
+                          </label>
+                        )}
                       </div>
                     )}
 
@@ -1505,7 +1542,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                       borderRadius: '50%',
                                       background: asset.chrome ? '#86efac' : '#6b7280'
                                     }} />
-                                    {asset.chrome ? 'ON' : 'OFF'}
+                                    {asset.chrome ? (typeof asset.chrome === 'string' ? asset.chrome.toUpperCase() : 'ON') : 'OFF'}
                                   </span>
                                 )}
                               </td>
