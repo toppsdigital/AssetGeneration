@@ -27,13 +27,14 @@ interface SpotColorPair {
 
 interface AssetConfig {
   id: string;
-  type: 'wp' | 'back' | 'base' | 'parallel' | 'multi-parallel';
+  type: 'wp' | 'back' | 'base' | 'parallel' | 'multi-parallel' | 'wp-1of1';
   layer: string;
   spot?: string;
   color?: string;
   spotColorPairs?: SpotColorPair[]; // For PARALLEL cards with multiple combinations
   vfx?: string;
   chrome: string | boolean;
+  oneOfOneWp?: boolean; // For BASE assets with superfractor chrome
 }
 
 export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatingAssets, setCreatingAssets, onJobDataUpdate }: PSDTemplateSelectorProps) => {
@@ -47,9 +48,10 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
   const [loadingJsonData, setLoadingJsonData] = useState(false);
   
   // New asset configuration state
-  const [currentCardType, setCurrentCardType] = useState<'wp' | 'back' | 'base' | 'parallel' | 'multi-parallel' | null>(null);
+  const [currentCardType, setCurrentCardType] = useState<'wp' | 'back' | 'base' | 'parallel' | 'multi-parallel' | 'wp-1of1' | null>(null);
   const [currentConfig, setCurrentConfig] = useState<Partial<AssetConfig>>({
-    chrome: false
+    chrome: false,
+    oneOfOneWp: false
   });
   const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
   const [savingAsset, setSavingAsset] = useState(false);
@@ -252,6 +254,11 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
             }
           }
 
+          // Add oneOfOneWp field if set (for base with superfractor chrome)
+          if (asset.oneOfOneWp) {
+            basePayload.oneOfOneWp = asset.oneOfOneWp;
+          }
+
           return basePayload;
         }
       });
@@ -339,7 +346,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
   };
 
   // Helper functions for new UI
-  const getLayersByType = (type: 'wp' | 'back' | 'base' | 'parallel' | 'multi-parallel') => {
+  const getLayersByType = (type: 'wp' | 'back' | 'base' | 'parallel' | 'multi-parallel' | 'wp-1of1') => {
     const extractedLayers = getExtractedLayers();
     console.log('🔍 All extracted layers:', extractedLayers);
     
@@ -347,6 +354,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       const lowerLayer = layer.toLowerCase();
       switch(type) {
         case 'wp':
+        case 'wp-1of1':
           return lowerLayer.includes('wp') && !lowerLayer.includes('inv'); // Include wp but exclude wp_inv
         case 'back': 
           return lowerLayer.startsWith('bk') || lowerLayer.includes('back');
@@ -412,7 +420,8 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       color: assetData.color,
       spotColorPairs: assetData.spotColorPairs || [],
       vfx: assetData.vfx,
-      chrome: assetData.chrome || false
+      chrome: assetData.chrome || false,
+      oneOfOneWp: assetData.oneOfOneWp || false
     }));
     
     console.log('✅ Parsed assets:', assets);
@@ -420,7 +429,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
   };
 
   const resetCurrentConfig = () => {
-    setCurrentConfig({ chrome: false });
+    setCurrentConfig({ chrome: false, oneOfOneWp: false });
     setCurrentCardType(null);
     setEditingAssetId(null);
     setSpotColorPairs([{ spot: '', color: undefined }]);
@@ -440,6 +449,11 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       // Only include chrome if it has a value
       if (currentConfig.chrome) {
         assetConfig.chrome = currentConfig.chrome;
+      }
+
+      // Include oneOfOneWp if it's set
+      if (currentConfig.oneOfOneWp) {
+        assetConfig.oneOfOneWp = currentConfig.oneOfOneWp;
       }
 
       // Handle parallel/multi-parallel with multiple spot/color pairs
@@ -486,6 +500,28 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       } else {
         // Create new asset - backend will generate ID and store this config
         response = await contentPipelineApi.createAsset(jobData.job_id, assetPayload);
+        
+        // If creating a new asset (not editing) and it's not already wp-1of1, also create a wp-1of1 version
+        if (response.success && currentCardType !== 'wp-1of1') {
+          console.log('🎯 Creating additional wp-1of1 asset...');
+          
+          // Get WP layers for the wp-1of1 asset
+          const wpLayers = getLayersByType('wp');
+          if (wpLayers.length > 0) {
+            const wp1of1Payload = {
+              type: 'wp-1of1',
+              layer: wpLayers[0] // Use first available WP layer - no VFX or chrome like regular wp
+            };
+            
+            try {
+              const wp1of1Response = await contentPipelineApi.createAsset(jobData.job_id, wp1of1Payload);
+              console.log('✅ wp-1of1 asset created:', wp1of1Response);
+            } catch (wp1of1Error) {
+              console.error('❌ Error creating wp-1of1 asset:', wp1of1Error);
+              // Don't fail the main asset creation if wp-1of1 fails
+            }
+          }
+        }
       }
 
       if (response.success) {
@@ -809,6 +845,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                             const autoSelectedLayer = layersForType.length === 1 ? layersForType[0] : '';
                             setCurrentConfig({ 
                               chrome: false,
+                              oneOfOneWp: false,
                               type,
                               layer: autoSelectedLayer
                             });
@@ -1188,7 +1225,15 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                             </label>
                             <select
                               value={typeof currentConfig.chrome === 'string' ? currentConfig.chrome : ''}
-                              onChange={(e) => setCurrentConfig(prev => ({ ...prev, chrome: e.target.value || false }))}
+                              onChange={(e) => {
+                                const newChrome = e.target.value || false;
+                                setCurrentConfig(prev => ({ 
+                                  ...prev, 
+                                  chrome: newChrome,
+                                  // Enable oneOfOneWp by default when superfractor is selected
+                                  oneOfOneWp: newChrome === 'superfractor' ? true : prev.oneOfOneWp
+                                }));
+                              }}
                               style={{
                                 width: '100%',
                                 padding: '8px 12px',
@@ -1203,6 +1248,29 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                               <option value="silver" style={{ background: '#1f2937' }}>Silver</option>
                               <option value="superfractor" style={{ background: '#1f2937' }}>Superfractor</option>
                             </select>
+                            
+                            {/* 10f1 wp checkbox - only show for superfractor */}
+                            {currentConfig.chrome === 'superfractor' && (
+                              <div style={{ marginTop: 12 }}>
+                                <label style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 8,
+                                  fontSize: 14,
+                                  fontWeight: 600,
+                                  color: '#f8f8f8',
+                                  cursor: 'pointer'
+                                }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={currentConfig.oneOfOneWp || false}
+                                    onChange={(e) => setCurrentConfig(prev => ({ ...prev, oneOfOneWp: e.target.checked }))}
+                                    style={{ width: 16, height: 16 }}
+                                  />
+                                  10f1 wp
+                                </label>
+                              </div>
+                            )}
                           </>
                         ) : (
                           // Toggle for parallel/multi-parallel
@@ -1241,6 +1309,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                             case 'wp':
                             case 'back':
                             case 'base':
+                            case 'wp-1of1':
                               if (!currentConfig.layer) {
                                 validationMessage = 'Select layer';
                               } else {
@@ -1402,7 +1471,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                   fontWeight: 600,
                                   letterSpacing: '0.02em'
                                 }}>
-                                  {asset.type === 'base' ? 'BASE' : asset.type === 'parallel' ? 'PARALLEL' : asset.type === 'multi-parallel' ? 'MULTI-PARALLEL' : asset.type.toUpperCase()}
+                                  {asset.type === 'base' ? 'BASE' : asset.type === 'parallel' ? 'PARALLEL' : asset.type === 'multi-parallel' ? 'MULTI-PARALLEL' : asset.type === 'wp-1of1' ? 'WP-1OF1' : asset.type.toUpperCase()}
                             </span>
                               </td>
                               <td style={{ padding: '10px 12px', color: '#e5e7eb', fontSize: 13 }}>
@@ -1530,7 +1599,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                 )}
                               </td>
                               <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                                {asset.type === 'wp' || asset.type === 'back' || getWpInvLayers().length === 0 ? (
+                                {asset.type === 'wp' || asset.type === 'back' || asset.type === 'wp-1of1' || getWpInvLayers().length === 0 ? (
                                   <span style={{ color: '#6b7280' }}>—</span>
                                 ) : (
                                   <span style={{
