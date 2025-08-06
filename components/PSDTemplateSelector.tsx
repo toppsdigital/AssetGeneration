@@ -483,53 +483,77 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
   };
 
   const generateAssetName = (type: string, config: Partial<AssetConfig>, existingNames?: string[]): string => {
-    const typeDisplayName = type === 'base' ? 'BASE' : 
-                           type === 'parallel' ? 'PARALLEL' : 
-                           type === 'multi-parallel' ? 'MULTI-PARALLEL' : 
-                           type === 'wp-1of1' ? 'WP-1OF1' : 
-                           type.toUpperCase();
+    let nameParts: string[] = [];
     
-    let nameParts = [typeDisplayName];
-    
-    // Add layer info if available (clean it up)
-    if (config.layer) {
-      const cleanLayer = config.layer.replace(/[^a-zA-Z0-9_]/g, '');
-      nameParts.push(cleanLayer);
-    }
-    
-    // Add spot/color info for parallel types
-    if (type === 'parallel' || type === 'multi-parallel') {
+    // Start with simple lowercase type names
+    if (type === 'wp' || type === 'wp-1of1') {
+      nameParts.push('wp');
+    } else if (type === 'back') {
+      nameParts.push('back');
+    } else if (type === 'base') {
+      nameParts.push('base');
+    } else if (type === 'parallel') {
+      // For parallel, add color names with spot suffixes
       if (config.spotColorPairs && config.spotColorPairs.length > 0) {
-        const spotNames = config.spotColorPairs
-          .filter(pair => pair.spot)
-          .map(pair => pair.spot.replace(/[^a-zA-Z0-9_]/g, ''))
-          .join('_');
-        if (spotNames) {
-          nameParts.push(spotNames);
+        const colorParts = config.spotColorPairs
+          .filter(pair => pair.spot && pair.color)
+          .map((pair, index) => {
+            const colorName = pair.color?.toLowerCase() || '';
+            // Extract spot number from spot name (like spot1 -> 1, or use auto)
+            const spotMatch = pair.spot?.match(/spot(\d+)/i);
+            const spotSuffix = spotMatch ? spotMatch[1] : 'auto';
+            return `${colorName}${spotSuffix}`;
+          });
+        
+        if (colorParts.length > 0) {
+          nameParts.push(...colorParts);
+        } else {
+          nameParts.push('parallel');
         }
-      } else if (config.spot) {
-        nameParts.push(config.spot.replace(/[^a-zA-Z0-9_]/g, ''));
+      } else {
+        nameParts.push('parallel');
+      }
+    } else if (type === 'multi-parallel') {
+      // For multi-parallel, add color names with spot suffixes
+      if (config.spotColorPairs && config.spotColorPairs.length > 0) {
+        const colorParts = config.spotColorPairs
+          .filter(pair => pair.spot && pair.color)
+          .map((pair, index) => {
+            const colorName = pair.color?.toLowerCase() || '';
+            // Extract spot number from spot name (like spot1 -> 1, or use auto)
+            const spotMatch = pair.spot?.match(/spot(\d+)/i);
+            const spotSuffix = spotMatch ? spotMatch[1] : 'auto';
+            return `${colorName}${spotSuffix}`;
+          });
+        
+        if (colorParts.length > 0) {
+          nameParts.push(...colorParts);
+        } else {
+          nameParts.push('multiparallel');
+        }
+      } else {
+        nameParts.push('multiparallel');
       }
     }
     
-    // Add VFX if present (clean it up)
+    // Add VFX if present
     if (config.vfx) {
-      const cleanVfx = config.vfx.replace(/[^a-zA-Z0-9_]/g, '');
-      nameParts.push(`VFX_${cleanVfx}`);
+      const cleanVfx = config.vfx.toLowerCase().replace(/[^a-zA-Z0-9]/g, '');
+      nameParts.push(`vfx_${cleanVfx}`);
     }
     
     // Add chrome info
     if (config.chrome) {
-      const chromeType = typeof config.chrome === 'string' ? config.chrome : 'silver';
-      nameParts.push(`CHROME_${chromeType.toUpperCase()}`);
+      const chromeType = typeof config.chrome === 'string' ? config.chrome.toLowerCase() : 'silver';
+      nameParts.push(`chrome_${chromeType}`);
     }
     
     // Add 1of1 indicator
     if (config.oneOfOneWp) {
-      nameParts.push('1OF1');
+      nameParts.push('1of1');
     }
     
-    // Join with underscores instead of spaces and dashes
+    // Join with underscores
     let baseName = nameParts.join('_');
     
     // Check for duplicates and add number suffix if needed
@@ -813,6 +837,16 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
 
       console.log('✅ PDF Extract API Response:', response);
       console.log('📋 Full JSON Response:', JSON.stringify(response, null, 2));
+
+      // Update job data if response contains job object
+      if (response.success && response.job && onJobDataUpdate) {
+        console.log('🔄 Updating job data from EDR PDF import response');
+        onJobDataUpdate(response.job);
+      } else if (response.success && onJobDataUpdate) {
+        console.log('🔄 No job data in EDR response, triggering refetch to get updated job data');
+        // PDF processed successfully but no job data returned - trigger a refetch
+        onJobDataUpdate({ _forceRefetch: true, job_id: jobData?.job_id });
+      }
 
     } catch (error) {
       console.error('❌ Error uploading EDR PDF:', error);
