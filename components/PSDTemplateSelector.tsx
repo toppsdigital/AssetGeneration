@@ -227,7 +227,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
             type: asset.type,
             spot_color_pairs: asset.spotColorPairs?.map(pair => ({
               spot: pair.spot,
-              color: pair.color
+              color: getColorRgbByName(pair.color || '')
             }))
           };
 
@@ -349,7 +349,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     { name: 'Green', displayName: 'Green', rgb: 'R0 G204 B51', hex: '#00cc33' },
     { name: 'Magenta', displayName: 'Magenta', rgb: 'R255 G0 B204', hex: '#ff00cc' },
     { name: 'Orange', displayName: 'Orange', rgb: 'R255 G102 B0', hex: '#ff6600' },
-    { name: 'Pink_Papradischa', displayName: 'Pink / Papradischa', rgb: 'R255 G102 B153', hex: '#ff6699' },
+    { name: 'Pink', displayName: 'Pink', rgb: 'R255 G102 B153', hex: '#ff6699' },
     { name: 'Purple', displayName: 'Purple', rgb: 'R153 G51 B255', hex: '#9933ff' },
     { name: 'Red', displayName: 'Red', rgb: 'R255 G0 B0', hex: '#ff0000' },
     { name: 'Refractor', displayName: 'Refractor', rgb: 'R153 G153 B153', hex: '#999999' },
@@ -365,6 +365,29 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       c.displayName.toLowerCase() === colorName.toLowerCase()
     );
     return color?.hex || '#999999'; // Default gray for unknown colors
+  };
+
+  const getColorRgbByName = (colorName: string): string => {
+    const color = HARDCODED_COLORS.find(c => 
+      c.name.toLowerCase() === colorName.toLowerCase() ||
+      c.displayName.toLowerCase() === colorName.toLowerCase()
+    );
+    return color?.rgb || 'R153 G153 B153'; // Default gray for unknown colors
+  };
+
+  const getColorNameByRgb = (rgbValue: string): string => {
+    const color = HARDCODED_COLORS.find(c => c.rgb === rgbValue);
+    return color?.name || 'Unknown';
+  };
+
+  const getColorDisplayNameByRgb = (rgbValue: string): string => {
+    const color = HARDCODED_COLORS.find(c => c.rgb === rgbValue);
+    return color?.displayName || rgbValue;
+  };
+
+  const getColorHexByRgb = (rgbValue: string): string => {
+    const color = HARDCODED_COLORS.find(c => c.rgb === rgbValue);
+    return color?.hex || '#999999';
   };
 
   const getColorVariants = () => {
@@ -569,7 +592,10 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
         assetConfig = {
           ...assetConfig,
           layer: finalLayer,
-          spotColorPairs: validPairs,
+          spotColorPairs: validPairs.map(pair => ({
+            spot: pair.spot,
+            color: getColorRgbByName(pair.color || '')
+          })),
           vfx: currentConfig.vfx
         };
       } else {
@@ -580,7 +606,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
           ...assetConfig,
           layer: currentConfig.layer,
           spot: currentConfig.spot,
-          color: currentConfig.color,
+          color: currentConfig.color ? getColorRgbByName(currentConfig.color) : undefined,
           vfx: currentConfig.vfx
         };
       }
@@ -700,19 +726,29 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
 
   const editAsset = (asset: AssetConfig) => {
     setCurrentCardType(asset.type);
-    setCurrentConfig(asset);
+    
+    // Convert RGB values back to color names for UI form
+    const convertedAsset = {
+      ...asset,
+      color: asset.color?.startsWith('R') ? getColorNameByRgb(asset.color) : asset.color
+    };
+    setCurrentConfig(convertedAsset);
     setEditingAssetId(asset.id);
     
     // For parallel assets, populate the spot/color pairs
     if (asset.type === 'parallel' || asset.type === 'multi-parallel') {
       if (asset.spotColorPairs && asset.spotColorPairs.length > 0) {
-        // New format with multiple pairs
-        setSpotColorPairs(asset.spotColorPairs);
+        // New format with multiple pairs - convert RGB values to color names for UI
+        const convertedPairs = asset.spotColorPairs.map(pair => ({
+          spot: pair.spot,
+          color: pair.color?.startsWith('R') ? getColorNameByRgb(pair.color) : pair.color
+        }));
+        setSpotColorPairs(convertedPairs);
       } else if (asset.spot && asset.color) {
         // Legacy format with single spot/color
         setSpotColorPairs([{
           spot: asset.spot,
-          color: asset.color
+          color: asset.color?.startsWith('R') ? getColorNameByRgb(asset.color) : asset.color
         }]);
       }
       // Clear spot/color from current config since it's in the pairs
@@ -1791,12 +1827,12 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                               width: 10,
                                               height: 10,
                                               borderRadius: '50%',
-                                              background: getColorHexByName(pair.color || ''),
+                                              background: pair.color?.startsWith('R') ? getColorHexByRgb(pair.color) : getColorHexByName(pair.color || ''),
                                               display: 'inline-block',
                                               border: '1px solid rgba(255, 255, 255, 0.2)'
                                             }} />
                                             <span style={{ fontSize: 13, color: '#f8f8f8' }}>
-                                              {HARDCODED_COLORS.find(c => c.name === pair.color)?.displayName || pair.color}
+                                              {pair.color?.startsWith('R') ? getColorDisplayNameByRgb(pair.color) : HARDCODED_COLORS.find(c => c.name === pair.color)?.displayName || pair.color}
                                             </span>
                                           </div>
                                         )}
@@ -1821,12 +1857,12 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                                 width: 10,
                                                 height: 10,
                                                 borderRadius: '50%',
-                                                background: getColorHexByName(asset.color || ''),
+                                                background: asset.color?.startsWith('R') ? getColorHexByRgb(asset.color) : getColorHexByName(asset.color || ''),
                                                 display: 'inline-block',
                                                 border: '1px solid rgba(255, 255, 255, 0.2)'
                                               }} />
                                               <span style={{ fontSize: 13, color: '#f8f8f8' }}>
-                                                {HARDCODED_COLORS.find(c => c.name === asset.color)?.displayName || asset.color}
+                                                {asset.color?.startsWith('R') ? getColorDisplayNameByRgb(asset.color) : HARDCODED_COLORS.find(c => c.name === asset.color)?.displayName || asset.color}
                                               </span>
                                             </div>
                                           )}
