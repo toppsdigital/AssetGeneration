@@ -27,6 +27,7 @@ interface SpotColorPair {
 
 interface AssetConfig {
   id: string;
+  name: string; // User-editable name for the asset
   type: 'wp' | 'back' | 'base' | 'parallel' | 'multi-parallel' | 'wp-1of1';
   layer: string;
   spot?: string;
@@ -51,7 +52,8 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
   const [currentCardType, setCurrentCardType] = useState<'wp' | 'back' | 'base' | 'parallel' | 'multi-parallel' | 'wp-1of1' | null>(null);
   const [currentConfig, setCurrentConfig] = useState<Partial<AssetConfig>>({
     chrome: false,
-    oneOfOneWp: false
+    oneOfOneWp: false,
+    name: ''
   });
   const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
   const [savingAsset, setSavingAsset] = useState(false);
@@ -86,6 +88,26 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     setCurrentConfig({ chrome: false });
     setCurrentCardType(null);
   }, [selectedPhysicalFile]);
+
+  // Auto-update asset name when configuration changes
+  useEffect(() => {
+    if (currentCardType && !editingAssetId) {
+      // Only auto-update if not editing an existing asset
+      const existingNames = getConfiguredAssets().map(asset => asset.name);
+      const newName = generateAssetName(currentCardType, {
+        ...currentConfig,
+        spotColorPairs: currentCardType === 'parallel' || currentCardType === 'multi-parallel' 
+          ? spotColorPairs 
+          : undefined
+      }, existingNames);
+      
+      // Only update if the name is empty or matches a basic auto-generated pattern (to preserve user edits)
+      const basicPattern = generateAssetName(currentCardType, { type: currentCardType }, existingNames);
+      if (!currentConfig.name || currentConfig.name === basicPattern || currentConfig.name.endsWith('_1') || currentConfig.name.endsWith('_2')) {
+        setCurrentConfig(prev => ({ ...prev, name: newName }));
+      }
+    }
+  }, [currentCardType, currentConfig.layer, currentConfig.vfx, currentConfig.chrome, currentConfig.oneOfOneWp, spotColorPairs, editingAssetId]);
 
   const fetchPhysicalJsonFiles = async () => {
     try {
@@ -318,30 +340,39 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     return allLayers.sort();
   };
 
+  // Hardcoded color mapping for consistent color selection
+  const HARDCODED_COLORS = [
+    { name: 'Aqua', displayName: 'Aqua', rgb: 'R0 G255 B255', hex: '#00ffff' },
+    { name: 'Black', displayName: 'Black', rgb: 'R51 G51 B51', hex: '#333333' },
+    { name: 'Blue', displayName: 'Blue', rgb: 'R0 G102 B204', hex: '#0066cc' },
+    { name: 'Gold', displayName: 'Gold', rgb: 'R204 G153 B0', hex: '#cc9900' },
+    { name: 'Green', displayName: 'Green', rgb: 'R0 G204 B51', hex: '#00cc33' },
+    { name: 'Magenta', displayName: 'Magenta', rgb: 'R255 G0 B204', hex: '#ff00cc' },
+    { name: 'Orange', displayName: 'Orange', rgb: 'R255 G102 B0', hex: '#ff6600' },
+    { name: 'Pink_Papradischa', displayName: 'Pink / Papradischa', rgb: 'R255 G102 B153', hex: '#ff6699' },
+    { name: 'Purple', displayName: 'Purple', rgb: 'R153 G51 B255', hex: '#9933ff' },
+    { name: 'Red', displayName: 'Red', rgb: 'R255 G0 B0', hex: '#ff0000' },
+    { name: 'Refractor', displayName: 'Refractor', rgb: 'R153 G153 B153', hex: '#999999' },
+    { name: 'Rose_Gold', displayName: 'Rose Gold', rgb: 'R255 G102 B102', hex: '#ff6666' },
+    { name: 'Silver', displayName: 'Silver', rgb: 'R153 G153 B153', hex: '#999999' },
+    { name: 'White', displayName: 'White', rgb: 'R255 G255 B255', hex: '#ffffff' },
+    { name: 'Yellow', displayName: 'Yellow', rgb: 'R255 G255 B0', hex: '#ffff00' }
+  ];
+
+  const getColorHexByName = (colorName: string): string => {
+    const color = HARDCODED_COLORS.find(c => 
+      c.name.toLowerCase() === colorName.toLowerCase() ||
+      c.displayName.toLowerCase() === colorName.toLowerCase()
+    );
+    return color?.hex || '#999999'; // Default gray for unknown colors
+  };
+
   const getColorVariants = () => {
-    // Get all spot groups
-    const spotGroups = jsonData?.layers?.filter((layer: any) => 
-      layer.name?.toLowerCase().includes('spot group')
-    ) || [];
-    
-    const collectSolidColorLayers = (layer: any): any[] => {
-      const layers: any[] = [];
-      if (layer.type === 'solidcolorfill') {
-        layers.push(layer);
-      }
-      if (layer.children) {
-        layer.children.forEach((child: any) => {
-          layers.push(...collectSolidColorLayers(child));
-        });
-      }
-      return layers;
-    };
-    
-    // Map each spot group to its colors
-    return spotGroups.map((group, index) => ({
-      groupName: `SPOT GROUP ${index + 1}`,
-      colors: collectSolidColorLayers(group)
-    }));
+    // Return a single color group with all hardcoded colors
+    return [{
+      groupName: 'COLORS',
+      colors: HARDCODED_COLORS
+    }];
   };
 
   // Helper functions for new UI
@@ -413,6 +444,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     
     const assets = Object.entries(mergedJobData.assets).map(([assetId, assetData]: [string, any]) => ({
       id: assetId,
+      name: assetData.name || assetData.type?.toUpperCase() || 'UNNAMED',
       type: assetData.type || 'wp',
       layer: assetData.layer || '',
       spot: assetData.spot,
@@ -427,8 +459,74 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     return assets;
   };
 
+  const generateAssetName = (type: string, config: Partial<AssetConfig>, existingNames?: string[]): string => {
+    const typeDisplayName = type === 'base' ? 'BASE' : 
+                           type === 'parallel' ? 'PARALLEL' : 
+                           type === 'multi-parallel' ? 'MULTI-PARALLEL' : 
+                           type === 'wp-1of1' ? 'WP-1OF1' : 
+                           type.toUpperCase();
+    
+    let nameParts = [typeDisplayName];
+    
+    // Add layer info if available (clean it up)
+    if (config.layer) {
+      const cleanLayer = config.layer.replace(/[^a-zA-Z0-9_]/g, '');
+      nameParts.push(cleanLayer);
+    }
+    
+    // Add spot/color info for parallel types
+    if (type === 'parallel' || type === 'multi-parallel') {
+      if (config.spotColorPairs && config.spotColorPairs.length > 0) {
+        const spotNames = config.spotColorPairs
+          .filter(pair => pair.spot)
+          .map(pair => pair.spot.replace(/[^a-zA-Z0-9_]/g, ''))
+          .join('_');
+        if (spotNames) {
+          nameParts.push(spotNames);
+        }
+      } else if (config.spot) {
+        nameParts.push(config.spot.replace(/[^a-zA-Z0-9_]/g, ''));
+      }
+    }
+    
+    // Add VFX if present (clean it up)
+    if (config.vfx) {
+      const cleanVfx = config.vfx.replace(/[^a-zA-Z0-9_]/g, '');
+      nameParts.push(`VFX_${cleanVfx}`);
+    }
+    
+    // Add chrome info
+    if (config.chrome) {
+      const chromeType = typeof config.chrome === 'string' ? config.chrome : 'silver';
+      nameParts.push(`CHROME_${chromeType.toUpperCase()}`);
+    }
+    
+    // Add 1of1 indicator
+    if (config.oneOfOneWp) {
+      nameParts.push('1OF1');
+    }
+    
+    // Join with underscores instead of spaces and dashes
+    let baseName = nameParts.join('_');
+    
+    // Check for duplicates and add number suffix if needed
+    if (existingNames && existingNames.length > 0) {
+      let finalName = baseName;
+      let counter = 1;
+      
+      while (existingNames.some(name => name.toLowerCase() === finalName.toLowerCase())) {
+        finalName = `${baseName}_${counter}`;
+        counter++;
+      }
+      
+      return finalName;
+    }
+    
+    return baseName;
+  };
+
   const resetCurrentConfig = () => {
-    setCurrentConfig({ chrome: false, oneOfOneWp: false });
+    setCurrentConfig({ chrome: false, oneOfOneWp: false, name: '' });
     setCurrentCardType(null);
     setEditingAssetId(null);
     setSpotColorPairs([{ spot: '', color: undefined }]);
@@ -487,9 +585,10 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
         };
       }
 
-      // Asset payload without name field - backend will generate ID and manage names
+      // Asset payload with name and configuration - backend will generate ID
       const assetPayload = {
-        ...assetConfig
+        ...assetConfig,
+        name: currentConfig.name?.trim()
       };
 
       let response;
@@ -509,7 +608,8 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
           if (wpLayers.length > 0) {
             const wp1of1Payload = {
               type: 'wp-1of1',
-              layer: wpLayers[0] // Use first available WP layer - no VFX or chrome like regular wp
+              layer: wpLayers[0], // Use first available WP layer - no VFX or chrome like regular wp
+              name: `${currentConfig.name?.trim()}_WP_1OF1`
             };
             
             try {
@@ -897,26 +997,34 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                         onClick={() => {
                           setCurrentCardType(type);
                           
-                                      if (type === 'parallel' || type === 'multi-parallel') {
-              // For parallel/multi-parallel, initialize with one empty pair
+                          // Get existing asset names to avoid duplicates
+                          const existingNames = getConfiguredAssets().map(asset => asset.name);
+                          
+                          if (type === 'parallel' || type === 'multi-parallel') {
+                            // For parallel/multi-parallel, initialize with one empty pair
                             setSpotColorPairs([{ spot: '', color: undefined }]);
-                            setCurrentConfig({ 
+                            const initialConfig = { 
                               chrome: false,
                               type,
                               spot: '',
-                              layer: ''
-                            });
+                              layer: '',
+                              name: generateAssetName(type, { type }, existingNames)
+                            };
+                            setCurrentConfig(initialConfig);
                           } else {
                             // For other types, clear spot/color pairs
                             setSpotColorPairs([]);
                             const layersForType = getLayersByType(type);
                             const autoSelectedLayer = layersForType.length === 1 ? layersForType[0] : '';
-                            setCurrentConfig({ 
+                            const initialConfig = { 
                               chrome: false,
                               oneOfOneWp: false,
                               type,
-                              layer: autoSelectedLayer
-                            });
+                              layer: autoSelectedLayer,
+                              name: ''
+                            };
+                            initialConfig.name = generateAssetName(type, initialConfig, existingNames);
+                            setCurrentConfig(initialConfig);
                           }
                         }}
                         style={{
@@ -1095,7 +1203,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                       value={colorLayer.name} 
                                       style={{ background: '#1f2937' }}
                                     >
-                                      {(colorLayer.name || `Color ${idx + 1}`).replace(/\d+$/, '')}
+                                      {colorLayer.displayName}
                                     </option>
                                   ))}
                                 </select>
@@ -1363,6 +1471,45 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                       </div>
                     )}
 
+                    {/* Asset Name Input */}
+                    {currentCardType && (
+                      <div>
+                        <label style={{
+                          display: 'block',
+                          fontSize: 14,
+                          fontWeight: 600,
+                          color: '#f8f8f8',
+                          marginBottom: 8
+                        }}>
+                          Asset Name
+                        </label>
+                        <input
+                          type="text"
+                          value={currentConfig.name || ''}
+                          onChange={(e) => setCurrentConfig(prev => ({ ...prev, name: e.target.value }))}
+                          placeholder="Enter asset name..."
+                          style={{
+                            width: '100%',
+                            padding: '8px 12px',
+                            background: 'rgba(255, 255, 255, 0.08)',
+                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                            borderRadius: 8,
+                            color: '#f8f8f8',
+                            fontSize: 14,
+                            outline: 'none',
+                            transition: 'border-color 0.2s',
+                            boxSizing: 'border-box'
+                          }}
+                          onFocus={(e) => {
+                            e.target.style.borderColor = 'rgba(59, 130, 246, 0.5)';
+                          }}
+                          onBlur={(e) => {
+                            e.target.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                          }}
+                        />
+                      </div>
+                    )}
+
                     {/* Add Asset Button */}
                     <div>
                       {(() => {
@@ -1372,7 +1519,9 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
 
                         if (!currentCardType) {
                           validationMessage = 'Select card type';
-                                } else {
+                        } else if (!currentConfig.name?.trim()) {
+                          validationMessage = 'Enter asset name';
+                        } else {
                           switch (currentCardType) {
                             case 'wp':
                             case 'back':
@@ -1566,7 +1715,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                           background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05))',
                           borderBottom: '2px solid rgba(255, 255, 255, 0.1)'
                         }}>
-                                              <th style={{ padding: '10px 12px', textAlign: 'left', color: '#f8f8f8', fontSize: 13, fontWeight: 600, letterSpacing: '0.05em' }}>TYPE</th>
+                                              <th style={{ padding: '10px 12px', textAlign: 'left', color: '#f8f8f8', fontSize: 13, fontWeight: 600, letterSpacing: '0.05em' }}>NAME</th>
                     <th style={{ padding: '10px 12px', textAlign: 'left', color: '#f8f8f8', fontSize: 13, fontWeight: 600, letterSpacing: '0.05em' }}>LAYERS</th>
                     <th style={{ padding: '10px 12px', textAlign: 'left', color: '#f8f8f8', fontSize: 13, fontWeight: 600, letterSpacing: '0.05em' }}>VFX</th>
                     <th style={{ padding: '10px 12px', textAlign: 'center', color: '#f8f8f8', fontSize: 13, fontWeight: 600, letterSpacing: '0.05em' }}>CHROME</th>
@@ -1587,26 +1736,40 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                               <td style={{ 
                                 padding: '10px 12px', 
                                 color: '#f8f8f8', 
-                                fontSize: 12,
+                                fontSize: 13,
                                 fontWeight: 500
                               }}>
-                                <span style={{
-                                  background: asset.type === 'wp' ? 'rgba(34, 197, 94, 0.2)' : 
-                                             asset.type === 'back' ? 'rgba(168, 85, 247, 0.2)' :
-                                             asset.type === 'base' ? 'rgba(59, 130, 246, 0.2)' :
-                                             'rgba(236, 72, 153, 0.2)',
-                                  color: asset.type === 'wp' ? '#86efac' : 
-                                         asset.type === 'back' ? '#c084fc' :
-                                         asset.type === 'base' ? '#93c5fd' :
-                                         '#f9a8d4',
-                                  padding: '3px 8px',
-                                  borderRadius: 4,
-                                  fontSize: 12,
-                                  fontWeight: 600,
-                                  letterSpacing: '0.02em'
+                                <div style={{
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: 4
                                 }}>
-                                  {asset.type === 'base' ? 'BASE' : asset.type === 'parallel' ? 'PARALLEL' : asset.type === 'multi-parallel' ? 'MULTI-PARALLEL' : asset.type === 'wp-1of1' ? 'WP-1OF1' : asset.type.toUpperCase()}
-                            </span>
+                                  <span style={{
+                                    color: '#f8f8f8',
+                                    fontSize: 13,
+                                    fontWeight: 600
+                                  }}>
+                                    {asset.name}
+                                  </span>
+                                  <span style={{
+                                    background: asset.type === 'wp' ? 'rgba(34, 197, 94, 0.2)' : 
+                                               asset.type === 'back' ? 'rgba(168, 85, 247, 0.2)' :
+                                               asset.type === 'base' ? 'rgba(59, 130, 246, 0.2)' :
+                                               'rgba(236, 72, 153, 0.2)',
+                                    color: asset.type === 'wp' ? '#86efac' : 
+                                           asset.type === 'back' ? '#c084fc' :
+                                           asset.type === 'base' ? '#93c5fd' :
+                                           '#f9a8d4',
+                                    padding: '2px 6px',
+                                    borderRadius: 3,
+                                    fontSize: 10,
+                                    fontWeight: 600,
+                                    letterSpacing: '0.02em',
+                                    alignSelf: 'flex-start'
+                                  }}>
+                                    {asset.type === 'base' ? 'BASE' : asset.type === 'parallel' ? 'PARALLEL' : asset.type === 'multi-parallel' ? 'MULTI-PARALLEL' : asset.type === 'wp-1of1' ? 'WP-1OF1' : asset.type.toUpperCase()}
+                                  </span>
+                                </div>
                               </td>
                               <td style={{ padding: '10px 12px', color: '#e5e7eb', fontSize: 13 }}>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -1628,29 +1791,12 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                               width: 10,
                                               height: 10,
                                               borderRadius: '50%',
-                                              background: (() => {
-                                                const colorName = (pair.color || '').replace(/\d+$/, '').toLowerCase();
-                                                // Map common color names to actual colors
-                                                if (colorName.includes('yellow')) return '#fbbf24';
-                                                if (colorName.includes('gold')) return '#f59e0b';
-                                                if (colorName.includes('silver')) return '#9ca3af';
-                                                if (colorName.includes('pink')) return '#ec4899';
-                                                if (colorName.includes('red')) return '#ef4444';
-                                                if (colorName.includes('blue')) return '#3b82f6';
-                                                if (colorName.includes('green')) return '#10b981';
-                                                if (colorName.includes('purple')) return '#8b5cf6';
-                                                if (colorName.includes('orange')) return '#f97316';
-                                                if (colorName.includes('black')) return '#1f2937';
-                                                if (colorName.includes('white')) return '#f8f8f8';
-                                                if (colorName.includes('gray') || colorName.includes('grey')) return '#6b7280';
-                                                // Default gradient for unknown colors
-                                                return 'linear-gradient(135deg, #fbbf24, #f59e0b)';
-                                              })(),
+                                              background: getColorHexByName(pair.color || ''),
                                               display: 'inline-block',
                                               border: '1px solid rgba(255, 255, 255, 0.2)'
                                             }} />
                                             <span style={{ fontSize: 13, color: '#f8f8f8' }}>
-                                              {(pair.color || '').replace(/\d+$/, '')}
+                                              {HARDCODED_COLORS.find(c => c.name === pair.color)?.displayName || pair.color}
                                             </span>
                                           </div>
                                         )}
@@ -1675,29 +1821,12 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                                 width: 10,
                                                 height: 10,
                                                 borderRadius: '50%',
-                                                background: (() => {
-                                                  const colorName = (asset.color || '').replace(/\d+$/, '').toLowerCase();
-                                                  // Map common color names to actual colors
-                                                  if (colorName.includes('yellow')) return '#fbbf24';
-                                                  if (colorName.includes('gold')) return '#f59e0b';
-                                                  if (colorName.includes('silver')) return '#9ca3af';
-                                                  if (colorName.includes('pink')) return '#ec4899';
-                                                  if (colorName.includes('red')) return '#ef4444';
-                                                  if (colorName.includes('blue')) return '#3b82f6';
-                                                  if (colorName.includes('green')) return '#10b981';
-                                                  if (colorName.includes('purple')) return '#8b5cf6';
-                                                  if (colorName.includes('orange')) return '#f97316';
-                                                  if (colorName.includes('black')) return '#1f2937';
-                                                  if (colorName.includes('white')) return '#f8f8f8';
-                                                  if (colorName.includes('gray') || colorName.includes('grey')) return '#6b7280';
-                                                  // Default gradient for unknown colors
-                                                  return 'linear-gradient(135deg, #fbbf24, #f59e0b)';
-                                                })(),
+                                                background: getColorHexByName(asset.color || ''),
                                                 display: 'inline-block',
                                                 border: '1px solid rgba(255, 255, 255, 0.2)'
                                               }} />
                                               <span style={{ fontSize: 13, color: '#f8f8f8' }}>
-                                                {(asset.color || '').replace(/\d+$/, '')}
+                                                {HARDCODED_COLORS.find(c => c.name === asset.color)?.displayName || asset.color}
                                               </span>
                                             </div>
                                           )}
