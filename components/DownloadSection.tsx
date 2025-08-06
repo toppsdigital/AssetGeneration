@@ -228,7 +228,7 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
     return null;
   };
 
-  if (!isVisible) return null;
+  if (!isVisible || jobData?.status !== 'completed') return null;
 
   return (
     <div style={{
