@@ -658,11 +658,13 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       const requestPayload = {
         pdf_data: base64Data,
         filename: file.name,
-        layers: filteredLayers.length > 0 ? filteredLayers : undefined
+        layers: filteredLayers.length > 0 ? filteredLayers : undefined,
+        job_id: jobData?.job_id
       };
 
       console.log('📋 Calling content pipeline API /pdf-extract:', {
         filename: file.name,
+        jobId: jobData?.job_id,
         base64Length: base64Data.length,
         totalLayersFound: allExtractedLayers.length,
         filteredLayersCount: filteredLayers.length,

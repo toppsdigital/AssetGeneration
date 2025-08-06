@@ -673,10 +673,10 @@ class ContentPipelineAPI {
     }
   }
 
-  async extractPdfData(pdfData: { pdf_data: string; filename: string }): Promise<any> {
-    console.log(`📋 Extracting PDF data for: ${pdfData.filename}`);
+  async extractPdfData(pdfData: { pdf_data: string; filename: string; layers?: string[]; job_id?: string }): Promise<any> {
+    console.log(`📋 Extracting PDF data for: ${pdfData.filename}`, pdfData.layers ? `with ${pdfData.layers.length} layers` : 'without layers', pdfData.job_id ? `for job: ${pdfData.job_id}` : 'without job ID');
     
-    const response = await fetch(`${this.baseUrl}/pdf-extract`, {
+    const response = await fetch(`${this.baseUrl}?operation=pdf-extract`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
