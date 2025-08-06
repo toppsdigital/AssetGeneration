@@ -779,7 +779,15 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                 {/* Step 1: Card Type Selection */}
                 <div style={{ marginBottom: 16 }}>
                   <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                    {(['wp', 'back', 'base', 'parallel', 'multi-parallel'] as const).map(type => (
+                    {(['wp', 'back', 'base', 'parallel', 'multi-parallel'] as const)
+                      .filter(type => {
+                        // Hide multi-parallel if there's only 1 spot layer
+                        if (type === 'multi-parallel') {
+                          return getSpotLayers().length > 1;
+                        }
+                        return true;
+                      })
+                      .map(type => (
                       <button
                         key={type}
                         onClick={() => {
