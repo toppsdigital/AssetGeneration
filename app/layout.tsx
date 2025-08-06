@@ -16,13 +16,16 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const session = await auth();
+  
+  // Check if session exists AND has a valid user (properly authenticated)
+  const isAuthenticated = session?.user?.email || session?.user?.id;
 
   return (
     <html lang="en">
       <body>
         <QueryProvider>
           <UserSessionHeader session={session} />
-          {!session ? <SignInPage /> : children}
+          {!isAuthenticated ? <SignInPage /> : children}
         </QueryProvider>
       </body>
     </html>
