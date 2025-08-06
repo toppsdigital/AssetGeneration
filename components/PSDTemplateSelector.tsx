@@ -643,15 +643,31 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
 
       console.log('📋 File converted to base64, size:', base64Data.length, 'characters');
 
+      // Get extracted layers to include in the request
+      const allExtractedLayers = getExtractedLayers();
+      
+      // Filter out specific layer types that shouldn't be sent to PDF extraction
+      const filteredLayers = allExtractedLayers.filter(layer => {
+        const lowerLayer = layer.toLowerCase();
+        return !lowerLayer.includes('fr_wp_inv') && 
+               !lowerLayer.includes('bk_seq') && 
+               !lowerLayer.includes('bk_seq_bb');
+      });
+      
       // Prepare API request
       const requestPayload = {
         pdf_data: base64Data,
-        filename: file.name
+        filename: file.name,
+        layers: filteredLayers.length > 0 ? filteredLayers : undefined
       };
 
       console.log('📋 Calling content pipeline API /pdf-extract:', {
         filename: file.name,
-        base64Length: base64Data.length
+        base64Length: base64Data.length,
+        totalLayersFound: allExtractedLayers.length,
+        filteredLayersCount: filteredLayers.length,
+        filteredLayers: filteredLayers,
+        excludedLayers: allExtractedLayers.filter(layer => !filteredLayers.includes(layer))
       });
 
       // Call the content pipeline API
