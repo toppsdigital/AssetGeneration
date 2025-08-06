@@ -342,21 +342,21 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
 
   // Hardcoded color mapping for consistent color selection
   const HARDCODED_COLORS = [
-    { name: 'Aqua', displayName: 'Aqua', rgb: 'R0 G255 B255', hex: '#00ffff' },
-    { name: 'Black', displayName: 'Black', rgb: 'R51 G51 B51', hex: '#333333' },
-    { name: 'Blue', displayName: 'Blue', rgb: 'R0 G102 B204', hex: '#0066cc' },
-    { name: 'Gold', displayName: 'Gold', rgb: 'R204 G153 B0', hex: '#cc9900' },
-    { name: 'Green', displayName: 'Green', rgb: 'R0 G204 B51', hex: '#00cc33' },
-    { name: 'Magenta', displayName: 'Magenta', rgb: 'R255 G0 B204', hex: '#ff00cc' },
-    { name: 'Orange', displayName: 'Orange', rgb: 'R255 G102 B0', hex: '#ff6600' },
-    { name: 'Pink', displayName: 'Pink', rgb: 'R255 G102 B153', hex: '#ff6699' },
-    { name: 'Purple', displayName: 'Purple', rgb: 'R153 G51 B255', hex: '#9933ff' },
-    { name: 'Red', displayName: 'Red', rgb: 'R255 G0 B0', hex: '#ff0000' },
-    { name: 'Refractor', displayName: 'Refractor', rgb: 'R153 G153 B153', hex: '#999999' },
-    { name: 'Rose_Gold', displayName: 'Rose Gold', rgb: 'R255 G102 B102', hex: '#ff6666' },
-    { name: 'Silver', displayName: 'Silver', rgb: 'R153 G153 B153', hex: '#999999' },
-    { name: 'White', displayName: 'White', rgb: 'R255 G255 B255', hex: '#ffffff' },
-    { name: 'Yellow', displayName: 'Yellow', rgb: 'R255 G255 B0', hex: '#ffff00' }
+    { name: 'Aqua', displayName: 'Aqua', rgb: 'R0G255B255', hex: '#00ffff' },
+    { name: 'Black', displayName: 'Black', rgb: 'R51G51B51', hex: '#333333' },
+    { name: 'Blue', displayName: 'Blue', rgb: 'R0G102B204', hex: '#0066cc' },
+    { name: 'Gold', displayName: 'Gold', rgb: 'R204G153B0', hex: '#cc9900' },
+    { name: 'Green', displayName: 'Green', rgb: 'R0G204B51', hex: '#00cc33' },
+    { name: 'Magenta', displayName: 'Magenta', rgb: 'R255G0B204', hex: '#ff00cc' },
+    { name: 'Orange', displayName: 'Orange', rgb: 'R255G102B0', hex: '#ff6600' },
+    { name: 'Pink', displayName: 'Pink', rgb: 'R255G102B153', hex: '#ff6699' },
+    { name: 'Purple', displayName: 'Purple', rgb: 'R153G51B255', hex: '#9933ff' },
+    { name: 'Red', displayName: 'Red', rgb: 'R255G0B0', hex: '#ff0000' },
+    { name: 'Refractor', displayName: 'Refractor', rgb: 'R153G153B153', hex: '#999999' },
+    { name: 'Rose_Gold', displayName: 'Rose Gold', rgb: 'R255G102B102', hex: '#ff6666' },
+    { name: 'Silver', displayName: 'Silver', rgb: 'R153G153B153', hex: '#999999' },
+    { name: 'White', displayName: 'White', rgb: 'R255G255B255', hex: '#ffffff' },
+    { name: 'Yellow', displayName: 'Yellow', rgb: 'R255G255B0', hex: '#ffff00' }
   ];
 
   const getColorHexByName = (colorName: string): string => {
@@ -372,7 +372,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       c.name.toLowerCase() === colorName.toLowerCase() ||
       c.displayName.toLowerCase() === colorName.toLowerCase()
     );
-    return color?.rgb || 'R153 G153 B153'; // Default gray for unknown colors
+    return color?.rgb || 'R153G153B153'; // Default gray for unknown colors
   };
 
   const getColorNameByRgb = (rgbValue: string): string => {
@@ -472,7 +472,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       layer: assetData.layer || '',
       spot: assetData.spot,
       color: assetData.color,
-      spotColorPairs: assetData.spotColorPairs || [],
+      spotColorPairs: assetData.spotColorPairs || assetData.spot_color_pairs || [],
       vfx: assetData.vfx,
       chrome: assetData.chrome || false,
       oneOfOneWp: assetData.oneOfOneWp || false
@@ -999,13 +999,13 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
             <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
               {/* Left Side: Asset Configuration Panel */}
               <div style={{
-                flex: '0 0 380px',
-                minWidth: 320,
-                maxWidth: 380,
+                flex: '0 0 300px',
+                minWidth: 280,
+                maxWidth: 300,
                 background: 'rgba(255, 255, 255, 0.05)',
                 borderRadius: 12,
                 border: '1px solid rgba(255, 255, 255, 0.1)',
-                padding: 20
+                padding: 16
               }}>
                 <h3 style={{
                   fontSize: 18,
@@ -1655,7 +1655,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
               {/* Right Side: Configured Assets List */}
               <div style={{
                 flex: 1,
-                minWidth: 400,
+                minWidth: 600,
                 background: 'rgba(255, 255, 255, 0.05)',
                 borderRadius: 12,
                 border: '1px solid rgba(255, 255, 255, 0.1)',
@@ -1751,7 +1751,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                           background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05))',
                           borderBottom: '2px solid rgba(255, 255, 255, 0.1)'
                         }}>
-                                              <th style={{ padding: '10px 12px', textAlign: 'left', color: '#f8f8f8', fontSize: 13, fontWeight: 600, letterSpacing: '0.05em' }}>NAME</th>
+                                              <th style={{ padding: '10px 12px', textAlign: 'left', color: '#f8f8f8', fontSize: 13, fontWeight: 600, letterSpacing: '0.05em', maxWidth: '150px', width: '150px' }}>NAME</th>
                     <th style={{ padding: '10px 12px', textAlign: 'left', color: '#f8f8f8', fontSize: 13, fontWeight: 600, letterSpacing: '0.05em' }}>LAYERS</th>
                     <th style={{ padding: '10px 12px', textAlign: 'left', color: '#f8f8f8', fontSize: 13, fontWeight: 600, letterSpacing: '0.05em' }}>VFX</th>
                     <th style={{ padding: '10px 12px', textAlign: 'center', color: '#f8f8f8', fontSize: 13, fontWeight: 600, letterSpacing: '0.05em' }}>CHROME</th>
@@ -1773,7 +1773,9 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                 padding: '10px 12px', 
                                 color: '#f8f8f8', 
                                 fontSize: 13,
-                                fontWeight: 500
+                                fontWeight: 500,
+                                maxWidth: '150px',
+                                width: '150px'
                               }}>
                                 <div style={{
                                   display: 'flex',
@@ -1783,7 +1785,11 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                   <span style={{
                                     color: '#f8f8f8',
                                     fontSize: 13,
-                                    fontWeight: 600
+                                    fontWeight: 600,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    display: 'block'
                                   }}>
                                     {asset.name}
                                   </span>
@@ -1807,80 +1813,90 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                   </span>
                                 </div>
                               </td>
-                              <td style={{ padding: '10px 12px', color: '#e5e7eb', fontSize: 13 }}>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                  {/* Handle multiple spot/color pairs for PARALLEL/MULTI-PARALLEL */}
-                                  {asset.spotColorPairs && asset.spotColorPairs.length > 0 ? (
-                                    asset.spotColorPairs.map((pair, idx) => (
-                                      <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                        <code style={{
-                                          padding: '2px 6px',
-                                          borderRadius: 4,
-                                          fontSize: 13,
-                                          fontFamily: 'monospace'
-                                        }}>
-                                          {pair.spot}
-                                        </code>
-                                        {pair.color && (
-                                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                            <span style={{
-                                              width: 10,
-                                              height: 10,
-                                              borderRadius: '50%',
-                                              background: pair.color?.startsWith('R') ? getColorHexByRgb(pair.color) : getColorHexByName(pair.color || ''),
-                                              display: 'inline-block',
-                                              border: '1px solid rgba(255, 255, 255, 0.2)'
-                                            }} />
-                                            <span style={{ fontSize: 13, color: '#f8f8f8' }}>
-                                              {pair.color?.startsWith('R') ? getColorDisplayNameByRgb(pair.color) : HARDCODED_COLORS.find(c => c.name === pair.color)?.displayName || pair.color}
-                                            </span>
-                                          </div>
-                                        )}
-                                      </div>
-                                    ))
-                                  ) : (
-                                    /* Legacy single spot/color display */
+                              <td style={{ padding: '10px 12px', color: '#e5e7eb', fontSize: 13, textAlign: 'center' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
+                                  {/* Show asset layer first */}
+                                  {asset.layer && (
                                     <>
-                                      {asset.spot && (
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                          <code style={{
-                                            padding: '2px 6px',
-                                            borderRadius: 4,
-                                            fontSize: 13,
-                                            fontFamily: 'monospace'
+                                      <span style={{
+                                        fontSize: 12,
+                                        fontFamily: 'monospace',
+                                        color: '#e5e7eb'
+                                      }}>
+                                        {asset.layer}
+                                      </span>
+                                    </>
+                                  )}
+                                  
+                                  {/* Show spot values from spot_color_pairs */}
+                                  {asset.spotColorPairs && asset.spotColorPairs.length > 0 && (
+                                    <div>
+                                      {asset.spotColorPairs.map((pair, idx) => (
+                                        <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2, justifyContent: 'center' }}>
+                                          <span style={{
+                                            fontSize: 12,
+                                            fontFamily: 'monospace',
+                                            color: '#e5e7eb'
                                           }}>
-                                            {asset.spot}
-                                          </code>
-                                          {asset.color && (
+                                            {pair.spot}
+                                          </span>
+                                          {pair.color && (
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                               <span style={{
-                                                width: 10,
-                                                height: 10,
+                                                width: 8,
+                                                height: 8,
                                                 borderRadius: '50%',
-                                                background: asset.color?.startsWith('R') ? getColorHexByRgb(asset.color) : getColorHexByName(asset.color || ''),
+                                                background: pair.color?.startsWith('R') ? getColorHexByRgb(pair.color) : getColorHexByName(pair.color || ''),
                                                 display: 'inline-block',
                                                 border: '1px solid rgba(255, 255, 255, 0.2)'
                                               }} />
-                                              <span style={{ fontSize: 13, color: '#f8f8f8' }}>
-                                                {asset.color?.startsWith('R') ? getColorDisplayNameByRgb(asset.color) : HARDCODED_COLORS.find(c => c.name === asset.color)?.displayName || asset.color}
+                                              <span style={{ fontSize: 12, color: '#d1d5db' }}>
+                                                {pair.color?.startsWith('R') ? getColorDisplayNameByRgb(pair.color) : HARDCODED_COLORS.find(c => c.name === pair.color)?.displayName || pair.color}
                                               </span>
                                             </div>
                                           )}
                                         </div>
-                                      )}
-                                    </>
+                                      ))}
+                                    </div>
                                   )}
-                                  {asset.layer && (!asset.spotColorPairs || asset.spotColorPairs.length === 0) && (!asset.spot || asset.spot !== asset.layer) && (
-                                    <code style={{
-                                      padding: '2px 6px',
-                                      borderRadius: 4,
-                                      fontSize: 13,
-                                      fontFamily: 'monospace'
-                                    }}>
-                                      {asset.layer}
-                                    </code>
+                                  
+                                  {/* Legacy single spot/color display */}
+                                  {asset.spot && (!asset.spotColorPairs || asset.spotColorPairs.length === 0) && (
+                                    <div>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+                                        <span style={{
+                                          fontSize: 12,
+                                          fontFamily: 'monospace',
+                                          color: '#e5e7eb'
+                                        }}>
+                                          {asset.spot}
+                                        </span>
+                                        {asset.color && (
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                            <span style={{
+                                              width: 8,
+                                              height: 8,
+                                              borderRadius: '50%',
+                                              background: asset.color?.startsWith('R') ? getColorHexByRgb(asset.color) : getColorHexByName(asset.color || ''),
+                                              display: 'inline-block',
+                                              border: '1px solid rgba(255, 255, 255, 0.2)'
+                                            }} />
+                                            <span style={{ fontSize: 12, color: '#d1d5db' }}>
+                                              {asset.color?.startsWith('R') ? getColorDisplayNameByRgb(asset.color) : HARDCODED_COLORS.find(c => c.name === asset.color)?.displayName || asset.color}
+                                            </span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
                                   )}
-                                                                </div>
+                                  
+                                  {/* Fallback: Show dash for empty cases */}
+                                  {!asset.layer && (!asset.spotColorPairs || asset.spotColorPairs.length === 0) && !asset.spot && (
+                                    <span style={{ color: '#6b7280' }}>—</span>
+                                  )}
+                                  
+
+                                </div>
                               </td>
                               <td style={{ padding: '10px 12px', color: '#e5e7eb', fontSize: 13 }}>
                                 {asset.vfx ? (
@@ -1909,7 +1925,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                                     color: asset.chrome ? '#86efac' : '#9ca3af',
                                     padding: '3px 8px',
                                     borderRadius: 12,
-                                    fontSize: 11,
+                                    fontSize: 12,
                                     fontWeight: 600
                                   }}>
                                     <span style={{
