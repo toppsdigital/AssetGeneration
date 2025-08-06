@@ -205,13 +205,13 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
   };
 
   const createAssets = async () => {
-    if (configuredAssets.length === 0) return;
+    if (!mergedJobData?.assets || Object.keys(mergedJobData.assets).length === 0) return;
 
-    console.log('🎨 Creating digital assets with configured assets:', {
+    console.log('🎨 Creating digital assets with job assets:', {
       selectedFile: selectedPhysicalFile,
       psdFile: jsonData?.psd_file,
-      configuredAssets,
-      totalAssets: configuredAssets.length,
+      jobAssets: mergedJobData.assets,
+      totalAssets: Object.keys(mergedJobData.assets).length,
     });
 
     setCreatingAssets(true);
@@ -219,72 +219,8 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     try {
       const psdFile = selectedPhysicalFile.split('/').pop()?.replace('.json', '.psd') || '';
       
-      // Convert configured assets to API format
-      const assets = configuredAssets.map(asset => {
-        if (asset.type === 'parallel' || asset.type === 'multi-parallel') {
-          // Handle parallel/multi-parallel with spot color pairs
-          const basePayload: any = {
-            type: asset.type,
-            spot_color_pairs: asset.spotColorPairs?.map(pair => ({
-              spot: pair.spot,
-              color: getColorRgbByName(pair.color || '')
-            }))
-          };
-
-          // Add optional properties only if they exist and are needed
-          if (asset.vfx || asset.chrome) {
-            if (asset.vfx) {
-              basePayload.vfx = asset.vfx;
-            }
-            if (asset.chrome) {
-              basePayload.chrome = asset.chrome;
-            }
-            if (asset.layer) {
-              basePayload.wp_inv_layer = asset.layer;
-            }
-          }
-
-          return basePayload;
-        } else {
-          // Other card types (wp, back, base)
-          const basePayload: any = {
-            type: asset.type
-          };
-
-          // Add layer only if it exists
-          if (asset.layer) {
-            basePayload.layer = asset.layer;
-          }
-
-          // Add VFX if it exists for any card type
-          if (asset.vfx) {
-            basePayload.vfx = asset.vfx;
-            // For base with VFX, we need wp_inv_layer
-            if (asset.type === 'base') {
-              const wpInvLayers = getWpInvLayers();
-              if (wpInvLayers.length > 0) {
-                basePayload.wp_inv_layer = wpInvLayers[0];
-              }
-            }
-          }
-
-          // For base, add chrome and wp_inv_layer if chrome is enabled
-          if (asset.type === 'base' && asset.chrome) {
-            basePayload.chrome = asset.chrome;
-            const wpInvLayers = getWpInvLayers();
-            if (wpInvLayers.length > 0) {
-              basePayload.wp_inv_layer = wpInvLayers[0];
-            }
-          }
-
-          // Add oneOfOneWp field if set (for base with superfractor chrome)
-          if (asset.oneOfOneWp) {
-            basePayload.oneOfOneWp = asset.oneOfOneWp;
-          }
-
-          return basePayload;
-        }
-      });
+      // Use the job's assets object directly - it contains the latest changes
+      const assets = mergedJobData.assets;
 
       const payload = {
         assets,
