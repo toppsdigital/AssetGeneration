@@ -281,10 +281,6 @@ class ContentPipelineAPI {
   }
 
   async batchGetFiles(filenames: string[]): Promise<BatchGetResponse> {
-    if (filenames.length > 100) {
-      throw new Error('Maximum 100 filenames per batch get request');
-    }
-
     const response = await fetch(`${this.baseUrl}?operation=batch_get_files`, {
       method: 'POST',
       headers: {
