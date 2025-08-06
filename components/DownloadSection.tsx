@@ -50,7 +50,10 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
     isLoading: loadingArchive, 
     error: downloadError,
     refetch: refetchArchive
-  } = useDownloadArchive(jobData?.job_id || null, Boolean(isVisible && shouldUseFallback));
+  } = useDownloadArchive(
+    jobData?.job_id || null, 
+    Boolean(isVisible && jobData?.job_status === 'completed')
+  );
 
   // Local state only for download progress
   const [downloadingArchive, setDownloadingArchive] = useState(false);
@@ -228,7 +231,7 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
     return null;
   };
 
-  if (!isVisible || jobData?.status !== 'completed') return null;
+  if (!isVisible || jobData?.job_status !== 'completed') return null;
 
   return (
     <div style={{
