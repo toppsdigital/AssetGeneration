@@ -55,6 +55,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
   });
   const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
   const [savingAsset, setSavingAsset] = useState(false);
+  const [processingPdf, setProcessingPdf] = useState(false);
   
   const [spotColorPairs, setSpotColorPairs] = useState<SpotColorPair[]>([{ spot: '', color: undefined }]);
 
@@ -624,6 +625,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     if (!file) return;
 
     console.log('📋 EDR PDF Upload initiated:', file.name);
+    setProcessingPdf(true);
 
     try {
       // Convert file to base64
@@ -661,6 +663,8 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     } catch (error) {
       console.error('❌ Error uploading EDR PDF:', error);
       alert(`Failed to process PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setProcessingPdf(false);
     }
 
     // Clear the input value so the same file can be selected again
@@ -1470,10 +1474,10 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                   </h3>
                   <button
                     onClick={() => document.getElementById('edr-pdf-input')?.click()}
-                    disabled={savingAsset || creatingAssets}
+                    disabled={savingAsset || creatingAssets || processingPdf}
                     style={{
                       padding: '8px 16px',
-                      background: (savingAsset || creatingAssets)
+                      background: (savingAsset || creatingAssets || processingPdf)
                         ? 'rgba(156, 163, 175, 0.3)'
                         : 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
                       border: 'none',
@@ -1481,33 +1485,50 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                       color: 'white',
                       fontSize: 14,
                       fontWeight: 600,
-                      cursor: (savingAsset || creatingAssets) ? 'not-allowed' : 'pointer',
+                      cursor: (savingAsset || creatingAssets || processingPdf) ? 'not-allowed' : 'pointer',
                       transition: 'all 0.2s',
-                      opacity: (savingAsset || creatingAssets) ? 0.6 : 1,
+                      opacity: (savingAsset || creatingAssets || processingPdf) ? 0.6 : 1,
                       display: 'flex',
                       alignItems: 'center',
                       gap: 6
                     }}
                     onMouseEnter={(e) => {
-                      if (!savingAsset && !creatingAssets) {
+                      if (!savingAsset && !creatingAssets && !processingPdf) {
                         e.currentTarget.style.transform = 'scale(1.02)';
                         e.currentTarget.style.boxShadow = '0 4px 12px rgba(139, 92, 246, 0.3)';
                       }
                     }}
                     onMouseLeave={(e) => {
-                      if (!savingAsset && !creatingAssets) {
+                      if (!savingAsset && !creatingAssets && !processingPdf) {
                         e.currentTarget.style.transform = 'scale(1)';
                         e.currentTarget.style.boxShadow = 'none';
                       }
                     }}
                   >
-                    📋 Import from EDR
+                    {processingPdf ? (
+                      <>
+                        <div style={{
+                          width: 14,
+                          height: 14,
+                          border: '2px solid rgba(255, 255, 255, 0.3)',
+                          borderTop: '2px solid white',
+                          borderRadius: '50%',
+                          animation: 'spin 1s linear infinite'
+                        }} />
+                        Processing PDF...
+                      </>
+                    ) : (
+                      <>
+                        📋 Import from EDR
+                      </>
+                    )}
                   </button>
                   <input
                     id="edr-pdf-input"
                     type="file"
                     accept=".pdf"
                     style={{ display: 'none' }}
+                    disabled={processingPdf}
                     onChange={handleEDRPdfUpload}
                   />
                 </div>
