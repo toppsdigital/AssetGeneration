@@ -198,21 +198,16 @@ const FileCard: React.FC<FileCardProps> = ({
           </div>
         </div>
 
-        {/* Extracted Layers - Only show if there are extracted files (excluding seq and seq_bb) */}
+        {/* Extracted Layers - Only show if there are extracted files */}
         {(() => {
-          // Filter out seq and seq_bb layer types
-          const filteredExtractedFiles = file.extracted_files ? 
-            Object.fromEntries(
-              Object.entries(file.extracted_files).filter(([_, extractedFile]) => 
-                !['seq', 'seq_bb'].includes(extractedFile.layer_type)
-              )
-            ) : {};
+          // Use all extracted files
+          const extractedFiles = file.extracted_files || {};
           
-          // Only render if there are filtered files
-          if (Object.keys(filteredExtractedFiles).length === 0) return null;
+          // Only render if there are extracted files
+          if (Object.keys(extractedFiles).length === 0) return null;
           
-          // Check if all filtered extracted files have "uploaded" status (case insensitive)
-          const allUploaded = Object.values(filteredExtractedFiles).every(
+          // Check if all extracted files have "uploaded" status (case insensitive)
+          const allUploaded = Object.values(extractedFiles).every(
             extractedFile => extractedFile.status.toLowerCase() === 'uploaded'
           );
           
@@ -230,13 +225,13 @@ const FileCard: React.FC<FileCardProps> = ({
                   fontWeight: 600,
                   margin: 0
                 }}>
-                  🖼️ Extracted Layers ({Object.keys(filteredExtractedFiles).length})
+                  🖼️ Extracted Layers ({Object.keys(extractedFiles).length})
                 </h4>
                 {allUploaded ? (
                   <button
                     onClick={() => {
-                      // Collect file paths from filtered extracted files
-                      const filePaths = Object.values(filteredExtractedFiles).map(extractedFile => 
+                      // Collect file paths from extracted files
+                      const filePaths = Object.values(extractedFiles).map(extractedFile => 
                         extractedFile.file_path
                       ).filter(path => path);
                       
@@ -289,7 +284,7 @@ const FileCard: React.FC<FileCardProps> = ({
                 maxHeight: 180, // Reduced from 200
                 overflowY: 'auto'
               }}>
-                {Object.entries(filteredExtractedFiles).map(([filename, extractedFile], extIndex) => {
+                {Object.entries(extractedFiles).map(([filename, extractedFile], extIndex) => {
                   // Show status when there are NO firefly assets (job hasn't reached generating/complete), or file is actively uploading
                   const hasFireflyAssets = file.firefly_assets && Object.keys(file.firefly_assets).length > 0;
                   const showStatus = uploadingFiles.has(filename) || !hasFireflyAssets;

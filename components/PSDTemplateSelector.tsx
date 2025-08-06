@@ -309,14 +309,12 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       });
     }
     
-    // Filter out layers containing "seq" (case-insensitive)
-    const filteredLayers = Array.from(extractedLayerNames).filter(layerName => 
-      !layerName.toLowerCase().includes('seq')
-    );
+    // Return all extracted layers without filtering
+    const allLayers = Array.from(extractedLayerNames);
     
-    console.log('🔍 Filtered out seq layers:', Array.from(extractedLayerNames).length - filteredLayers.length, 'of', Array.from(extractedLayerNames).length, 'total layers');
+    console.log('🔍 Total extracted layers:', allLayers.length);
     
-    return filteredLayers.sort();
+    return allLayers.sort();
   };
 
   const getColorVariants = () => {
@@ -619,6 +617,54 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       // Clear spot/color from current config since it's in the pairs
       setCurrentConfig(prev => ({ ...prev, spot: undefined, color: undefined }));
     }
+  };
+
+  const handleEDRPdfUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    console.log('📋 EDR PDF Upload initiated:', file.name);
+
+    try {
+      // Convert file to base64
+      const base64Data = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          // Remove the data:application/pdf;base64, prefix to get just the base64 data
+          const base64 = result.split(',')[1];
+          resolve(base64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      console.log('📋 File converted to base64, size:', base64Data.length, 'characters');
+
+      // Prepare API request
+      const requestPayload = {
+        pdf_data: base64Data,
+        filename: file.name
+      };
+
+      console.log('📋 Calling content pipeline API /pdf-extract:', {
+        filename: file.name,
+        base64Length: base64Data.length
+      });
+
+      // Call the content pipeline API
+      const response = await contentPipelineApi.extractPdfData(requestPayload);
+
+      console.log('✅ PDF Extract API Response:', response);
+      console.log('📋 Full JSON Response:', JSON.stringify(response, null, 2));
+
+    } catch (error) {
+      console.error('❌ Error uploading EDR PDF:', error);
+      alert(`Failed to process PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+
+    // Clear the input value so the same file can be selected again
+    event.target.value = '';
   };
 
   if (!isVisible) return null;
@@ -1408,14 +1454,63 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                 border: '1px solid rgba(255, 255, 255, 0.1)',
                 padding: 20
               }}>
-                <h3 style={{
-                  fontSize: 18,
-                  fontWeight: 600,
-                  color: '#f8f8f8',
-                  margin: '0 0 16px 0'
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: 16
                 }}>
-                  Assets to Generate ({configuredAssets.length})
-                </h3>
+                  <h3 style={{
+                    fontSize: 18,
+                    fontWeight: 600,
+                    color: '#f8f8f8',
+                    margin: 0
+                  }}>
+                    Assets to Generate ({configuredAssets.length})
+                  </h3>
+                  <button
+                    onClick={() => document.getElementById('edr-pdf-input')?.click()}
+                    disabled={savingAsset || creatingAssets}
+                    style={{
+                      padding: '8px 16px',
+                      background: (savingAsset || creatingAssets)
+                        ? 'rgba(156, 163, 175, 0.3)'
+                        : 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
+                      border: 'none',
+                      borderRadius: 8,
+                      color: 'white',
+                      fontSize: 14,
+                      fontWeight: 600,
+                      cursor: (savingAsset || creatingAssets) ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.2s',
+                      opacity: (savingAsset || creatingAssets) ? 0.6 : 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!savingAsset && !creatingAssets) {
+                        e.currentTarget.style.transform = 'scale(1.02)';
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(139, 92, 246, 0.3)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!savingAsset && !creatingAssets) {
+                        e.currentTarget.style.transform = 'scale(1)';
+                        e.currentTarget.style.boxShadow = 'none';
+                      }
+                    }}
+                  >
+                    📋 Import from EDR
+                  </button>
+                  <input
+                    id="edr-pdf-input"
+                    type="file"
+                    accept=".pdf"
+                    style={{ display: 'none' }}
+                    onChange={handleEDRPdfUpload}
+                  />
+                </div>
                 
                 {configuredAssets.length > 0 ? (
                   <div style={{

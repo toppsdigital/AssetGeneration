@@ -672,6 +672,27 @@ class ContentPipelineAPI {
       throw fetchError;
     }
   }
+
+  async extractPdfData(pdfData: { pdf_data: string; filename: string }): Promise<any> {
+    console.log(`📋 Extracting PDF data for: ${pdfData.filename}`);
+    
+    const response = await fetch(`${this.baseUrl}/pdf-extract`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(pdfData),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || `Failed to extract PDF data: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log(`✅ PDF data extracted:`, result);
+    return result;
+  }
 }
 
 // Export a singleton instance
