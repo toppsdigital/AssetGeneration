@@ -501,9 +501,9 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
         // Create new asset - backend will generate ID and store this config
         response = await contentPipelineApi.createAsset(jobData.job_id, assetPayload);
         
-        // If creating a new asset (not editing) and it's not already wp-1of1, also create a wp-1of1 version
-        if (response.success && currentCardType !== 'wp-1of1') {
-          console.log('🎯 Creating additional wp-1of1 asset...');
+        // If creating a new BASE asset with superfractor chrome, also create a wp-1of1 version
+        if (response.success && currentCardType === 'base' && currentConfig.chrome === 'superfractor' && currentConfig.oneOfOneWp) {
+          console.log('🎯 Creating additional wp-1of1 asset for BASE + superfractor...');
           
           // Get WP layers for the wp-1of1 asset
           const wpLayers = getLayersByType('wp');
@@ -515,7 +515,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
             
             try {
               const wp1of1Response = await contentPipelineApi.createAsset(jobData.job_id, wp1of1Payload);
-              console.log('✅ wp-1of1 asset created:', wp1of1Response);
+              console.log('✅ wp-1of1 asset created for BASE + superfractor:', wp1of1Response);
             } catch (wp1of1Error) {
               console.error('❌ Error creating wp-1of1 asset:', wp1of1Error);
               // Don't fail the main asset creation if wp-1of1 fails
