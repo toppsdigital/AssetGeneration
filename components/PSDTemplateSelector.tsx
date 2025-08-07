@@ -966,10 +966,9 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
   const handleAllFileUpload = async (file: File, fileSizeMB: number) => {
     console.log('📋 Starting direct S3 proxy upload for EDR PDF...');
     
-    const timestamp = Date.now();
-    const s3FileName = `${timestamp}_${file.name}`;
-    const s3FolderPath = 'asset_generator/dev/edr_uploads';
-    const s3Key = `${s3FolderPath}/${s3FileName}`;
+    const s3FileName = file.name;
+    const appName = jobData?.app_name || 'default_app';
+    const presignedPath = `${appName}/EDR/${s3FileName}`;  // For presigned URL
     
     setUploadProgress(10);
 
@@ -981,7 +980,7 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         client_method: 'put',
-        filename: s3Key,
+        filename: presignedPath,
         expires_in: 3600
       }),
     });
@@ -991,6 +990,13 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
     }
 
     const { url: putUrl } = await putUrlResponse.json();
+    
+    // Extract S3 key from the presigned URL for the extract API
+    const urlObj = new URL(putUrl);
+    const s3PathFromUrl = urlObj.pathname.substring(1); // Remove leading slash and query params are automatically excluded
+    const extractApiS3Key = s3PathFromUrl; // Clean S3 key without query parameters
+    
+    console.log('📋 Extracted S3 key from presigned URL:', extractApiS3Key);
     setUploadProgress(30);
 
     // Step 2: Upload file via our S3 proxy (bypasses Vercel payload limits and CORS)
@@ -1010,7 +1016,7 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
       throw new Error(`S3 upload failed: ${uploadResponse.status} ${errorText}`);
     }
 
-    console.log('✅ PDF uploaded to S3 successfully:', s3Key);
+    console.log('✅ PDF uploaded to S3 successfully:', extractApiS3Key);
     setUploadProgress(85);
 
     // Step 3: Process the PDF via Content Pipeline using S3 key
@@ -1027,9 +1033,9 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
              !lowerLayer.includes('bk_seq_bb');
     });
     
-    // Prepare API request with S3 key (streaming approach)
+    // Prepare API request with full S3 key for extract API
     const requestPayload = {
-      s3_key: s3Key,  // Use S3 key from streaming upload
+      s3_key: extractApiS3Key,  // Use full S3 key for extract API
       filename: file.name,
       layers: filteredLayers.length > 0 ? filteredLayers : undefined,
       job_id: jobData?.job_id
@@ -1038,7 +1044,7 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
     console.log('📋 Calling content pipeline API /pdf-extract:', {
       filename: file.name,
       jobId: jobData?.job_id,
-      s3Key: s3Key,
+      s3Key: extractApiS3Key,
       fileSizeMB: fileSizeMB.toFixed(2),
       totalLayersFound: allExtractedLayers.length,
       filteredLayersCount: filteredLayers.length,
