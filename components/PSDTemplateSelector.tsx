@@ -231,15 +231,19 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     try {
       const psdFile = selectedPhysicalFile.split('/').pop()?.replace('.json', '.psd') || '';
       
-      // Use the job's assets object directly - it contains the latest changes
-      const assets = mergedJobData.assets;
+      // Convert job assets object to array format for API
+      const assets = Object.values(mergedJobData.assets) as any[];
 
       const payload = {
         assets,
         psd_file: psdFile
       };
 
-      console.log('📋 API Payload:', payload);
+      console.log('📋 API Payload:', {
+        ...payload,
+        assetsCount: assets.length,
+        assetsPreview: assets.map((asset: any) => ({ name: asset.name, type: asset.type }))
+      });
 
       const response = await contentPipelineApi.generateAssets(jobData!.job_id!, payload);
       
