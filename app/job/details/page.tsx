@@ -1162,37 +1162,33 @@ function JobDetailsPageContent() {
                 }
                 
                 // Normal case: Update React Query cache with updated job data from asset operations
-                updateJobDataForUpload((prevJobData) => {
-                  console.log('🔄 Updating job data from PSDTemplateSelector:', {
-                    previous: Object.keys(prevJobData?.assets || {}),
-                    new: Object.keys(updatedJobData?.assets || {}),
-                    jobId: updatedJobData?.job_id,
-                    updatedJobData: updatedJobData,
-                    prevJobData: prevJobData
-                  });
-                  
-                  // Map API response to UIJobData format to preserve UI-specific fields
-                  const mappedJobData = {
-                    ...prevJobData, // Preserve existing UI fields (api_files, content_pipeline_files, etc.)
-                    ...updatedJobData, // Overlay new server data (including updated assets)
-                    api_files: updatedJobData.files || prevJobData?.api_files || [],
-                    Subset_name: updatedJobData.source_folder || prevJobData?.Subset_name,
-                    // Force a new object reference to trigger React re-render
-                    _cacheTimestamp: Date.now()
-                  };
-                  
-                  console.log('✅ Mapped job data:', {
-                    hasAssets: !!mappedJobData.assets,
-                    assetsCount: mappedJobData.assets ? Object.keys(mappedJobData.assets).length : 0,
-                    assetIds: mappedJobData.assets ? Object.keys(mappedJobData.assets) : []
-                  });
-                  
-                  // FORCE UI UPDATE: Also update local state to bypass React Query cache issues
-                  console.log('🚀 Setting local job data to force UI update');
-                  setLocalJobData(mappedJobData);
-                  
-                  return mappedJobData;
+                // Map API response to UIJobData format to preserve UI-specific fields
+                const mappedJobData = {
+                  ...effectiveJobData, // Preserve existing UI fields (api_files, content_pipeline_files, etc.)
+                  ...updatedJobData, // Overlay new server data (including updated assets)
+                  api_files: updatedJobData.files || effectiveJobData?.api_files || [],
+                  Subset_name: updatedJobData.source_folder || effectiveJobData?.Subset_name,
+                  // Force a new object reference to trigger React re-render
+                  _cacheTimestamp: Date.now()
+                };
+                
+                console.log('🔄 Updating job data from PSDTemplateSelector:', {
+                  previous: Object.keys(effectiveJobData?.assets || {}),
+                  new: Object.keys(updatedJobData?.assets || {}),
+                  jobId: updatedJobData?.job_id,
+                  hasAssets: !!mappedJobData.assets,
+                  assetsCount: mappedJobData.assets ? Object.keys(mappedJobData.assets).length : 0,
+                  assetIds: mappedJobData.assets ? Object.keys(mappedJobData.assets) : []
                 });
+                
+                // Update React Query cache
+                if (jobData?.job_id) {
+                  syncJobDataAcrossCaches(queryClient, jobData.job_id, () => mappedJobData);
+                }
+                
+                // FORCE UI UPDATE: Update local state to ensure UI reflects new data immediately
+                console.log('🚀 Setting local job data to force UI update');
+                setLocalJobData(mappedJobData);
               }}
             />
 
