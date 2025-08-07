@@ -58,6 +58,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
   const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
   const [savingAsset, setSavingAsset] = useState(false);
   const [processingPdf, setProcessingPdf] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   
   const [spotColorPairs, setSpotColorPairs] = useState<SpotColorPair[]>([{ spot: '', color: undefined }]);
 
@@ -747,25 +748,163 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     const file = event.target.files?.[0];
     if (!file) return;
 
-    console.log('📋 EDR PDF Upload initiated:', file.name);
+    console.log('📋 EDR PDF Upload initiated:', file.name, 'Size:', (file.size / 1024 / 1024).toFixed(2), 'MB');
+    
+    const fileSizeMB = file.size / (1024 * 1024);
+    const useStreamingUpload = fileSizeMB >= 4; // Use streaming for files 4MB and larger
+    
     setProcessingPdf(true);
+    setUploadProgress(0);
 
     try {
-      // Convert file to base64
-      const base64Data = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const result = reader.result as string;
-          // Remove the data:application/pdf;base64, prefix to get just the base64 data
-          const base64 = result.split(',')[1];
-          resolve(base64);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
+      if (useStreamingUpload) {
+        // NEW: Streaming approach for large files (≥4MB)
+        console.log('📋 Using streaming upload approach for large file');
+        await handleLargeFileUpload(file, fileSizeMB);
+      } else {
+        // EXISTING: Base64 approach for smaller files (<4MB) 
+        console.log('📋 Using base64 upload approach for small file');
+        await handleSmallFileUpload(file, fileSizeMB);
+      }
+    } catch (error) {
+      console.error('❌ Error uploading EDR PDF:', error);
+      alert(`Failed to process PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setProcessingPdf(false);
+      setUploadProgress(0);
+    }
+
+    // Clear the input value so the same file can be selected again
+    event.target.value = '';
+  };
+
+  // Handle large file uploads using streaming S3 API
+  const handleLargeFileUpload = async (file: File, fileSizeMB: number) => {
+    // Step 1: Get upload instructions using the new streaming S3 API
+    console.log('📋 Step 1: Getting S3 upload instructions...');
+    
+    const timestamp = Date.now();
+    const s3FileName = `${timestamp}_${file.name}`;
+    const s3FolderPath = 'asset_generator/dev/edr_uploads';
+      
+      // Use the new streaming upload API format
+      const uploadInstructionsResponse = await fetch('/api/content-pipeline-proxy?operation=s3_upload_files', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'upload',
+          folder: s3FolderPath,
+          files: [{
+            filename: s3FileName,
+            size: file.size,
+            content_type: file.type || 'application/pdf'
+          }]
+        }),
       });
 
-      console.log('📋 File converted to base64, size:', base64Data.length, 'characters');
+      if (!uploadInstructionsResponse.ok) {
+        const errorData = await uploadInstructionsResponse.json().catch(() => ({}));
+        throw new Error(`Failed to get upload instructions: ${uploadInstructionsResponse.status} ${JSON.stringify(errorData)}`);
+      }
 
+      const instructionsResult = await uploadInstructionsResponse.json();
+      console.log('✅ Got upload instructions:', instructionsResult);
+      setUploadProgress(10);
+
+      const uploadInstruction = instructionsResult.data.upload_instructions[0];
+      const s3FilePath = uploadInstruction.s3_key;
+
+      // Step 2: Upload file using the provided instructions
+      console.log('📋 Step 2: Uploading file using instructions...');
+      
+      let uploadResponse;
+      
+      if (uploadInstruction.upload_type === 'single') {
+        // Single upload for smaller files (< 100MB)
+        console.log('📋 Using single upload method');
+        
+        const formData = new FormData();
+        
+        // Add all the required fields from the upload instructions
+        Object.entries(uploadInstruction.upload_data.fields).forEach(([key, value]) => {
+          formData.append(key, value as string);
+        });
+        
+        // Add the file last (important for S3)
+        formData.append('file', file);
+        
+        uploadResponse = await fetch(uploadInstruction.upload_data.url, {
+          method: uploadInstruction.upload_data.method,
+          body: formData,
+        });
+        
+        setUploadProgress(90); // Single upload completed
+        
+      } else if (uploadInstruction.upload_type === 'multipart') {
+        // Multipart upload for larger files (> 100MB)
+        console.log('📋 Using multipart upload method');
+        
+        const partETags = [];
+        const partSize = uploadInstruction.upload_data.part_size;
+        
+        // Upload each part with progress tracking
+        const totalParts = uploadInstruction.upload_data.part_urls.length;
+        for (let i = 0; i < uploadInstruction.upload_data.part_urls.length; i++) {
+          const partInfo = uploadInstruction.upload_data.part_urls[i];
+          const start = partInfo.size_range.start;
+          const end = Math.min(partInfo.size_range.end + 1, file.size);
+          const chunk = file.slice(start, end);
+          
+          console.log(`📋 Uploading part ${partInfo.part_number} (${start}-${end})`);
+          
+          const partResponse = await fetch(partInfo.url, {
+            method: 'PUT',
+            body: chunk,
+          });
+          
+          if (!partResponse.ok) {
+            throw new Error(`Part ${partInfo.part_number} upload failed: ${partResponse.status}`);
+          }
+          
+          const etag = partResponse.headers.get('ETag');
+          partETags.push({
+            PartNumber: partInfo.part_number,
+            ETag: etag
+          });
+          
+          // Update progress (10% for getting instructions, 80% for upload, 10% for processing)
+          const partProgress = ((i + 1) / totalParts) * 80;
+          setUploadProgress(10 + partProgress);
+        }
+        
+        // Complete the multipart upload
+        console.log('📋 Completing multipart upload...');
+        
+        const completeXML = `<?xml version="1.0" encoding="UTF-8"?>
+<CompleteMultipartUpload>
+${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETag>${part.ETag}</ETag></Part>`).join('\n')}
+</CompleteMultipartUpload>`;
+        
+        uploadResponse = await fetch(uploadInstruction.upload_data.complete_url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/xml',
+          },
+          body: completeXML,
+        });
+      }
+
+      if (!uploadResponse.ok) {
+        const errorText = await uploadResponse.text();
+        throw new Error(`S3 upload failed: ${uploadResponse.status} ${errorText}`);
+      }
+
+      console.log('✅ PDF uploaded to S3 successfully:', s3FilePath);
+      setUploadProgress(95);
+
+      // Step 3: Process the uploaded file via Content Pipeline using S3 path
+      console.log('📋 Step 3: Calling Content Pipeline for PDF extraction...');
+      
       // Get extracted layers to include in the request
       const allExtractedLayers = getExtractedLayers();
       
@@ -777,25 +916,26 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                !lowerLayer.includes('bk_seq_bb');
       });
       
-      // Prepare API request
+      // Prepare API request with S3 file path (small payload)
       const requestPayload = {
-        pdf_data: base64Data,
-        filename: file.name,
+        s3_file_path: s3FilePath,  // Use S3 file path instead of base64
+        filename: file.name,       // Original filename for reference
         layers: filteredLayers.length > 0 ? filteredLayers : undefined,
         job_id: jobData?.job_id
       };
 
       console.log('📋 Calling content pipeline API /pdf-extract:', {
-        filename: file.name,
+        originalFilename: file.name,
+        s3FilePath: s3FilePath,
         jobId: jobData?.job_id,
-        base64Length: base64Data.length,
+        fileSizeMB: (file.size / 1024 / 1024).toFixed(2),
         totalLayersFound: allExtractedLayers.length,
         filteredLayersCount: filteredLayers.length,
         filteredLayers: filteredLayers,
         excludedLayers: allExtractedLayers.filter(layer => !filteredLayers.includes(layer))
       });
 
-      // Call the content pipeline API
+      // Call the content pipeline API (small payload, just metadata)
       const response = await contentPipelineApi.extractPdfData(requestPayload);
 
       console.log('✅ PDF Extract API Response:', response);
@@ -828,16 +968,84 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       } else {
         console.log('❌ Could not update job data - missing onJobDataUpdate callback');
       }
+  };
 
-    } catch (error) {
-      console.error('❌ Error uploading EDR PDF:', error);
-      alert(`Failed to process PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setProcessingPdf(false);
+  // Handle small file uploads using base64 approach (existing working method)
+  const handleSmallFileUpload = async (file: File, fileSizeMB: number) => {
+    // Step 1: Convert file to base64
+    console.log('📋 Step 1: Converting PDF to base64...');
+    const base64Data = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        // Remove the data:application/pdf;base64, prefix to get just the base64 data
+        const base64 = result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+    setUploadProgress(50);
+    console.log('📋 File converted to base64, size:', base64Data.length, 'characters');
+
+    // Step 2: Process the PDF via Content Pipeline using base64 data
+    console.log('📋 Step 2: Calling Content Pipeline for PDF extraction...');
+    
+    // Get extracted layers to include in the request
+    const allExtractedLayers = getExtractedLayers();
+    
+    // Filter out specific layer types that shouldn't be sent to PDF extraction
+    const filteredLayers = allExtractedLayers.filter(layer => {
+      const lowerLayer = layer.toLowerCase();
+      return !lowerLayer.includes('fr_wp_inv') && 
+             !lowerLayer.includes('bk_seq') && 
+             !lowerLayer.includes('bk_seq_bb');
+    });
+    
+    // Prepare API request with base64 data (original working approach)
+    const requestPayload = {
+      pdf_data: base64Data,  // Use base64 data for small files
+      filename: file.name,
+      layers: filteredLayers.length > 0 ? filteredLayers : undefined,
+      job_id: jobData?.job_id
+    };
+
+    console.log('📋 Calling content pipeline API /pdf-extract:', {
+      filename: file.name,
+      jobId: jobData?.job_id,
+      fileSizeMB: fileSizeMB.toFixed(2),
+      base64Length: base64Data.length,
+      totalLayersFound: allExtractedLayers.length,
+      filteredLayersCount: filteredLayers.length,
+      filteredLayers: filteredLayers,
+      excludedLayers: allExtractedLayers.filter(layer => !filteredLayers.includes(layer))
+    });
+
+    setUploadProgress(80);
+
+    // Call the content pipeline API with base64 data
+    const response = await contentPipelineApi.extractPdfData(requestPayload);
+    
+    console.log('✅ PDF Extract API Response:', response);
+    console.log('📋 Full JSON Response:', JSON.stringify(response, null, 2));
+
+    setUploadProgress(95);
+
+    // Update job data if response contains job object
+    if (response.job && onJobDataUpdate) {
+      console.log('🔄 Updating job data from EDR PDF import response (found job object)');
+      onJobDataUpdate(response.job);
+    } else if (response.success && response.job && onJobDataUpdate) {
+      console.log('🔄 Updating job data from EDR PDF import response (success + job)');
+      onJobDataUpdate(response.job);
+    } else if (onJobDataUpdate) {
+      console.log('🔄 No job data in EDR response, triggering refetch to get updated job data');
+      // PDF processed successfully but no job data returned - trigger a refetch
+      onJobDataUpdate({ _forceRefetch: true, job_id: jobData?.job_id });
+    } else {
+      console.log('❌ Could not update job data - missing onJobDataUpdate callback');
     }
-
-    // Clear the input value so the same file can be selected again
-    event.target.value = '';
   };
 
   if (!isVisible) return null;
@@ -1749,6 +1957,36 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                     disabled={processingPdf}
                     onChange={handleEDRPdfUpload}
                   />
+                  
+                  {/* Upload Progress Indicator */}
+                  {processingPdf && uploadProgress > 0 && (
+                    <div style={{
+                      marginTop: 12,
+                      fontSize: 12,
+                      color: '#9ca3af'
+                    }}>
+                      <div style={{
+                        background: 'rgba(255, 255, 255, 0.1)',
+                        borderRadius: 4,
+                        height: 6,
+                        marginBottom: 4,
+                        overflow: 'hidden'
+                      }}>
+                        <div style={{
+                          background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)',
+                          height: '100%',
+                          width: `${uploadProgress}%`,
+                          transition: 'width 0.3s ease'
+                        }} />
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        {uploadProgress < 10 && 'Getting upload instructions...'}
+                        {uploadProgress >= 10 && uploadProgress < 90 && 'Uploading file...'}
+                        {uploadProgress >= 90 && uploadProgress < 95 && 'Upload complete...'}
+                        {uploadProgress >= 95 && 'Processing PDF...'}
+                      </div>
+                    </div>
+                  )}
                 </div>
                 
                 {configuredAssets.length > 0 ? (

@@ -673,8 +673,11 @@ class ContentPipelineAPI {
     }
   }
 
-  async extractPdfData(pdfData: { pdf_data: string; filename: string; layers?: string[]; job_id?: string }): Promise<any> {
-    console.log(`📋 Extracting PDF data for: ${pdfData.filename}`, pdfData.layers ? `with ${pdfData.layers.length} layers` : 'without layers', pdfData.job_id ? `for job: ${pdfData.job_id}` : 'without job ID');
+  async extractPdfData(pdfData: { pdf_data?: string; s3_file_path?: string; filename: string; layers?: string[]; job_id?: string }): Promise<any> {
+    const dataSource = pdfData.s3_file_path ? 'S3 file path' : 'base64 data';
+    const dataValue = pdfData.s3_file_path || (pdfData.pdf_data ? `${pdfData.pdf_data.length} chars` : 'none');
+    
+    console.log(`📋 Extracting PDF data for: ${pdfData.filename} using ${dataSource}: ${dataValue}`, pdfData.layers ? `with ${pdfData.layers.length} layers` : 'without layers', pdfData.job_id ? `for job: ${pdfData.job_id}` : 'without job ID');
     
     const response = await fetch(`${this.baseUrl}?operation=pdf-extract`, {
       method: 'POST',
