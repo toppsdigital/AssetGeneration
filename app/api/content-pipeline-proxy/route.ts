@@ -727,6 +727,11 @@ async function handleRequest(request: NextRequest, method: string) {
         // Don't send body with DELETE request - some backends don't accept it
         apiBody = {}; // Empty body for DELETE
         break;
+
+      case 'pdf-extract':
+        apiUrl += '/pdf-extract';
+        apiMethod = 'POST';
+        break;
         
       default:
         return NextResponse.json({ 
@@ -737,6 +742,7 @@ async function handleRequest(request: NextRequest, method: string) {
             'batch_create_files', 'batch_get_files', 'update_pdf_status', 'batch_update_pdf_status',
             'generate_assets', 'regenerate_assets', 'update_download_url',
             'create_asset', 'update_asset', 'delete_asset',
+            'pdf-extract',
             's3_download_file', 's3_download_folder', 's3_upload_files'
           ]
         }, { status: 400 });
