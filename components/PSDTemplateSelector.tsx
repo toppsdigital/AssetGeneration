@@ -109,6 +109,18 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     }
   }, [currentCardType, currentConfig.layer, currentConfig.vfx, currentConfig.chrome, currentConfig.oneOfOneWp, spotColorPairs, editingAssetId]);
 
+  // Debug mergedJobData changes
+  useEffect(() => {
+    console.log('🔍 mergedJobData changed in PSDTemplateSelector:', {
+      timestamp: new Date().toISOString(),
+      hasMergedJobData: !!mergedJobData,
+      jobId: mergedJobData?.job_id,
+      hasAssets: !!mergedJobData?.assets,
+      assetsCount: mergedJobData?.assets ? Object.keys(mergedJobData.assets).length : 0,
+      assetIds: mergedJobData?.assets ? Object.keys(mergedJobData.assets) : []
+    });
+  }, [mergedJobData]);
+
   const fetchPhysicalJsonFiles = async () => {
     try {
       setLoadingPhysicalFiles(true);
@@ -392,14 +404,20 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
   // Helper function to get assets from job data
   const getConfiguredAssets = (): AssetConfig[] => {
     console.log('🔍 getConfiguredAssets called:', {
+      timestamp: new Date().toISOString(),
       hasMergedJobData: !!mergedJobData,
       hasAssets: !!mergedJobData?.assets,
       assetsType: typeof mergedJobData?.assets,
       assetsKeys: mergedJobData?.assets ? Object.keys(mergedJobData.assets) : [],
-      fullMergedJobData: mergedJobData
+      assetsCount: mergedJobData?.assets ? Object.keys(mergedJobData.assets).length : 0,
+      mergedJobDataKeys: mergedJobData ? Object.keys(mergedJobData) : [],
+      jobId: mergedJobData?.job_id
     });
     
-    if (!mergedJobData?.assets) return [];
+    if (!mergedJobData?.assets) {
+      console.log('❌ No assets found in mergedJobData, returning empty array');
+      return [];
+    }
     
     const assets = Object.entries(mergedJobData.assets).map(([assetId, assetData]: [string, any]) => ({
       id: assetId,
@@ -414,7 +432,12 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       oneOfOneWp: assetData.oneOfOneWp || false
     }));
     
-    console.log('✅ Parsed assets:', assets);
+    console.log('✅ Parsed assets from mergedJobData.assets:', {
+      count: assets.length,
+      assetIds: assets.map(a => a.id),
+      assetNames: assets.map(a => a.name),
+      assetTypes: assets.map(a => a.type)
+    });
     return assets;
   };
 
@@ -774,14 +797,32 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       console.log('✅ PDF Extract API Response:', response);
       console.log('📋 Full JSON Response:', JSON.stringify(response, null, 2));
 
+      // Debug the response structure and compare to addAsset
+      console.log('🔍 EDR Response Debug:', {
+        hasSuccess: 'success' in response,
+        successValue: response.success,
+        hasJob: 'job' in response,
+        jobExists: !!response.job,
+        jobAssetsCount: response.job?.assets ? Object.keys(response.job.assets).length : 0,
+        jobAssetIds: response.job?.assets ? Object.keys(response.job.assets) : [],
+        hasOnJobDataUpdate: !!onJobDataUpdate,
+        responseKeys: Object.keys(response)
+      });
+
       // Update job data if response contains job object
-      if (response.success && response.job && onJobDataUpdate) {
-        console.log('🔄 Updating job data from EDR PDF import response');
+      // Note: EDR response has job directly, not response.success like createAsset
+      if (response.job && onJobDataUpdate) {
+        console.log('🔄 Updating job data from EDR PDF import response (found job object)');
         onJobDataUpdate(response.job);
-      } else if (response.success && onJobDataUpdate) {
+      } else if (response.success && response.job && onJobDataUpdate) {
+        console.log('🔄 Updating job data from EDR PDF import response (success + job)');
+        onJobDataUpdate(response.job);
+      } else if (onJobDataUpdate) {
         console.log('🔄 No job data in EDR response, triggering refetch to get updated job data');
         // PDF processed successfully but no job data returned - trigger a refetch
         onJobDataUpdate({ _forceRefetch: true, job_id: jobData?.job_id });
+      } else {
+        console.log('❌ Could not update job data - missing onJobDataUpdate callback');
       }
 
     } catch (error) {
