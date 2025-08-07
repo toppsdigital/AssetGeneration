@@ -962,95 +962,48 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
       }
   };
 
-  // Handle all file uploads using streaming approach (base64 no longer supported)
+  // Handle all file uploads using direct S3 proxy approach (bypasses Vercel limits)
   const handleAllFileUpload = async (file: File, fileSizeMB: number) => {
-    // Step 1: Get upload instructions for streaming upload
-    console.log('📋 Step 1: Getting upload instructions for streaming upload...');
+    console.log('📋 Starting direct S3 proxy upload for EDR PDF...');
     
     const timestamp = Date.now();
     const s3FileName = `${timestamp}_${file.name}`;
     const s3FolderPath = 'asset_generator/dev/edr_uploads';
+    const s3Key = `${s3FolderPath}/${s3FileName}`;
     
-    const uploadInstructionsResponse = await fetch('/api/content-pipeline-proxy?operation=s3_upload_files', {
+    setUploadProgress(10);
+
+    // Step 1: Get presigned PUT URL from our S3 proxy
+    console.log('📋 Step 1: Getting presigned PUT URL...');
+    
+    const putUrlResponse = await fetch('/api/s3-proxy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        folder: s3FolderPath,
-        files: [{
-          filename: s3FileName,
-          size: file.size,
-          content_type: file.type || 'application/pdf'
-        }]
+        client_method: 'put',
+        filename: s3Key,
+        expires_in: 3600
       }),
     });
 
-    if (!uploadInstructionsResponse.ok) {
-      const errorData = await uploadInstructionsResponse.json().catch(() => ({}));
-      throw new Error(`Failed to get upload instructions: ${uploadInstructionsResponse.status} ${JSON.stringify(errorData)}`);
+    if (!putUrlResponse.ok) {
+      throw new Error('Failed to get PUT presigned URL for EDR upload');
     }
 
-    const instructionsResult = await uploadInstructionsResponse.json();
-    const uploadInstruction = instructionsResult.data.upload_instructions[0];
-    const s3Key = uploadInstruction.s3_key;
+    const { url: putUrl } = await putUrlResponse.json();
+    setUploadProgress(30);
 
-    setUploadProgress(10);
-
-    // Step 2: Upload file using streaming approach
-    console.log('📋 Step 2: Uploading file using streaming...');
+    // Step 2: Upload file via our S3 proxy (bypasses Vercel payload limits and CORS)
+    console.log('📋 Step 2: Uploading file via S3 proxy...');
     
-    let uploadResponse;
-    
-    if (uploadInstruction.upload_type === 'single') {
-      const formData = new FormData();
-      Object.entries(uploadInstruction.upload_data.fields).forEach(([key, value]) => {
-        formData.append(key, value as string);
-      });
-      formData.append('file', file);
-      
-      uploadResponse = await fetch(uploadInstruction.upload_data.url, {
-        method: uploadInstruction.upload_data.method,
-        body: formData,
-      });
-    } else if (uploadInstruction.upload_type === 'multipart') {
-      const partETags = [];
-      const totalParts = uploadInstruction.upload_data.part_urls.length;
-      
-      for (let i = 0; i < uploadInstruction.upload_data.part_urls.length; i++) {
-        const partInfo = uploadInstruction.upload_data.part_urls[i];
-        const start = partInfo.size_range.start;
-        const end = Math.min(partInfo.size_range.end + 1, file.size);
-        const chunk = file.slice(start, end);
-        
-        const partResponse = await fetch(partInfo.url, {
-          method: 'PUT',
-          body: chunk,
-        });
-        
-        if (!partResponse.ok) {
-          throw new Error(`Part ${partInfo.part_number} upload failed: ${partResponse.status}`);
-        }
-        
-        const etag = partResponse.headers.get('ETag');
-        partETags.push({
-          PartNumber: partInfo.part_number,
-          ETag: etag
-        });
-        
-        const partProgress = ((i + 1) / totalParts) * 70; // 70% for upload
-        setUploadProgress(10 + partProgress);
-      }
-      
-      const completeXML = `<?xml version="1.0" encoding="UTF-8"?>
-<CompleteMultipartUpload>
-${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETag>${part.ETag}</ETag></Part>`).join('\n')}
-</CompleteMultipartUpload>`;
-      
-      uploadResponse = await fetch(uploadInstruction.upload_data.complete_url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/xml' },
-        body: completeXML,
-      });
-    }
+    const uploadResponse = await fetch('/api/s3-upload', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': file.type || 'application/pdf',
+        'x-presigned-url': putUrl,
+      },
+      body: file,
+    });
 
     if (!uploadResponse.ok) {
       const errorText = await uploadResponse.text();

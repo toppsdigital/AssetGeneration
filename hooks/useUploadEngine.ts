@@ -137,47 +137,74 @@ export const useUploadEngine = ({
     });
   }, []);
 
-  // Upload files using Content Pipeline API streaming approach
+  // Upload files directly via our S3 proxy to avoid Vercel payload limits
   const uploadFilesToContentPipeline = useCallback(async (
     files: Array<{ file: File; filePath: string }>
   ): Promise<void> => {
     try {
-      console.log('📤 Starting Content Pipeline streaming upload for', files.length, 'files');
+      console.log('📤 Starting direct S3 proxy upload for', files.length, 'files');
       
-      // Get upload instructions for all files (streaming approach for all)
-      const fileInstructions = files.map(({ file, filePath }) => ({
-        filename: filePath,
-        size: file.size,
-        content_type: file.type || 'application/pdf'
-      }));
+      const uploadedFiles = [];
       
-      const instructionsResponse = await fetch('/api/content-pipeline-proxy?operation=s3_upload_files', {
+      for (const { file, filePath } of files) {
+        console.log(`📤 Uploading file via S3 proxy: ${filePath} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
+        
+        // Step 1: Get presigned PUT URL for our S3 bucket
+        const s3Key = `asset_generator/dev/uploads/${filePath}`;
+        const presignedResponse = await fetch('/api/s3-proxy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            client_method: 'put',
+            filename: s3Key,
+            expires_in: 3600
+          }),
+        });
+
+        if (!presignedResponse.ok) {
+          throw new Error(`Failed to get presigned URL for ${filePath}: ${presignedResponse.status}`);
+        }
+
+        const { url: presignedUrl } = await presignedResponse.json();
+        
+        // Step 2: Upload file directly to S3 via our proxy (bypasses Vercel limits)
+        const uploadResponse = await fetch('/api/s3-upload', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': file.type || 'application/pdf',
+            'x-presigned-url': presignedUrl,
+          },
+          body: file,
+        });
+
+        if (!uploadResponse.ok) {
+          const errorText = await uploadResponse.text();
+          throw new Error(`Failed to upload ${filePath}: ${uploadResponse.status} - ${errorText}`);
+        }
+
+        uploadedFiles.push({ filename: filePath, s3_key: s3Key });
+        console.log(`✅ Successfully uploaded via proxy: ${filePath}`);
+      }
+      
+      // Step 3: Notify Content Pipeline about the uploaded files
+      console.log('📤 Notifying Content Pipeline about uploaded files...');
+      const notifyResponse = await fetch('/api/content-pipeline-proxy?operation=register_uploaded_files', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-
-          folder: 'asset_generator/dev/uploads',
-          files: fileInstructions
+          job_id: jobData?.job_id,
+          uploaded_files: uploadedFiles
         }),
       });
 
-      if (!instructionsResponse.ok) {
-        const errorData = await instructionsResponse.json().catch(() => ({}));
-        throw new Error(`Failed to get upload instructions: ${instructionsResponse.status} ${JSON.stringify(errorData)}`);
-      }
-
-      const instructionsResult = await instructionsResponse.json();
-      
-      // Upload each file using its specific streaming instructions
-      for (let i = 0; i < files.length; i++) {
-        const { file, filePath } = files[i];
-        const uploadInstruction = instructionsResult.data.upload_instructions[i];
-        await uploadLargeFileToS3(file, filePath, uploadInstruction);
+      if (!notifyResponse.ok) {
+        console.warn('⚠️ Failed to notify Content Pipeline about uploads, but files are uploaded');
+        // Don't throw here - files are uploaded successfully
       }
       
-      console.log('✅ All Content Pipeline streaming uploads completed successfully');
+      console.log('✅ All files uploaded successfully via S3 proxy');
     } catch (error) {
-      console.error('❌ Content Pipeline streaming upload failed:', error);
+      console.error('❌ S3 proxy upload failed:', error);
       throw error;
     }
   }, [jobData]);
@@ -212,9 +239,34 @@ export const useUploadEngine = ({
         console.log('📤 FormData prepared, uploading to S3...');
         
         try {
-          uploadResponse = await fetch(uploadInstruction.upload_data.url, {
-            method: uploadInstruction.upload_data.method,
-            body: formData,
+          // For now, let's create a simple presigned PUT URL instead of complex POST
+          console.log('📤 Getting simple presigned PUT URL instead of POST');
+          
+          // Request a simple PUT URL that works with our existing proxy
+          const putUrlResponse = await fetch('/api/s3-proxy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              client_method: 'put',
+              filename: uploadInstruction.s3_key,
+              expires_in: 3600
+            }),
+          });
+
+          if (!putUrlResponse.ok) {
+            throw new Error('Failed to get PUT presigned URL');
+          }
+
+          const { url: putUrl } = await putUrlResponse.json();
+          
+          // Use our S3 proxy with the PUT URL
+          uploadResponse = await fetch('/api/s3-upload', {
+            method: 'PUT',
+            headers: {
+              'Content-Type': file.type || 'application/pdf',
+              'x-presigned-url': putUrl,
+            },
+            body: file,
           });
           
           console.log('📤 S3 response status:', uploadResponse.status);
