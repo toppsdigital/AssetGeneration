@@ -1120,7 +1120,7 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
             fontSize: 24,
             flexShrink: 0
           }}>
-            ⚡
+            {mergedJobData?.job_status?.toLowerCase() === 'generation-failed' ? '🔄' : '⚡'}
           </div>
           <div>
             <h2 style={{
@@ -1129,7 +1129,7 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
               color: '#f8f8f8',
               margin: '0 0 8px 0'
             }}>
-              ⚡ Action Required: Configure Digital Assets
+              ⚡ {mergedJobData?.job_status?.toLowerCase() === 'generation-failed' ? 'Retry Asset Generation' : 'Action Required: Configure Digital Assets'}
             </h2>
             <p style={{
               fontSize: '1rem',
@@ -1137,7 +1137,10 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
               margin: 0,
               lineHeight: 1.5
             }}>
-              Configure your digital assets by selecting a PSD template and configuring card types, layers, and colors below.
+              {mergedJobData?.job_status?.toLowerCase() === 'generation-failed' 
+                ? 'Asset generation failed. Review and modify your configuration below, then retry generation.'
+                : 'Configure your digital assets by selecting a PSD template and configuring card types, layers, and colors below.'
+              }
             </p>
           </div>
         </div>
@@ -2370,7 +2373,9 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
                         Creating Assets...
                     </div>
                   ) : (
-                      `🎨 Generate All Assets (${configuredAssets.length})`
+                      mergedJobData?.job_status?.toLowerCase() === 'generation-failed' 
+                        ? `🔄 Retry Asset Generation (${configuredAssets.length})`
+                        : `🎨 Generate All Assets (${configuredAssets.length})`
                   )}
                 </button>
                 )}

@@ -1135,7 +1135,7 @@ function JobDetailsPageContent() {
             <PSDTemplateSelector
               jobData={jobData}
               mergedJobData={mergedJobData}
-              isVisible={mergedJobData?.job_status?.toLowerCase() === 'extracted' && !loading && !loadingFiles}
+              isVisible={(mergedJobData?.job_status?.toLowerCase() === 'extracted' || mergedJobData?.job_status?.toLowerCase() === 'generation-failed') && !loading && !loadingFiles}
               creatingAssets={creatingAssets}
               setCreatingAssets={setCreatingAssets}
               onJobDataUpdate={(updatedJobData) => {
