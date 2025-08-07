@@ -751,21 +751,14 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     console.log('📋 EDR PDF Upload initiated:', file.name, 'Size:', (file.size / 1024 / 1024).toFixed(2), 'MB');
     
     const fileSizeMB = file.size / (1024 * 1024);
-    const useStreamingUpload = fileSizeMB >= 4; // Use streaming for files 4MB and larger
     
     setProcessingPdf(true);
     setUploadProgress(0);
 
     try {
-      if (useStreamingUpload) {
-        // NEW: Streaming approach for large files (≥4MB)
-        console.log('📋 Using streaming upload approach for large file');
-        await handleLargeFileUpload(file, fileSizeMB);
-      } else {
-        // EXISTING: Base64 approach for smaller files (<4MB) 
-        console.log('📋 Using base64 upload approach for small file');
-        await handleSmallFileUpload(file, fileSizeMB);
-      }
+      // Always use streaming approach (base64 no longer supported)
+      console.log('📋 Using streaming upload approach for all files');
+      await handleAllFileUpload(file, fileSizeMB);
     } catch (error) {
       console.error('❌ Error uploading EDR PDF:', error);
       alert(`Failed to process PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -792,7 +785,6 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          mode: 'upload',
           folder: s3FolderPath,
           files: [{
             filename: s3FileName,
@@ -812,7 +804,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       setUploadProgress(10);
 
       const uploadInstruction = instructionsResult.data.upload_instructions[0];
-      const s3FilePath = uploadInstruction.s3_key;
+      const s3Key = uploadInstruction.s3_key; // Use the exact s3_key returned from upload instructions
 
       // Step 2: Upload file using the provided instructions
       console.log('📋 Step 2: Uploading file using instructions...');
@@ -899,10 +891,10 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
         throw new Error(`S3 upload failed: ${uploadResponse.status} ${errorText}`);
       }
 
-      console.log('✅ PDF uploaded to S3 successfully:', s3FilePath);
+      console.log('✅ PDF uploaded to S3 successfully:', s3Key);
       setUploadProgress(95);
 
-      // Step 3: Process the uploaded file via Content Pipeline using S3 path
+      // Step 3: Process the uploaded file via Content Pipeline using S3 key
       console.log('📋 Step 3: Calling Content Pipeline for PDF extraction...');
       
       // Get extracted layers to include in the request
@@ -916,9 +908,9 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
                !lowerLayer.includes('bk_seq_bb');
       });
       
-      // Prepare API request with S3 file path (small payload)
+      // Prepare API request with S3 key (exact key from upload response)
       const requestPayload = {
-        s3_file_path: s3FilePath,  // Use S3 file path instead of base64
+        s3_key: s3Key,  // Use the exact s3_key returned from upload instructions
         filename: file.name,       // Original filename for reference
         layers: filteredLayers.length > 0 ? filteredLayers : undefined,
         job_id: jobData?.job_id
@@ -926,7 +918,7 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
 
       console.log('📋 Calling content pipeline API /pdf-extract:', {
         originalFilename: file.name,
-        s3FilePath: s3FilePath,
+        s3Key: s3Key,
         jobId: jobData?.job_id,
         fileSizeMB: (file.size / 1024 / 1024).toFixed(2),
         totalLayersFound: allExtractedLayers.length,
@@ -970,27 +962,106 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
       }
   };
 
-  // Handle small file uploads using base64 approach (existing working method)
-  const handleSmallFileUpload = async (file: File, fileSizeMB: number) => {
-    // Step 1: Convert file to base64
-    console.log('📋 Step 1: Converting PDF to base64...');
-    const base64Data = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        // Remove the data:application/pdf;base64, prefix to get just the base64 data
-        const base64 = result.split(',')[1];
-        resolve(base64);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
+  // Handle all file uploads using streaming approach (base64 no longer supported)
+  const handleAllFileUpload = async (file: File, fileSizeMB: number) => {
+    // Step 1: Get upload instructions for streaming upload
+    console.log('📋 Step 1: Getting upload instructions for streaming upload...');
+    
+    const timestamp = Date.now();
+    const s3FileName = `${timestamp}_${file.name}`;
+    const s3FolderPath = 'asset_generator/dev/edr_uploads';
+    
+    const uploadInstructionsResponse = await fetch('/api/content-pipeline-proxy?operation=s3_upload_files', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        folder: s3FolderPath,
+        files: [{
+          filename: s3FileName,
+          size: file.size,
+          content_type: file.type || 'application/pdf'
+        }]
+      }),
     });
 
-    setUploadProgress(50);
-    console.log('📋 File converted to base64, size:', base64Data.length, 'characters');
+    if (!uploadInstructionsResponse.ok) {
+      const errorData = await uploadInstructionsResponse.json().catch(() => ({}));
+      throw new Error(`Failed to get upload instructions: ${uploadInstructionsResponse.status} ${JSON.stringify(errorData)}`);
+    }
 
-    // Step 2: Process the PDF via Content Pipeline using base64 data
-    console.log('📋 Step 2: Calling Content Pipeline for PDF extraction...');
+    const instructionsResult = await uploadInstructionsResponse.json();
+    const uploadInstruction = instructionsResult.data.upload_instructions[0];
+    const s3Key = uploadInstruction.s3_key;
+
+    setUploadProgress(10);
+
+    // Step 2: Upload file using streaming approach
+    console.log('📋 Step 2: Uploading file using streaming...');
+    
+    let uploadResponse;
+    
+    if (uploadInstruction.upload_type === 'single') {
+      const formData = new FormData();
+      Object.entries(uploadInstruction.upload_data.fields).forEach(([key, value]) => {
+        formData.append(key, value as string);
+      });
+      formData.append('file', file);
+      
+      uploadResponse = await fetch(uploadInstruction.upload_data.url, {
+        method: uploadInstruction.upload_data.method,
+        body: formData,
+      });
+    } else if (uploadInstruction.upload_type === 'multipart') {
+      const partETags = [];
+      const totalParts = uploadInstruction.upload_data.part_urls.length;
+      
+      for (let i = 0; i < uploadInstruction.upload_data.part_urls.length; i++) {
+        const partInfo = uploadInstruction.upload_data.part_urls[i];
+        const start = partInfo.size_range.start;
+        const end = Math.min(partInfo.size_range.end + 1, file.size);
+        const chunk = file.slice(start, end);
+        
+        const partResponse = await fetch(partInfo.url, {
+          method: 'PUT',
+          body: chunk,
+        });
+        
+        if (!partResponse.ok) {
+          throw new Error(`Part ${partInfo.part_number} upload failed: ${partResponse.status}`);
+        }
+        
+        const etag = partResponse.headers.get('ETag');
+        partETags.push({
+          PartNumber: partInfo.part_number,
+          ETag: etag
+        });
+        
+        const partProgress = ((i + 1) / totalParts) * 70; // 70% for upload
+        setUploadProgress(10 + partProgress);
+      }
+      
+      const completeXML = `<?xml version="1.0" encoding="UTF-8"?>
+<CompleteMultipartUpload>
+${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETag>${part.ETag}</ETag></Part>`).join('\n')}
+</CompleteMultipartUpload>`;
+      
+      uploadResponse = await fetch(uploadInstruction.upload_data.complete_url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/xml' },
+        body: completeXML,
+      });
+    }
+
+    if (!uploadResponse.ok) {
+      const errorText = await uploadResponse.text();
+      throw new Error(`S3 upload failed: ${uploadResponse.status} ${errorText}`);
+    }
+
+    console.log('✅ PDF uploaded to S3 successfully:', s3Key);
+    setUploadProgress(85);
+
+    // Step 3: Process the PDF via Content Pipeline using S3 key
+    console.log('📋 Step 3: Calling Content Pipeline for PDF extraction...');
     
     // Get extracted layers to include in the request
     const allExtractedLayers = getExtractedLayers();
@@ -1003,9 +1074,9 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
              !lowerLayer.includes('bk_seq_bb');
     });
     
-    // Prepare API request with base64 data (original working approach)
+    // Prepare API request with S3 key (streaming approach)
     const requestPayload = {
-      pdf_data: base64Data,  // Use base64 data for small files
+      s3_key: s3Key,  // Use S3 key from streaming upload
       filename: file.name,
       layers: filteredLayers.length > 0 ? filteredLayers : undefined,
       job_id: jobData?.job_id
@@ -1014,17 +1085,17 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
     console.log('📋 Calling content pipeline API /pdf-extract:', {
       filename: file.name,
       jobId: jobData?.job_id,
+      s3Key: s3Key,
       fileSizeMB: fileSizeMB.toFixed(2),
-      base64Length: base64Data.length,
       totalLayersFound: allExtractedLayers.length,
       filteredLayersCount: filteredLayers.length,
       filteredLayers: filteredLayers,
       excludedLayers: allExtractedLayers.filter(layer => !filteredLayers.includes(layer))
     });
 
-    setUploadProgress(80);
+    setUploadProgress(90);
 
-    // Call the content pipeline API with base64 data
+    // Call the content pipeline API with S3 key
     const response = await contentPipelineApi.extractPdfData(requestPayload);
     
     console.log('✅ PDF Extract API Response:', response);
@@ -1041,7 +1112,6 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
       onJobDataUpdate(response.job);
     } else if (onJobDataUpdate) {
       console.log('🔄 No job data in EDR response, triggering refetch to get updated job data');
-      // PDF processed successfully but no job data returned - trigger a refetch
       onJobDataUpdate({ _forceRefetch: true, job_id: jobData?.job_id });
     } else {
       console.log('❌ Could not update job data - missing onJobDataUpdate callback');

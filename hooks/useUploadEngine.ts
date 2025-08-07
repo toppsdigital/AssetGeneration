@@ -137,49 +137,154 @@ export const useUploadEngine = ({
     });
   }, []);
 
-  // Upload files using Content Pipeline API
+  // Upload files using Content Pipeline API streaming approach
   const uploadFilesToContentPipeline = useCallback(async (
     files: Array<{ file: File; filePath: string }>
   ): Promise<void> => {
     try {
-      console.log('📤 Starting Content Pipeline upload for', files.length, 'files');
+      console.log('📤 Starting Content Pipeline streaming upload for', files.length, 'files');
       
-      // Convert files to base64 format required by API
-      const uploadFiles = await Promise.all(
-        files.map(async ({ file, filePath }) => ({
-          filename: filePath,
-          content: await fileToBase64(file),
-          content_type: file.type || 'application/pdf'
-        }))
-      );
+      // Get upload instructions for all files (streaming approach for all)
+      const fileInstructions = files.map(({ file, filePath }) => ({
+        filename: filePath,
+        size: file.size,
+        content_type: file.type || 'application/pdf'
+      }));
       
-      // Upload to Content Pipeline
-      const response = await fetch('/api/content-pipeline-proxy?operation=s3_upload_files', {
+      const instructionsResponse = await fetch('/api/content-pipeline-proxy?operation=s3_upload_files', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          files: uploadFiles,
-          job_id: jobData?.job_id,
-          folder: 'asset_generator/dev/uploads'
+
+          folder: 'asset_generator/dev/uploads',
+          files: fileInstructions
         }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(`Upload failed: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`);
+      if (!instructionsResponse.ok) {
+        const errorData = await instructionsResponse.json().catch(() => ({}));
+        throw new Error(`Failed to get upload instructions: ${instructionsResponse.status} ${JSON.stringify(errorData)}`);
       }
 
-      const result = await response.json();
-      console.log('✅ Content Pipeline upload successful:', result);
+      const instructionsResult = await instructionsResponse.json();
       
-      return result;
+      // Upload each file using its specific streaming instructions
+      for (let i = 0; i < files.length; i++) {
+        const { file, filePath } = files[i];
+        const uploadInstruction = instructionsResult.data.upload_instructions[i];
+        await uploadLargeFileToS3(file, filePath, uploadInstruction);
+      }
+      
+      console.log('✅ All Content Pipeline streaming uploads completed successfully');
     } catch (error) {
-      console.error('❌ Content Pipeline upload failed:', error);
+      console.error('❌ Content Pipeline streaming upload failed:', error);
       throw error;
     }
-  }, [fileToBase64, jobData]);
+  }, [jobData]);
+
+  // Upload large files using streaming S3 API  
+  const uploadLargeFileToS3 = useCallback(async (
+    file: File, 
+    filePath: string, 
+    uploadInstruction: any
+  ): Promise<void> => {
+    try {
+      console.log(`📤 Starting streaming upload for large file: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
+      
+      let uploadResponse;
+      
+      if (uploadInstruction.upload_type === 'single') {
+        // Single upload using presigned POST
+        console.log('📤 Using single presigned POST upload');
+        console.log('📤 Upload URL:', uploadInstruction.upload_data.url);
+        console.log('📤 Upload method:', uploadInstruction.upload_data.method);
+        console.log('📤 Upload fields:', uploadInstruction.upload_data.fields);
+        
+        const formData = new FormData();
+        
+        // Add all the required fields from the upload instructions
+        Object.entries(uploadInstruction.upload_data.fields).forEach(([key, value]) => {
+          console.log(`📤 Adding field: ${key} = ${value}`);
+          formData.append(key, value as string);
+        });
+        // Add the file last (important for S3)
+        formData.append('file', file);
+        console.log('📤 FormData prepared, uploading to S3...');
+        
+        try {
+          uploadResponse = await fetch(uploadInstruction.upload_data.url, {
+            method: uploadInstruction.upload_data.method,
+            body: formData,
+          });
+          
+          console.log('📤 S3 response status:', uploadResponse.status);
+          console.log('📤 S3 response headers:', Object.fromEntries(uploadResponse.headers.entries()));
+          
+          if (!uploadResponse.ok) {
+            const responseText = await uploadResponse.text();
+            console.error('📤 S3 error response:', responseText);
+            throw new Error(`S3 upload failed: ${uploadResponse.status} - ${responseText}`);
+          }
+        } catch (fetchError) {
+          console.error('📤 Fetch error details:', fetchError);
+          console.error('📤 Error name:', fetchError.name);
+          console.error('📤 Error message:', fetchError.message);
+          throw new Error(`Failed to upload to S3: ${fetchError.message}`);
+        }
+        
+      } else if (uploadInstruction.upload_type === 'multipart') {
+        // Multipart upload for very large files
+        console.log('📤 Using multipart upload');
+        const partETags = [];
+        
+        for (const partInfo of uploadInstruction.upload_data.part_urls) {
+          const start = partInfo.size_range.start;
+          const end = Math.min(partInfo.size_range.end + 1, file.size);
+          const chunk = file.slice(start, end);
+          
+          console.log(`📤 Uploading part ${partInfo.part_number} (${start}-${end})`);
+          
+          const partResponse = await fetch(partInfo.url, {
+            method: 'PUT',
+            body: chunk,
+          });
+          
+          if (!partResponse.ok) {
+            throw new Error(`Part ${partInfo.part_number} upload failed: ${partResponse.status}`);
+          }
+          
+          const etag = partResponse.headers.get('ETag');
+          partETags.push({
+            PartNumber: partInfo.part_number,
+            ETag: etag
+          });
+        }
+        
+        // Complete multipart upload
+        console.log('📤 Completing multipart upload');
+        const completeXML = `<?xml version="1.0" encoding="UTF-8"?>
+<CompleteMultipartUpload>
+${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETag>${part.ETag}</ETag></Part>`).join('\n')}
+</CompleteMultipartUpload>`;
+        
+        uploadResponse = await fetch(uploadInstruction.upload_data.complete_url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/xml' },
+          body: completeXML,
+        });
+      }
+
+      if (!uploadResponse.ok) {
+        const errorText = await uploadResponse.text();
+        throw new Error(`S3 streaming upload failed: ${uploadResponse.status} ${errorText}`);
+      }
+
+      console.log(`✅ Large file uploaded successfully via streaming: ${file.name}`);
+    } catch (error) {
+      console.error(`❌ Large file streaming upload failed for ${file.name}:`, error);
+      throw error;
+    }
+  }, []);
 
   // Update file status with backend sync
   const updateFileStatus = useCallback(async (
@@ -308,12 +413,12 @@ export const useUploadEngine = ({
     );
   }, [fileToBase64]);
 
-  // Upload pre-converted file group
+  // Upload file group using streaming approach
   const uploadPreConvertedFileGroup = useCallback(async (
     groupFilename: string,
     convertedFiles: Array<{filename: string, file: File, fileInfo: any, base64Content: string}>
   ): Promise<void> => {
-    console.log(`🚀 Uploading pre-converted file group ${groupFilename} with ${convertedFiles.length} PDFs`);
+    console.log(`🚀 Uploading file group ${groupFilename} with ${convertedFiles.length} PDFs using streaming approach`);
     
     // Set optimistic uploading status for all files in group
     convertedFiles.forEach(({ filename }) => {
@@ -321,31 +426,38 @@ export const useUploadEngine = ({
     });
     
     try {
-      // Upload files using pre-converted base64 content
-      const uploadFiles = convertedFiles.map(({ fileInfo, base64Content }) => ({
+      // Get upload instructions for all files (streaming approach for all)
+      const fileInstructions = convertedFiles.map(({ file, fileInfo }) => ({
         filename: fileInfo.file_path,
-        content: base64Content,
-        content_type: 'application/pdf'
+        size: file.size,
+        content_type: file.type || 'application/pdf'
       }));
       
-      const response = await fetch('/api/content-pipeline-proxy?operation=s3_upload_files', {
+      const instructionsResponse = await fetch('/api/content-pipeline-proxy?operation=s3_upload_files', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          files: uploadFiles,
-          job_id: jobData?.job_id,
-          folder: 'asset_generator/dev/uploads'
+
+          folder: 'asset_generator/dev/uploads',
+          files: fileInstructions
         }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(`Upload failed: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`);
+      if (!instructionsResponse.ok) {
+        const errorData = await instructionsResponse.json().catch(() => ({}));
+        throw new Error(`Failed to get upload instructions for group ${groupFilename}: ${instructionsResponse.status} ${JSON.stringify(errorData)}`);
       }
 
-      console.log(`✅ File group ${groupFilename} uploaded successfully`);
+      const instructionsResult = await instructionsResponse.json();
+      
+      // Upload each file using its specific streaming instructions
+      for (let i = 0; i < convertedFiles.length; i++) {
+        const { file, fileInfo } = convertedFiles[i];
+        const uploadInstruction = instructionsResult.data.upload_instructions[i];
+        await uploadLargeFileToS3(file, fileInfo.file_path, uploadInstruction);
+      }
+
+      console.log(`✅ File group ${groupFilename} streaming upload completed successfully`);
       
       // Update backend status for all files in the group with a single API call
       try {
