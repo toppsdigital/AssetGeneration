@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useDownloadArchive } from '../web/hooks/useJobData';
 import { ConfirmationModal } from './ConfirmationModal';
 import { contentPipelineApi } from '../web/utils/contentPipelineApi';
 import { useQueryClient } from '@tanstack/react-query';
@@ -42,24 +41,13 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
     return expiryTime <= fiveMinutesFromNow;
   };
 
-  const shouldUseFallback = !hasValidDownloadUrl();
-  
-  // Use React Query hook for smart caching with expiry management (fallback for when job doesn't have download_url)
-  const { 
-    data: archiveData, 
-    isLoading: loadingArchive, 
-    error: downloadError,
-    refetch: refetchArchive
-  } = useDownloadArchive(
-    jobData?.job_id || null, 
-    Boolean(isVisible && jobData?.job_status === 'completed')
-  );
-
-  // Local state only for download progress
+  // Local state for download management
   const [downloadingArchive, setDownloadingArchive] = useState(false);
   const [regeneratingAssets, setRegeneratingAssets] = useState(false);
   const [showRegenerateModal, setShowRegenerateModal] = useState(false);
   const [refreshingDownloadUrl, setRefreshingDownloadUrl] = useState(false);
+  const [creatingDownloadUrl, setCreatingDownloadUrl] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   // Function to refresh download URL when expired
   const refreshDownloadUrl = async () => {
@@ -96,33 +84,75 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
     }
   };
 
-  // Auto-refresh expired download URLs
-  useEffect(() => {
-    if (!isVisible || !jobData?.job_id) return;
+  // Function to create download URL on user action
+  const createDownloadUrl = async () => {
+    if (!jobData?.job_id || creatingDownloadUrl) return null;
     
-    if (needsRefresh() && !refreshingDownloadUrl) {
-      console.log('🔄 Download URL expired or expiring soon, auto-refreshing...');
-      refreshDownloadUrl();
+    console.log('🔄 Creating and saving download URL for job:', jobData.job_id);
+    setCreatingDownloadUrl(true);
+    setDownloadError(null);
+    
+    try {
+      // Use updateDownloadUrl which generates AND saves the URL to the job object
+      const response = await contentPipelineApi.updateDownloadUrl(jobData.job_id);
+      
+      if (response.success && response.download_url && response.download_url_expires) {
+        console.log('✅ Download URL created and saved to job object:', response.download_url);
+        
+        // Update the job data with the new download URL info
+        const updatedJobData = {
+          ...jobData,
+          download_url: response.download_url,
+          download_url_expires: response.download_url_expires,
+          download_url_created: new Date().toISOString()
+        };
+        
+        // Notify parent component to update its job data
+        if (onJobDataUpdate) {
+          onJobDataUpdate(updatedJobData);
+        }
+        
+        return response.download_url;
+      } else {
+        throw new Error(response.message || 'Failed to create download URL');
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ Error creating download URL:', errorMessage);
+      setDownloadError(errorMessage);
+      return null;
+    } finally {
+      setCreatingDownloadUrl(false);
     }
-  }, [isVisible, jobData?.download_url_expires, jobData?.job_id, refreshingDownloadUrl]);
+  };
 
   const handleDownloadArchive = async () => {
     let downloadUrl: string;
     let downloadSource: string;
     
-    // Use download URL from job object if available and valid, otherwise use fallback
+    // Use download URL from job object if available and valid
     if (hasValidDownloadUrl()) {
       downloadUrl = jobData.download_url;
-      downloadSource = 'job object';
+      downloadSource = 'stored URL';
       console.log('🔗 Using download URL from job object');
-    } else if (archiveData) {
-      downloadUrl = archiveData.download_url;
-      downloadSource = 'on-demand generation';
-      console.log('🔗 Using download URL from on-demand generation');
+    } else if (needsRefresh() && jobData.download_url) {
+      // URL exists but expired, refresh it
+      console.log('🔄 Download URL expired, refreshing...');
+      await refreshDownloadUrl();
+      if (hasValidDownloadUrl()) {
+        downloadUrl = jobData.download_url;
+        downloadSource = 'refreshed URL';
+      } else {
+        // Refresh failed, create new URL
+        downloadUrl = await createDownloadUrl();
+        if (!downloadUrl) return;
+        downloadSource = 'newly created URL';
+      }
     } else {
-      console.error('❌ No download URL available');
-      alert('No download URL available. Please try regenerating assets.');
-      return;
+      // No URL available, create one
+      downloadUrl = await createDownloadUrl();
+      if (!downloadUrl) return;
+      downloadSource = 'newly created URL';
     }
     
     setDownloadingArchive(true);
@@ -141,7 +171,8 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
       
     } catch (error) {
       console.error('❌ Error downloading archive:', error);
-      alert(`Failed to download archive: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      setDownloadError(`Failed to download archive: ${errorMessage}`);
     } finally {
       setDownloadingArchive(false);
     }
@@ -212,7 +243,7 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
     return `${minutes}m`;
   };
 
-  // Get expiration info for display (supports both job object and fallback data)
+  // Get expiration info for display
   const getExpirationInfo = () => {
     if (hasValidDownloadUrl()) {
       const expiryTime = new Date(jobData.download_url_expires).getTime();
@@ -221,11 +252,6 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
       return {
         expiresIn: expiresInSeconds,
         source: 'stored'
-      };
-    } else if (archiveData) {
-      return {
-        expiresIn: archiveData.expires_in,
-        source: 'generated'
       };
     }
     return null;
@@ -283,43 +309,8 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
         </div>
       </div>
 
-      {/* Loading State */}
-      {loadingArchive && (
-        <div style={{
-          padding: '24px',
-          textAlign: 'center',
-          background: 'rgba(255, 255, 255, 0.05)',
-          borderRadius: 12,
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          margin: '20px 0'
-        }}>
-          <div style={{
-            width: 32,
-            height: 32,
-            border: '3px solid rgba(16, 185, 129, 0.3)',
-            borderTop: '3px solid #10b981',
-            borderRadius: '50%',
-            animation: 'spin 1s linear infinite',
-            margin: '0 auto 16px'
-          }} />
-          <div style={{
-            color: '#9ca3af',
-            fontSize: 14,
-            marginBottom: 8
-          }}>
-            Creating download archive...
-          </div>
-          <div style={{
-            color: '#6b7280',
-            fontSize: 12
-          }}>
-            Compressing all your generated assets into a ZIP file
-          </div>
-        </div>
-      )}
-
       {/* Error State */}
-      {downloadError && !loadingArchive && (
+      {downloadError && (
         <div style={{
           padding: '16px',
           background: 'rgba(239, 68, 68, 0.1)',
@@ -330,9 +321,9 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
           margin: '20px 0'
         }}>
           <div style={{ fontWeight: 600, marginBottom: 4 }}>Unable to create download archive</div>
-          <div style={{ opacity: 0.8 }}>{downloadError instanceof Error ? downloadError.message : String(downloadError)}</div>
+          <div style={{ opacity: 0.8 }}>{downloadError}</div>
           <button
-            onClick={() => refetchArchive()}
+            onClick={() => setDownloadError(null)}
             style={{
               marginTop: 8,
               padding: '6px 12px',
@@ -344,202 +335,183 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
               cursor: 'pointer'
             }}
           >
-            Retry
+            Dismiss
           </button>
         </div>
       )}
 
-      {/* Archive Available - either from job object or generated on-demand */}
-      {(hasValidDownloadUrl() || archiveData) && !loadingArchive && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {/* Download Button */}
+      {/* Main Content */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        {/* Download Button */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 16,
+          marginTop: 8
+        }}>
+          <button
+            onClick={handleDownloadArchive}
+            disabled={downloadingArchive || regeneratingAssets || refreshingDownloadUrl || creatingDownloadUrl}
+            style={{
+              padding: '20px 40px',
+              background: (downloadingArchive || regeneratingAssets || refreshingDownloadUrl || creatingDownloadUrl)
+                ? 'rgba(156, 163, 175, 0.3)'
+                : 'linear-gradient(135deg, #10b981, #059669)',
+              border: 'none',
+              borderRadius: 16,
+              color: 'white',
+              fontSize: 18,
+              fontWeight: 700,
+              cursor: (downloadingArchive || regeneratingAssets || refreshingDownloadUrl || creatingDownloadUrl) ? 'not-allowed' : 'pointer',
+              transition: 'all 0.2s',
+              boxShadow: (downloadingArchive || regeneratingAssets || refreshingDownloadUrl || creatingDownloadUrl)
+                ? 'none' 
+                : '0 12px 32px rgba(16, 185, 129, 0.4)',
+              minHeight: 70,
+              minWidth: 250,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 12
+            }}
+          >
+            {creatingDownloadUrl ? (
+              <>
+                <div style={{
+                  width: 20,
+                  height: 20,
+                  border: '2px solid rgba(255, 255, 255, 0.3)',
+                  borderTop: '2px solid white',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite'
+                }} />
+                Creating Download Link...
+              </>
+            ) : refreshingDownloadUrl ? (
+              <>
+                <div style={{
+                  width: 20,
+                  height: 20,
+                  border: '2px solid rgba(255, 255, 255, 0.3)',
+                  borderTop: '2px solid white',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite'
+                }} />
+                Refreshing Download Link...
+              </>
+            ) : downloadingArchive ? (
+              <>
+                <div style={{
+                  width: 20,
+                  height: 20,
+                  border: '2px solid rgba(255, 255, 255, 0.3)',
+                  borderTop: '2px solid white',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite'
+                }} />
+                Downloading...
+              </>
+            ) : (
+              <>
+                <span style={{ fontSize: 24 }}>📦</span>
+                {hasValidDownloadUrl() ? 'Download ZIP Archive (Ready)' : 'Create & Download ZIP Archive'}
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Re-Generate Assets Button - Always visible for completed jobs */}
+        {jobData?.job_id && (
           <div style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 16,
-            marginTop: 8
+            marginTop: 12
           }}>
             <button
-              onClick={handleDownloadArchive}
-              disabled={downloadingArchive || regeneratingAssets || refreshingDownloadUrl}
+              onClick={handleRegenerateClick}
+              disabled={downloadingArchive || regeneratingAssets || refreshingDownloadUrl || creatingDownloadUrl}
               style={{
-                padding: '20px 40px',
-                background: (downloadingArchive || regeneratingAssets || refreshingDownloadUrl)
-                  ? 'rgba(156, 163, 175, 0.3)'
-                  : 'linear-gradient(135deg, #10b981, #059669)',
-                border: 'none',
-                borderRadius: 16,
-                color: 'white',
-                fontSize: 18,
-                fontWeight: 700,
-                cursor: (downloadingArchive || regeneratingAssets || refreshingDownloadUrl) ? 'not-allowed' : 'pointer',
+                padding: '12px 24px',
+                background: 'transparent',
+                border: (regeneratingAssets || refreshingDownloadUrl || creatingDownloadUrl)
+                  ? '1px solid rgba(156, 163, 175, 0.3)'
+                  : '1px solid rgba(168, 85, 247, 0.3)',
+                borderRadius: 8,
+                color: (regeneratingAssets || refreshingDownloadUrl || creatingDownloadUrl) ? '#9ca3af' : '#c4b5fd',
+                fontSize: 16,
+                fontWeight: 500,
+                cursor: (downloadingArchive || regeneratingAssets || refreshingDownloadUrl || creatingDownloadUrl) ? 'not-allowed' : 'pointer',
                 transition: 'all 0.2s',
-                boxShadow: (downloadingArchive || regeneratingAssets || refreshingDownloadUrl)
-                  ? 'none' 
-                  : '0 12px 32px rgba(16, 185, 129, 0.4)',
-                minHeight: 70,
-                minWidth: 250,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: 12
+                gap: 8,
+                opacity: (regeneratingAssets || refreshingDownloadUrl || creatingDownloadUrl) ? 0.6 : 0.9,
+                minHeight: 50
+              }}
+              onMouseEnter={(e) => {
+                if (!downloadingArchive && !regeneratingAssets && !refreshingDownloadUrl && !creatingDownloadUrl) {
+                  e.currentTarget.style.opacity = '1';
+                  e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.5)';
+                  e.currentTarget.style.background = 'rgba(168, 85, 247, 0.05)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!downloadingArchive && !regeneratingAssets && !refreshingDownloadUrl && !creatingDownloadUrl) {
+                  e.currentTarget.style.opacity = '0.9';
+                  e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.3)';
+                  e.currentTarget.style.background = 'transparent';
+                }
               }}
             >
-              {refreshingDownloadUrl ? (
+              {regeneratingAssets ? (
                 <>
                   <div style={{
-                    width: 20,
-                    height: 20,
-                    border: '2px solid rgba(255, 255, 255, 0.3)',
-                    borderTop: '2px solid white',
+                    width: 16,
+                    height: 16,
+                    border: '2px solid rgba(156, 163, 175, 0.5)',
+                    borderTop: '2px solid #9ca3af',
                     borderRadius: '50%',
                     animation: 'spin 1s linear infinite'
                   }} />
-                  Refreshing Download Link...
-                </>
-              ) : downloadingArchive ? (
-                <>
-                  <div style={{
-                    width: 20,
-                    height: 20,
-                    border: '2px solid rgba(255, 255, 255, 0.3)',
-                    borderTop: '2px solid white',
-                    borderRadius: '50%',
-                    animation: 'spin 1s linear infinite'
-                  }} />
-                  Downloading...
+                  Regenerating...
                 </>
               ) : (
                 <>
-                  <span style={{ fontSize: 24 }}>📦</span>
-                  Download ZIP Archive ({archiveData?.files_count || 'All'} files)
+                  <span style={{ fontSize: 16 }}>🔄</span>
+                  Re-Generate Assets
                 </>
               )}
             </button>
           </div>
+        )}
 
-          {/* Re-Generate Assets Button */}
-          {jobData?.job_id && (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginTop: 12
-            }}>
-              <button
-                onClick={handleRegenerateClick}
-                disabled={downloadingArchive || regeneratingAssets || refreshingDownloadUrl}
-                style={{
-                  padding: '8px 16px',
-                  background: 'transparent',
-                  border: (regeneratingAssets || refreshingDownloadUrl)
-                    ? '1px solid rgba(156, 163, 175, 0.3)'
-                    : '1px solid rgba(168, 85, 247, 0.3)',
-                  borderRadius: 8,
-                  color: (regeneratingAssets || refreshingDownloadUrl) ? '#9ca3af' : '#c4b5fd',
-                  fontSize: 14,
-                  fontWeight: 500,
-                  cursor: (downloadingArchive || regeneratingAssets || refreshingDownloadUrl) ? 'not-allowed' : 'pointer',
-                  transition: 'all 0.2s',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 6,
-                  opacity: (regeneratingAssets || refreshingDownloadUrl) ? 0.6 : 0.8
-                }}
-                onMouseEnter={(e) => {
-                  if (!downloadingArchive && !regeneratingAssets && !refreshingDownloadUrl) {
-                    e.currentTarget.style.opacity = '1';
-                    e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.5)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!downloadingArchive && !regeneratingAssets && !refreshingDownloadUrl) {
-                    e.currentTarget.style.opacity = '0.8';
-                    e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.3)';
-                  }
-                }}
-              >
-                {regeneratingAssets ? (
-                  <>
-                    <div style={{
-                      width: 14,
-                      height: 14,
-                      border: '1px solid rgba(156, 163, 175, 0.5)',
-                      borderTop: '1px solid #9ca3af',
-                      borderRadius: '50%',
-                      animation: 'spin 1s linear infinite'
-                    }} />
-                    Regenerating...
-                  </>
-                ) : (
-                  <>
-                    <span style={{ fontSize: 14 }}>🔄</span>
-                    Re-Generate Assets
-                  </>
-                )}
-              </button>
-            </div>
-          )}
-
-          {/* Additional Info */}
-          <div style={{
-            textAlign: 'center',
-            fontSize: 12,
-            color: '#9ca3af',
-            marginTop: -8
-          }}>
-            {(() => {
-              const expirationInfo = getExpirationInfo();
-              if (expirationInfo) {
-                return `Archive contains all generated digital assets from this job • Expires in ${formatExpirationTime(expirationInfo.expiresIn)}`;
-              }
-              return 'Archive contains all generated digital assets from this job';
-            })()}
-            {jobData?.job_id && (
-              <>
-                <br />
-                <span style={{ fontSize: 11, opacity: 0.8 }}>
-                  Need different assets? Re-generate to go back to template selection
-                </span>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* No Archive Available */}
-      {!hasValidDownloadUrl() && !archiveData && !loadingArchive && !downloadError && !refreshingDownloadUrl && (
+        {/* Additional Info */}
         <div style={{
-          padding: '24px',
           textAlign: 'center',
-          background: 'rgba(255, 255, 255, 0.05)',
-          borderRadius: 12,
-          border: '1px solid rgba(255, 255, 255, 0.1)'
+          fontSize: 12,
+          color: '#9ca3af',
+          marginTop: -8
         }}>
-          <div style={{
-            fontSize: 48,
-            marginBottom: 16
-          }}>
-            📂
-          </div>
-          <div style={{
-            fontSize: 16,
-            color: '#f8f8f8',
-            fontWeight: 600,
-            marginBottom: 8
-          }}>
-            No download archive available
-          </div>
-          <div style={{
-            fontSize: 14,
-            color: '#9ca3af'
-          }}>
-            Files may still be processing or there was an issue with asset generation.
-          </div>
+          {(() => {
+            const expirationInfo = getExpirationInfo();
+            if (expirationInfo) {
+              return `Download archive will contain all generated digital assets • Current link expires in ${formatExpirationTime(expirationInfo.expiresIn)}`;
+            }
+            return 'Download archive will contain all generated digital assets from this job';
+          })()}
+          {jobData?.job_id && (
+            <>
+              <br />
+              <span style={{ fontSize: 11, opacity: 0.8 }}>
+                Need different assets? Use Re-Generate to go back to template selection
+              </span>
+            </>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Add required CSS animations */}
       <style jsx>{`
