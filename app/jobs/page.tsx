@@ -676,28 +676,57 @@ export default function JobsPage() {
                         </div>
                       )}
                       
-                      <button
-                        onClick={() => viewJobDetails(job)}
-                        style={{
+                      {/* Only show View Details button when not actively processing */}
+                      {!['extracting', 'generating'].includes(job.job_status?.toLowerCase() || '') && (
+                        <button
+                          onClick={() => viewJobDetails(job)}
+                          style={{
+                            padding: '8px 16px',
+                            background: 'rgba(255, 255, 255, 0.1)',
+                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                            borderRadius: 6,
+                            color: '#e5e7eb',
+                            cursor: 'pointer',
+                            fontSize: 14,
+                            fontWeight: 500,
+                            transition: 'all 0.2s'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                          }}
+                        >
+                          📋 View Details
+                        </button>
+                      )}
+                      
+                      {/* Show processing indicator when actively processing */}
+                      {['extracting', 'generating'].includes(job.job_status?.toLowerCase() || '') && (
+                        <div style={{
                           padding: '8px 16px',
-                          background: 'rgba(255, 255, 255, 0.1)',
-                          border: '1px solid rgba(255, 255, 255, 0.2)',
+                          background: 'rgba(245, 158, 11, 0.1)',
+                          border: '1px solid rgba(245, 158, 11, 0.3)',
                           borderRadius: 6,
-                          color: '#e5e7eb',
-                          cursor: 'pointer',
+                          color: '#f59e0b',
                           fontSize: 14,
                           fontWeight: 500,
-                          transition: 'all 0.2s'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
-                        }}
-                      >
-                        📋 View Details
-                      </button>
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6
+                        }}>
+                          <div style={{
+                            width: 12,
+                            height: 12,
+                            border: '2px solid rgba(245, 158, 11, 0.3)',
+                            borderTop: '2px solid #f59e0b',
+                            borderRadius: '50%',
+                            animation: 'spin 1s linear infinite'
+                          }} />
+                          Processing...
+                        </div>
+                      )}
                       {job.user_name && (
                         <span style={{ color: '#9ca3af', fontSize: 12, marginTop: 8 }}>
                           Created by: {job.user_name}
@@ -711,6 +740,14 @@ export default function JobsPage() {
           )}
         </div>
       </div>
+      
+      {/* Add CSS animation for spinner */}
+      <style jsx>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 } 
