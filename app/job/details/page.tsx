@@ -712,27 +712,36 @@ function JobDetailsPageContent() {
       console.log('Actual files to be uploaded:', actualFiles.map((f: File) => f.name));
       
       // Create a mapping of actual file names to their base names (for grouping)
+      // Only process files that match our strict naming convention
       const fileNameToBaseMap = new Map<string, string>();
       actualFiles.forEach((file: File) => {
         const fileName = file.name;
-        // Extract base name by removing _FR.pdf, _BK.pdf, etc.
-        const baseName = fileName.replace(/_(FR|BK|FRONT|BACK)\.pdf$/i, '');
-        fileNameToBaseMap.set(fileName, baseName);
+        // Only accept files ending with _FR.pdf or _BK.pdf (strict naming)
+        if (fileName.match(/_(FR|BK)\.pdf$/i)) {
+          const baseName = fileName.replace(/_(FR|BK)\.pdf$/i, '');
+          fileNameToBaseMap.set(fileName, baseName);
+        } else {
+          console.warn(`⚠️ Skipping file with invalid naming: ${fileName} (must end with _FR.pdf or _BK.pdf)`);
+        }
       });
       
-      // Group files by their base names
+      // Group files by their base names (only for valid files)
       const fileGroups = new Map<string, {name: string, type: 'front' | 'back'}[]>();
       actualFiles.forEach((file: File) => {
         const fileName = file.name;
         const baseName = fileNameToBaseMap.get(fileName);
-        if (!baseName) return;
+        if (!baseName) return; // Skip files that don't match our naming convention
         
-        // Determine card type based on filename
+        // Determine card type based on strict filename convention
         let cardType: 'front' | 'back' = 'front';
-        if (fileName.match(/_(BK|BACK)\.pdf$/i)) {
+        if (fileName.match(/_BK\.pdf$/i)) {
           cardType = 'back';
-        } else if (fileName.match(/_(FR|FRONT)\.pdf$/i)) {
+        } else if (fileName.match(/_FR\.pdf$/i)) {
           cardType = 'front';
+        } else {
+          // This shouldn't happen since we filtered above, but be safe
+          console.warn(`⚠️ Unexpected filename pattern: ${fileName}`);
+          return;
         }
         
         if (!fileGroups.has(baseName)) {

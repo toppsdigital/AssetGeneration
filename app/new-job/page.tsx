@@ -77,10 +77,12 @@ function NewJobPageContent() {
       const firstFile = files[0];
       const folderPath = firstFile.webkitRelativePath.split('/')[0];
       
-      // Filter only PDF files
-      const pdfFiles = Array.from(files).filter(file => 
-        file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
-      );
+      // Filter only PDF files with _FR.pdf or _BK.pdf endings
+      const pdfFiles = Array.from(files).filter(file => {
+        const isCorrectType = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+        const hasCorrectNaming = file.name.match(/_(FR|BK)\.pdf$/i);
+        return isCorrectType && hasCorrectNaming;
+      });
       
       // Create a new FileList-like object with only PDF files
       const dataTransfer = new DataTransfer();
@@ -203,20 +205,19 @@ function NewJobPageContent() {
       }
 
       // Group files by prefix (removing _FR/_BK suffixes)
+      // Only process files that match our strict naming convention
       const fileGroups = new Set<string>();
       
       Array.from(formData.selectedFiles).forEach(file => {
-        let fileName = file.name.replace('.pdf', ''); // Remove .pdf extension
+        const fileName = file.name;
         
-        // Check for _FR (front) or _BK (back) pattern and extract prefix
-        if (fileName.endsWith('_FR')) {
-          fileName = fileName.replace('_FR', '');
-        } else if (fileName.endsWith('_BK')) {
-          fileName = fileName.replace('_BK', '');
+        // Only process files that match _FR.pdf or _BK.pdf pattern
+        if (fileName.match(/_(FR|BK)\.pdf$/i)) {
+          const baseName = fileName.replace(/_(FR|BK)\.pdf$/i, '');
+          fileGroups.add(baseName);
+        } else {
+          console.warn(`⚠️ Skipping file with invalid naming: ${fileName} (must end with _FR.pdf or _BK.pdf)`);
         }
-        
-        // Add the prefix to our set (Set automatically handles duplicates)
-        fileGroups.add(fileName);
       });
       
       // Convert set to array for the API
@@ -498,7 +499,7 @@ function NewJobPageContent() {
                     color: '#f3f4f6',
                     marginBottom: 8
                   }}>
-                    Select PDF Folder to Upload *
+                    Select PDF Folder to Upload * (files must end with _FR.pdf or _BK.pdf)
                   </label>
                   
                   {/* Hidden file input for folder selection */}
@@ -565,7 +566,7 @@ function NewJobPageContent() {
                           )}
                         </>
                       ) : (
-                        'Click to select folder containing PDF files'
+                        'Click to select folder containing PDF files ending with _FR.pdf or _BK.pdf'
                       )}
                     </span>
                     <span style={{ color: '#9ca3af' }}>📂</span>
@@ -577,7 +578,7 @@ function NewJobPageContent() {
                       fontSize: 12, 
                       margin: '4px 0 0 0' 
                     }}>
-                      No PDF files found in the selected folder
+                      No valid PDF files found. Please ensure files end with _FR.pdf or _BK.pdf
                     </p>
                   )}
                   
