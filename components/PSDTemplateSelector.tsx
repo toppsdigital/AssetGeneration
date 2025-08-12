@@ -920,8 +920,7 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
       // Filter out specific layer types that shouldn't be sent to PDF extraction
       const filteredLayers = allExtractedLayers.filter(layer => {
         const lowerLayer = layer.toLowerCase();
-        return !lowerLayer.includes('fr_wp_inv') && 
-               !lowerLayer.includes('bk_seq') && 
+        return !lowerLayer.includes('bk_seq') && 
                !lowerLayer.includes('bk_seq_bb');
       });
       
@@ -1045,8 +1044,7 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
     // Filter out specific layer types that shouldn't be sent to PDF extraction
     const filteredLayers = allExtractedLayers.filter(layer => {
       const lowerLayer = layer.toLowerCase();
-      return !lowerLayer.includes('fr_wp_inv') && 
-             !lowerLayer.includes('bk_seq') && 
+      return !lowerLayer.includes('bk_seq') && 
              !lowerLayer.includes('bk_seq_bb');
     });
     
