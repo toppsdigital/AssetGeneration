@@ -200,14 +200,20 @@ const FileCard: React.FC<FileCardProps> = ({
 
         {/* Extracted Layers - Only show if there are extracted files */}
         {(() => {
-          // Use all extracted files
-          const extractedFiles = file.extracted_files || {};
+          // Use all extracted files and filter out _seq and _seq_bb layers
+          const allExtractedFiles = file.extracted_files || {};
+          const extractedFiles = Object.fromEntries(
+            Object.entries(allExtractedFiles).filter(([filename]) => {
+              const lowerFilename = filename.toLowerCase();
+              return !lowerFilename.includes('_seq') && !lowerFilename.includes('_seq_bb');
+            })
+          );
           
-          // Only render if there are extracted files
+          // Only render if there are extracted files after filtering
           if (Object.keys(extractedFiles).length === 0) return null;
           
-          // Check if all extracted files have "uploaded" status (case insensitive)
-          const allUploaded = Object.values(extractedFiles).every(
+          // Check if all extracted files (including _seq) have "uploaded" status for preview functionality
+          const allUploaded = Object.values(allExtractedFiles).every(
             extractedFile => extractedFile.status.toLowerCase() === 'uploaded'
           );
           
@@ -230,8 +236,8 @@ const FileCard: React.FC<FileCardProps> = ({
                 {allUploaded ? (
                   <button
                     onClick={() => {
-                      // Collect file paths from extracted files
-                      const filePaths = Object.values(extractedFiles).map(extractedFile => 
+                      // Collect file paths from ALL extracted files (including _seq) for preview
+                      const filePaths = Object.values(allExtractedFiles).map(extractedFile => 
                         extractedFile.file_path
                       ).filter(path => path);
                       
