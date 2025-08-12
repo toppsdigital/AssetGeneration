@@ -36,6 +36,7 @@ interface AssetConfig {
   vfx?: string;
   chrome: string | boolean;
   oneOfOneWp?: boolean; // For BASE assets with superfractor chrome
+  wp_inv_layer?: string; // For VFX and chrome effects
 }
 
 export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatingAssets, setCreatingAssets, onJobDataUpdate }: PSDTemplateSelectorProps) => {
@@ -53,7 +54,8 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
   const [currentConfig, setCurrentConfig] = useState<Partial<AssetConfig>>({
     chrome: false,
     oneOfOneWp: false,
-    name: ''
+    name: '',
+    wp_inv_layer: ''
   });
   const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
   const [savingAsset, setSavingAsset] = useState(false);
@@ -109,6 +111,21 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       }
     }
   }, [currentCardType, currentConfig.layer, currentConfig.vfx, currentConfig.chrome, currentConfig.oneOfOneWp, spotColorPairs, editingAssetId]);
+
+  // Auto-select wp_inv layer when VFX or chrome is enabled and only one wp_inv layer exists
+  useEffect(() => {
+    if (currentCardType && !editingAssetId) {
+      const hasVfxOrChrome = currentConfig.vfx || currentConfig.chrome;
+      const wpInvLayers = getWpInvLayers();
+      
+      if (hasVfxOrChrome && wpInvLayers.length === 1 && !currentConfig.wp_inv_layer) {
+        setCurrentConfig(prev => ({ ...prev, wp_inv_layer: wpInvLayers[0] }));
+      } else if (!hasVfxOrChrome && currentConfig.wp_inv_layer) {
+        // Clear wp_inv_layer if VFX and chrome are both disabled
+        setCurrentConfig(prev => ({ ...prev, wp_inv_layer: '' }));
+      }
+    }
+  }, [currentCardType, currentConfig.vfx, currentConfig.chrome, editingAssetId]);
 
   // Debug mergedJobData changes
   useEffect(() => {
@@ -434,7 +451,8 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       spotColorPairs: assetData.spotColorPairs || assetData.spot_color_pairs || [],
       vfx: assetData.vfx,
       chrome: assetData.chrome || false,
-      oneOfOneWp: assetData.oneOfOneWp || false
+      oneOfOneWp: assetData.oneOfOneWp || false,
+      wp_inv_layer: assetData.wp_inv_layer || ''
     }));
     
     console.log('✅ Parsed assets from mergedJobData.assets:', {
@@ -512,6 +530,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       nameParts.push(`chrome_${chromeType}`);
     }
     
+
     // Add 1of1 indicator
     if (config.oneOfOneWp) {
       nameParts.push('1of1');
@@ -537,7 +556,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
   };
 
   const resetCurrentConfig = () => {
-    setCurrentConfig({ chrome: false, oneOfOneWp: false, name: '' });
+    setCurrentConfig({ chrome: false, oneOfOneWp: false, name: '', wp_inv_layer: '' });
     setCurrentCardType(null);
     setEditingAssetId(null);
     setSpotColorPairs([{ spot: '', color: undefined }]);
@@ -559,33 +578,26 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
         assetConfig.chrome = currentConfig.chrome;
       }
 
-      // Include oneOfOneWp if it's set
-      if (currentConfig.oneOfOneWp) {
-        assetConfig.oneOfOneWp = currentConfig.oneOfOneWp;
-      }
+
 
       // Handle parallel/multi-parallel with multiple spot/color pairs
       if (currentCardType === 'parallel' || currentCardType === 'multi-parallel') {
         const validPairs = spotColorPairs.filter(pair => pair.spot && pair.color);
         if (validPairs.length === 0) return;
         
-        // For parallel/multi-parallel cards, auto-select wp_inv layer if only one exists
-        let finalLayer = currentConfig.layer || validPairs[0].spot;
-        if (getWpInvLayers().length === 1) {
-          finalLayer = getWpInvLayers()[0];
-        } else if (getWpInvLayers().length > 1 && currentConfig.layer) {
-          finalLayer = currentConfig.layer;
-        }
-
         assetConfig = {
           ...assetConfig,
-          layer: finalLayer,
-          spotColorPairs: validPairs.map(pair => ({
+          spot_color_pairs: validPairs.map(pair => ({
             spot: pair.spot,
             color: getColorRgbByName(pair.color || '')
           })),
           vfx: currentConfig.vfx
         };
+
+        // Include wp_inv_layer if VFX or chrome is enabled
+        if ((currentConfig.vfx || currentConfig.chrome) && currentConfig.wp_inv_layer) {
+          assetConfig.wp_inv_layer = currentConfig.wp_inv_layer;
+        }
       } else {
         // Handle other card types
         if (!currentConfig.layer) return;
@@ -597,6 +609,11 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
           color: currentConfig.color ? getColorRgbByName(currentConfig.color) : undefined,
           vfx: currentConfig.vfx
         };
+
+        // Include wp_inv_layer if VFX or chrome is enabled
+        if ((currentConfig.vfx || currentConfig.chrome) && currentConfig.wp_inv_layer) {
+          assetConfig.wp_inv_layer = currentConfig.wp_inv_layer;
+        }
       }
 
       // Asset payload with name and configuration - backend will generate ID
@@ -1638,8 +1655,8 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
                           ))}
                         </select>
                         
-                        {/* WP_INV Layer Selection - Only show when multiple wp_inv layers exist */}
-                        {(currentCardType === 'parallel' || currentCardType === 'multi-parallel') && getWpInvLayers().length > 1 && (
+                        {/* WP_INV Layer Selection - Show when VFX or chrome is enabled and wp_inv layers exist */}
+                        {(currentConfig.vfx || currentConfig.chrome) && getWpInvLayers().length > 0 && (
                           <div style={{ marginTop: 12 }}>
                             <label style={{
                               display: 'block',
@@ -1649,10 +1666,21 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
                               marginBottom: 8
                             }}>
                               Select WP_INV Layer
+                              {getWpInvLayers().length === 1 && (
+                                <span style={{ 
+                                  fontSize: 12, 
+                                  color: '#10b981', 
+                                  fontWeight: 400,
+                                  marginLeft: 8 
+                                }}>
+                                  (auto-selected)
+                                </span>
+                              )}
                             </label>
                             <select
-                              value={currentConfig.layer || ''}
-                              onChange={(e) => setCurrentConfig(prev => ({ ...prev, layer: e.target.value }))}
+                              value={currentConfig.wp_inv_layer || ''}
+                              onChange={(e) => setCurrentConfig(prev => ({ ...prev, wp_inv_layer: e.target.value }))}
+                              disabled={getWpInvLayers().length === 1}
                               style={{
                                 width: '100%',
                                 padding: '8px 12px',
@@ -1660,11 +1688,14 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
                                 border: '1px solid rgba(255, 255, 255, 0.2)',
                                 borderRadius: 8,
                                 color: '#f8f8f8',
-                                fontSize: 14
+                                fontSize: 14,
+                                opacity: getWpInvLayers().length === 1 ? 0.7 : 1
                               }}
                             >
-                              <option value="" style={{ background: '#1f2937' }}>Select wp_inv layer...</option>
-                              {getWpInvLayers().map(wpInvLayer => (
+                              <option value="" style={{ background: '#1f2937' }}>
+                                {getWpInvLayers().length === 1 ? getWpInvLayers()[0] : 'Select wp_inv layer...'}
+                              </option>
+                              {getWpInvLayers().length > 1 && getWpInvLayers().map(wpInvLayer => (
                                 <option key={wpInvLayer} value={wpInvLayer} style={{ background: '#1f2937' }}>
                                   {wpInvLayer}
                                 </option>

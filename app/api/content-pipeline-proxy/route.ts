@@ -694,24 +694,7 @@ async function handleRequest(request: NextRequest, method: string) {
         }
         apiUrl += `/jobs/${id}/assets/${assetId}`;
         apiMethod = 'PUT';
-        // Transform asset config to match backend expectations
-        // Add temporary key field if not present (backend transition support)
-        if (!apiBody.key) {
-          apiBody.key = assetId; // Use the existing asset ID as the key for updates
-        }
-        // Get session and add user information for asset update tracking
-        try {
-          const session = await auth();
-          if (session?.user) {
-            apiBody = {
-              ...apiBody,
-              updated_by_user_id: session.user.id || session.user.email || 'unknown',
-              updated_by_user_name: session.user.name || session.user.email || 'Unknown User'
-            };
-          }
-        } catch (error) {
-          console.warn('Failed to get session for asset update:', error);
-        }
+        // Pass asset config directly to backend without adding tracking fields
         break;
 
       case 'delete_asset':
