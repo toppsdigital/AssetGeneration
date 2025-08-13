@@ -1118,15 +1118,91 @@ function JobDetailsPageContent() {
                   fullJobData: JSON.stringify(mergedJobData, null, 2)
                 });
                 
-                // Try multiple possible field names for files
-                const filesArray = mergedJobData.files || 
-                                  mergedJobData.api_files || 
-                                  (mergedJobData as any).file_list ||
-                                  (mergedJobData as any).file_names ||
-                                  (mergedJobData as any).grouped_files ||
-                                  (mergedJobData as any).filenames ||
-                                  [];
-                console.log('📁 Files array for rerun:', filesArray);
+                // Extract files from multiple possible sources with comprehensive fallback
+                let filesArray: string[] = [];
+                
+                // Try direct file fields first
+                if (mergedJobData.files && Array.isArray(mergedJobData.files) && mergedJobData.files.length > 0) {
+                  filesArray = mergedJobData.files;
+                  console.log('📁 Found files in .files field:', filesArray);
+                } else if (mergedJobData.api_files && Array.isArray(mergedJobData.api_files) && mergedJobData.api_files.length > 0) {
+                  filesArray = mergedJobData.api_files;
+                  console.log('📁 Found files in .api_files field:', filesArray);
+                } else {
+                  // Try other possible field names
+                  const possibleFields = [
+                    'file_list', 'file_names', 'grouped_files', 'filenames',
+                    'file_array', 'grouped_filenames', 'base_files'
+                  ];
+                  
+                  for (const field of possibleFields) {
+                    const fieldValue = (mergedJobData as any)[field];
+                    if (Array.isArray(fieldValue) && fieldValue.length > 0) {
+                      filesArray = fieldValue;
+                      console.log(`📁 Found files in .${field} field:`, filesArray);
+                      break;
+                    }
+                  }
+                  
+                  // If still no files, try extracting from content_pipeline_files (same source as UI)
+                  if (filesArray.length === 0 && mergedJobData.content_pipeline_files) {
+                    console.log('🔍 Analyzing content_pipeline_files for rerun:', {
+                      length: mergedJobData.content_pipeline_files.length,
+                      sampleFile: mergedJobData.content_pipeline_files[0],
+                      allFiles: mergedJobData.content_pipeline_files
+                    });
+                    
+                    const extractedFiles = mergedJobData.content_pipeline_files
+                      .map((file: any) => {
+                        // Try multiple possible filename fields
+                        return file.filename || file.name || file.file_name || file.base_name;
+                      })
+                      .filter((filename: string) => filename && filename.trim());
+                    
+                    if (extractedFiles.length > 0) {
+                      filesArray = extractedFiles;
+                      console.log('📁 Successfully extracted files from content_pipeline_files:', {
+                        extractedFiles,
+                        count: extractedFiles.length,
+                        source: 'content_pipeline_files (same as UI)'
+                      });
+                    } else {
+                      console.warn('⚠️ content_pipeline_files exists but no valid filenames found');
+                    }
+                  }
+                }
+                
+                // If we still have no files, create a fallback based on the job's original structure
+                if (filesArray.length === 0) {
+                  console.warn('⚠️ No files found in job data. Creating fallback based on file count.');
+                  
+                  // If we know the job had files (from file counts), create placeholder filenames
+                  const totalCount = mergedJobData.original_files_total_count || 0;
+                  const completedCount = mergedJobData.original_files_completed_count || 0;
+                  
+                  if (totalCount > 0) {
+                    // Create placeholder filenames based on filename_prefix and count
+                    const prefix = mergedJobData.filename_prefix || 'file';
+                    const estimatedFileCount = Math.ceil(totalCount / 2); // Assume pairs
+                    
+                    filesArray = Array.from({ length: estimatedFileCount }, (_, i) => 
+                      `${prefix}_${String(i + 1).padStart(4, '0')}`
+                    );
+                    
+                    console.log('📁 Created fallback files array:', {
+                      totalCount,
+                      estimatedFileCount,
+                      fallbackFiles: filesArray
+                    });
+                  }
+                }
+                
+                console.log('📁 Final files array for rerun:', {
+                  filesArray,
+                  length: filesArray.length,
+                  isEmpty: filesArray.length === 0,
+                  source: filesArray.length > 0 ? 'extracted_or_fallback' : 'none_available'
+                });
                 
                 const queryParams = new URLSearchParams({
                   rerun: 'true',
