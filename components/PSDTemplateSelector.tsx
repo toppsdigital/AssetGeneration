@@ -1188,34 +1188,39 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
             left: 0,
             right: 0,
             bottom: 0,
-            background: 'rgba(255, 255, 255, 0.9)',
+            background: 'rgba(0, 0, 0, 0.4)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 1000,
             borderRadius: 16,
-            backdropFilter: 'blur(2px)'
+            backdropFilter: 'blur(4px)'
           }}>
             <div style={{
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              padding: 24
+              padding: 20,
+              background: 'rgba(255, 255, 255, 0.95)',
+              borderRadius: 12,
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+              border: '1px solid rgba(255, 255, 255, 0.2)'
             }}>
               <div style={{
-                width: 40,
-                height: 40,
+                width: 32,
+                height: 32,
                 border: '3px solid #e5e7eb',
                 borderTop: '3px solid #3b82f6',
                 borderRadius: '50%',
                 animation: 'spin 1s linear infinite',
-                marginBottom: 12
+                marginBottom: 10
               }}></div>
               <p style={{
-                fontSize: 14,
-                color: '#6b7280',
+                fontSize: 13,
+                color: '#374151',
                 fontWeight: 500,
-                textAlign: 'center'
+                textAlign: 'center',
+                margin: 0
               }}>
                 Applying chrome updates...
               </p>
