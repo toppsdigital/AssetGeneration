@@ -48,17 +48,22 @@ function JobDetailsPageContent() {
   // React Query hooks for smart caching
   const queryClient = useQueryClient();
   
-  // Smart cache invalidation - skip for completed jobs since they don't change
+  // Smart cache invalidation - skip for completed jobs and uploading jobs
   useEffect(() => {
     if (jobId) {
       // Check if we have cached job data to determine if it's completed
       const cachedJobData = queryClient.getQueryData<UIJobData>(jobKeys.detail(jobId));
       const isCompleted = ['complete', 'completed'].includes(cachedJobData?.job_status?.toLowerCase() || '');
+      const isUploading = ['uploading'].includes(cachedJobData?.job_status?.toLowerCase() || '');
       
       if (isCompleted) {
         console.log('✅ Job is completed - skipping cache invalidation (only download URLs may need refresh)');
         // Note: For completed jobs, only download URLs (presigned S3 URLs) may expire and need refreshing
         // This should be handled at the component level when downloads fail, not here
+      } else if (isUploading) {
+        console.log('📤 Job is uploading - skipping cache invalidation (real-time updates via increment API)');
+        // For uploading jobs, we rely on increment API calls for real-time progress
+        // Avoid invalidating cache as it would interfere with upload progress tracking
       } else {
         console.log('🔄 Forcing cache invalidation for active job:', jobId);
         // Remove both job detail and files caches to ensure fresh data for active jobs
@@ -230,15 +235,13 @@ function JobDetailsPageContent() {
     if (jobData?.job_id) {
       syncJobDataAcrossCaches(queryClient, jobData.job_id, updater);
       
-      // Force a refetch to ensure UI updates
-      setTimeout(() => {
-        console.log('🔄 Force refetching job data to ensure UI update');
-        refetchJobData();
-      }, 100);
+      // Skip refetch during uploads - local updates are sufficient
+      // The increment API calls provide real-time progress updates
+      console.log('✅ Updated job data locally (skipping refetch during uploads)');
     }
     // Also update legacy state for any remaining dependencies
     setJobData(updater);
-  }, [jobData?.job_id, queryClient, refetchJobData]);
+  }, [jobData?.job_id, queryClient]);
 
   // Upload management with comprehensive upload engine
   const uploadEngine = useUploadEngine({ 
