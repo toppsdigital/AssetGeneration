@@ -150,7 +150,7 @@ export function useJobData(jobId: string | null) {
       return mappedData;
     },
     enabled: !!jobId,
-    staleTime: 30 * 1000, // Consider fresh for 30 seconds during uploads
+    staleTime: 5 * 60 * 1000, // Consider fresh for 5 minutes during uploads (increment API provides updates)
     gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
     refetchOnWindowFocus: false, // Disable automatic refetch on focus during uploads
     retry: (failureCount, error) => {

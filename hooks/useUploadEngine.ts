@@ -572,11 +572,24 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
             const result = await updateResponse.json();
             console.log(`✅ Job completed count updated: +${convertedFiles.length} files`);
             
-            // Update local state to reflect new count
-            setJobData(prev => ({
-              ...prev,
-              original_files_completed_count: result.job?.original_files_completed_count || (prev.original_files_completed_count || 0) + convertedFiles.length
-            }));
+            // Use the complete job object returned from increment API
+            if (result.job) {
+              console.log(`📦 Updating local job data with complete object from increment API`);
+              setJobData(prev => ({
+                ...prev,
+                ...result.job, // Use entire job object from API response
+                // Preserve UI-specific fields that might not be in API response
+                api_files: result.job.files || prev.api_files || [],
+                content_pipeline_files: prev.content_pipeline_files || [],
+                Subset_name: result.job.source_folder || prev.Subset_name
+              }));
+            } else {
+              // Fallback to manual increment if no job object returned
+              setJobData(prev => ({
+                ...prev,
+                original_files_completed_count: (prev.original_files_completed_count || 0) + convertedFiles.length
+              }));
+            }
           } else {
             console.warn(`⚠️ Failed to update job completed count: ${updateResponse.status}`);
           }
@@ -588,12 +601,44 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
     } catch (error) {
       console.error(`❌ Failed to upload file group ${groupFilename}:`, error);
       
-      // Update local file status only (no backend API call needed)
-      // The increment API already tracks failed uploads at the job level
-      convertedFiles.forEach(({ filename }) => {
-        updateLocalFileStatus(groupFilename, filename, 'upload-failed');
-      });
-      console.log(`✅ Updated local status for ${convertedFiles.length} PDFs to 'upload-failed'`);
+      // Update backend status for all files in the group to failed with a single API call
+      try {
+        const pdfUpdates = convertedFiles.map(({ filename }) => ({
+          pdf_filename: filename,
+          status: 'upload-failed' as const
+        }));
+        
+        const statusResponse = await contentPipelineApi.batchUpdatePdfFileStatus(groupFilename, pdfUpdates);
+        
+        if (statusResponse?.file?.original_files) {
+          // Update local state with backend response
+          if (setJobData) {
+            setJobData(prev => {
+              if (!prev?.content_pipeline_files) return prev;
+              
+              const updatedFiles = prev.content_pipeline_files.map((file: any) =>
+                file.filename === groupFilename
+                  ? {
+                      ...file,
+                      original_files: statusResponse.file.original_files,
+                      last_updated: new Date().toISOString()
+                    }
+                  : file
+              );
+              
+              return { ...prev, content_pipeline_files: updatedFiles };
+            });
+          }
+        }
+        
+        console.log(`✅ Batch updated ${pdfUpdates.length} PDFs to 'upload-failed' status`);
+      } catch (batchError) {
+        console.error(`Failed to batch update failed status for group ${groupFilename}:`, batchError);
+        // Fallback to local status updates
+        convertedFiles.forEach(({ filename }) => {
+          updateLocalFileStatus(groupFilename, filename, 'upload-failed');
+        });
+      }
       
       // Update counters (only once per group, not per file)
       setFailedPdfFiles(prev => prev + convertedFiles.length);
@@ -617,11 +662,24 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
             const result = await updateResponse.json();
             console.log(`✅ Job failed count updated: +${convertedFiles.length} files`);
             
-            // Update local state to reflect new count
-            setJobData(prev => ({
-              ...prev,
-              original_files_failed_count: result.job?.original_files_failed_count || (prev.original_files_failed_count || 0) + convertedFiles.length
-            }));
+            // Use the complete job object returned from increment API
+            if (result.job) {
+              console.log(`📦 Updating local job data with complete object from increment API`);
+              setJobData(prev => ({
+                ...prev,
+                ...result.job, // Use entire job object from API response
+                // Preserve UI-specific fields that might not be in API response
+                api_files: result.job.files || prev.api_files || [],
+                content_pipeline_files: prev.content_pipeline_files || [],
+                Subset_name: result.job.source_folder || prev.Subset_name
+              }));
+            } else {
+              // Fallback to manual increment if no job object returned
+              setJobData(prev => ({
+                ...prev,
+                original_files_failed_count: (prev.original_files_failed_count || 0) + convertedFiles.length
+              }));
+            }
           } else {
             console.warn(`⚠️ Failed to update job failed count: ${updateResponse.status}`);
           }
