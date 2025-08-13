@@ -230,6 +230,7 @@ function NewJobPageContent() {
       console.log('Starting job creation process...');
       
       let filenames: string[];
+      let actualPdfCount: number;
       
       if (isRerun) {
         // For rerun operations, use files from URL parameters
@@ -239,6 +240,9 @@ function NewJobPageContent() {
         if (filenames.length === 0) {
           throw new Error('No files found for rerun operation');
         }
+        
+        // For rerun, we don't have access to the actual file count, so use the old calculation
+        actualPdfCount = filenames.length * 2;
       } else {
         // For new jobs, process selected files
         if (!formData.selectedFiles || formData.selectedFiles.length === 0) {
@@ -277,7 +281,7 @@ function NewJobPageContent() {
         
         // Create final filenames array and count actual PDF files
         filenames = Array.from(fileMap.keys());
-        const actualPdfCount = validFiles.length; // Count individual PDF files, not pairs
+        actualPdfCount = validFiles.length; // Count individual PDF files, not pairs
         
         console.log('📊 File Processing Summary:');
         console.log(`  Total files selected: ${formData.selectedFiles.length}`);
@@ -314,8 +318,8 @@ function NewJobPageContent() {
         sourceFolder: generateFilePath(formData.appName),
         files: filenames,
         description: formData.description,
-        // Pass actual PDF count for accurate total_count calculation
-        ...(isRerun ? {} : { actual_pdf_count: actualPdfCount })
+        // Pass actual PDF count for accurate total_count calculation (only for new jobs)
+        ...(!isRerun ? { actual_pdf_count: actualPdfCount } : {})
       });
 
       setJobCreated(createdJob);
