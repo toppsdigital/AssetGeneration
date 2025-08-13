@@ -108,10 +108,10 @@ class ContentPipelineAPI {
   private baseUrl = '/api/content-pipeline-proxy';
 
   // Job operations
-  async createJob(jobData: Omit<JobData, 'job_id' | 'created_at' | 'last_updated' | 'priority' | 'metadata' | 'job_status'>): Promise<JobResponse> {
-    // Calculate total PDF files based on grouped filenames
-    // Each grouped filename represents 2 PDF files (front and back)
-    const totalPdfFiles = (jobData.files || []).length * 2;
+  async createJob(jobData: Omit<JobData, 'job_id' | 'created_at' | 'last_updated' | 'priority' | 'metadata' | 'job_status'> & { actual_pdf_count?: number }): Promise<JobResponse> {
+    // Use provided actual_pdf_count if available, otherwise fallback to the old calculation
+    // This allows for flexible file counting (pairs, front-only, back-only)
+    const totalPdfFiles = jobData.actual_pdf_count || (jobData.files || []).length * 2;
     
     const jobPayload = {
       ...jobData,
@@ -121,6 +121,9 @@ class ContentPipelineAPI {
       original_files_completed_count: 0,
       original_files_failed_count: 0
     };
+    
+    // Remove the helper field from the payload
+    delete (jobPayload as any).actual_pdf_count;
 
     const response = await fetch(`${this.baseUrl}?operation=create_job`, {
       method: 'POST',

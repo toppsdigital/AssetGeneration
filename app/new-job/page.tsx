@@ -180,6 +180,7 @@ function NewJobPageContent() {
     sourceFolder: string;
     files: string[];
     description?: string;
+    actual_pdf_count?: number;
   }) => {
     try {
       let response;
@@ -202,7 +203,8 @@ function NewJobPageContent() {
           filename_prefix: jobData.filenamePrefix,
         source_folder: jobData.sourceFolder,
         files: jobData.files,
-        description: jobData.description
+        description: jobData.description,
+        ...(jobData.actual_pdf_count ? { actual_pdf_count: jobData.actual_pdf_count } : {})
       });
       console.log('Job created successfully via Content Pipeline API:', response.job.job_id);
       }
@@ -243,9 +245,11 @@ function NewJobPageContent() {
           throw new Error('No files selected for upload');
         }
 
-        // Group files by prefix (removing _FR/_BK suffixes)
-        // Only process files that match our strict naming convention
-        const fileGroups = new Set<string>();
+        // Process files individually (allowing _FR only, _BK only, or both)
+        // Track each individual PDF file for accurate counting
+        const validFiles: string[] = [];
+        const invalidFiles: string[] = [];
+        const fileMap = new Map<string, { fr: boolean; bk: boolean }>();
         
         Array.from(formData.selectedFiles).forEach(file => {
           const fileName = file.name;
@@ -253,17 +257,54 @@ function NewJobPageContent() {
           // Only process files that match _FR.pdf or _BK.pdf pattern
           if (fileName.match(/_(FR|BK)\.pdf$/i)) {
             const baseName = fileName.replace(/_(FR|BK)\.pdf$/i, '');
-            fileGroups.add(baseName);
+            const isFront = fileName.match(/_FR\.pdf$/i);
+            const isBack = fileName.match(/_BK\.pdf$/i);
+            
+            // Track file types for this base name
+            if (!fileMap.has(baseName)) {
+              fileMap.set(baseName, { fr: false, bk: false });
+            }
+            const fileInfo = fileMap.get(baseName)!;
+            if (isFront) fileInfo.fr = true;
+            if (isBack) fileInfo.bk = true;
+            
+            validFiles.push(fileName);
           } else {
             console.warn(`⚠️ Skipping file with invalid naming: ${fileName} (must end with _FR.pdf or _BK.pdf)`);
+            invalidFiles.push(fileName);
           }
         });
         
-        // Convert set to array for the API
-        filenames = Array.from(fileGroups);
+        // Create final filenames array and count actual PDF files
+        filenames = Array.from(fileMap.keys());
+        const actualPdfCount = validFiles.length; // Count individual PDF files, not pairs
         
-        console.log('Original files:', Array.from(formData.selectedFiles).map(f => f.name));
-        console.log('Grouped file prefixes:', filenames);
+        console.log('📊 File Processing Summary:');
+        console.log(`  Total files selected: ${formData.selectedFiles.length}`);
+        console.log(`  Valid _FR/_BK files: ${validFiles.length}`, validFiles);
+        console.log(`  Invalid files (skipped): ${invalidFiles.length}`, invalidFiles);
+        console.log(`  Unique base names: ${filenames.length}`, filenames);
+        console.log(`  Actual PDF count (for total_count): ${actualPdfCount}`);
+        
+        // Show file type breakdown
+        const pairs: string[] = [];
+        const frontOnly: string[] = [];
+        const backOnly: string[] = [];
+        
+        fileMap.forEach((info, baseName) => {
+          if (info.fr && info.bk) pairs.push(baseName);
+          else if (info.fr) frontOnly.push(baseName);
+          else if (info.bk) backOnly.push(baseName);
+        });
+        
+        console.log(`  Complete pairs (_FR + _BK): ${pairs.length}`, pairs);
+        console.log(`  Front only (_FR): ${frontOnly.length}`, frontOnly);
+        console.log(`  Back only (_BK): ${backOnly.length}`, backOnly);
+        
+        // Ensure we have valid files before proceeding
+        if (filenames.length === 0) {
+          throw new Error('No valid PDF files found. Please ensure files end with _FR.pdf or _BK.pdf');
+        }
       }
       
       // Create job using Content Pipeline API
@@ -272,7 +313,9 @@ function NewJobPageContent() {
         filenamePrefix: formData.filenamePrefix,
         sourceFolder: generateFilePath(formData.appName),
         files: filenames,
-        description: formData.description
+        description: formData.description,
+        // Pass actual PDF count for accurate total_count calculation
+        ...(isRerun ? {} : { actual_pdf_count: actualPdfCount })
       });
 
       setJobCreated(createdJob);
