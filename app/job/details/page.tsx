@@ -48,28 +48,19 @@ function JobDetailsPageContent() {
   // React Query hooks for smart caching
   const queryClient = useQueryClient();
   
-  // Smart cache invalidation - skip for completed jobs and uploading jobs
+  // Smart cache strategy - rely on React Query's built-in staleness instead of aggressive invalidation
   useEffect(() => {
     if (jobId) {
-      // Check if we have cached job data to determine if it's completed
       const cachedJobData = queryClient.getQueryData<UIJobData>(jobKeys.detail(jobId));
-      const isCompleted = ['complete', 'completed'].includes(cachedJobData?.job_status?.toLowerCase() || '');
-      const isUploading = ['uploading'].includes(cachedJobData?.job_status?.toLowerCase() || '');
+      console.log('📋 Using cached job data, React Query will handle staleness:', {
+        jobId,
+        hasCache: !!cachedJobData,
+        status: cachedJobData?.job_status,
+        cacheStrategy: 'Let React Query handle staleness based on staleTime (5 minutes)'
+      });
       
-      if (isCompleted) {
-        console.log('✅ Job is completed - skipping cache invalidation (only download URLs may need refresh)');
-        // Note: For completed jobs, only download URLs (presigned S3 URLs) may expire and need refreshing
-        // This should be handled at the component level when downloads fail, not here
-      } else if (isUploading) {
-        console.log('📤 Job is uploading - skipping cache invalidation (real-time updates via increment API)');
-        // For uploading jobs, we rely on increment API calls for real-time progress
-        // Avoid invalidating cache as it would interfere with upload progress tracking
-      } else {
-        console.log('🔄 Forcing cache invalidation for active job:', jobId);
-        // Remove both job detail and files caches to ensure fresh data for active jobs
-        queryClient.removeQueries({ queryKey: jobKeys.detail(jobId) });
-        queryClient.removeQueries({ queryKey: jobKeys.files(jobId) });
-      }
+      // Only invalidate in extreme cases where we know data is definitely stale
+      // Normal navigation should rely on React Query's staleTime configuration
     }
   }, [jobId, queryClient]);
   
@@ -88,7 +79,7 @@ function JobDetailsPageContent() {
   // Use local data if available, otherwise use React Query data
   const effectiveJobData = localJobData || jobData;
   
-  // Debug logging for cache behavior and fresh data synchronization
+  // Debug logging for cache behavior - simplified without aggressive cross-cache syncing
   useEffect(() => {
     console.log('🔍 React Query State:', {
       jobId,
@@ -100,37 +91,10 @@ function JobDetailsPageContent() {
       source: jobData ? 'Cache/Fresh Data' : 'None',
       timestamp: new Date().toISOString()
     });
-  
-        // Check if we have fresher data in jobs list cache and sync it
-    if (jobId && jobData) {
-      const jobsListData = queryClient.getQueryData<JobData[]>(jobKeys.all);
-      const freshJobFromList = jobsListData?.find(job => job.job_id === jobId);
-      
-      if (freshJobFromList && freshJobFromList.job_status !== jobData.job_status) {
-        console.log('🔄 Found fresher job status in jobs list cache. Syncing...', {
-          currentStatus: jobData.job_status,
-          freshStatus: freshJobFromList.job_status,
-          jobId
-      });
-      
-        // Update the individual job cache with fresh data from jobs list
-        syncJobDataAcrossCaches(queryClient, jobId, (prevJobData) => ({
-          ...prevJobData,
-          job_status: freshJobFromList.job_status,
-          last_updated: freshJobFromList.last_updated || new Date().toISOString()
-        }));
-        
-        // Only force refetch for non-completed jobs since completed jobs don't change
-        const isCompleted = ['complete', 'completed'].includes(freshJobFromList.job_status?.toLowerCase() || '');
-        if (!isCompleted) {
-          console.log('🔄 Force refetching job data to ensure absolute freshness');
-          refetchJobData();
-        } else {
-          console.log('✅ Job is completed - skipping refetch (data is stable)');
-        }
-      }
-    }
-  }, [jobId, jobData, isLoadingJob, isRefetchingJob, jobError, queryClient]);
+    
+    // Removed aggressive cross-cache synchronization to prevent excessive refetches
+    // React Query's built-in staleness handling should be sufficient
+  }, [jobId, jobData, isLoadingJob, isRefetchingJob, jobError]);
   
 
   
