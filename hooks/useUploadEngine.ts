@@ -554,6 +554,38 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
       setUploadedPdfFiles(prev => prev + convertedFiles.length);
       console.log(`📊 Updated counters: +${convertedFiles.length} uploaded files`);
       
+      // Update job's original_files_completed_count in real-time
+      if (jobData?.job_id && setJobData) {
+        try {
+          console.log(`🔄 Updating job original_files_completed_count by +${convertedFiles.length}`);
+          
+          // Update job object with incremented completed count
+          const updateResponse = await fetch('/api/content-pipeline-proxy?operation=update_job', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: jobData.job_id,
+              increment_completed_count: convertedFiles.length
+            })
+          });
+          
+          if (updateResponse.ok) {
+            const result = await updateResponse.json();
+            console.log(`✅ Job completed count updated: +${convertedFiles.length} files`);
+            
+            // Update local state to reflect new count
+            setJobData(prev => ({
+              ...prev,
+              original_files_completed_count: result.job?.original_files_completed_count || (prev.original_files_completed_count || 0) + convertedFiles.length
+            }));
+          } else {
+            console.warn(`⚠️ Failed to update job completed count: ${updateResponse.status}`);
+          }
+        } catch (error) {
+          console.error(`❌ Error updating job completed count:`, error);
+        }
+      }
+      
     } catch (error) {
       console.error(`❌ Failed to upload file group ${groupFilename}:`, error);
       
@@ -599,6 +631,38 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
       // Update counters (only once per group, not per file)
       setFailedPdfFiles(prev => prev + convertedFiles.length);
       console.log(`📊 Updated counters: +${convertedFiles.length} failed files`);
+      
+      // Update job's original_files_failed_count in real-time
+      if (jobData?.job_id && setJobData) {
+        try {
+          console.log(`🔄 Updating job original_files_failed_count by +${convertedFiles.length}`);
+          
+          // Update job object with incremented failed count
+          const updateResponse = await fetch('/api/content-pipeline-proxy?operation=update_job', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: jobData.job_id,
+              increment_failed_count: convertedFiles.length
+            })
+          });
+          
+          if (updateResponse.ok) {
+            const result = await updateResponse.json();
+            console.log(`✅ Job failed count updated: +${convertedFiles.length} files`);
+            
+            // Update local state to reflect new count
+            setJobData(prev => ({
+              ...prev,
+              original_files_failed_count: result.job?.original_files_failed_count || (prev.original_files_failed_count || 0) + convertedFiles.length
+            }));
+          } else {
+            console.warn(`⚠️ Failed to update job failed count: ${updateResponse.status}`);
+          }
+        } catch (error) {
+          console.error(`❌ Error updating job failed count:`, error);
+        }
+      }
       
       throw error;
     }

@@ -328,6 +328,55 @@ async function handleRequest(request: NextRequest, method: string) {
         if (!id) {
           return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
         }
+        
+        // Handle increment_completed_count or increment_failed_count special cases
+        if (body.increment_completed_count || body.increment_failed_count) {
+          const incrementType = body.increment_completed_count ? 'completed' : 'failed';
+          const incrementValue = body.increment_completed_count || body.increment_failed_count;
+          
+          console.log(`🔄 Processing increment_${incrementType}_count: +${incrementValue} for job ${id}`);
+          
+          // First get current job data
+          const getJobResponse = await fetch(`${API_BASE_URL}/jobs?job_id=${id}`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          
+          if (!getJobResponse.ok) {
+            return NextResponse.json({ error: 'Failed to get current job data' }, { status: 500 });
+          }
+          
+          const getJobResult = await getJobResponse.json();
+          const currentJob = getJobResult.jobs?.[0];
+          
+          if (!currentJob) {
+            return NextResponse.json({ error: 'Job not found' }, { status: 404 });
+          }
+          
+          // Calculate new count based on type
+          const incrementBy = parseInt(incrementValue);
+          
+          if (body.increment_completed_count) {
+            const currentCount = currentJob.original_files_completed_count || 0;
+            const newCount = currentCount + incrementBy;
+            console.log(`📊 Incrementing completed count: ${currentCount} + ${incrementBy} = ${newCount}`);
+            
+            apiBody = {
+              original_files_completed_count: newCount,
+              last_updated: new Date().toISOString()
+            };
+          } else if (body.increment_failed_count) {
+            const currentCount = currentJob.original_files_failed_count || 0;
+            const newCount = currentCount + incrementBy;
+            console.log(`📊 Incrementing failed count: ${currentCount} + ${incrementBy} = ${newCount}`);
+            
+            apiBody = {
+              original_files_failed_count: newCount,
+              last_updated: new Date().toISOString()
+            };
+          }
+        }
+        
         apiUrl += `/jobs/${id}`;
         apiMethod = 'PUT';
         // Get session and add user information for audit trail
