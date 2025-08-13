@@ -755,7 +755,18 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
       const hasUploads = uploadedPdfFiles > 0;
       const isComplete = allFilesProcessed && noActiveUploads && hasUploads;
       
-      console.log('📊 Upload status check:', uploadedPdfFiles + '/' + totalPdfFiles, 'uploaded,', failedPdfFiles, 'failed');
+      console.log('📊 Upload status check:', {
+        totalPdfFiles,
+        uploadedPdfFiles,
+        failedPdfFiles,
+        uploadingFilesCount: uploadingFiles.size,
+        allFilesProcessed,
+        noActiveUploads,
+        hasUploads,
+        isComplete,
+        allFilesUploaded,
+        onUploadCompleteExists: !!onUploadComplete
+      });
       
       if (isComplete && !allFilesUploaded) {
         console.log('✅ Upload completed! Calling completion handler...');
@@ -763,8 +774,10 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
         
         // Call completion callback or navigate
         if (onUploadComplete) {
+          console.log('🔄 Calling onUploadComplete callback...');
           onUploadComplete();
         } else {
+          console.log('📍 No onUploadComplete callback, using default navigation...');
           // Default navigation after delay
           setTimeout(() => {
             router.push('/jobs');
