@@ -103,9 +103,28 @@ export function createCacheClearingCallback(queryClient: QueryClient) {
           typeof key === 'string' && (
             key.includes('files') || 
             key.includes('upload') || 
-            key.includes('batch')
+            key.includes('batch') ||
+            key.includes('file') || // Individual file entities
+            key.includes('content_pipeline_files') // Content pipeline file arrays
           )
         );
+      }
+    });
+    
+    // Additional comprehensive file entity clearing
+    // Clear any cache that might contain individual file data
+    queryClient.removeQueries({ 
+      predicate: (query) => {
+        const queryKey = query.queryKey;
+        // Check if this query might be caching file entity data
+        return queryKey.some(key => {
+          if (typeof key === 'object' && key !== null) {
+            // Check object keys for file-related properties
+            const keyStr = JSON.stringify(key).toLowerCase();
+            return keyStr.includes('file') || keyStr.includes('pdf') || keyStr.includes('original_files');
+          }
+          return false;
+        });
       }
     });
     
