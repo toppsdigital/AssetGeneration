@@ -244,11 +244,28 @@ function JobDetailsPageContent() {
   const uploadEngine = useUploadEngine({ 
     jobData: mergedJobData, 
     setJobData: updateJobDataForUpload,
-    onUploadComplete: () => {
-      console.log('✅ Upload completed! Navigating to jobs list...');
-      setTimeout(() => {
-        router.push('/jobs');
-      }, 1500);
+    onUploadComplete: async () => {
+      console.log('✅ Upload completed! Updating job status to "uploaded"...');
+      
+      try {
+        // Update job status to 'uploaded' when all files are uploaded
+        await updateJobStatus('uploaded');
+        console.log('✅ Job status updated to "uploaded" successfully');
+        
+        // Navigate to jobs list after status update
+        setTimeout(() => {
+          console.log('📍 Navigating to jobs list...');
+          router.push('/jobs');
+        }, 1500);
+      } catch (error) {
+        console.error('❌ Failed to update job status to "uploaded":', error);
+        
+        // Still navigate even if status update fails
+        setTimeout(() => {
+          console.log('📍 Navigating to jobs list (despite status update failure)...');
+          router.push('/jobs');
+        }, 1500);
+      }
     }
   });
 
