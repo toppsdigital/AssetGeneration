@@ -1180,7 +1180,7 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
         marginBottom: 32,
         overflow: 'hidden'
       }}>
-        {/* Loading overlay for bulk operations */}
+        {/* Simple loading overlay */}
         {savingAsset && (
           <div style={{
             position: 'absolute',
@@ -1188,43 +1188,21 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
             left: 0,
             right: 0,
             bottom: 0,
-            background: 'rgba(0, 0, 0, 0.4)',
+            background: 'rgba(0, 0, 0, 0.3)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 1000,
-            borderRadius: 16,
-            backdropFilter: 'blur(4px)'
+            borderRadius: 16
           }}>
             <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              padding: 20,
-              background: 'rgba(255, 255, 255, 0.95)',
-              borderRadius: 12,
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-              border: '1px solid rgba(255, 255, 255, 0.2)'
-            }}>
-              <div style={{
-                width: 32,
-                height: 32,
-                border: '3px solid #e5e7eb',
-                borderTop: '3px solid #3b82f6',
-                borderRadius: '50%',
-                animation: 'spin 1s linear infinite',
-                marginBottom: 10
-              }}></div>
-              <p style={{
-                fontSize: 13,
-                color: '#374151',
-                fontWeight: 500,
-                textAlign: 'center',
-                margin: 0
-              }}>
-                Applying chrome updates...
-              </p>
-            </div>
+              width: 24,
+              height: 24,
+              border: '2px solid rgba(255, 255, 255, 0.3)',
+              borderTop: '2px solid #fff',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite'
+            }}></div>
           </div>
         )}
         
@@ -2194,38 +2172,51 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
                       onClick={async () => {
                         if (savingAsset || !jobData?.job_id) return;
                         
-                        // Find all assets where chrome is currently off (false/falsy) but not superfractor
-                        const assetsToUpdate = configuredAssets.filter(asset => 
-                          !asset.chrome && 
+                        // Find all eligible assets (excludes wp, back, wp-1of1, and requires wp_inv layers)
+                        const eligibleAssets = configuredAssets.filter(asset => 
                           asset.type !== 'wp' && 
                           asset.type !== 'back' && 
                           asset.type !== 'wp-1of1' &&
                           getWpInvLayers().length > 0
                         );
                         
+                        if (eligibleAssets.length === 0) {
+                          console.log('📋 No eligible assets for chrome operations');
+                          return;
+                        }
+                        
+                        // Check current chrome state - if any have chrome, remove it; otherwise add it
+                        const assetsWithChrome = eligibleAssets.filter(asset => asset.chrome);
+                        const shouldRemoveChrome = assetsWithChrome.length > 0;
+                        
+                        const assetsToUpdate = shouldRemoveChrome 
+                          ? assetsWithChrome 
+                          : eligibleAssets.filter(asset => !asset.chrome);
+                        
                         if (assetsToUpdate.length === 0) {
                           console.log('📋 No assets need chrome update');
                           return;
                         }
                         
-                        console.log(`🔧 Applying silver chrome to ${assetsToUpdate.length} assets`);
+                        const action = shouldRemoveChrome ? 'remove' : 'apply';
+                        console.log(`🔧 ${shouldRemoveChrome ? 'Removing' : 'Applying'} chrome ${shouldRemoveChrome ? 'from' : 'to'} ${assetsToUpdate.length} assets`);
                         
                         setSavingAsset(true);
                         
                         try {
-                          // Apply chrome to each asset - use assets as-is with chrome added
-                          const assetsWithChrome = assetsToUpdate.map(asset => ({
+                          // Update chrome for each asset
+                          const updatedAssets = assetsToUpdate.map(asset => ({
                             ...asset,
-                            chrome: 'silver' // Apply silver chrome
+                            chrome: shouldRemoveChrome ? null : 'silver'
                           }));
                           
-                          console.log(`📦 Bulk updating ${assetsWithChrome.length} assets:`, assetsWithChrome);
+                          console.log(`📦 Bulk updating ${updatedAssets.length} assets:`, updatedAssets);
                           
-                          // Make single bulk update API call - pass assets directly
-                          const response = await contentPipelineApi.bulkUpdateAssets(jobData.job_id, assetsWithChrome);
+                          // Make single bulk update API call
+                          const response = await contentPipelineApi.bulkUpdateAssets(jobData.job_id, updatedAssets);
                           
                           if (response.success) {
-                            console.log(`✅ Successfully applied chrome to ${assetsToUpdate.length} assets`);
+                            console.log(`✅ Successfully ${action}d chrome ${shouldRemoveChrome ? 'from' : 'to'} ${assetsToUpdate.length} assets`);
                             
                             // Update job data with response
                             if (response.job && onJobDataUpdate) {
@@ -2235,16 +2226,12 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
                               console.log('🔄 Triggering job data refresh after bulk chrome update');
                               onJobDataUpdate({ _forceRefetch: true, job_id: jobData.job_id });
                             }
-                            
-                            alert(`✅ Successfully applied silver chrome to ${assetsToUpdate.length} assets!`);
                           } else {
                             console.error('❌ Bulk chrome update failed:', response);
-                            alert(`Failed to apply chrome: ${response.message || 'Unknown error'}`);
                           }
                           
                         } catch (error) {
-                          console.error('❌ Error applying bulk chrome update:', error);
-                          alert(`Failed to apply chrome: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                          console.error('❌ Error in bulk chrome update:', error);
                         } finally {
                           setSavingAsset(false);
                         }
@@ -2259,7 +2246,7 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
                           e.currentTarget.style.color = '#f8f8f8';
                         }
                       }}
-                      title="Click to apply silver chrome to all assets where chrome is off"
+                      title="Click to toggle chrome on/off for all eligible assets (excludes wp, back, wp-1of1)"
                     >
                       CHROME
                     </th>
