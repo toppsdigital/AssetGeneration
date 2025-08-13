@@ -42,24 +42,44 @@ function NewJobPageContent() {
     if (!isRerun) return [];
     try {
       const filesParam = searchParams.get('files');
-      console.log('🔍 DEBUG getRerunFiles:', {
+      console.log('🔍 ENHANCED DEBUG getRerunFiles:', {
         isRerun,
         filesParam,
+        filesParamType: typeof filesParam,
         filesParamLength: filesParam?.length,
-        allUrlParams: Object.fromEntries(searchParams.entries())
+        allUrlParams: Object.fromEntries(searchParams.entries()),
+        rawUrl: window.location.href,
+        searchParamsString: searchParams.toString()
       });
       
       if (!filesParam) {
         console.warn('⚠️ No files parameter found in URL for rerun operation');
+        console.log('Available URL parameters:', Array.from(searchParams.entries()));
         return [];
       }
       
+      console.log('🔍 Raw files parameter before parsing:', {
+        rawValue: filesParam,
+        firstChar: filesParam[0],
+        lastChar: filesParam[filesParam.length - 1],
+        includes_bracket: filesParam.includes('['),
+        includes_quote: filesParam.includes('"')
+      });
+      
       const parsedFiles = JSON.parse(filesParam);
-      console.log('✅ Parsed files from URL:', parsedFiles);
+      console.log('✅ Successfully parsed files from URL:', {
+        parsedFiles,
+        parsedFilesType: typeof parsedFiles,
+        parsedFilesLength: Array.isArray(parsedFiles) ? parsedFiles.length : 'not array',
+        parsedFilesStringified: JSON.stringify(parsedFiles)
+      });
       return parsedFiles || [];
     } catch (error) {
-      console.error('❌ Failed to parse files parameter from URL:', error);
-      console.log('Raw files parameter:', searchParams.get('files'));
+      console.error('❌ Failed to parse files parameter from URL:', {
+        error: error.message,
+        rawFilesParam: searchParams.get('files'),
+        errorType: error.constructor.name
+      });
       return [];
     }
   };

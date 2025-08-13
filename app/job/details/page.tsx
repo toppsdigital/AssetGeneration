@@ -1096,19 +1096,26 @@ function JobDetailsPageContent() {
               uploadedPdfFiles={uploadEngine.uploadedPdfFiles}
               onRerunJob={mergedJobData && !uploadsInProgress ? () => {
                 // Navigate to new job page with pre-filled data
-                console.log('🔍 DEBUG Rerun Navigation - Job Data:', {
+                console.log('🔍 DEBUG Rerun Navigation - Full Job Data Analysis:', {
                   job_id: mergedJobData.job_id,
+                  // Direct file fields
                   files: mergedJobData.files,
                   api_files: mergedJobData.api_files,
+                  // Length checks
                   filesLength: mergedJobData.files?.length,
                   api_filesLength: mergedJobData.api_files?.length,
+                  // All keys for comprehensive analysis
                   allJobDataKeys: Object.keys(mergedJobData),
-                  // Check for other possible file field names
+                  // Check other possible file field names
                   file_list: (mergedJobData as any).file_list,
                   file_names: (mergedJobData as any).file_names,
                   grouped_files: (mergedJobData as any).grouped_files,
                   filenames: (mergedJobData as any).filenames,
-                  mergedJobData: mergedJobData
+                  // Check if files might be nested in other objects
+                  content_pipeline_files: mergedJobData.content_pipeline_files,
+                  content_pipeline_files_length: mergedJobData.content_pipeline_files?.length,
+                  // Raw data structure
+                  fullJobData: JSON.stringify(mergedJobData, null, 2)
                 });
                 
                 // Try multiple possible field names for files
