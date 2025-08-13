@@ -1165,15 +1165,64 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
 
   return (
     <>
+      <style jsx>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
       <div style={{
         background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(147, 51, 234, 0.15))',
         border: '2px solid rgba(59, 130, 246, 0.3)',
         borderRadius: 16,
+        position: 'relative', // For loading overlay positioning
         padding: 24,
         marginBottom: 32,
-        position: 'relative',
         overflow: 'hidden'
       }}>
+        {/* Loading overlay for bulk operations */}
+        {savingAsset && (
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(255, 255, 255, 0.9)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            borderRadius: 16,
+            backdropFilter: 'blur(2px)'
+          }}>
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              padding: 24
+            }}>
+              <div style={{
+                width: 40,
+                height: 40,
+                border: '3px solid #e5e7eb',
+                borderTop: '3px solid #3b82f6',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite',
+                marginBottom: 12
+              }}></div>
+              <p style={{
+                fontSize: 14,
+                color: '#6b7280',
+                fontWeight: 500,
+                textAlign: 'center'
+              }}>
+                Applying chrome updates...
+              </p>
+            </div>
+          </div>
+        )}
+        
         {/* Header */}
         <div style={{
           display: 'flex',
