@@ -150,9 +150,9 @@ export function useJobData(jobId: string | null) {
       return mappedData;
     },
     enabled: !!jobId,
-    staleTime: 5 * 1000, // Consider fresh for only 5 seconds to ensure quick updates
+    staleTime: 30 * 1000, // Consider fresh for 30 seconds during uploads
     gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
-    refetchOnWindowFocus: true, // Refresh when tab becomes active
+    refetchOnWindowFocus: false, // Disable automatic refetch on focus during uploads
     retry: (failureCount, error) => {
       // Don't retry on 404s, but retry on network errors
       if (error instanceof Error && error.message.includes('404')) {
