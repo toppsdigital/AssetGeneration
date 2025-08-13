@@ -104,8 +104,14 @@ interface S3UploadFilesResponse {
 }
 
 // Configuration - replace with your actual API Gateway URL
-const API_BASE_URL = process.env.CONTENT_PIPELINE_API_URL;
+const API_BASE_URL = process.env.CONTENT_PIPELINE_API_URL?.replace(/\/$/, ''); // Remove trailing slash
 const S3_BUCKET_NAME = 'topps-nexus-powertools';
+
+console.log('🔧 API Configuration:', {
+  raw_url: process.env.CONTENT_PIPELINE_API_URL,
+  cleaned_url: API_BASE_URL,
+  has_trailing_slash: process.env.CONTENT_PIPELINE_API_URL?.endsWith('/')
+});
 
 // If no API URL is configured, return mock data for development
 if (!API_BASE_URL) {
@@ -219,6 +225,12 @@ export async function DELETE(request: NextRequest) {
 }
 
 async function handleRequest(request: NextRequest, method: string) {
+  console.log('🚀 API Route Request:', {
+    method,
+    url: request.url,
+    timestamp: new Date().toISOString()
+  });
+  
   const { searchParams } = new URL(request.url);
   let body: any = {};
   
@@ -248,6 +260,13 @@ async function handleRequest(request: NextRequest, method: string) {
     const operation = searchParams.get('operation');
     const resource = searchParams.get('resource');
     const id = searchParams.get('id');
+    
+    console.log('🔍 Parsed Parameters:', {
+      operation,
+      resource,
+      id,
+      allParams: Object.fromEntries(searchParams.entries())
+    });
     
     let apiUrl = API_BASE_URL;
     let apiMethod = method;
@@ -284,7 +303,24 @@ async function handleRequest(request: NextRequest, method: string) {
         if (!id) {
           return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
         }
-        apiUrl += `/jobs/${id}`;
+        
+        // Let's try different endpoint patterns
+        console.log('🔍 GET_JOB API Call Debug:', {
+          operation: 'get_job',
+          jobId: id,
+          jobIdLength: id.length,
+          jobIdEncoded: encodeURIComponent(id),
+          baseUrl: API_BASE_URL,
+          possibleEndpoints: [
+            `/jobs/${id}`,
+            `/job/${id}`, 
+            `/jobs?job_id=${id}`,
+            `/jobs?id=${id}`
+          ]
+        });
+        
+        // Try with query parameter instead of path parameter
+        apiUrl += `/jobs?job_id=${id}`;
         apiMethod = 'GET';
         break;
         
@@ -759,8 +795,15 @@ async function handleRequest(request: NextRequest, method: string) {
       fetchOptions.body = JSON.stringify(apiBody);
     }
     
-    console.log(`Making ${apiMethod} request to: ${apiUrl}`);
-    console.log('Request headers:', JSON.stringify(headers, null, 2));
+    console.log(`🌐 Making ${apiMethod} request to: ${apiUrl}`);
+    console.log('🔧 Request headers:', JSON.stringify(headers, null, 2));
+    console.log('🎯 Request details:', {
+      method: apiMethod,
+      url: apiUrl,
+      hasBody: !!apiBody,
+      operation,
+      jobId: id
+    });
     if (apiBody) {
       console.log('Request body:', JSON.stringify(apiBody, null, 2));
       // Log user information for job operations
@@ -786,6 +829,31 @@ async function handleRequest(request: NextRequest, method: string) {
     
     console.log(`Response status: ${response.status}`);
     console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+    
+    // Special handling for get_job operation to transform list response to single job response
+    if (operation === 'get_job' && response.ok) {
+      const responseText = await response.text();
+      
+      try {
+        const listResponse = JSON.parse(responseText);
+        
+        // Transform list response to single job response
+        if (listResponse.jobs && listResponse.jobs.length > 0) {
+          const job = listResponse.jobs[0]; // Take the first (and should be only) job
+          console.log('✅ GET_JOB: Successfully transformed list response to single job');
+          return NextResponse.json({ job }, { status: 200 });
+        } else {
+          console.log('❌ GET_JOB: No job found in list response');
+          return NextResponse.json({ 
+            error: 'Job not found',
+            message: `Job with ID ${id} does not exist`
+          }, { status: 404 });
+        }
+      } catch (parseError) {
+        console.error('❌ GET_JOB: Failed to parse response:', parseError);
+        // Continue with normal response handling below
+      }
+    }
     
     // Check if response has specific headers that indicate source (proxy vs API)
     const server = response.headers.get('server');
