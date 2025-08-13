@@ -1150,10 +1150,22 @@ function JobDetailsPageContent() {
                   filesLength: mergedJobData.files?.length,
                   api_filesLength: mergedJobData.api_files?.length,
                   allJobDataKeys: Object.keys(mergedJobData),
+                  // Check for other possible file field names
+                  file_list: (mergedJobData as any).file_list,
+                  file_names: (mergedJobData as any).file_names,
+                  grouped_files: (mergedJobData as any).grouped_files,
+                  filenames: (mergedJobData as any).filenames,
                   mergedJobData: mergedJobData
                 });
                 
-                const filesArray = mergedJobData.files || mergedJobData.api_files || [];
+                // Try multiple possible field names for files
+                const filesArray = mergedJobData.files || 
+                                  mergedJobData.api_files || 
+                                  (mergedJobData as any).file_list ||
+                                  (mergedJobData as any).file_names ||
+                                  (mergedJobData as any).grouped_files ||
+                                  (mergedJobData as any).filenames ||
+                                  [];
                 console.log('📁 Files array for rerun:', filesArray);
                 
                 const queryParams = new URLSearchParams({
