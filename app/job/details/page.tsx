@@ -1149,7 +1149,9 @@ function JobDetailsPageContent() {
                   appName: mergedJobData.app_name || '',
                   filenamePrefix: mergedJobData.filename_prefix || '',
                   description: mergedJobData.description || '',
-                  sourceFolder: mergedJobData.source_folder || ''
+                  sourceFolder: mergedJobData.source_folder || '',
+                  // Include files array for rerun - essential for upload functionality
+                  files: JSON.stringify(mergedJobData.files || mergedJobData.api_files || [])
                 });
                 router.push(`/new-job?${queryParams.toString()}`);
               } : undefined}

@@ -37,6 +37,18 @@ function NewJobPageContent() {
     return filename ? `${basePath}/${filename}` : basePath;
   };
   
+  // Get files from URL for rerun operations
+  const getRerunFiles = (): string[] => {
+    if (!isRerun) return [];
+    try {
+      const filesParam = searchParams.get('files');
+      return filesParam ? JSON.parse(filesParam) : [];
+    } catch (error) {
+      console.warn('Failed to parse files parameter from URL:', error);
+      return [];
+    }
+  };
+
   // Initialize form data - pre-fill if this is a re-run
   const [formData, setFormData] = useState<NewJobFormData>({
     appName: isRerun ? (searchParams.get('appName') || '') : '',
@@ -200,31 +212,44 @@ function NewJobPageContent() {
     try {
       console.log('Starting job creation process...');
       
-      if (!formData.selectedFiles || formData.selectedFiles.length === 0) {
-        throw new Error('No files selected for upload');
-      }
-
-      // Group files by prefix (removing _FR/_BK suffixes)
-      // Only process files that match our strict naming convention
-      const fileGroups = new Set<string>();
+      let filenames: string[];
       
-      Array.from(formData.selectedFiles).forEach(file => {
-        const fileName = file.name;
+      if (isRerun) {
+        // For rerun operations, use files from URL parameters
+        filenames = getRerunFiles();
+        console.log('Rerun files from URL:', filenames);
         
-        // Only process files that match _FR.pdf or _BK.pdf pattern
-        if (fileName.match(/_(FR|BK)\.pdf$/i)) {
-          const baseName = fileName.replace(/_(FR|BK)\.pdf$/i, '');
-          fileGroups.add(baseName);
-        } else {
-          console.warn(`⚠️ Skipping file with invalid naming: ${fileName} (must end with _FR.pdf or _BK.pdf)`);
+        if (filenames.length === 0) {
+          throw new Error('No files found for rerun operation');
         }
-      });
-      
-      // Convert set to array for the API
-      const filenames = Array.from(fileGroups);
-      
-      console.log('Original files:', Array.from(formData.selectedFiles).map(f => f.name));
-      console.log('Grouped file prefixes:', filenames);
+      } else {
+        // For new jobs, process selected files
+        if (!formData.selectedFiles || formData.selectedFiles.length === 0) {
+          throw new Error('No files selected for upload');
+        }
+
+        // Group files by prefix (removing _FR/_BK suffixes)
+        // Only process files that match our strict naming convention
+        const fileGroups = new Set<string>();
+        
+        Array.from(formData.selectedFiles).forEach(file => {
+          const fileName = file.name;
+          
+          // Only process files that match _FR.pdf or _BK.pdf pattern
+          if (fileName.match(/_(FR|BK)\.pdf$/i)) {
+            const baseName = fileName.replace(/_(FR|BK)\.pdf$/i, '');
+            fileGroups.add(baseName);
+          } else {
+            console.warn(`⚠️ Skipping file with invalid naming: ${fileName} (must end with _FR.pdf or _BK.pdf)`);
+          }
+        });
+        
+        // Convert set to array for the API
+        filenames = Array.from(fileGroups);
+        
+        console.log('Original files:', Array.from(formData.selectedFiles).map(f => f.name));
+        console.log('Grouped file prefixes:', filenames);
+      }
       
       // Create job using Content Pipeline API
       const createdJob = await createJob({
@@ -236,40 +261,48 @@ function NewJobPageContent() {
       });
 
       setJobCreated(createdJob);
-      console.log('Job created successfully, navigating to job details page...');
+      console.log(`${isRerun ? 'Job re-run' : 'Job created'} successfully, navigating to job details page...`);
       
-      // Store the form data in sessionStorage so the job details page can access it
-      const uploadSession = {
-        jobId: createdJob.job_id,
-        appName: formData.appName,
-        filenamePrefix: formData.filenamePrefix,
-        description: formData.description,
-        files: Array.from(formData.selectedFiles!).map(file => ({
-          name: file.name,
-          size: file.size,
-          type: file.type
-        }))
-      };
-      
-      sessionStorage.setItem(`upload_${createdJob.job_id}`, JSON.stringify(uploadSession));
-      
-      // Store actual File objects in global variable (sessionStorage can't store File objects)
-      (window as any).pendingUploadFiles = {
-        jobId: createdJob.job_id,
-        files: Array.from(formData.selectedFiles!)
-      };
-      
-      console.log('Stored upload session data and files for job:', createdJob.job_id);
-      console.log('File count:', formData.selectedFiles!.length);
-      
-      // Navigate to job details page - React Query will handle data fetching
-      const queryParams = new URLSearchParams({
-        jobId: createdJob.job_id!,
-        startUpload: 'true',
-        createFiles: 'true'
-      });
-      
-      router.push(`/job/details?${queryParams.toString()}`);
+      if (isRerun) {
+        // For rerun operations, navigate directly to job details without file upload setup
+        const queryParams = new URLSearchParams({
+          jobId: createdJob.job_id!
+        });
+        router.push(`/job/details?${queryParams.toString()}`);
+      } else {
+        // For new jobs, store file data for upload
+        const uploadSession = {
+          jobId: createdJob.job_id,
+          appName: formData.appName,
+          filenamePrefix: formData.filenamePrefix,
+          description: formData.description,
+          files: Array.from(formData.selectedFiles!).map(file => ({
+            name: file.name,
+            size: file.size,
+            type: file.type
+          }))
+        };
+        
+        sessionStorage.setItem(`upload_${createdJob.job_id}`, JSON.stringify(uploadSession));
+        
+        // Store actual File objects in global variable (sessionStorage can't store File objects)
+        (window as any).pendingUploadFiles = {
+          jobId: createdJob.job_id,
+          files: Array.from(formData.selectedFiles!)
+        };
+        
+        console.log('Stored upload session data and files for job:', createdJob.job_id);
+        console.log('File count:', formData.selectedFiles!.length);
+        
+        // Navigate to job details page with upload parameters - React Query will handle data fetching
+        const queryParams = new URLSearchParams({
+          jobId: createdJob.job_id!,
+          startUpload: 'true',
+          createFiles: 'true'
+        });
+        
+        router.push(`/job/details?${queryParams.toString()}`);
+      }
       
     } catch (error) {
       console.error(`Error ${isRerun ? 're-running' : 'creating'} job:`, error);
