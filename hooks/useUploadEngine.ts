@@ -560,11 +560,10 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
           console.log(`🔄 Updating job original_files_completed_count by +${convertedFiles.length}`);
           
           // Update job object with incremented completed count
-          const updateResponse = await fetch('/api/content-pipeline-proxy?operation=update_job', {
+          const updateResponse = await fetch(`/api/content-pipeline-proxy?operation=update_job&id=${jobData.job_id}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              id: jobData.job_id,
               increment_completed_count: convertedFiles.length
             })
           });
@@ -638,11 +637,10 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
           console.log(`🔄 Updating job original_files_failed_count by +${convertedFiles.length}`);
           
           // Update job object with incremented failed count
-          const updateResponse = await fetch('/api/content-pipeline-proxy?operation=update_job', {
+          const updateResponse = await fetch(`/api/content-pipeline-proxy?operation=update_job&id=${jobData.job_id}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              id: jobData.job_id,
               increment_failed_count: convertedFiles.length
             })
           });
