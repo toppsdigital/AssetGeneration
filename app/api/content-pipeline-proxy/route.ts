@@ -659,10 +659,17 @@ async function handleRequest(request: NextRequest, method: string) {
         apiUrl += '/jobs';
         apiMethod = 'POST';
         // Add rerun-specific data to the body
+        // Calculate total PDF files based on grouped filenames (consistent with create_job)
+        const totalPdfFiles = (body.files || []).length * 2;
+        
         apiBody = {
           ...apiBody,
           rerun_job_id: id, // Mark this as a rerun of the specified job
-          operation: 'rerun' // Backend may need this flag
+          operation: 'rerun', // Backend may need this flag
+          job_status: 'uploading', // Set initial status same as create_job
+          original_files_total_count: totalPdfFiles,
+          original_files_completed_count: 0,
+          original_files_failed_count: 0
         };
         
         // Get session and add user information
