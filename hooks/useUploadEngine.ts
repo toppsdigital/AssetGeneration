@@ -576,18 +576,18 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
             if (result.job) {
               console.log(`📦 Updating local job data with complete object from increment API`);
               setJobData(prev => ({
-                ...prev,
+                ...(prev || {}), // Handle null prev safely
                 ...result.job, // Use entire job object from API response
                 // Preserve UI-specific fields that might not be in API response
-                api_files: result.job.files || prev.api_files || [],
-                content_pipeline_files: prev.content_pipeline_files || [],
-                Subset_name: result.job.source_folder || prev.Subset_name
+                api_files: result.job.files || prev?.api_files || [],
+                content_pipeline_files: prev?.content_pipeline_files || [],
+                Subset_name: result.job.source_folder || prev?.Subset_name
               }));
             } else {
               // Fallback to manual increment if no job object returned
               setJobData(prev => ({
-                ...prev,
-                original_files_completed_count: (prev.original_files_completed_count || 0) + convertedFiles.length
+                ...(prev || {}), // Handle null prev safely
+                original_files_completed_count: ((prev?.original_files_completed_count || 0) + convertedFiles.length)
               }));
             }
           } else {
@@ -666,18 +666,18 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
             if (result.job) {
               console.log(`📦 Updating local job data with complete object from increment API`);
               setJobData(prev => ({
-                ...prev,
+                ...(prev || {}), // Handle null prev safely
                 ...result.job, // Use entire job object from API response
                 // Preserve UI-specific fields that might not be in API response
-                api_files: result.job.files || prev.api_files || [],
-                content_pipeline_files: prev.content_pipeline_files || [],
-                Subset_name: result.job.source_folder || prev.Subset_name
+                api_files: result.job.files || prev?.api_files || [],
+                content_pipeline_files: prev?.content_pipeline_files || [],
+                Subset_name: result.job.source_folder || prev?.Subset_name
               }));
             } else {
               // Fallback to manual increment if no job object returned
               setJobData(prev => ({
-                ...prev,
-                original_files_failed_count: (prev.original_files_failed_count || 0) + convertedFiles.length
+                ...(prev || {}), // Handle null prev safely
+                original_files_failed_count: ((prev?.original_files_failed_count || 0) + convertedFiles.length)
               }));
             }
           } else {
