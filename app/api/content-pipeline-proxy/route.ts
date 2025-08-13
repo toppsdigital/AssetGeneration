@@ -642,8 +642,29 @@ async function handleRequest(request: NextRequest, method: string) {
         if (!id) {
           return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
         }
-        apiUrl += `/jobs/${id}/rerun`;
+        console.log('🔄 RERUN_JOB Debug:', {
+          operation: 'rerun_job',
+          jobId: id,
+          baseUrl: API_BASE_URL,
+          possibleEndpoints: [
+            `/jobs/${id}/rerun`,
+            `/jobs?operation=rerun&job_id=${id}`,
+            `/jobs` // with rerun data in body
+          ],
+          note: 'Testing different endpoint patterns'
+        });
+        
+        // Try different endpoint patterns based on backend API design
+        // First try: POST to /jobs with rerun data in body (similar to create_job)
+        apiUrl += '/jobs';
         apiMethod = 'POST';
+        // Add rerun-specific data to the body
+        apiBody = {
+          ...apiBody,
+          rerun_job_id: id, // Mark this as a rerun of the specified job
+          operation: 'rerun' // Backend may need this flag
+        };
+        
         // Get session and add user information
         try {
           const session = await auth();
