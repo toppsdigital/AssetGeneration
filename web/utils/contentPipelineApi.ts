@@ -682,20 +682,20 @@ class ContentPipelineAPI {
     }
   }
 
-  async bulkUpdateAssets(jobId: string, bulkUpdatePayload: { assets: any[] }): Promise<{
+  async bulkUpdateAssets(jobId: string, assets: any[]): Promise<{
     success: boolean;
     message: string;
     updated_count?: number;
     job?: JobData;
   }> {
-    console.log(`📦 Bulk updating ${bulkUpdatePayload.assets.length} assets for job: ${jobId}`, bulkUpdatePayload);
+    console.log(`📦 Bulk updating ${assets.length} assets for job: ${jobId}`, assets);
     
     const response = await fetch(`${this.baseUrl}?operation=bulk_update_assets&id=${encodeURIComponent(jobId)}`, {
-      method: 'PUT',
+      method: 'POST',  // Use POST as shown in working cURL
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(bulkUpdatePayload),
+      body: JSON.stringify({ assets }),  // Match the structure from your working cURL
     });
 
     if (!response.ok) {

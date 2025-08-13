@@ -2159,18 +2159,17 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
                         setSavingAsset(true);
                         
                         try {
-                          // Prepare bulk update payload for all assets
-                          const bulkUpdatePayload = {
-                            assets: assetsToUpdate.map(asset => ({
-                              id: asset.id, // Asset ID for identification
-                              name: asset.name,
-                              type: asset.type,
-                              layer: asset.layer,
-                              spot: asset.spot,
-                              color: asset.color ? getColorRgbByName(asset.color) : undefined,
-                              vfx: asset.vfx,
+                          // Prepare bulk update payload matching the working cURL structure
+                          const bulkAssets = assetsToUpdate.map(asset => ({
+                            name: asset.name,
+                            type: asset.type,
+                            layer: asset.layer,
+                            config: {
+                              ...(asset.spot && { spot: asset.spot }),
+                              ...(asset.color && { color: getColorRgbByName(asset.color) }),
+                              ...(asset.vfx && { vfx: asset.vfx }),
                               chrome: 'silver', // Apply silver chrome
-                              wp_inv_layer: asset.wp_inv_layer,
+                              ...(asset.wp_inv_layer && { wp_inv_layer: asset.wp_inv_layer }),
                               // Handle spot_color_pairs for parallel types
                               ...(asset.spotColorPairs && asset.spotColorPairs.length > 0 && {
                                 spot_color_pairs: asset.spotColorPairs.map(pair => ({
@@ -2178,13 +2177,13 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
                                   color: getColorRgbByName(pair.color || '')
                                 }))
                               })
-                            }))
-                          };
+                            }
+                          }));
                           
-                          console.log('📦 Bulk update payload:', bulkUpdatePayload);
+                          console.log('📦 Bulk update payload:', bulkAssets);
                           
                           // Make single bulk update API call
-                          const response = await contentPipelineApi.bulkUpdateAssets(jobData.job_id, bulkUpdatePayload);
+                          const response = await contentPipelineApi.bulkUpdateAssets(jobData.job_id, bulkAssets);
                           
                           if (response.success) {
                             console.log(`✅ Successfully applied chrome to ${assetsToUpdate.length} assets`);
@@ -2197,6 +2196,8 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
                               console.log('🔄 Triggering job data refresh after bulk chrome update');
                               onJobDataUpdate({ _forceRefetch: true, job_id: jobData.job_id });
                             }
+                            
+                            alert(`✅ Successfully applied silver chrome to ${assetsToUpdate.length} assets!`);
                           } else {
                             console.error('❌ Bulk chrome update failed:', response);
                             alert(`Failed to apply chrome: ${response.message || 'Unknown error'}`);

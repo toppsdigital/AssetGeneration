@@ -814,6 +814,7 @@ async function handleRequest(request: NextRequest, method: string) {
         apiBody = {}; // Empty body for DELETE
         break;
 
+
       case 'bulk_update_assets':
         if (!id) {
           return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
@@ -822,9 +823,15 @@ async function handleRequest(request: NextRequest, method: string) {
           return NextResponse.json({ error: 'assets array is required for bulk update' }, { status: 400 });
         }
         apiUrl += `/jobs/${id}/assets/batch`;
-        apiMethod = 'PUT';
+        apiMethod = 'POST';  // Use POST as shown in your working cURL
         // Pass the assets array directly as the body
         apiBody = body;
+        console.log(`🔧 Bulk update assets for job ${id}:`, {
+          endpoint: apiUrl,
+          method: apiMethod,
+          assetCount: body.assets.length,
+          firstAsset: body.assets[0]
+        });
         break;
 
       case 'pdf-extract':
