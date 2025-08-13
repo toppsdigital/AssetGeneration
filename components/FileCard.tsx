@@ -112,7 +112,9 @@ const FileCard: React.FC<FileCardProps> = ({
             overflowY: 'auto'
           }}>
             {file.original_files && Object.keys(file.original_files).length > 0 ? (
-              Object.entries(file.original_files).map(([filename, fileInfo], origIndex) => {
+              Object.entries(file.original_files)
+                .sort(([a], [b]) => a.toLowerCase().localeCompare(b.toLowerCase()))
+                .map(([filename, fileInfo], origIndex) => {
                 // Show status when there are NO firefly assets (job hasn't reached generating/complete), or file is actively uploading
                 const hasFireflyAssets = file.firefly_assets && Object.keys(file.firefly_assets).length > 0;
                 const showStatus = uploadingFiles.has(filename) || !hasFireflyAssets;
@@ -290,7 +292,9 @@ const FileCard: React.FC<FileCardProps> = ({
                 maxHeight: 180, // Reduced from 200
                 overflowY: 'auto'
               }}>
-                {Object.entries(extractedFiles).map(([filename, extractedFile], extIndex) => {
+                {Object.entries(extractedFiles)
+                  .sort(([a], [b]) => a.toLowerCase().localeCompare(b.toLowerCase()))
+                  .map(([filename, extractedFile], extIndex) => {
                   // Show status when there are NO firefly assets (job hasn't reached generating/complete), or file is actively uploading
                   const hasFireflyAssets = file.firefly_assets && Object.keys(file.firefly_assets).length > 0;
                   const showStatus = uploadingFiles.has(filename) || !hasFireflyAssets;
@@ -426,7 +430,9 @@ const FileCard: React.FC<FileCardProps> = ({
               maxHeight: 180, // Reduced from 200
               overflowY: 'auto'
             }}>
-              {Object.entries(file.firefly_assets).map(([assetName, asset], assetIndex) => (
+              {Object.entries(file.firefly_assets)
+                .sort(([a], [b]) => a.toLowerCase().localeCompare(b.toLowerCase()))
+                .map(([assetName, asset], assetIndex) => (
                 <div key={assetIndex} style={{
                   marginBottom: 6, // Reduced from 8
                   fontSize: 12, // Reduced from 13

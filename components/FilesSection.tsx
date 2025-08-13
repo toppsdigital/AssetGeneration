@@ -93,7 +93,9 @@ export const FilesSection = ({
           animation: 'fadeIn 0.3s ease-in'
         }}>
           {mergedJobData?.content_pipeline_files && mergedJobData.content_pipeline_files.length > 0 ? (
-            mergedJobData.content_pipeline_files.map((file: any, index: number) => (
+            mergedJobData.content_pipeline_files
+              .sort((a: any, b: any) => a.filename.toLowerCase().localeCompare(b.filename.toLowerCase()))
+              .map((file: any, index: number) => (
               <FileCard 
                 key={index} 
                 file={file} 
