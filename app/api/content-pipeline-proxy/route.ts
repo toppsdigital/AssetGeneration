@@ -333,17 +333,29 @@ async function handleRequest(request: NextRequest, method: string) {
             console.warn('Failed to get session for my_jobs filter:', error);
           }
         }
-        // Map 'status' parameter to 'sk_status' for API compatibility
-        if (searchParams.get('status')) {
-          jobParams.append('sk_status', searchParams.get('status')!);
+        // Pass 'status' parameter directly to backend
+        const statusParam = searchParams.get('status');
+        console.log('🔍 Debug status parameter:', {
+          statusParam,
+          hasStatus: !!statusParam,
+          allSearchParams: Object.fromEntries(searchParams.entries())
+        });
+        
+        if (statusParam) {
+          // Backend expects simple 'status' parameter
+          jobParams.append('status', statusParam);
           console.log('🔍 Status filter mapped:', {
-            frontend_status: searchParams.get('status'),
-            api_sk_status: searchParams.get('status')
+            frontend_status: statusParam,
+            backend_status: statusParam
           });
+        } else {
+          console.log('⚠️ No status parameter found in request');
         }
         if (jobParams.toString()) {
           apiUrl += `?${jobParams.toString()}`;
         }
+        console.log('🔗 Final API URL for list_jobs:', apiUrl);
+        console.log('🔗 Job params constructed:', jobParams.toString());
         break;
         
       // File operations
