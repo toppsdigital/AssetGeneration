@@ -335,46 +335,40 @@ function NewJobPageContent() {
       setJobCreated(createdJob);
       console.log(`${isRerun ? 'Job re-run' : 'Job created'} successfully, navigating to job details page...`);
       
-      if (isRerun) {
-        // For rerun operations, navigate directly to job details without file upload setup
-        const queryParams = new URLSearchParams({
-          jobId: createdJob.job_id!
-        });
-        router.push(`/job/details?${queryParams.toString()}`);
-      } else {
-        // For new jobs, store file data for upload
-        const uploadSession = {
-          jobId: createdJob.job_id,
-          appName: formData.appName,
-          filenamePrefix: formData.filenamePrefix,
-          description: formData.description,
-          files: Array.from(formData.selectedFiles!).map(file => ({
-            name: file.name,
-            size: file.size,
-            type: file.type
-          }))
-        };
-        
-        sessionStorage.setItem(`upload_${createdJob.job_id}`, JSON.stringify(uploadSession));
-        
-        // Store actual File objects in global variable (sessionStorage can't store File objects)
-        (window as any).pendingUploadFiles = {
-          jobId: createdJob.job_id,
-          files: Array.from(formData.selectedFiles!)
-        };
-        
-        console.log('Stored upload session data and files for job:', createdJob.job_id);
-        console.log('File count:', formData.selectedFiles!.length);
-        
-        // Navigate to job details page with upload parameters - React Query will handle data fetching
-        const queryParams = new URLSearchParams({
-          jobId: createdJob.job_id!,
-          startUpload: 'true',
-          createFiles: 'true'
-        });
-        
-        router.push(`/job/details?${queryParams.toString()}`);
-      }
+      // Both new jobs and reruns now work the same way - store file data and start upload
+      const uploadSession = {
+        jobId: createdJob.job_id,
+        appName: formData.appName,
+        filenamePrefix: formData.filenamePrefix,
+        description: formData.description,
+        files: Array.from(formData.selectedFiles!).map(file => ({
+          name: file.name,
+          size: file.size,
+          type: file.type
+        }))
+      };
+      
+      sessionStorage.setItem(`upload_${createdJob.job_id}`, JSON.stringify(uploadSession));
+      
+      // Store actual File objects in global variable (sessionStorage can't store File objects)
+      (window as any).pendingUploadFiles = {
+        jobId: createdJob.job_id,
+        files: Array.from(formData.selectedFiles!)
+      };
+      
+      console.log('Stored upload session data and files for job:', createdJob.job_id);
+      console.log('File count:', formData.selectedFiles!.length);
+      console.log('Operation type:', isRerun ? 'rerun' : 'new job');
+      
+      // Navigate to job details page with upload parameters for both new jobs and reruns
+      const queryParams = new URLSearchParams({
+        jobId: createdJob.job_id!,
+        startUpload: 'true',
+        createFiles: 'true'
+      });
+      
+      router.push(`/job/details?${queryParams.toString()}`);
+      console.log(`🔗 Navigating to job details with upload params: ${queryParams.toString()}`);
       
     } catch (error) {
       console.error(`Error ${isRerun ? 're-running' : 'creating'} job:`, error);
