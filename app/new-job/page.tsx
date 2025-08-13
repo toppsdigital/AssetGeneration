@@ -37,52 +37,8 @@ function NewJobPageContent() {
     return filename ? `${basePath}/${filename}` : basePath;
   };
   
-  // Get files from URL for rerun operations
-  const getRerunFiles = (): string[] => {
-    if (!isRerun) return [];
-    try {
-      const filesParam = searchParams.get('files');
-      console.log('🔍 ENHANCED DEBUG getRerunFiles:', {
-        isRerun,
-        filesParam,
-        filesParamType: typeof filesParam,
-        filesParamLength: filesParam?.length,
-        allUrlParams: Object.fromEntries(searchParams.entries()),
-        rawUrl: window.location.href,
-        searchParamsString: searchParams.toString()
-      });
-      
-      if (!filesParam) {
-        console.warn('⚠️ No files parameter found in URL for rerun operation');
-        console.log('Available URL parameters:', Array.from(searchParams.entries()));
-        return [];
-      }
-      
-      console.log('🔍 Raw files parameter before parsing:', {
-        rawValue: filesParam,
-        firstChar: filesParam[0],
-        lastChar: filesParam[filesParam.length - 1],
-        includes_bracket: filesParam.includes('['),
-        includes_quote: filesParam.includes('"')
-      });
-      
-      const parsedFiles = JSON.parse(filesParam);
-      console.log('✅ Successfully parsed files from URL:', {
-        parsedFiles,
-        parsedFilesType: typeof parsedFiles,
-        parsedFilesLength: Array.isArray(parsedFiles) ? parsedFiles.length : 'not array',
-        parsedFilesStringified: JSON.stringify(parsedFiles)
-      });
-      return parsedFiles || [];
-    } catch (error) {
-      console.error('❌ Failed to parse files parameter from URL:', {
-        error: error.message,
-        rawFilesParam: searchParams.get('files'),
-        errorType: error.constructor.name
-      });
-      return [];
-    }
-  };
+  // Rerun operations work exactly like new jobs - no file extraction needed
+  // User will select the same folder again, ensuring identical file processing
 
   // Initialize form data - pre-fill if this is a re-run
   const [formData, setFormData] = useState<NewJobFormData>({
@@ -159,10 +115,19 @@ function NewJobPageContent() {
 
   // Check if all required fields are valid
   const isFormValid = (): boolean => {
-    return !!(
+    const basicFieldsValid = !!(
       formData.appName.trim() &&
       formData.filenamePrefix.trim() &&
-      formData.description.trim() &&
+      formData.description.trim()
+    );
+    
+    // For reruns, we don't require file selection until user chooses to proceed
+    if (isRerun) {
+      return basicFieldsValid;
+    }
+    
+    // For new jobs, require file selection
+    return basicFieldsValid && !!(
       formData.uploadFolder.trim() &&
       formData.selectedFiles &&
       formData.selectedFiles.length > 0
@@ -185,7 +150,8 @@ function NewJobPageContent() {
       newErrors.description = 'Description is required';
     }
 
-    if (!formData.uploadFolder.trim()) {
+    // Only require upload folder for new jobs, not reruns
+    if (!isRerun && !formData.uploadFolder.trim()) {
       newErrors.uploadFolder = 'Upload folder is required';
     }
 
@@ -255,16 +221,41 @@ function NewJobPageContent() {
       let actualPdfCount: number;
       
       if (isRerun) {
-        // For rerun operations, use files from URL parameters
-        filenames = getRerunFiles();
-        console.log('Rerun files from URL:', filenames);
-        
-        if (filenames.length === 0) {
-          throw new Error('No files found for rerun operation');
+        // For rerun operations, user must select files just like a new job
+        if (!formData.selectedFiles || formData.selectedFiles.length === 0) {
+          throw new Error('Please select a folder containing PDF files');
         }
         
-        // For rerun, we don't have access to the actual file count, so use the old calculation
-        actualPdfCount = filenames.length * 2;
+        // Process files exactly like a new job
+        const fileGroups = new Set<string>();
+        const validFiles: string[] = [];
+        const invalidFiles: string[] = [];
+        
+        Array.from(formData.selectedFiles).forEach(file => {
+          const fileName = file.name;
+          
+          if (fileName.match(/_(FR|BK)\.pdf$/i)) {
+            const baseName = fileName.replace(/_(FR|BK)\.pdf$/i, '');
+            fileGroups.add(baseName);
+            validFiles.push(fileName);
+          } else {
+            console.warn(`⚠️ Skipping file with invalid naming: ${fileName} (must end with _FR.pdf or _BK.pdf)`);
+            invalidFiles.push(fileName);
+          }
+        });
+        
+        filenames = Array.from(fileGroups);
+        actualPdfCount = validFiles.length;
+        
+        console.log('📊 Rerun File Processing (same as new job):');
+        console.log(`  Valid _FR/_BK files: ${validFiles.length}`, validFiles);
+        console.log(`  Invalid files (skipped): ${invalidFiles.length}`, invalidFiles);
+        console.log(`  Grouped file prefixes: ${filenames.length}`, filenames);
+        console.log(`  Actual PDF count: ${actualPdfCount}`);
+        
+        if (filenames.length === 0) {
+          throw new Error('No valid PDF file pairs found. Please ensure files end with _FR.pdf and _BK.pdf');
+        }
       } else {
         // For new jobs, process selected files
         if (!formData.selectedFiles || formData.selectedFiles.length === 0) {
