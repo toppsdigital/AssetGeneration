@@ -1143,6 +1143,19 @@ function JobDetailsPageContent() {
               uploadedPdfFiles={uploadEngine.uploadedPdfFiles}
               onRerunJob={mergedJobData && !uploadsInProgress ? () => {
                 // Navigate to new job page with pre-filled data
+                console.log('🔍 DEBUG Rerun Navigation - Job Data:', {
+                  job_id: mergedJobData.job_id,
+                  files: mergedJobData.files,
+                  api_files: mergedJobData.api_files,
+                  filesLength: mergedJobData.files?.length,
+                  api_filesLength: mergedJobData.api_files?.length,
+                  allJobDataKeys: Object.keys(mergedJobData),
+                  mergedJobData: mergedJobData
+                });
+                
+                const filesArray = mergedJobData.files || mergedJobData.api_files || [];
+                console.log('📁 Files array for rerun:', filesArray);
+                
                 const queryParams = new URLSearchParams({
                   rerun: 'true',
                   sourceJobId: mergedJobData.job_id || '',
@@ -1151,8 +1164,10 @@ function JobDetailsPageContent() {
                   description: mergedJobData.description || '',
                   sourceFolder: mergedJobData.source_folder || '',
                   // Include files array for rerun - essential for upload functionality
-                  files: JSON.stringify(mergedJobData.files || mergedJobData.api_files || [])
+                  files: JSON.stringify(filesArray)
                 });
+                
+                console.log('🔗 Navigation URL will be:', `/new-job?${queryParams.toString()}`);
                 router.push(`/new-job?${queryParams.toString()}`);
               } : undefined}
             />

@@ -42,9 +42,24 @@ function NewJobPageContent() {
     if (!isRerun) return [];
     try {
       const filesParam = searchParams.get('files');
-      return filesParam ? JSON.parse(filesParam) : [];
+      console.log('🔍 DEBUG getRerunFiles:', {
+        isRerun,
+        filesParam,
+        filesParamLength: filesParam?.length,
+        allUrlParams: Object.fromEntries(searchParams.entries())
+      });
+      
+      if (!filesParam) {
+        console.warn('⚠️ No files parameter found in URL for rerun operation');
+        return [];
+      }
+      
+      const parsedFiles = JSON.parse(filesParam);
+      console.log('✅ Parsed files from URL:', parsedFiles);
+      return parsedFiles || [];
     } catch (error) {
-      console.warn('Failed to parse files parameter from URL:', error);
+      console.error('❌ Failed to parse files parameter from URL:', error);
+      console.log('Raw files parameter:', searchParams.get('files'));
       return [];
     }
   };
