@@ -814,6 +814,19 @@ async function handleRequest(request: NextRequest, method: string) {
         apiBody = {}; // Empty body for DELETE
         break;
 
+      case 'bulk_update_assets':
+        if (!id) {
+          return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
+        }
+        if (!body.assets || !Array.isArray(body.assets) || body.assets.length === 0) {
+          return NextResponse.json({ error: 'assets array is required for bulk update' }, { status: 400 });
+        }
+        apiUrl += `/jobs/${id}/assets/batch`;
+        apiMethod = 'PUT';
+        // Pass the assets array directly as the body
+        apiBody = body;
+        break;
+
       case 'pdf-extract':
         apiUrl += '/pdf-extract';
         apiMethod = 'POST';
@@ -827,7 +840,7 @@ async function handleRequest(request: NextRequest, method: string) {
             'create_file', 'get_file', 'update_file', 'list_files',
             'batch_create_files', 'batch_get_files', 'update_pdf_status', 'batch_update_pdf_status',
             'generate_assets', 'regenerate_assets', 'update_download_url',
-            'create_asset', 'update_asset', 'delete_asset',
+            'create_asset', 'update_asset', 'delete_asset', 'bulk_update_assets',
             'pdf-extract',
             's3_download_file', 's3_download_folder', 's3_upload_files'
           ]

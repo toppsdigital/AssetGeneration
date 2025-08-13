@@ -682,6 +682,32 @@ class ContentPipelineAPI {
     }
   }
 
+  async bulkUpdateAssets(jobId: string, bulkUpdatePayload: { assets: any[] }): Promise<{
+    success: boolean;
+    message: string;
+    updated_count?: number;
+    job?: JobData;
+  }> {
+    console.log(`📦 Bulk updating ${bulkUpdatePayload.assets.length} assets for job: ${jobId}`, bulkUpdatePayload);
+    
+    const response = await fetch(`${this.baseUrl}?operation=bulk_update_assets&id=${encodeURIComponent(jobId)}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(bulkUpdatePayload),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || `Failed to bulk update assets: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log(`✅ Bulk asset update completed:`, result);
+    return result;
+  }
+
   async extractPdfData(pdfData: { pdf_data?: string; s3_key?: string; filename: string; layers?: string[]; job_id?: string }): Promise<any> {
     const dataSource = pdfData.s3_key ? 'S3 key' : 'base64 data';
     const dataValue = pdfData.s3_key || (pdfData.pdf_data ? `${pdfData.pdf_data.length} chars` : 'none');

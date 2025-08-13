@@ -341,35 +341,43 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
 
   // Hardcoded color mapping for consistent color selection
   const HARDCODED_COLORS = [
-    { name: 'Aqua', displayName: 'Aqua', rgb: 'R0G255B255', hex: '#00ffff' },
-    { name: 'Black', displayName: 'Black', rgb: 'R51G51B51', hex: '#333333' },
-    { name: 'Blue', displayName: 'Blue', rgb: 'R0G102B204', hex: '#0066cc' },
-    { name: 'Gold', displayName: 'Gold', rgb: 'R204G153B0', hex: '#cc9900' },
-    { name: 'Green', displayName: 'Green', rgb: 'R0G204B51', hex: '#00cc33' },
-    { name: 'Magenta', displayName: 'Magenta', rgb: 'R255G0B204', hex: '#ff00cc' },
-    { name: 'Orange', displayName: 'Orange', rgb: 'R255G102B0', hex: '#ff6600' },
-    { name: 'Pink', displayName: 'Pink', rgb: 'R255G102B153', hex: '#ff6699' },
-    { name: 'Purple', displayName: 'Purple', rgb: 'R153G51B255', hex: '#9933ff' },
-    { name: 'Red', displayName: 'Red', rgb: 'R255G0B0', hex: '#ff0000' },
-    { name: 'Refractor', displayName: 'Refractor', rgb: 'R153G153B153', hex: '#999999' },
-    { name: 'Rose_Gold', displayName: 'Rose Gold', rgb: 'R255G102B102', hex: '#ff6666' },
-    { name: 'Silver', displayName: 'Silver', rgb: 'R153G153B153', hex: '#999999' },
-    { name: 'White', displayName: 'White', rgb: 'R255G255B255', hex: '#ffffff' },
-    { name: 'Yellow', displayName: 'Yellow', rgb: 'R255G255B0', hex: '#ffff00' }
+    { name: 'Aqua', rgb: 'R0G255B255' },
+    { name: 'Black', rgb: 'R51G51B51' },
+    { name: 'Blue', rgb: 'R0G102B204' },
+    { name: 'Gold', rgb: 'R204G153B0' },
+    { name: 'Green', rgb: 'R0G204B51' },
+    { name: 'Magenta', rgb: 'R255G0B204' },
+    { name: 'Orange', rgb: 'R255G102B0' },
+    { name: 'Pink', rgb: 'R255G102B153' },
+    { name: 'Purple', rgb: 'R153G51B255' },
+    { name: 'Red', rgb: 'R255G0B0' },
+    { name: 'Refractor', rgb: 'R153G153B153' },
+    { name: 'Rose Gold', rgb: 'R255G102B102' },
+    { name: 'Silver', rgb: 'R153G153B153' },
+    { name: 'White', rgb: 'R255G255B255' },
+    { name: 'Yellow', rgb: 'R255G255B0' }
   ];
 
   const getColorHexByName = (colorName: string): string => {
     const color = HARDCODED_COLORS.find(c => 
-      c.name.toLowerCase() === colorName.toLowerCase() ||
-      c.displayName.toLowerCase() === colorName.toLowerCase()
+      c.name.toLowerCase() === colorName.toLowerCase()
     );
-    return color?.hex || '#999999'; // Default gray for unknown colors
+    // Convert RGB to hex for display (we can remove this function entirely if not needed)
+    if (color?.rgb) {
+      const rgbMatch = color.rgb.match(/R(\d+)G(\d+)B(\d+)/);
+      if (rgbMatch) {
+        const r = parseInt(rgbMatch[1]).toString(16).padStart(2, '0');
+        const g = parseInt(rgbMatch[2]).toString(16).padStart(2, '0');
+        const b = parseInt(rgbMatch[3]).toString(16).padStart(2, '0');
+        return `#${r}${g}${b}`;
+      }
+    }
+    return '#999999'; // Default gray for unknown colors
   };
 
   const getColorRgbByName = (colorName: string): string => {
     const color = HARDCODED_COLORS.find(c => 
-      c.name.toLowerCase() === colorName.toLowerCase() ||
-      c.displayName.toLowerCase() === colorName.toLowerCase()
+      c.name.toLowerCase() === colorName.toLowerCase()
     );
     return color?.rgb || 'R153G153B153'; // Default gray for unknown colors
   };
@@ -381,12 +389,19 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
 
   const getColorDisplayNameByRgb = (rgbValue: string): string => {
     const color = HARDCODED_COLORS.find(c => c.rgb === rgbValue);
-    return color?.displayName || rgbValue;
+    return color?.name || rgbValue;
   };
 
   const getColorHexByRgb = (rgbValue: string): string => {
-    const color = HARDCODED_COLORS.find(c => c.rgb === rgbValue);
-    return color?.hex || '#999999';
+    // Convert RGB string to hex for display
+    const rgbMatch = rgbValue.match(/R(\d+)G(\d+)B(\d+)/);
+    if (rgbMatch) {
+      const r = parseInt(rgbMatch[1]).toString(16).padStart(2, '0');
+      const g = parseInt(rgbMatch[2]).toString(16).padStart(2, '0');
+      const b = parseInt(rgbMatch[3]).toString(16).padStart(2, '0');
+      return `#${r}${g}${b}`;
+    }
+    return '#999999'; // Default gray for unknown colors
   };
 
   const getColorVariants = () => {
@@ -1551,7 +1566,7 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
                                       value={colorLayer.name} 
                                       style={{ background: '#1f2937' }}
                                     >
-                                      {colorLayer.displayName}
+                                      {colorLayer.name}
                                     </option>
                                   ))}
                                 </select>
@@ -2110,12 +2125,111 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
                                               <th style={{ padding: '10px 12px', textAlign: 'left', color: '#f8f8f8', fontSize: 13, fontWeight: 600, letterSpacing: '0.05em', maxWidth: '150px', width: '150px' }}>NAME</th>
                     <th style={{ padding: '10px 12px', textAlign: 'left', color: '#f8f8f8', fontSize: 13, fontWeight: 600, letterSpacing: '0.05em' }}>LAYERS</th>
                     <th style={{ padding: '10px 12px', textAlign: 'left', color: '#f8f8f8', fontSize: 13, fontWeight: 600, letterSpacing: '0.05em' }}>VFX</th>
-                    <th style={{ padding: '10px 12px', textAlign: 'center', color: '#f8f8f8', fontSize: 13, fontWeight: 600, letterSpacing: '0.05em' }}>CHROME</th>
+                    <th 
+                      style={{ 
+                        padding: '10px 12px', 
+                        textAlign: 'center', 
+                        color: '#f8f8f8', 
+                        fontSize: 13, 
+                        fontWeight: 600, 
+                        letterSpacing: '0.05em',
+                        cursor: 'pointer',
+                        userSelect: 'none',
+                        transition: 'color 0.2s'
+                      }}
+                      onClick={async () => {
+                        if (savingAsset || !jobData?.job_id) return;
+                        
+                        // Find all assets where chrome is currently off (false/falsy) but not superfractor
+                        const assetsToUpdate = configuredAssets.filter(asset => 
+                          !asset.chrome && 
+                          asset.type !== 'wp' && 
+                          asset.type !== 'back' && 
+                          asset.type !== 'wp-1of1' &&
+                          getWpInvLayers().length > 0
+                        );
+                        
+                        if (assetsToUpdate.length === 0) {
+                          console.log('📋 No assets need chrome update');
+                          return;
+                        }
+                        
+                        console.log(`🔧 Applying silver chrome to ${assetsToUpdate.length} assets`);
+                        
+                        setSavingAsset(true);
+                        
+                        try {
+                          // Prepare bulk update payload for all assets
+                          const bulkUpdatePayload = {
+                            assets: assetsToUpdate.map(asset => ({
+                              id: asset.id, // Asset ID for identification
+                              name: asset.name,
+                              type: asset.type,
+                              layer: asset.layer,
+                              spot: asset.spot,
+                              color: asset.color ? getColorRgbByName(asset.color) : undefined,
+                              vfx: asset.vfx,
+                              chrome: 'silver', // Apply silver chrome
+                              wp_inv_layer: asset.wp_inv_layer,
+                              // Handle spot_color_pairs for parallel types
+                              ...(asset.spotColorPairs && asset.spotColorPairs.length > 0 && {
+                                spot_color_pairs: asset.spotColorPairs.map(pair => ({
+                                  spot: pair.spot,
+                                  color: getColorRgbByName(pair.color || '')
+                                }))
+                              })
+                            }))
+                          };
+                          
+                          console.log('📦 Bulk update payload:', bulkUpdatePayload);
+                          
+                          // Make single bulk update API call
+                          const response = await contentPipelineApi.bulkUpdateAssets(jobData.job_id, bulkUpdatePayload);
+                          
+                          if (response.success) {
+                            console.log(`✅ Successfully applied chrome to ${assetsToUpdate.length} assets`);
+                            
+                            // Update job data with response
+                            if (response.job && onJobDataUpdate) {
+                              console.log('🔄 Updating job data from bulk chrome response');
+                              onJobDataUpdate(response.job);
+                            } else if (onJobDataUpdate) {
+                              console.log('🔄 Triggering job data refresh after bulk chrome update');
+                              onJobDataUpdate({ _forceRefetch: true, job_id: jobData.job_id });
+                            }
+                          } else {
+                            console.error('❌ Bulk chrome update failed:', response);
+                            alert(`Failed to apply chrome: ${response.message || 'Unknown error'}`);
+                          }
+                          
+                        } catch (error) {
+                          console.error('❌ Error applying bulk chrome update:', error);
+                          alert(`Failed to apply chrome: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                        } finally {
+                          setSavingAsset(false);
+                        }
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!savingAsset) {
+                          e.currentTarget.style.color = '#c084fc';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!savingAsset) {
+                          e.currentTarget.style.color = '#f8f8f8';
+                        }
+                      }}
+                      title="Click to apply silver chrome to all assets where chrome is off"
+                    >
+                      CHROME
+                    </th>
                     <th style={{ padding: '10px 12px', textAlign: 'center', color: '#f8f8f8', fontSize: 13, fontWeight: 600, letterSpacing: '0.05em' }}>ACTIONS</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {configuredAssets.map((asset, index) => {
+                        {configuredAssets
+                          .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()))
+                          .map((asset, index) => {
                           return (
                             <tr key={asset.id} style={{ 
                               borderBottom: index < configuredAssets.length - 1 ? '1px solid rgba(255, 255, 255, 0.05)' : 'none',
@@ -2153,10 +2267,12 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
                                     background: asset.type === 'wp' ? 'rgba(34, 197, 94, 0.2)' : 
                                                asset.type === 'back' ? 'rgba(168, 85, 247, 0.2)' :
                                                asset.type === 'base' ? 'rgba(59, 130, 246, 0.2)' :
+                                               asset.type === 'wp-1of1' ? 'rgba(245, 158, 11, 0.2)' :
                                                'rgba(236, 72, 153, 0.2)',
                                     color: asset.type === 'wp' ? '#86efac' : 
                                            asset.type === 'back' ? '#c084fc' :
                                            asset.type === 'base' ? '#93c5fd' :
+                                           asset.type === 'wp-1of1' ? '#fbbf24' :
                                            '#f9a8d4',
                                     padding: '2px 6px',
                                     borderRadius: 3,
@@ -2207,7 +2323,7 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
                                                 border: '1px solid rgba(255, 255, 255, 0.2)'
                                               }} />
                                               <span style={{ fontSize: 12, color: '#d1d5db' }}>
-                                                {pair.color?.startsWith('R') ? getColorDisplayNameByRgb(pair.color) : HARDCODED_COLORS.find(c => c.name === pair.color)?.displayName || pair.color}
+                                                {pair.color?.startsWith('R') ? getColorDisplayNameByRgb(pair.color) : HARDCODED_COLORS.find(c => c.name === pair.color)?.name || pair.color}
                                               </span>
                                             </div>
                                           )}
@@ -2238,7 +2354,7 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
                                               border: '1px solid rgba(255, 255, 255, 0.2)'
                                             }} />
                                             <span style={{ fontSize: 12, color: '#d1d5db' }}>
-                                              {asset.color?.startsWith('R') ? getColorDisplayNameByRgb(asset.color) : HARDCODED_COLORS.find(c => c.name === asset.color)?.displayName || asset.color}
+                                              {asset.color?.startsWith('R') ? getColorDisplayNameByRgb(asset.color) : HARDCODED_COLORS.find(c => c.name === asset.color)?.name || asset.color}
                                             </span>
                                           </div>
                                         )}
