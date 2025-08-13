@@ -48,21 +48,60 @@ function JobDetailsPageContent() {
   // React Query hooks for smart caching
   const queryClient = useQueryClient();
   
-  // Smart cache strategy - rely on React Query's built-in staleness instead of aggressive invalidation
+  // Smart cache strategy based on navigation source
   useEffect(() => {
     if (jobId) {
       const cachedJobData = queryClient.getQueryData<UIJobData>(jobKeys.detail(jobId));
-      console.log('📋 Using cached job data, React Query will handle staleness:', {
+      const isFromFreshJobCreation = startUpload === 'true' && createFiles === 'true';
+      
+      // Detect navigation source from referrer or session storage
+      const referrer = document.referrer;
+      const isFromJobsList = referrer.includes('/jobs') && !referrer.includes('/job/preview');
+      const isFromPreview = referrer.includes('/job/preview');
+      const sessionNavigationSource = sessionStorage.getItem('navigationSource');
+      
+      console.log('📋 Job details page cache strategy:', {
         jobId,
         hasCache: !!cachedJobData,
         status: cachedJobData?.job_status,
-        cacheStrategy: 'Let React Query handle staleness based on staleTime (5 minutes)'
+        isFromFreshJobCreation,
+        isFromJobsList,
+        isFromPreview,
+        referrer,
+        sessionNavigationSource,
+        startUpload,
+        createFiles
       });
       
-      // Only invalidate in extreme cases where we know data is definitely stale
-      // Normal navigation should rely on React Query's staleTime configuration
+      let shouldForceFreshFetch = false;
+      let cacheStrategy = '';
+      
+      if (isFromFreshJobCreation) {
+        shouldForceFreshFetch = true;
+        cacheStrategy = 'Force fresh fetch for new job creation/rerun';
+      } else if (isFromJobsList || sessionNavigationSource === 'jobs-list') {
+        shouldForceFreshFetch = true;
+        cacheStrategy = 'Force fresh fetch from jobs list navigation';
+      } else if (isFromPreview || sessionNavigationSource === 'preview') {
+        shouldForceFreshFetch = false;
+        cacheStrategy = 'Use cached data for preview ↔ details navigation';
+      } else {
+        shouldForceFreshFetch = false;
+        cacheStrategy = 'Use cached data with staleness (default)';
+      }
+      
+      console.log('📋 Cache decision:', { shouldForceFreshFetch, cacheStrategy });
+      
+      if (shouldForceFreshFetch) {
+        console.log('🔄 Forcing cache invalidation:', cacheStrategy);
+        queryClient.removeQueries({ queryKey: jobKeys.detail(jobId) });
+        queryClient.removeQueries({ queryKey: jobKeys.files(jobId) });
+      }
+      
+      // Clear navigation source after using it
+      sessionStorage.removeItem('navigationSource');
     }
-  }, [jobId, queryClient]);
+  }, [jobId, queryClient, startUpload, createFiles]);
   
   // Always use React Query caching - let it handle cached data automatically
   const { 
@@ -1095,113 +1134,12 @@ function JobDetailsPageContent() {
               totalPdfFiles={uploadEngine.totalPdfFiles}
               uploadedPdfFiles={uploadEngine.uploadedPdfFiles}
               onRerunJob={mergedJobData && !uploadsInProgress ? () => {
-                // Navigate to new job page with pre-filled data
-                console.log('🔍 DEBUG Rerun Navigation - Full Job Data Analysis:', {
+                // Navigate to new job page with pre-filled form data (no files - user will select folder)
+                console.log('🔄 Rerun Job - Pre-filling form with job data:', {
                   job_id: mergedJobData.job_id,
-                  // Direct file fields
-                  files: mergedJobData.files,
-                  api_files: mergedJobData.api_files,
-                  // Length checks
-                  filesLength: mergedJobData.files?.length,
-                  api_filesLength: mergedJobData.api_files?.length,
-                  // All keys for comprehensive analysis
-                  allJobDataKeys: Object.keys(mergedJobData),
-                  // Check other possible file field names
-                  file_list: (mergedJobData as any).file_list,
-                  file_names: (mergedJobData as any).file_names,
-                  grouped_files: (mergedJobData as any).grouped_files,
-                  filenames: (mergedJobData as any).filenames,
-                  // Check if files might be nested in other objects
-                  content_pipeline_files: mergedJobData.content_pipeline_files,
-                  content_pipeline_files_length: mergedJobData.content_pipeline_files?.length,
-                  // Raw data structure
-                  fullJobData: JSON.stringify(mergedJobData, null, 2)
-                });
-                
-                // Extract files from multiple possible sources with comprehensive fallback
-                let filesArray: string[] = [];
-                
-                // Try direct file fields first
-                if (mergedJobData.files && Array.isArray(mergedJobData.files) && mergedJobData.files.length > 0) {
-                  filesArray = mergedJobData.files;
-                  console.log('📁 Found files in .files field:', filesArray);
-                } else if (mergedJobData.api_files && Array.isArray(mergedJobData.api_files) && mergedJobData.api_files.length > 0) {
-                  filesArray = mergedJobData.api_files;
-                  console.log('📁 Found files in .api_files field:', filesArray);
-                } else {
-                  // Try other possible field names
-                  const possibleFields = [
-                    'file_list', 'file_names', 'grouped_files', 'filenames',
-                    'file_array', 'grouped_filenames', 'base_files'
-                  ];
-                  
-                  for (const field of possibleFields) {
-                    const fieldValue = (mergedJobData as any)[field];
-                    if (Array.isArray(fieldValue) && fieldValue.length > 0) {
-                      filesArray = fieldValue;
-                      console.log(`📁 Found files in .${field} field:`, filesArray);
-                      break;
-                    }
-                  }
-                  
-                  // If still no files, try extracting from content_pipeline_files (same source as UI)
-                  if (filesArray.length === 0 && mergedJobData.content_pipeline_files) {
-                    console.log('🔍 Analyzing content_pipeline_files for rerun:', {
-                      length: mergedJobData.content_pipeline_files.length,
-                      sampleFile: mergedJobData.content_pipeline_files[0],
-                      allFiles: mergedJobData.content_pipeline_files
-                    });
-                    
-                    const extractedFiles = mergedJobData.content_pipeline_files
-                      .map((file: any) => {
-                        // Try multiple possible filename fields
-                        return file.filename || file.name || file.file_name || file.base_name;
-                      })
-                      .filter((filename: string) => filename && filename.trim());
-                    
-                    if (extractedFiles.length > 0) {
-                      filesArray = extractedFiles;
-                      console.log('📁 Successfully extracted files from content_pipeline_files:', {
-                        extractedFiles,
-                        count: extractedFiles.length,
-                        source: 'content_pipeline_files (same as UI)'
-                      });
-                    } else {
-                      console.warn('⚠️ content_pipeline_files exists but no valid filenames found');
-                    }
-                  }
-                }
-                
-                // If we still have no files, create a fallback based on the job's original structure
-                if (filesArray.length === 0) {
-                  console.warn('⚠️ No files found in job data. Creating fallback based on file count.');
-                  
-                  // If we know the job had files (from file counts), create placeholder filenames
-                  const totalCount = mergedJobData.original_files_total_count || 0;
-                  const completedCount = mergedJobData.original_files_completed_count || 0;
-                  
-                  if (totalCount > 0) {
-                    // Create placeholder filenames based on filename_prefix and count
-                    const prefix = mergedJobData.filename_prefix || 'file';
-                    const estimatedFileCount = Math.ceil(totalCount / 2); // Assume pairs
-                    
-                    filesArray = Array.from({ length: estimatedFileCount }, (_, i) => 
-                      `${prefix}_${String(i + 1).padStart(4, '0')}`
-                    );
-                    
-                    console.log('📁 Created fallback files array:', {
-                      totalCount,
-                      estimatedFileCount,
-                      fallbackFiles: filesArray
-                    });
-                  }
-                }
-                
-                console.log('📁 Final files array for rerun:', {
-                  filesArray,
-                  length: filesArray.length,
-                  isEmpty: filesArray.length === 0,
-                  source: filesArray.length > 0 ? 'extracted_or_fallback' : 'none_available'
+                  app_name: mergedJobData.app_name,
+                  filename_prefix: mergedJobData.filename_prefix,
+                  description: mergedJobData.description
                 });
                 
                 const queryParams = new URLSearchParams({
@@ -1209,13 +1147,11 @@ function JobDetailsPageContent() {
                   sourceJobId: mergedJobData.job_id || '',
                   appName: mergedJobData.app_name || '',
                   filenamePrefix: mergedJobData.filename_prefix || '',
-                  description: mergedJobData.description || '',
-                  sourceFolder: mergedJobData.source_folder || '',
-                  // Include files array for rerun - essential for upload functionality
-                  files: JSON.stringify(filesArray)
+                  description: mergedJobData.description || ''
+                  // No files parameter - user will select folder like a new job
                 });
                 
-                console.log('🔗 Navigation URL will be:', `/new-job?${queryParams.toString()}`);
+                console.log('🔗 Rerun Navigation URL:', `/new-job?${queryParams.toString()}`);
                 router.push(`/new-job?${queryParams.toString()}`);
               } : undefined}
             />

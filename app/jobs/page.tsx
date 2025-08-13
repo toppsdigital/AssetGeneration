@@ -134,6 +134,9 @@ export default function JobsPage() {
   const viewJobDetails = (job: JobData) => {
     if (!job.job_id) return;
     
+    // Set navigation source for cache strategy in job details page
+    sessionStorage.setItem('navigationSource', 'jobs-list');
+    
     // Simple navigation - React Query cache will provide the data
     router.push(`/job/details?jobId=${job.job_id}`);
   };

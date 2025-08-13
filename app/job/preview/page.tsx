@@ -200,7 +200,11 @@ function JobPreviewPageContent() {
           <h2>Error Loading Assets</h2>
           <p>{error}</p>
           <button 
-            onClick={() => router.push(`/job/details?jobId=${encodeURIComponent(jobPath as string)}`)}
+            onClick={() => {
+              // Set navigation source for cache strategy in job details page
+              sessionStorage.setItem('navigationSource', 'preview');
+              router.push(`/job/details?jobId=${encodeURIComponent(jobPath as string)}`);
+            }}
             style={{
               marginTop: 16,
               padding: '8px 16px',
