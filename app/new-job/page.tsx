@@ -121,17 +121,14 @@ function NewJobPageContent() {
       formData.description.trim()
     );
     
-    // For reruns, we don't require file selection until user chooses to proceed
-    if (isRerun) {
-      return basicFieldsValid;
-    }
-    
-    // For new jobs, require file selection
-    return basicFieldsValid && !!(
+    // Both new jobs and reruns require file selection before submission
+    const filesValid = !!(
       formData.uploadFolder.trim() &&
       formData.selectedFiles &&
       formData.selectedFiles.length > 0
     );
+    
+    return basicFieldsValid && filesValid;
   };
 
   // Validate form
@@ -150,8 +147,8 @@ function NewJobPageContent() {
       newErrors.description = 'Description is required';
     }
 
-    // Only require upload folder for new jobs, not reruns
-    if (!isRerun && !formData.uploadFolder.trim()) {
+    // Require upload folder for both new jobs and reruns
+    if (!formData.uploadFolder.trim()) {
       newErrors.uploadFolder = 'Upload folder is required';
     }
 
