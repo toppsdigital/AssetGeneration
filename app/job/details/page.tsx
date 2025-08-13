@@ -245,27 +245,13 @@ function JobDetailsPageContent() {
     jobData: mergedJobData, 
     setJobData: updateJobDataForUpload,
     onUploadComplete: async () => {
-      console.log('✅ Upload completed! Updating job status to "uploaded"...');
+      console.log('✅ Upload completed! All files have been uploaded successfully.');
       
-      try {
-        // Update job status to 'uploaded' when all files are uploaded
-        await updateJobStatus('uploaded');
-        console.log('✅ Job status updated to "uploaded" successfully');
-        
-        // Navigate to jobs list after status update
-        setTimeout(() => {
-          console.log('📍 Navigating to jobs list...');
-          router.push('/jobs');
-        }, 1500);
-      } catch (error) {
-        console.error('❌ Failed to update job status to "uploaded":', error);
-        
-        // Still navigate even if status update fails
-        setTimeout(() => {
-          console.log('📍 Navigating to jobs list (despite status update failure)...');
-          router.push('/jobs');
-        }, 1500);
-      }
+      // Navigate to jobs list after a short delay to show completion
+      setTimeout(() => {
+        console.log('📍 Navigating to jobs list...');
+        router.push('/jobs');
+      }, 1500);
     }
   });
 
