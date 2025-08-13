@@ -682,9 +682,8 @@ async function handleRequest(request: NextRequest, method: string) {
           note: 'Testing different endpoint patterns'
         });
         
-        // Try different endpoint patterns based on backend API design
-        // First try: POST to /jobs with rerun data in body (similar to create_job)
-        apiUrl += '/jobs';
+        // Use dedicated rerun endpoint
+        apiUrl += `/jobs/${id}/rerun`;
         apiMethod = 'POST';
         // Add rerun-specific data to the body
         // Calculate total PDF files based on grouped filenames (consistent with create_job)
@@ -895,9 +894,28 @@ async function handleRequest(request: NextRequest, method: string) {
         
         // Transform list response to single job response
         if (listResponse.jobs && listResponse.jobs.length > 0) {
-          const job = listResponse.jobs[0]; // Take the first (and should be only) job
-          console.log('✅ GET_JOB: Successfully transformed list response to single job');
-          return NextResponse.json({ job }, { status: 200 });
+          // CRITICAL: Find the specific job by ID, don't just take the first one
+          const job = listResponse.jobs.find((j: any) => j.job_id === id);
+          
+          console.log('🔍 GET_JOB: Job search in list response:', {
+            requestedJobId: id,
+            totalJobsInResponse: listResponse.jobs.length,
+            jobIds: listResponse.jobs.map((j: any) => j.job_id),
+            foundMatchingJob: !!job,
+            matchingJobId: job?.job_id
+          });
+          
+          if (job) {
+            console.log('✅ GET_JOB: Successfully found and returned matching job');
+            return NextResponse.json({ job }, { status: 200 });
+          } else {
+            console.log('❌ GET_JOB: Requested job ID not found in list response');
+            return NextResponse.json({ 
+              error: 'Job not found',
+              message: `Job with ID ${id} not found in results`,
+              available_jobs: listResponse.jobs.map((j: any) => j.job_id)
+            }, { status: 404 });
+          }
         } else {
           console.log('❌ GET_JOB: No job found in list response');
           return NextResponse.json({ 
