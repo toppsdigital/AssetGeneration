@@ -691,11 +691,11 @@ class ContentPipelineAPI {
     console.log(`📦 Bulk updating ${assets.length} assets for job: ${jobId}`, assets);
     
     const response = await fetch(`${this.baseUrl}?operation=bulk_update_assets&id=${encodeURIComponent(jobId)}`, {
-      method: 'POST',  // Use POST as shown in working cURL
+      method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ assets }),  // Match the structure from your working cURL
+      body: JSON.stringify({ assets }),  // Pass assets as-is in the expected structure
     });
 
     if (!response.ok) {

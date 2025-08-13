@@ -2159,31 +2159,16 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
                         setSavingAsset(true);
                         
                         try {
-                          // Prepare bulk update payload matching the working cURL structure
-                          const bulkAssets = assetsToUpdate.map(asset => ({
-                            name: asset.name,
-                            type: asset.type,
-                            layer: asset.layer,
-                            config: {
-                              ...(asset.spot && { spot: asset.spot }),
-                              ...(asset.color && { color: getColorRgbByName(asset.color) }),
-                              ...(asset.vfx && { vfx: asset.vfx }),
-                              chrome: 'silver', // Apply silver chrome
-                              ...(asset.wp_inv_layer && { wp_inv_layer: asset.wp_inv_layer }),
-                              // Handle spot_color_pairs for parallel types
-                              ...(asset.spotColorPairs && asset.spotColorPairs.length > 0 && {
-                                spot_color_pairs: asset.spotColorPairs.map(pair => ({
-                                  spot: pair.spot,
-                                  color: getColorRgbByName(pair.color || '')
-                                }))
-                              })
-                            }
+                          // Apply chrome to each asset - use assets as-is with chrome added
+                          const assetsWithChrome = assetsToUpdate.map(asset => ({
+                            ...asset,
+                            chrome: 'silver' // Apply silver chrome
                           }));
                           
-                          console.log('📦 Bulk update payload:', bulkAssets);
+                          console.log(`📦 Bulk updating ${assetsWithChrome.length} assets:`, assetsWithChrome);
                           
-                          // Make single bulk update API call
-                          const response = await contentPipelineApi.bulkUpdateAssets(jobData.job_id, bulkAssets);
+                          // Make single bulk update API call - pass assets directly
+                          const response = await contentPipelineApi.bulkUpdateAssets(jobData.job_id, assetsWithChrome);
                           
                           if (response.success) {
                             console.log(`✅ Successfully applied chrome to ${assetsToUpdate.length} assets`);
