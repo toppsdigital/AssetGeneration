@@ -331,50 +331,29 @@ async function handleRequest(request: NextRequest, method: string) {
         
         // Handle increment_completed_count or increment_failed_count special cases
         if (body.increment_completed_count || body.increment_failed_count) {
-          const incrementType = body.increment_completed_count ? 'completed' : 'failed';
-          const incrementValue = body.increment_completed_count || body.increment_failed_count;
+          console.log(`🔄 Using increment endpoint for job ${id}`);
           
-          console.log(`🔄 Processing increment_${incrementType}_count: +${incrementValue} for job ${id}`);
+          // Use the dedicated increment endpoint instead of manual calculation
+          apiUrl += `/jobs/${id}/increment`;
+          apiMethod = 'POST';
           
-          // First get current job data
-          const getJobResponse = await fetch(`${API_BASE_URL}/jobs?job_id=${id}`, {
-            method: 'GET',
-            headers: { 'Content-Type': 'application/json' }
-          });
-          
-          if (!getJobResponse.ok) {
-            return NextResponse.json({ error: 'Failed to get current job data' }, { status: 500 });
-          }
-          
-          const getJobResult = await getJobResponse.json();
-          const currentJob = getJobResult.jobs?.[0];
-          
-          if (!currentJob) {
-            return NextResponse.json({ error: 'Job not found' }, { status: 404 });
-          }
-          
-          // Calculate new count based on type
-          const incrementBy = parseInt(incrementValue);
+          // Build counters object for the increment endpoint
+          const counters: Record<string, number> = {};
           
           if (body.increment_completed_count) {
-            const currentCount = currentJob.original_files_completed_count || 0;
-            const newCount = currentCount + incrementBy;
-            console.log(`📊 Incrementing completed count: ${currentCount} + ${incrementBy} = ${newCount}`);
-            
-            apiBody = {
-              original_files_completed_count: newCount,
-              last_updated: new Date().toISOString()
-            };
-          } else if (body.increment_failed_count) {
-            const currentCount = currentJob.original_files_failed_count || 0;
-            const newCount = currentCount + incrementBy;
-            console.log(`📊 Incrementing failed count: ${currentCount} + ${incrementBy} = ${newCount}`);
-            
-            apiBody = {
-              original_files_failed_count: newCount,
-              last_updated: new Date().toISOString()
-            };
+            counters.original_files_completed_count = parseInt(body.increment_completed_count);
+            console.log(`📊 Incrementing original_files_completed_count by +${counters.original_files_completed_count}`);
           }
+          
+          if (body.increment_failed_count) {
+            counters.original_files_failed_count = parseInt(body.increment_failed_count);
+            console.log(`📊 Incrementing original_files_failed_count by +${counters.original_files_failed_count}`);
+          }
+          
+          apiBody = { counters };
+          
+          // Skip the normal update_job flow since we're using increment endpoint
+          break;
         }
         
         apiUrl += `/jobs/${id}`;
