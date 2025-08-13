@@ -193,7 +193,9 @@ function NewJobPageContent() {
           filename_prefix: jobData.filenamePrefix,
           source_folder: jobData.sourceFolder,
           files: jobData.files,
-          description: jobData.description
+          description: jobData.description,
+          // Pass actual PDF count for consistent payload structure
+          ...(jobData.actual_pdf_count ? { actual_pdf_count: jobData.actual_pdf_count } : {})
         }, cacheClearingCallback);
         console.log('Job re-run successfully via Content Pipeline API:', response.job.job_id);
       } else {
@@ -318,8 +320,8 @@ function NewJobPageContent() {
         sourceFolder: generateFilePath(formData.appName),
         files: filenames,
         description: formData.description,
-        // Pass actual PDF count for accurate total_count calculation (only for new jobs)
-        ...(!isRerun ? { actual_pdf_count: actualPdfCount } : {})
+        // Pass actual PDF count for accurate total_count calculation (for both new jobs and reruns)
+        actual_pdf_count: actualPdfCount
       });
 
       setJobCreated(createdJob);

@@ -372,15 +372,15 @@ class ContentPipelineAPI {
     });
   }
 
-  // Re-run a job with new parameters
+  // Re-run a job with new parameters - uses same payload structure as createJob
   async rerunJob(
     jobId: string, 
-    jobData: Omit<JobData, 'job_id' | 'created_at' | 'last_updated' | 'job_status'>,
+    jobData: Omit<JobData, 'job_id' | 'created_at' | 'last_updated' | 'job_status'> & { actual_pdf_count?: number },
     onCacheClear?: CacheClearingCallback
   ): Promise<JobResponse> {
-    // Calculate total PDF files based on grouped filenames
-    // Each grouped filename represents 2 PDF files (front and back)
-    const totalPdfFiles = (jobData.files || []).length * 2;
+    // Use provided actual_pdf_count if available, otherwise fallback to the old calculation
+    // This allows for flexible file counting (pairs, front-only, back-only) - same as createJob
+    const totalPdfFiles = jobData.actual_pdf_count || (jobData.files || []).length * 2;
     
     const jobPayload = {
       ...jobData,
@@ -388,8 +388,14 @@ class ContentPipelineAPI {
       files: jobData.files || [],
       original_files_total_count: totalPdfFiles,
       original_files_completed_count: 0,
-      original_files_failed_count: 0
+      original_files_failed_count: 0,
+      // Add rerun-specific fields
+      rerun_job_id: jobId,
+      operation: 'rerun'
     };
+    
+    // Remove the helper field from the payload
+    delete (jobPayload as any).actual_pdf_count;
 
     const response = await fetch(`${this.baseUrl}?operation=rerun_job&id=${encodeURIComponent(jobId)}`, {
       method: 'POST',
