@@ -495,8 +495,12 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
           throw new Error('No valid spot/color pairs found');
         }
         
+        // Base layer is required for parallel types too
+        if (!config.layer) throw new Error('Base layer is required');
+        
         assetConfig = {
           ...assetConfig,
+          layer: config.layer,
           vfx: config.vfx
         };
 
