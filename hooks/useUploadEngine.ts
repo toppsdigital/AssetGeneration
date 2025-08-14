@@ -833,7 +833,7 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
 
   // Monitor upload completion
   useEffect(() => {
-    if (!jobData?.content_pipeline_files || allFilesUploaded) {
+    if (!jobData?.content_pipeline_files || allFilesUploaded || !uploadStarted) {
       return;
     }
 
