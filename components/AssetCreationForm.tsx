@@ -181,10 +181,19 @@ export const AssetCreationForm = ({
         chrome: configForName.chrome,
         spotColorPairs: configForName.spotColorPairs
       });
-      // For 'front' type, use the determined asset type for name generation
-      const typeForNaming = currentCardType === 'front' 
-        ? determineActualAssetType(currentCardType, configForName, spotColorPairs)
-        : currentCardType;
+      // For 'front' type, determine name type (special handling for base + superfractor)
+      let typeForNaming = currentCardType;
+      if (currentCardType === 'front') {
+        const actualType = determineActualAssetType(currentCardType, configForName, spotColorPairs);
+        const validSpotPairs = spotColorPairs.filter(pair => pair.spot && pair.color);
+        
+        // If it becomes parallel due to superfractor (not spot colors), use 'base' for naming
+        if (actualType === 'parallel' && configForName.chrome === 'superfractor' && validSpotPairs.length === 0) {
+          typeForNaming = 'base';
+        } else {
+          typeForNaming = actualType;
+        }
+      }
       const newName = generateAssetName(typeForNaming, configForName, existingNames);
       
       // Only update if the name is empty or appears to be auto-generated (to preserve user edits)
@@ -983,6 +992,9 @@ export const AssetCreationForm = ({
                 ? determineActualAssetType(currentCardType, currentConfig, spotColorPairs)
                 : currentCardType || '';
 
+              // Use actualType for validation (handles front -> base/parallel/multi-parallel conversion)
+              const typeToValidate = currentCardType === 'front' ? actualType : currentCardType;
+
               console.log('🔍 Validation check:', { 
                 currentCardType, 
                 actualType,
@@ -1003,9 +1015,6 @@ export const AssetCreationForm = ({
               } else if (!currentConfig.name?.trim()) {
                 validationMessage = 'Enter asset name';
               } else {
-                // Use actualType for validation (handles front -> base/parallel/multi-parallel conversion)
-                const typeToValidate = currentCardType === 'front' ? actualType : currentCardType;
-                
                 switch (typeToValidate) {
                   case 'wp':
                   case 'back':
@@ -1042,9 +1051,9 @@ export const AssetCreationForm = ({
                         actualType 
                       });
                       
-                      // For front cards that become parallel/multi-parallel, require spot colors
+                      // For front cards, spot colors are optional (they determine type)
                       // For original parallel/multi-parallel cards, always require spot colors
-                      if (validPairs.length === 0) {
+                      if (validPairs.length === 0 && currentCardType !== 'front') {
                         validationMessage = 'Select at least one spot layer and color';
                       } else if ((currentConfig.vfx || currentConfig.chrome) && getWpInvLayers().length > 1 && !currentConfig.wp_inv_layer) {
                         // Only require wp_inv layer selection if VFX/chrome is enabled and there are multiple layers
