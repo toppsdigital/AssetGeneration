@@ -1,5 +1,5 @@
 // test-firefly.js
-const fetch = require('node-fetch');
+// Using built-in fetch (Node.js 18+)
 
 async function getFireflyToken() {
   const url = 'https://ims-na1.adobelogin.com/ims/token/v3';

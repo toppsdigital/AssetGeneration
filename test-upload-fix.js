@@ -1,6 +1,6 @@
 const FormData = require('form-data');
 const fs = require('fs');
-const fetch = require('node-fetch');
+// Using built-in fetch (Node.js 18+)
 
 async function testUploadFlow() {
   console.log('Testing upload proxy flow...');
