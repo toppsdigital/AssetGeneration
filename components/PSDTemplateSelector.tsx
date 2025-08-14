@@ -30,7 +30,7 @@ interface SpotColorPair {
 interface AssetConfig {
   id: string;
   name: string; // User-editable name for the asset
-  type: 'wp' | 'back' | 'base' | 'parallel' | 'multi-parallel' | 'wp-1of1';
+  type: 'wp' | 'back' | 'base' | 'parallel' | 'multi-parallel' | 'wp-1of1' | 'front';
   layer: string;
   spot?: string;
   color?: string;
@@ -52,7 +52,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
   const [loadingJsonData, setLoadingJsonData] = useState(false);
   
   // New asset configuration state
-  const [currentCardType, setCurrentCardType] = useState<'wp' | 'back' | 'base' | 'parallel' | 'multi-parallel' | 'wp-1of1' | null>(null);
+  const [currentCardType, setCurrentCardType] = useState<'wp' | 'back' | 'base' | 'parallel' | 'multi-parallel' | 'wp-1of1' | 'front' | null>(null);
   const [currentConfig, setCurrentConfig] = useState<Partial<AssetConfig>>({
     chrome: false,
     oneOfOneWp: false,
@@ -61,6 +61,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
   });
   const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
   const [savingAsset, setSavingAsset] = useState(false);
+  const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
   const [processingPdf, setProcessingPdf] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   
@@ -457,6 +458,15 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     setSpotColorPairs([{ spot: '', color: undefined }]);
   };
 
+  const openAssetModal = () => {
+    setIsAssetModalOpen(true);
+  };
+
+  const closeAssetModal = () => {
+    setIsAssetModalOpen(false);
+    resetCurrentConfig();
+  };
+
   const addAssetWithConfig = async (config: AssetConfig, spotColorPairsFromForm: SpotColorPair[]) => {
     if (!jobData?.job_id || savingAsset) return;
     
@@ -636,6 +646,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
 
   const editAsset = (asset: AssetConfig) => {
     setCurrentCardType(asset.type);
+    setIsAssetModalOpen(true);
     
     // Convert RGB values back to color names for UI form
     const convertedAsset = {
@@ -1047,22 +1058,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
           {/* New Asset Builder UI */}
           {selectedPhysicalFile && jsonData && !loadingJsonData && (
             <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
-              {/* Left Side: Asset Configuration Panel */}
-              <AssetCreationForm
-                jsonData={jsonData}
-                getExtractedLayers={getExtractedLayers}
-                getConfiguredAssets={getConfiguredAssets}
-                generateAssetName={generateAssetName}
-                savingAsset={savingAsset}
-                editingAssetId={editingAssetId}
-                onAddAsset={async (config, spotColorPairsFromForm) => {
-                  // Call addAsset directly with the config from the form
-                  await addAssetWithConfig(config, spotColorPairsFromForm);
-                }}
-                onResetConfig={resetCurrentConfig}
-              />
-
-              {/* Right Side: Configured Assets List */}
+              {/* Configured Assets List */}
               <AssetsTable
                 configuredAssets={configuredAssets}
                 savingAsset={savingAsset}
@@ -1076,9 +1072,27 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                 onCreateAssets={createAssets}
                 onJobDataUpdate={onJobDataUpdate}
                 onEDRPdfUpload={handleEDRPdfUpload}
+                onAddAsset={openAssetModal}
               />
             </div>
           )}
+
+          {/* Asset Creation Modal */}
+          <AssetCreationForm
+            isOpen={isAssetModalOpen}
+            onClose={closeAssetModal}
+            jsonData={jsonData}
+            getExtractedLayers={getExtractedLayers}
+            getConfiguredAssets={getConfiguredAssets}
+            generateAssetName={generateAssetName}
+            savingAsset={savingAsset}
+            editingAssetId={editingAssetId}
+            onAddAsset={async (config, spotColorPairsFromForm) => {
+              // Call addAsset directly with the config from the form
+              await addAssetWithConfig(config, spotColorPairsFromForm);
+            }}
+            onResetConfig={resetCurrentConfig}
+          />
         </div>
       </div>
     </>

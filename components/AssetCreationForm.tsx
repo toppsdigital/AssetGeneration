@@ -23,6 +23,8 @@ interface AssetConfig {
 }
 
 interface AssetCreationFormProps {
+  isOpen: boolean;
+  onClose: () => void;
   jsonData: any;
   getExtractedLayers: () => string[];
   getConfiguredAssets: () => AssetConfig[];
@@ -53,6 +55,8 @@ const HARDCODED_COLORS = [
 ];
 
 export const AssetCreationForm = ({
+  isOpen,
+  onClose,
   jsonData,
   getExtractedLayers,
   getConfiguredAssets,
@@ -260,23 +264,109 @@ export const AssetCreationForm = ({
       // Only reset form if the operation was successful
       setCurrentConfig({ chrome: false, oneOfOneWp: false, name: '', wp_inv_layer: '' });
       setCurrentCardType(null);
-      setSpotColorPairs([{ spot: '', color: undefined }]);
+      setSpotColorPairs([]);
+      // Close modal on successful add
+      onClose();
     } catch (error) {
       console.error('❌ Error in handleAddAsset:', error);
       // Don't reset form on error so user can retry
     }
   };
 
+  // Close modal and reset form when closed
+  const handleClose = () => {
+    setCurrentConfig({ chrome: false, oneOfOneWp: false, name: '', wp_inv_layer: '' });
+    setCurrentCardType(null);
+    setSpotColorPairs([]);
+    onClose();
+  };
+
+  // Don't render if modal is not open
+  if (!isOpen) return null;
+
   return (
-    <div style={{
-      flex: '0 0 300px',
-      minWidth: 280,
-      maxWidth: 300,
-      background: 'rgba(255, 255, 255, 0.05)',
-      borderRadius: 12,
-      border: '1px solid rgba(255, 255, 255, 0.1)',
-      padding: 16
-    }}>
+    <>
+      {/* Modal Backdrop */}
+      <div
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: 20
+        }}
+        onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            handleClose();
+          }
+        }}
+      >
+        {/* Modal Content */}
+        <div
+          style={{
+            backgroundColor: '#1f2937',
+            borderRadius: 16,
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            maxWidth: 600,
+            width: '100%',
+            maxHeight: '90vh',
+            overflow: 'auto',
+            position: 'relative'
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Modal Header */}
+          <div style={{
+            padding: '24px 24px 16px 24px',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}>
+            <h2 style={{
+              fontSize: 20,
+              fontWeight: 600,
+              color: '#f8f8f8',
+              margin: 0
+            }}>
+              {editingAssetId ? 'Edit Asset' : 'Add New Asset'}
+            </h2>
+            <button
+              onClick={handleClose}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 8,
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                color: '#f8f8f8',
+                fontSize: 16,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s'
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+              }}
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Modal Body */}
+          <div style={{ padding: 24 }}>
+            <div>
       <h3 style={{
         fontSize: 18,
         fontWeight: 600,
@@ -1013,6 +1103,10 @@ export const AssetCreationForm = ({
           </div>
         </div>
       )}
-    </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
   );
 };
