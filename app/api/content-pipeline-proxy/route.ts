@@ -792,9 +792,8 @@ async function handleRequest(request: NextRequest, method: string) {
           return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
         }
         apiUrl += `/jobs/${id}/assets`;
-        // Backend expects POST with a body (even for listing); send minimal payload
-        apiMethod = 'POST';
-        apiBody = Object.keys(apiBody || {}).length > 0 ? apiBody : { assets: [] };
+        apiMethod = 'GET';
+        apiBody = {}; // no body for GET
         break;
 
       case 'update_asset':
@@ -810,6 +809,23 @@ async function handleRequest(request: NextRequest, method: string) {
         // Pass asset config directly to backend without adding tracking fields
         break;
 
+      case 'replace_assets':
+        if (!id) {
+          return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
+        }
+        apiUrl += `/jobs/${id}/assets`;
+        apiMethod = 'PUT';
+        // Body should contain full replacement mapping or list per backend contract
+        break;
+
+      case 'batch_create_assets':
+        if (!id) {
+          return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
+        }
+        apiUrl += `/jobs/${id}/assets/batch`;
+        apiMethod = 'POST';
+        break;
+
       case 'delete_asset':
         if (!id) {
           return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
@@ -822,6 +838,15 @@ async function handleRequest(request: NextRequest, method: string) {
         apiMethod = 'DELETE';
         // Don't send body with DELETE request - some backends don't accept it
         apiBody = {}; // Empty body for DELETE
+        break;
+
+      case 'delete_all_assets':
+        if (!id) {
+          return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
+        }
+        apiUrl += `/jobs/${id}/assets`;
+        apiMethod = 'DELETE';
+        apiBody = {}; // no body
         break;
 
 

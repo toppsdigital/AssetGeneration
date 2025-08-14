@@ -581,80 +581,48 @@ class ContentPipelineAPI {
   }
 
   // Asset management operations
-  async getAssets(jobId: string): Promise<{
-    success: boolean;
-    assets?: { assets?: any[]; [key: string]: any };
-    message?: string;
-  }> {
+  // New assets API contract
+  async getAssets(jobId: string): Promise<{ assets: Record<string, any>; job_id: string }> {
     const response = await fetch(`${this.baseUrl}?operation=list_assets&id=${encodeURIComponent(jobId)}`, {
-      method: 'POST',
+      method: 'GET',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ assets: [] }),
     });
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.error || `Failed to fetch assets: ${response.status}`);
     }
-    const result = await response.json();
-    return result;
+    return await response.json();
   }
-  async createAsset(jobId: string, assetConfig: any): Promise<{
-    success: boolean;
-    message: string;
-    asset?: any;
-    job?: JobData;
-  }> {
+
+  async createAsset(jobId: string, assetConfig: any): Promise<{ assets: Record<string, any>; job_id: string }> {
     console.log(`🎨 Creating asset for job: ${jobId}`, assetConfig);
-    
     const response = await fetch(`${this.baseUrl}?operation=create_asset&id=${encodeURIComponent(jobId)}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(assetConfig),
     });
-
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.error || `Failed to create asset: ${response.status}`);
     }
-
-    const result = await response.json();
-    console.log(`✅ Asset created:`, result);
-    return result;
+    return await response.json();
   }
 
-  async updateAsset(jobId: string, assetId: string, assetConfig: any): Promise<{
-    success: boolean;
-    message: string;
-    asset?: any;
-    job?: JobData;
-  }> {
+  async updateAsset(jobId: string, assetId: string, assetConfig: any): Promise<{ assets: Record<string, any>; job_id: string }> {
     console.log(`🔄 Updating asset ${assetId} for job: ${jobId}`, assetConfig);
-    
     const response = await fetch(`${this.baseUrl}?operation=update_asset&id=${encodeURIComponent(jobId)}&asset_id=${encodeURIComponent(assetId)}`, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(assetConfig),
     });
-
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.error || `Failed to update asset: ${response.status}`);
     }
-
-    const result = await response.json();
-    console.log(`✅ Asset updated:`, result);
-    return result;
+    return await response.json();
   }
 
-  async deleteAsset(jobId: string, assetId: string): Promise<{
-    success: boolean;
-    message: string;
-    job?: JobData;
-  }> {
+  async deleteAsset(jobId: string, assetId: string): Promise<{ assets: Record<string, any>; job_id: string }> {
     const requestUrl = `${this.baseUrl}?operation=delete_asset&id=${encodeURIComponent(jobId)}&asset_id=${encodeURIComponent(assetId)}`;
     
     console.log(`🗑️ Deleting asset ${assetId} for job: ${jobId}`);
@@ -686,10 +654,7 @@ class ContentPipelineAPI {
         throw new Error(error.error || error.message || `Failed to delete asset: ${response.status}`);
       }
 
-      const resultText = await response.text();
-      console.log(`📥 DELETE response body:`, resultText);
-      
-      const result = JSON.parse(resultText);
+      const result = await response.json();
       console.log(`✅ Asset deleted:`, result);
       return result;
     } catch (fetchError) {
