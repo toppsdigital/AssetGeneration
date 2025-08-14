@@ -670,14 +670,6 @@ export const AssetCreationForm = ({
                 marginBottom: 8
               }}>
                 Select VFX Texture
-                <span style={{ 
-                  fontSize: 12, 
-                  color: '#9ca3af', 
-                  fontWeight: 400,
-                  marginLeft: 8 
-                }}>
-                  (optional)
-                </span>
                 {getWpInvLayers().length === 1 && (
                   <span style={{ 
                     fontSize: 12, 
@@ -710,8 +702,8 @@ export const AssetCreationForm = ({
                 ))}
               </select>
               
-              {/* WP_INV Layer Selection - Show when VFX or chrome is enabled and wp_inv layers exist */}
-              {(currentConfig.vfx || currentConfig.chrome) && getWpInvLayers().length > 0 && (
+              {/* WP_INV Layer Selection - Only show when VFX or chrome is enabled and there are multiple wp_inv layers */}
+              {(currentConfig.vfx || currentConfig.chrome) && getWpInvLayers().length > 1 && (
                 <div style={{ marginTop: 12 }}>
                   <label style={{
                     display: 'block',
@@ -721,21 +713,10 @@ export const AssetCreationForm = ({
                     marginBottom: 8
                   }}>
                     Select WP_INV Layer
-                    {getWpInvLayers().length === 1 && (
-                      <span style={{ 
-                        fontSize: 12, 
-                        color: '#10b981', 
-                        fontWeight: 400,
-                        marginLeft: 8 
-                      }}>
-                        (auto-selected)
-                      </span>
-                    )}
                   </label>
                   <select
                     value={currentConfig.wp_inv_layer || ''}
                     onChange={(e) => setCurrentConfig(prev => ({ ...prev, wp_inv_layer: e.target.value }))}
-                    disabled={getWpInvLayers().length === 1}
                     style={{
                       width: '100%',
                       padding: '8px 12px',
@@ -743,14 +724,11 @@ export const AssetCreationForm = ({
                       border: '1px solid rgba(255, 255, 255, 0.2)',
                       borderRadius: 8,
                       color: '#f8f8f8',
-                      fontSize: 14,
-                      opacity: getWpInvLayers().length === 1 ? 0.7 : 1
+                      fontSize: 14
                     }}
                   >
-                    <option value="" style={{ background: '#1f2937' }}>
-                      {getWpInvLayers().length === 1 ? getWpInvLayers()[0] : 'Select wp_inv layer...'}
-                    </option>
-                    {getWpInvLayers().length > 1 && getWpInvLayers().map(wpInvLayer => (
+                    <option value="" style={{ background: '#1f2937' }}>Select wp_inv layer...</option>
+                    {getWpInvLayers().map(wpInvLayer => (
                       <option key={wpInvLayer} value={wpInvLayer} style={{ background: '#1f2937' }}>
                         {wpInvLayer}
                       </option>
@@ -775,6 +753,16 @@ export const AssetCreationForm = ({
                     marginBottom: 8
                   }}>
                     Chrome Effect
+                    {getWpInvLayers().length === 1 && (
+                      <span style={{ 
+                        fontSize: 12, 
+                        color: '#9ca3af', 
+                        fontWeight: 400,
+                        marginLeft: 8 
+                      }}>
+                        - using {getWpInvLayers()[0]}
+                      </span>
+                    )}
                   </label>
                   <select
                     value={typeof currentConfig.chrome === 'string' ? currentConfig.chrome : ''}
