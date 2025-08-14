@@ -2185,13 +2185,13 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
                           return;
                         }
                         
-                        // Check current chrome state - if any have chrome, remove it; otherwise add it
-                        const assetsWithChrome = eligibleAssets.filter(asset => asset.chrome);
-                        const shouldRemoveChrome = assetsWithChrome.length > 0;
+                        // Check current chrome state - if any have silver chrome, remove it; otherwise add silver
+                        const assetsWithSilverChrome = eligibleAssets.filter(asset => asset.chrome === 'silver');
+                        const shouldRemoveChrome = assetsWithSilverChrome.length > 0;
                         
                         const assetsToUpdate = shouldRemoveChrome 
-                          ? assetsWithChrome 
-                          : eligibleAssets.filter(asset => !asset.chrome);
+                          ? assetsWithSilverChrome  // Only update assets with silver chrome
+                          : eligibleAssets.filter(asset => !asset.chrome); // Only update assets with no chrome
                         
                         if (assetsToUpdate.length === 0) {
                           console.log('📋 No assets need chrome update');
