@@ -60,6 +60,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     wp_inv_layer: ''
   });
   const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
+  const [editingAsset, setEditingAsset] = useState<AssetConfig | null>(null);
   const [savingAsset, setSavingAsset] = useState(false);
   const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
   const [processingPdf, setProcessingPdf] = useState(false);
@@ -464,6 +465,8 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
 
   const closeAssetModal = () => {
     setIsAssetModalOpen(false);
+    setEditingAssetId(null);
+    setEditingAsset(null);
     resetCurrentConfig();
   };
 
@@ -664,6 +667,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     };
     setCurrentConfig(convertedAsset);
     setEditingAssetId(asset.id);
+    setEditingAsset(convertedAsset);
     
     // For parallel assets, populate the spot/color pairs
     if (asset.type === 'parallel' || asset.type === 'multi-parallel') {
@@ -1099,6 +1103,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
         generateAssetName={generateAssetName}
         savingAsset={savingAsset}
         editingAssetId={editingAssetId}
+        editingAsset={editingAsset}
         onAddAsset={async (config, spotColorPairsFromForm) => {
           // Call addAsset directly with the config from the form
           await addAssetWithConfig(config, spotColorPairsFromForm);

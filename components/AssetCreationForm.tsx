@@ -32,6 +32,7 @@ interface AssetCreationFormProps {
   generateAssetName: (type: string, config: Partial<AssetConfig>, existingNames?: string[]) => string;
   savingAsset: boolean;
   editingAssetId: string | null;
+  editingAsset: AssetConfig | null;
   onAddAsset: (config: AssetConfig, spotColorPairs: SpotColorPair[]) => Promise<void>;
   onResetConfig: () => void;
 }
@@ -64,6 +65,7 @@ export const AssetCreationForm = ({
   generateAssetName,
   savingAsset,
   editingAssetId,
+  editingAsset,
   onAddAsset,
   onResetConfig
 }: AssetCreationFormProps) => {
@@ -76,6 +78,64 @@ export const AssetCreationForm = ({
     wp_inv_layer: ''
   });
   const [spotColorPairs, setSpotColorPairs] = useState<SpotColorPair[]>([{ spot: '', color: undefined }]);
+
+  // Effect to populate form when editing an existing asset
+  useEffect(() => {
+    if (editingAsset && editingAssetId) {
+      console.log('🔄 Populating form for editing asset:', editingAsset);
+      
+      // Set the card type - map actual types back to 'front' if needed
+      const cardTypeForUI = editingAsset.type === 'base' || editingAsset.type === 'parallel' || editingAsset.type === 'multi-parallel' 
+        ? 'front' 
+        : editingAsset.type;
+      setCurrentCardType(cardTypeForUI);
+      
+      // Set the configuration
+      setCurrentConfig({
+        id: editingAsset.id,
+        name: editingAsset.name,
+        layer: editingAsset.layer,
+        vfx: editingAsset.vfx || '',
+        chrome: editingAsset.chrome || false,
+        oneOfOneWp: editingAsset.oneOfOneWp || false,
+        wp_inv_layer: editingAsset.wp_inv_layer || '',
+        type: editingAsset.type
+      });
+      
+      // Set spot color pairs for parallel/multi-parallel assets
+      if (editingAsset.spotColorPairs && editingAsset.spotColorPairs.length > 0) {
+        // Convert RGB values back to color names for the UI
+        const convertedPairs = editingAsset.spotColorPairs.map(pair => ({
+          spot: pair.spot,
+          color: pair.color?.startsWith('R') ? getColorNameByRgb(pair.color) : pair.color
+        }));
+        setSpotColorPairs(convertedPairs);
+      } else if (editingAsset.spot && editingAsset.color) {
+        // Handle legacy single spot/color format
+        const colorName = editingAsset.color.startsWith('R') ? getColorNameByRgb(editingAsset.color) : editingAsset.color;
+        setSpotColorPairs([{ spot: editingAsset.spot, color: colorName }]);
+      } else {
+        // No spot colors - start with empty array for 'front' type
+        setSpotColorPairs([]);
+      }
+    } else {
+      // Reset form when not editing
+      setCurrentCardType(null);
+      setCurrentConfig({
+        chrome: false,
+        oneOfOneWp: false,
+        name: '',
+        wp_inv_layer: ''
+      });
+      setSpotColorPairs([]);
+    }
+  }, [editingAsset, editingAssetId]);
+
+  // Helper function to convert RGB value back to color name
+  const getColorNameByRgb = (rgbValue: string): string => {
+    const color = HARDCODED_COLORS.find(c => c.rgb === rgbValue);
+    return color?.name || 'Unknown';
+  };
 
   // Helper functions
   const getLayersByType = (type: 'wp' | 'back' | 'base' | 'parallel' | 'multi-parallel' | 'wp-1of1' | 'front') => {
