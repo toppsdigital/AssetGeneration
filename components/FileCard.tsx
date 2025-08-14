@@ -22,12 +22,32 @@ interface FireflyAsset {
   job_url?: string;
 }
 
+// Error object types
+interface ExtractedFileError {
+  error_type: string; // 'extraction_error' | 'upload_error' | etc.
+  error_message: string;
+  error_timestamp?: string;
+  // Additional fields may exist depending on error_type
+  [key: string]: any;
+}
+
+interface FireflyAssetError {
+  error_type: string; // 'firefly_top_level_error' or specific job error types
+  error_message: string;
+  error_timestamp?: string;
+  // Additional fields may exist
+  [key: string]: any;
+}
+
 interface FileData {
   filename: string;
   last_updated?: string;
   original_files?: Record<string, FileInfo>;
   extracted_files?: Record<string, ExtractedFile>;
   firefly_assets?: Record<string, FireflyAsset>;
+  // New error maps
+  extracted_files_errors?: Record<string, ExtractedFileError>;
+  firefly_assets_errors?: Record<string, FireflyAssetError>;
 }
 
 interface FileCardProps {
@@ -52,16 +72,24 @@ const FileCard: React.FC<FileCardProps> = ({
 }) => {
   const router = useRouter();
 
+  // Determine if this file has any errors to adjust styling and surface details
+  const hasErrors = (
+    !!file.extracted_files_errors && Object.keys(file.extracted_files_errors).length > 0
+  ) || (
+    !!file.firefly_assets_errors && Object.keys(file.firefly_assets_errors).length > 0
+  );
+
   return (
     <div style={{
-      border: '1px solid rgba(255, 255, 255, 0.1)',
+      border: hasErrors ? '1px solid rgba(239, 68, 68, 0.35)' : '1px solid rgba(255, 255, 255, 0.1)',
       borderRadius: 12,
       padding: 20,
       minHeight: 280,
       transition: 'all 0.3s ease',
       opacity: 1,
       animationDelay: `${index * 0.1}s`,
-      animation: 'fadeIn 0.3s ease-in-out forwards'
+      animation: 'fadeIn 0.3s ease-in-out forwards',
+      background: hasErrors ? 'linear-gradient(135deg, rgba(239,68,68,0.08), rgba(239,68,68,0.05))' : undefined
     }}>
       {/* File Header */}
       <div style={{ marginBottom: 20 }}>
@@ -93,6 +121,90 @@ const FileCard: React.FC<FileCardProps> = ({
         gap: 16, // Reduced from 20
         marginBottom: 20 // Reduced from 24
       }}>
+        {/* Errors (if any) - spans across all columns */}
+        {(hasErrors) && (
+          <div style={{ gridColumn: '1 / -1' }}>
+            <h4 style={{
+              color: '#fca5a5',
+              fontSize: 15,
+              fontWeight: 600,
+              margin: '0 0 10px 0'
+            }}>
+              ❗ Errors Detected
+            </h4>
+            <div style={{
+              background: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              borderRadius: 8,
+              padding: 10,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8
+            }}>
+              {/* Extraction/Upload errors */}
+              {file.extracted_files_errors && Object.keys(file.extracted_files_errors).length > 0 && (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <span style={{ color: '#fecaca', fontSize: 13, fontWeight: 600 }}>
+                      PDF Extraction/Upload Errors ({Object.keys(file.extracted_files_errors).length})
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {Object.entries(file.extracted_files_errors)
+                      .sort(([a],[b]) => a.toLowerCase().localeCompare(b.toLowerCase()))
+                      .map(([name, err], i) => (
+                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: '#fecaca' }}>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontWeight: 600 }}>{name}</span>
+                            <span style={{
+                              padding: '1px 6px',
+                              borderRadius: 4,
+                              background: 'rgba(239,68,68,0.25)',
+                              color: '#fecaca'
+                            }}>{err.error_type}</span>
+                          </span>
+                          <span style={{ color: '#fca5a5', marginLeft: 8, flex: 1, textAlign: 'right', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }} title={err.error_message}>
+                            {err.error_message}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Firefly processing errors */}
+              {file.firefly_assets_errors && Object.keys(file.firefly_assets_errors).length > 0 && (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '6px 0' }}>
+                    <span style={{ color: '#fecaca', fontSize: 13, fontWeight: 600 }}>
+                      Firefly Errors ({Object.keys(file.firefly_assets_errors).length})
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {Object.entries(file.firefly_assets_errors)
+                      .sort(([a],[b]) => a.toLowerCase().localeCompare(b.toLowerCase()))
+                      .map(([name, err], i) => (
+                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: '#fecaca' }}>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontWeight: 600 }}>{name}</span>
+                            <span style={{
+                              padding: '1px 6px',
+                              borderRadius: 4,
+                              background: 'rgba(239,68,68,0.25)',
+                              color: '#fecaca'
+                            }}>{err.error_type}</span>
+                          </span>
+                          <span style={{ color: '#fca5a5', marginLeft: 8, flex: 1, textAlign: 'right', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }} title={err.error_message}>
+                            {err.error_message}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         {/* Original PDF Files */}
         <div>
           <h4 style={{
