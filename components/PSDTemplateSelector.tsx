@@ -1074,27 +1074,28 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                 onEDRPdfUpload={handleEDRPdfUpload}
                 onAddAsset={openAssetModal}
               />
-            </div>
-          )}
+                      </div>
+                    )}
 
-          {/* Asset Creation Modal */}
-          <AssetCreationForm
-            isOpen={isAssetModalOpen}
-            onClose={closeAssetModal}
-            jsonData={jsonData}
-            getExtractedLayers={getExtractedLayers}
-            getConfiguredAssets={getConfiguredAssets}
-            generateAssetName={generateAssetName}
-            savingAsset={savingAsset}
-            editingAssetId={editingAssetId}
-            onAddAsset={async (config, spotColorPairsFromForm) => {
-              // Call addAsset directly with the config from the form
-              await addAssetWithConfig(config, spotColorPairsFromForm);
-            }}
-            onResetConfig={resetCurrentConfig}
-          />
         </div>
       </div>
+
+      {/* Asset Creation Modal - Render outside main container */}
+      <AssetCreationForm
+        isOpen={isAssetModalOpen}
+        onClose={closeAssetModal}
+        jsonData={jsonData}
+        getExtractedLayers={getExtractedLayers}
+        getConfiguredAssets={getConfiguredAssets}
+        generateAssetName={generateAssetName}
+        savingAsset={savingAsset}
+        editingAssetId={editingAssetId}
+        onAddAsset={async (config, spotColorPairsFromForm) => {
+          // Call addAsset directly with the config from the form
+          await addAssetWithConfig(config, spotColorPairsFromForm);
+        }}
+        onResetConfig={resetCurrentConfig}
+      />
     </>
   );
 };

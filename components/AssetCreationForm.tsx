@@ -298,8 +298,9 @@ export const AssetCreationForm = ({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          zIndex: 1000,
-          padding: 20
+          zIndex: 9999,
+          padding: 20,
+          overflowY: 'auto'
         }}
         onClick={(e) => {
           if (e.target === e.currentTarget) {
@@ -315,9 +316,10 @@ export const AssetCreationForm = ({
             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
             maxWidth: 600,
             width: '100%',
-            maxHeight: '90vh',
-            overflow: 'auto',
-            position: 'relative'
+            maxHeight: '85vh',
+            overflow: 'hidden',
+            position: 'relative',
+            margin: 'auto'
           }}
           onClick={(e) => e.stopPropagation()}
         >
@@ -365,7 +367,11 @@ export const AssetCreationForm = ({
           </div>
 
           {/* Modal Body */}
-          <div style={{ padding: 24 }}>
+          <div style={{ 
+            padding: 24, 
+            maxHeight: 'calc(85vh - 100px)', 
+            overflowY: 'auto' 
+          }}>
             <div>
       <h3 style={{
         fontSize: 18,
@@ -970,8 +976,14 @@ export const AssetCreationForm = ({
               let canAdd = false;
               let validationMessage = '';
 
+              // For front type, determine what it will become
+              const actualType: string = currentCardType === 'front' 
+                ? determineActualAssetType(currentCardType, currentConfig, spotColorPairs)
+                : currentCardType || '';
+
               console.log('🔍 Validation check:', { 
                 currentCardType, 
+                actualType,
                 currentConfigName: currentConfig.name, 
                 currentConfigLayer: currentConfig.layer,
                 currentConfigWpInvLayer: currentConfig.wp_inv_layer,
@@ -986,7 +998,10 @@ export const AssetCreationForm = ({
               } else if (!currentConfig.name?.trim()) {
                 validationMessage = 'Enter asset name';
               } else {
-                switch (currentCardType) {
+                // Use actualType for validation (handles front -> base/parallel/multi-parallel conversion)
+                const typeToValidate = currentCardType === 'front' ? actualType : currentCardType;
+                
+                switch (typeToValidate) {
                   case 'wp':
                   case 'back':
                     if (!currentConfig.layer) {
@@ -995,9 +1010,10 @@ export const AssetCreationForm = ({
                       canAdd = true;
                     }
                     break;
-                  case 'front':
+                  case 'base':
+                  case 'wp-1of1':
                     if (!currentConfig.layer) {
-                      validationMessage = 'Select base layer';
+                      validationMessage = currentCardType === 'front' ? 'Select base layer' : 'Select layer';
                     } else if ((currentConfig.vfx || currentConfig.chrome) && getWpInvLayers().length > 1 && !currentConfig.wp_inv_layer) {
                       // Only require wp_inv layer selection if VFX/chrome is enabled and there are multiple layers
                       validationMessage = 'Select wp_inv layer';
@@ -1005,31 +1021,35 @@ export const AssetCreationForm = ({
                       canAdd = true; // Base layer is required, spot colors are optional
                     }
                     break;
-                  case 'base':
-                  case 'wp-1of1':
-                    if (!currentConfig.layer) {
-                      validationMessage = 'Select layer';
-                    } else {
-                      canAdd = true;
-                    }
-                    break;
                   case 'parallel':
                   case 'multi-parallel':
-                    const validPairs = spotColorPairs.filter(pair => pair.spot && pair.color);
-                    console.log('🔍 Parallel validation:', { 
-                      spotColorPairs, 
-                      validPairs, 
-                      validPairsLength: validPairs.length,
-                      wpInvLayersLength: getWpInvLayers().length,
-                      currentConfigLayer: currentConfig.layer 
-                    });
-                    if (validPairs.length === 0) {
-                      validationMessage = 'Select at least one spot layer and color';
-                    } else if ((currentConfig.vfx || currentConfig.chrome) && getWpInvLayers().length > 1 && !currentConfig.wp_inv_layer) {
-                      // Only require wp_inv layer selection if VFX/chrome is enabled and there are multiple layers
-                      validationMessage = 'Select wp_inv layer';
+                    if (!currentConfig.layer) {
+                      validationMessage = currentCardType === 'front' ? 'Select base layer' : 'Select layer';
                     } else {
-                      canAdd = true; // Have at least one valid spot/color pair
+                      const validPairs = spotColorPairs.filter(pair => pair.spot && pair.color);
+                      console.log('🔍 Parallel validation:', { 
+                        spotColorPairs, 
+                        validPairs, 
+                        validPairsLength: validPairs.length,
+                        wpInvLayersLength: getWpInvLayers().length,
+                        currentConfigLayer: currentConfig.layer 
+                      });
+                      if (validPairs.length === 0) {
+                        validationMessage = 'Select at least one spot layer and color';
+                      } else if ((currentConfig.vfx || currentConfig.chrome) && getWpInvLayers().length > 1 && !currentConfig.wp_inv_layer) {
+                        // Only require wp_inv layer selection if VFX/chrome is enabled and there are multiple layers
+                        validationMessage = 'Select wp_inv layer';
+                      } else {
+                        canAdd = true; // Have at least one valid spot/color pair
+                      }
+                    }
+                    break;
+                  case 'front':
+                    // This shouldn't happen since we convert front to actual type above
+                    if (!currentConfig.layer) {
+                      validationMessage = 'Select base layer';
+                    } else {
+                      canAdd = true;
                     }
                     break;
                 }
