@@ -889,10 +889,11 @@ async function handleRequest(request: NextRequest, method: string) {
         }, { status: 400 });
     }
     
-    // Prepare headers
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
+    // Prepare headers - only set Content-Type for POST/PUT
+    const headers: Record<string, string> = {};
+    if (apiMethod === 'POST' || apiMethod === 'PUT') {
+      headers['Content-Type'] = 'application/json';
+    }
     
     // Make the API request
     const fetchOptions: RequestInit = {
