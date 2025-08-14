@@ -587,8 +587,9 @@ class ContentPipelineAPI {
     message?: string;
   }> {
     const response = await fetch(`${this.baseUrl}?operation=list_assets&id=${encodeURIComponent(jobId)}`, {
-      method: 'GET',
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assets: [] }),
     });
     if (!response.ok) {
       const error = await response.json();

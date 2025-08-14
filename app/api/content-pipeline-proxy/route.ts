@@ -792,8 +792,9 @@ async function handleRequest(request: NextRequest, method: string) {
           return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
         }
         apiUrl += `/jobs/${id}/assets`;
-        apiMethod = 'GET';
-        apiBody = {}; // no body for GET
+        // Backend expects POST with a body (even for listing); send minimal payload
+        apiMethod = 'POST';
+        apiBody = Object.keys(apiBody || {}).length > 0 ? apiBody : { assets: [] };
         break;
 
       case 'update_asset':

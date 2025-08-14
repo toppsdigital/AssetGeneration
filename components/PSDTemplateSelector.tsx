@@ -601,28 +601,16 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
           if (response.job) {
             console.log('🔄 Using legacy job object from response to update UI');
             onJobDataUpdate(response.job);
-          } else if (response.assets?.assets && Array.isArray(response.assets.assets)) {
-            console.log('🔄 Updating UI using assets array from response');
-            const existingAssets = (mergedJobData?.assets || {}) as Record<string, any>;
-            const updatedAssets: Record<string, any> = { ...existingAssets };
-            (response.assets.assets as any[]).forEach((a: any) => {
+          } else if ((response as any)?.assets?.assets && Array.isArray((response as any).assets.assets)) {
+            console.log('🔄 Replacing UI assets with server-provided assets array');
+            const assetsArray = (response as any).assets.assets as any[];
+            const newAssets: Record<string, any> = {};
+            assetsArray.forEach((a: any) => {
               const assetId = a.asset_id || a.id || a.name;
               if (!assetId) return;
-              updatedAssets[assetId] = {
-                // Prefer server-provided fields, fall back to config we just sent
-                name: a.name ?? config.name,
-                type: a.type ?? config.type,
-                layer: a.layer ?? config.layer,
-                vfx: a.vfx ?? (config as any).vfx,
-                chrome: a.chrome ?? (config as any).chrome,
-                spot: a.spot ?? (config as any).spot,
-                color: a.color ?? (config as any).color,
-                spot_color_pairs: a.spot_color_pairs ?? (config as any).spotColorPairs,
-                wp_inv_layer: a.wp_inv_layer ?? (config as any).wp_inv_layer,
-                oneOfOneWp: a.oneOfOneWp ?? (config as any).oneOfOneWp
-              };
+              newAssets[assetId] = a;
             });
-            onJobDataUpdate({ job_id: jobData.job_id, assets: updatedAssets });
+            onJobDataUpdate({ job_id: jobData.job_id, assets: newAssets });
           } else {
             console.log('ℹ️ No assets array or job in response; forcing refetch');
             onJobDataUpdate({ _forceRefetch: true, job_id: jobData.job_id });
@@ -672,10 +660,20 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
         if (response.success) {
           console.log('✅ Asset removed successfully:', response);
           if (onJobDataUpdate) {
-            if (response.job) {
+            if ((response as any)?.job) {
               onJobDataUpdate(response.job);
+            } else if ((response as any)?.assets?.assets && Array.isArray((response as any).assets.assets)) {
+              // Replace with authoritative list from server after deletion
+              const assetsArray = (response as any).assets.assets as any[];
+              const newAssets: Record<string, any> = {};
+              assetsArray.forEach((a: any) => {
+                const assetId = a.asset_id || a.id || a.name;
+                if (!assetId) return;
+                newAssets[assetId] = a;
+              });
+              onJobDataUpdate({ job_id: jobData.job_id, assets: newAssets });
             } else {
-              // Locally remove from existing assets map
+              // Fallback: remove locally
               const existingAssets = (mergedJobData?.assets || {}) as Record<string, any>;
               const updatedAssets: Record<string, any> = { ...existingAssets };
               delete updatedAssets[id];
