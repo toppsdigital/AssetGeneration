@@ -182,7 +182,7 @@ export const AssetCreationForm = ({
         console.log('🚫 Not updating name - appears to be user-edited');
       }
     }
-  }, [currentCardType, currentConfig.layer, currentConfig.vfx, currentConfig.chrome, currentConfig.oneOfOneWp, spotColorPairs, editingAssetId]);
+  }, [currentCardType, currentConfig.layer, currentConfig.vfx, currentConfig.chrome, currentConfig.oneOfOneWp, spotColorPairs, editingAssetId, getConfiguredAssets, generateAssetName]);
 
   // Auto-select wp_inv layer when VFX or chrome is enabled and only one wp_inv layer exists
   useEffect(() => {
@@ -197,7 +197,7 @@ export const AssetCreationForm = ({
         setCurrentConfig(prev => ({ ...prev, wp_inv_layer: '' }));
       }
     }
-  }, [currentCardType, currentConfig.vfx, currentConfig.chrome, editingAssetId]);
+  }, [currentCardType, currentConfig.vfx, currentConfig.chrome, editingAssetId, getWpInvLayers]);
 
   const handleAddAsset = async () => {
     console.log('🔍 handleAddAsset called:', { 
@@ -796,7 +796,11 @@ export const AssetCreationForm = ({
                 currentCardType, 
                 currentConfigName: currentConfig.name, 
                 currentConfigLayer: currentConfig.layer,
-                spotColorPairs: spotColorPairs 
+                currentConfigWpInvLayer: currentConfig.wp_inv_layer,
+                currentConfigVfx: currentConfig.vfx,
+                currentConfigChrome: currentConfig.chrome,
+                spotColorPairs: spotColorPairs,
+                wpInvLayersLength: getWpInvLayers().length
               });
 
               if (!currentCardType) {
@@ -827,8 +831,8 @@ export const AssetCreationForm = ({
                     });
                     if (validPairs.length === 0) {
                       validationMessage = 'Select at least one spot layer and color';
-                    } else if (getWpInvLayers().length > 1 && !currentConfig.layer) {
-                      // Only require wp_inv layer selection if there are multiple
+                    } else if ((currentConfig.vfx || currentConfig.chrome) && getWpInvLayers().length > 1 && !currentConfig.wp_inv_layer) {
+                      // Only require wp_inv layer selection if VFX/chrome is enabled and there are multiple layers
                       validationMessage = 'Select wp_inv layer';
                     } else {
                       canAdd = true; // Have at least one valid spot/color pair
