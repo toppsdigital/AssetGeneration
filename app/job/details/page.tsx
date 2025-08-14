@@ -854,8 +854,9 @@ function JobDetailsPageContent() {
         console.log('Setting job data with file objects:', updatedJobData);
         console.log('🔄 Updating React Query cache from: createNewFiles at', new Date().toISOString());
         
-        // Update React Query cache instead of legacy state
+        // Update React Query cache and local UI state for immediate render
         queryClient.setQueryData(jobKeys.detail(jobData.job_id), updatedJobData);
+        setLocalJobData(updatedJobData as any);
         setFilesLoaded(true);
         
         // Verify the cache was updated

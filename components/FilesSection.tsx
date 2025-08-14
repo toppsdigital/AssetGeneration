@@ -29,9 +29,9 @@ export const FilesSection = ({
   className = ''
 }: FilesSectionProps) => {
   const shouldShowLoading = () => {
-    return (loadingFiles && !mergedJobData?.content_pipeline_files?.length) || 
-           (!filesLoaded && mergedJobData?.api_files?.length > 0 && 
-            !mergedJobData?.content_pipeline_files?.length);
+    // Show loading only while we truly await data; if we already have content_pipeline_files, don't mask them
+    if (mergedJobData?.content_pipeline_files && mergedJobData.content_pipeline_files.length > 0) return false;
+    return (loadingFiles) || (!filesLoaded && (mergedJobData?.api_files?.length || 0) > 0);
   };
 
   const getEmptyStateMessage = () => {
