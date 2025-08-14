@@ -118,6 +118,87 @@ if (!API_BASE_URL) {
   console.warn('CONTENT_PIPELINE_API_URL not configured, using mock data');
 }
 
+// Helper function to normalize asset responses for consistent UI handling
+function normalizeAssetResponse(responseData: any, operation: string): any {
+  console.log(`🔧 Normalizing ${operation} response:`, {
+    hasDirectAssets: !!responseData.assets,
+    hasResultCompleteAssets: !!responseData.result?.complete_assets?.assets,
+    hasResultAssetsRecord: !!responseData.result?.assets_record?.assets,
+    hasResultAssets: !!responseData.result?.assets,
+    responseKeys: Object.keys(responseData || {})
+  });
+
+  // Extract assets from various possible locations in the response
+  let extractedAssets = null;
+  
+  // Priority order for asset extraction based on common API patterns
+  if (responseData.assets?.assets && typeof responseData.assets.assets === 'object') {
+    // Assets nested within assets wrapper (bulk_update_assets format)
+    extractedAssets = responseData.assets.assets;
+    console.log(`✅ ${operation}: Using assets.assets (${Object.keys(extractedAssets).length} assets)`);
+  } else if (responseData.assets && typeof responseData.assets === 'object' && !responseData.assets.pk) {
+    // Direct assets object (simple format, no pk/sk wrapper)
+    extractedAssets = responseData.assets;
+    console.log(`✅ ${operation}: Using direct assets (${Object.keys(extractedAssets).length} assets)`);
+  } else if (responseData.result?.complete_assets?.assets) {
+    // Assets nested in result.complete_assets (alternative structure)
+    extractedAssets = responseData.result.complete_assets.assets;
+    console.log(`✅ ${operation}: Using result.complete_assets.assets (${Object.keys(extractedAssets).length} assets)`);
+  } else if (responseData.result?.assets_record?.assets) {
+    // Assets nested in result.assets_record (another alternative)
+    extractedAssets = responseData.result.assets_record.assets;
+    console.log(`✅ ${operation}: Using result.assets_record.assets (${Object.keys(extractedAssets).length} assets)`);
+  } else if (responseData.result?.assets && Array.isArray(responseData.result.assets)) {
+    // Convert array format to object format (EDR import sometimes returns arrays)
+    const assetsArray = responseData.result.assets;
+    extractedAssets = {};
+    assetsArray.forEach((asset: any) => {
+      if (asset.asset_id || asset.id) {
+        extractedAssets[asset.asset_id || asset.id] = asset;
+      }
+    });
+    console.log(`✅ ${operation}: Converted array to object format (${Object.keys(extractedAssets).length} assets)`);
+  } else if (responseData.result?.assets && typeof responseData.result.assets === 'object') {
+    // Direct assets in result object
+    extractedAssets = responseData.result.assets;
+    console.log(`✅ ${operation}: Using result.assets (${Object.keys(extractedAssets).length} assets)`);
+  } else if (responseData.job?.assets) {
+    // Assets within job object (some operations return job wrapper)
+    extractedAssets = responseData.job.assets;
+    console.log(`✅ ${operation}: Using job.assets (${Object.keys(extractedAssets).length} assets)`);
+  }
+
+  // Create normalized response structure
+  const normalizedResponse = {
+    // Preserve original response fields
+    ...responseData,
+    // Ensure assets are always available at top level for UI consistency
+    assets: extractedAssets || {},
+    // Preserve job information if available
+    job_id: responseData.job_id || responseData.result?.job_id || responseData.job?.job_id,
+    // Add operation metadata for debugging
+    _operation: operation,
+    _normalized: true,
+    _assets_source: extractedAssets ? (
+      responseData.assets?.assets ? 'assets.assets' :
+      responseData.assets && !responseData.assets.pk ? 'direct' :
+      responseData.result?.complete_assets?.assets ? 'result.complete_assets' :
+      responseData.result?.assets_record?.assets ? 'result.assets_record' :
+      responseData.result?.assets ? 'result.assets' :
+      responseData.job?.assets ? 'job.assets' : 'unknown'
+    ) : 'none'
+  };
+
+  console.log(`🎯 ${operation} normalization result:`, {
+    originalKeys: Object.keys(responseData || {}),
+    normalizedKeys: Object.keys(normalizedResponse),
+    assetsCount: extractedAssets ? Object.keys(extractedAssets).length : 0,
+    assetsSource: normalizedResponse._assets_source
+  });
+
+  return normalizedResponse;
+}
+
 // Helper function to generate and save download URL to job object
 async function generateAndSaveDownloadUrl(jobId: string): Promise<{
   success: boolean;
@@ -1064,7 +1145,25 @@ async function handleRequest(request: NextRequest, method: string) {
       });
     }
     
-    // For asset create/update/delete and pdf-extract (EDR import), backend returns assets wrapper; proxy through as-is
+    // Normalize asset-related responses for consistent UI handling
+    if (operation === 'list_assets' || operation === 'create_asset' || operation === 'update_asset' || 
+        operation === 'replace_assets' || operation === 'batch_create_assets' || operation === 'bulk_update_assets' || 
+        operation === 'pdf-extract') {
+      console.log(`🔄 Normalizing ${operation} response for UI consistency`);
+      
+      // Normalize the response structure to ensure assets are consistently available
+      const normalizedResponse = normalizeAssetResponse(responseData, operation);
+      
+      console.log(`✅ Normalized ${operation} response:`, {
+        hasAssets: !!normalizedResponse.assets,
+        assetsCount: normalizedResponse.assets ? Object.keys(normalizedResponse.assets).length : 0,
+        operation
+      });
+      
+      return NextResponse.json(normalizedResponse, { status: response.status });
+    }
+    
+    // For other operations, proxy through as-is
     return NextResponse.json(responseData, { status: response.status });
     
   } catch (error) {
