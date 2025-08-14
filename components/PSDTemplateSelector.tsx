@@ -91,30 +91,39 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
 
   // Fetch physical JSON files when component becomes visible
   useEffect(() => {
+    console.log('🔍 PSDTemplateSelector useEffect triggered:', {
+      isVisible,
+      hasJobId: !!mergedJobData?.job_id,
+      jobId: mergedJobData?.job_id
+    });
+    
     if (isVisible) {
       fetchPhysicalJsonFiles();
       // Also fetch latest assets from backend to ensure UI is up to date
       (async () => {
         try {
-          if (!mergedJobData?.job_id) return;
+          if (!mergedJobData?.job_id) {
+            console.log('❌ No job ID available for asset fetch, skipping');
+            return;
+          }
           console.log('🔄 Fetching latest assets for job on selector mount:', mergedJobData.job_id);
           const resp = await contentPipelineApi.getAssets(mergedJobData.job_id);
-          if (resp.success && resp.assets?.assets && Array.isArray(resp.assets.assets)) {
-            const assetsArray = resp.assets.assets as any[];
-            const newAssets: Record<string, any> = {};
-            assetsArray.forEach(a => {
-              const assetId = a.asset_id || a.id || a.name;
-              if (!assetId) return;
-              newAssets[assetId] = a;
-            });
-            onJobDataUpdate?.({ job_id: mergedJobData.job_id, assets: newAssets });
+          console.log('🔍 getAssets response:', resp);
+          // New response shape: { assets: { assets: { id: asset } , ... }, job_id }
+          const serverAssetsMapping = (resp as any)?.assets?.assets;
+          console.log('🔍 Extracted serverAssetsMapping:', serverAssetsMapping);
+          if (serverAssetsMapping && typeof serverAssetsMapping === 'object') {
+            console.log('✅ Calling onJobDataUpdate with assets:', Object.keys(serverAssetsMapping));
+            onJobDataUpdate?.({ job_id: mergedJobData.job_id, assets: serverAssetsMapping });
+      } else {
+            console.warn('⚠️ Unexpected assets response shape', resp);
           }
         } catch (e) {
           console.warn('⚠️ Failed to fetch assets on load:', e);
         }
       })();
     }
-  }, [isVisible]);
+  }, [isVisible, mergedJobData?.job_id]);
 
   // Debug mergedJobData changes
   useEffect(() => {
@@ -600,20 +609,14 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
         if (onJobDataUpdate) {
           if (response.job) {
             console.log('🔄 Using legacy job object from response to update UI');
-            onJobDataUpdate(response.job);
-          } else if ((response as any)?.assets?.assets && Array.isArray((response as any).assets.assets)) {
-            console.log('🔄 Replacing UI assets with server-provided assets array');
-            const assetsArray = (response as any).assets.assets as any[];
-            const newAssets: Record<string, any> = {};
-            assetsArray.forEach((a: any) => {
-              const assetId = a.asset_id || a.id || a.name;
-              if (!assetId) return;
-              newAssets[assetId] = a;
-            });
-            onJobDataUpdate({ job_id: jobData.job_id, assets: newAssets });
+          onJobDataUpdate(response.job);
+          } else if ((response as any)?.assets?.assets && typeof (response as any).assets.assets === 'object') {
+            console.log('🔄 Replacing UI assets with server-provided assets mapping');
+            const mapping = (response as any).assets.assets as Record<string, any>;
+            onJobDataUpdate({ job_id: jobData.job_id, assets: mapping });
           } else {
             console.log('ℹ️ No assets array or job in response; forcing refetch');
-            onJobDataUpdate({ _forceRefetch: true, job_id: jobData.job_id });
+          onJobDataUpdate({ _forceRefetch: true, job_id: jobData.job_id });
           }
         }
       } else {
@@ -653,26 +656,20 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     
     setSavingAsset(true);
     
-      try {
+    try {
       console.log('🗑️ Removing asset:', id);
       const response = await contentPipelineApi.deleteAsset(jobData.job_id, id);
       
-        if (response.success) {
+        {
           console.log('✅ Asset removed successfully:', response);
           if (onJobDataUpdate) {
             if ((response as any)?.job) {
-              onJobDataUpdate(response.job);
-            } else if ((response as any)?.assets?.assets && Array.isArray((response as any).assets.assets)) {
-              // Replace with authoritative list from server after deletion
-              const assetsArray = (response as any).assets.assets as any[];
-              const newAssets: Record<string, any> = {};
-              assetsArray.forEach((a: any) => {
-                const assetId = a.asset_id || a.id || a.name;
-                if (!assetId) return;
-                newAssets[assetId] = a;
-              });
-              onJobDataUpdate({ job_id: jobData.job_id, assets: newAssets });
-            } else {
+              onJobDataUpdate((response as any).job);
+            } else if ((response as any)?.assets?.assets && typeof (response as any).assets.assets === 'object') {
+              // Replace with authoritative mapping from server after deletion
+              const mapping = (response as any).assets.assets as Record<string, any>;
+              onJobDataUpdate({ job_id: jobData.job_id, assets: mapping });
+      } else {
               // Fallback: remove locally
               const existingAssets = (mergedJobData?.assets || {}) as Record<string, any>;
               const updatedAssets: Record<string, any> = { ...existingAssets };
@@ -680,11 +677,6 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
               onJobDataUpdate({ job_id: jobData.job_id, assets: updatedAssets });
             }
           }
-      } else {
-        console.log('❌ Asset deletion failed:', {
-          success: response.success,
-          response: response
-        });
       }
     } catch (error) {
       console.error('❌ Error removing asset:', error);
@@ -886,21 +878,42 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     
     console.log('✅ PDF Extract API Response:', response);
     console.log('📋 Full JSON Response:', JSON.stringify(response, null, 2));
+    console.log('🔍 EDR Response Analysis:', {
+      hasAssets: !!(response as any)?.assets,
+      hasAssetsAssets: !!(response as any)?.assets?.assets,
+      assetsType: typeof (response as any)?.assets,
+      assetsAssetsType: typeof (response as any)?.assets?.assets,
+      assetsKeys: (response as any)?.assets ? Object.keys((response as any).assets) : 'no assets',
+      assetsAssetsKeys: (response as any)?.assets?.assets ? Object.keys((response as any).assets.assets) : 'no assets.assets'
+    });
 
     setUploadProgress(95);
 
-    // Update job data if response contains job object
-    if (response.job && onJobDataUpdate) {
-      console.log('🔄 Updating job data from EDR PDF import response (found job object)');
-      onJobDataUpdate(response.job);
-    } else if (response.success && response.job && onJobDataUpdate) {
-      console.log('🔄 Updating job data from EDR PDF import response (success + job)');
-      onJobDataUpdate(response.job);
-    } else if (onJobDataUpdate) {
-      console.log('🔄 No job data in EDR response, triggering refetch to get updated job data');
+    // Update job data from new response structure similar to asset list
+    if (onJobDataUpdate) {
+      if ((response as any)?.assets?.assets && typeof (response as any).assets.assets === 'object') {
+        console.log('🔄 EDR: Using nested assets.assets mapping');
+        const mapping = (response as any).assets.assets as Record<string, any>;
+        console.log('🔄 EDR: Assets mapping:', mapping);
+        console.log('🔄 EDR: Calling onJobDataUpdate with mapping keys:', Object.keys(mapping));
+        onJobDataUpdate({ job_id: jobData?.job_id, assets: mapping });
+      } else if ((response as any)?.assets && typeof (response as any).assets === 'object' && (response as any).job_id) {
+        console.log('🔄 EDR: Using direct assets mapping (EDR format)');
+        const mapping = (response as any).assets as Record<string, any>;
+        console.log('🔄 EDR: Direct assets mapping:', mapping);
+        console.log('🔄 EDR: Calling onJobDataUpdate with direct mapping keys:', Object.keys(mapping));
+        onJobDataUpdate({ job_id: jobData?.job_id, assets: mapping });
+      } else if ((response as any)?.job) {
+        console.log('🔄 EDR: Using legacy job object structure');
+        console.log('🔄 EDR: Job object assets:', (response as any).job.assets);
+        onJobDataUpdate((response as any).job);
+      } else {
+        console.log('🔄 EDR: No assets mapping or job in response, triggering refetch');
+        console.log('🔄 EDR: Response structure:', Object.keys(response as any));
       onJobDataUpdate({ _forceRefetch: true, job_id: jobData?.job_id });
+      }
     } else {
-      console.log('❌ Could not update job data - missing onJobDataUpdate callback');
+      console.log('❌ EDR: Could not update job data - missing onJobDataUpdate callback');
     }
   };
 
@@ -913,6 +926,9 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
   console.log('🔍 PSDTemplateSelector render:', {
     configuredAssetsCount: configuredAssets.length,
     configuredAssetIds: configuredAssets.map(a => a.id),
+    hasMergedJobData: !!mergedJobData,
+    mergedJobDataAssets: mergedJobData?.assets ? Object.keys(mergedJobData.assets) : 'no assets',
+    mergedJobDataKeys: mergedJobData ? Object.keys(mergedJobData) : [],
     timestamp: new Date().toISOString()
   });
 
@@ -1106,10 +1122,16 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
             </div>
           )}
 
-          {/* New Asset Builder UI */}
-          {selectedPhysicalFile && jsonData && !loadingJsonData && (
+          {/* Assets Table - Always visible when assets exist or to allow creation */}
+                          {(() => {
+            console.log('🔍 Asset display check:', {
+              configuredAssetsCount: configuredAssets.length,
+              hasJobData: !!jobData,
+              hasMergedJobData: !!mergedJobData
+            });
+            return true; // Always show the asset table
+          })() && (
             <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
-              {/* Configured Assets List */}
               <AssetsTable
                 configuredAssets={configuredAssets}
                 savingAsset={savingAsset}
@@ -1123,13 +1145,20 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                 onCreateAssets={createAssets}
                 onJobDataUpdate={onJobDataUpdate}
                 onEDRPdfUpload={handleEDRPdfUpload}
-                onAddAsset={openAssetModal}
+                onAddAsset={selectedPhysicalFile && jsonData && !loadingJsonData ? openAssetModal : undefined}
               />
                       </div>
                     )}
 
-        </div>
-      </div>
+          {/* PSD File Selection and Asset Creation - Only when PSD functionality is needed */}
+          {selectedPhysicalFile && jsonData && !loadingJsonData && (
+            <div style={{ marginTop: 24 }}>
+              {/* PSD file is selected and ready - additional functionality can go here if needed */}
+                      </div>
+                    )}
+
+                              </div>
+              </div>
 
       {/* Asset Creation Modal - Render outside main container */}
       <AssetCreationForm
@@ -1150,4 +1179,4 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       />
     </>
   );
-};
+}; 
