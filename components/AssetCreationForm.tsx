@@ -393,7 +393,7 @@ export const AssetCreationForm = ({
             backgroundColor: '#1f2937',
             borderRadius: 16,
             boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-            maxWidth: 600,
+            maxWidth: 500,
             width: '100%',
             maxHeight: '85vh',
             overflow: 'hidden',
@@ -584,7 +584,7 @@ export const AssetCreationForm = ({
                       setSpotColorPairs([{ spot: '', color: undefined }]);
                     }}
                     style={{
-                      padding: '8px 16px',
+                      padding: '10px 18px',
                       background: 'rgba(34, 197, 94, 0.2)',
                       border: '1px solid rgba(34, 197, 94, 0.4)',
                       borderRadius: 8,
@@ -666,9 +666,9 @@ export const AssetCreationForm = ({
                     {spotColorPairs.map((pair, index) => {
                   const spotGroup = getColorVariants()[0]; // Always use first spot group
                   return (
-                    <div key={index} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                    <div key={index} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                       {/* Spot Layer Selection */}
-                      <div style={{ flex: 1 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
                         {index === 0 && (
                           <label style={{
                             display: 'block',
@@ -693,8 +693,7 @@ export const AssetCreationForm = ({
                             border: '1px solid rgba(255, 255, 255, 0.2)',
                             borderRadius: 8,
                             color: '#f8f8f8',
-                            fontSize: 14,
-                            marginTop: index > 0 ? '20px' : '0'
+                            fontSize: 14
                           }}
                         >
                           <option value="" style={{ background: '#1f2937' }}>Select...</option>
@@ -709,7 +708,7 @@ export const AssetCreationForm = ({
                       </div>
                       
                       {/* Color Selection */}
-                      <div style={{ flex: 1 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
                         {index === 0 && (
                           <label style={{
                             display: 'block',
@@ -738,14 +737,13 @@ export const AssetCreationForm = ({
                           }}
                           disabled={!pair.spot}
                           style={{
-                            width: '100%',
+                             width: '100%',
                             padding: '8px 12px',
                             background: 'rgba(255, 255, 255, 0.08)',
                             border: '1px solid rgba(255, 255, 255, 0.2)',
                             borderRadius: 8,
                             color: '#f8f8f8',
                             fontSize: 14,
-                            marginTop: index > 0 ? '20px' : '0',
                             opacity: !pair.spot ? 0.5 : 1
                           }}
                         >
@@ -762,34 +760,28 @@ export const AssetCreationForm = ({
                         </select>
                       </div>
                       
-                      {/* Remove Button */}
+                      {/* Remove Button - only render when more than one pair to avoid stealing row width */}
                       <button
                         onClick={() => {
-                          if (spotColorPairs.length > 1) {
-                            setSpotColorPairs(prev => prev.filter((_, i) => i !== index));
-                          }
+                          setSpotColorPairs(prev => prev.filter((_, i) => i !== index));
                         }}
-                        disabled={spotColorPairs.length === 1}
                         style={{
                           width: 32,
                           height: 32,
-                          background: spotColorPairs.length === 1 
-                            ? 'transparent' 
-                            : 'rgba(239, 68, 68, 0.1)',
-                          border: '1px solid ' + (spotColorPairs.length === 1 
-                            ? 'transparent' 
-                            : 'rgba(239, 68, 68, 0.2)'),
-                          borderRadius: 6,
-                          color: spotColorPairs.length === 1 ? 'transparent' : '#ef4444',
+                          background: 'rgba(239, 68, 68, 0.1)',
+                          border: '1px solid rgba(239, 68, 68, 0.2)',
+                          borderRadius: 8,
+                          color: '#ef4444',
                           fontSize: 16,
-                          cursor: spotColorPairs.length === 1 ? 'default' : 'pointer',
+                          cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                           transition: 'all 0.2s',
-                          marginTop: index > 0 ? '20px' : (index === 0 ? '20px' : '0')
+                          alignSelf: 'flex-start',
+                          marginTop: index === 0 ? 22 : 0
                         }}
-                        title={spotColorPairs.length === 1 ? '' : 'Remove'}
+                        title={'Remove'}
                       >
                         ×
                       </button>
@@ -1150,12 +1142,12 @@ export const AssetCreationForm = ({
                     onClick={handleAddAsset}
                     disabled={!canAdd || savingAsset}
                     style={{
-                      padding: '12px 24px',
+                      padding: '14px 28px',
                       background: (!canAdd || savingAsset) ? 'rgba(156, 163, 175, 0.3)' : 'linear-gradient(135deg, #10b981, #059669)',
                       border: 'none',
-                      borderRadius: 8,
+                      borderRadius: 12,
                       color: 'white',
-                      fontSize: 14,
+                      fontSize: 16,
                       fontWeight: 600,
                       cursor: (!canAdd || savingAsset) ? 'not-allowed' : 'pointer',
                       transition: 'all 0.2s',
@@ -1184,7 +1176,7 @@ export const AssetCreationForm = ({
                         padding: '12px 24px',
                         background: 'rgba(156, 163, 175, 0.3)',
                         border: 'none',
-                        borderRadius: 8,
+                        borderRadius: 12,
                         color: 'white',
                         fontSize: 14,
                         fontWeight: 600,
