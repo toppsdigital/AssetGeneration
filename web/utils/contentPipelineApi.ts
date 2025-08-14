@@ -581,6 +581,22 @@ class ContentPipelineAPI {
   }
 
   // Asset management operations
+  async getAssets(jobId: string): Promise<{
+    success: boolean;
+    assets?: { assets?: any[]; [key: string]: any };
+    message?: string;
+  }> {
+    const response = await fetch(`${this.baseUrl}?operation=list_assets&id=${encodeURIComponent(jobId)}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || `Failed to fetch assets: ${response.status}`);
+    }
+    const result = await response.json();
+    return result;
+  }
   async createAsset(jobId: string, assetConfig: any): Promise<{
     success: boolean;
     message: string;

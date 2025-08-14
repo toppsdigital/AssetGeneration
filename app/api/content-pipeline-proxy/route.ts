@@ -787,6 +787,15 @@ async function handleRequest(request: NextRequest, method: string) {
         // Pass asset_config directly to backend - server will generate ID
         break;
 
+      case 'list_assets':
+        if (!id) {
+          return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
+        }
+        apiUrl += `/jobs/${id}/assets`;
+        apiMethod = 'GET';
+        apiBody = {}; // no body for GET
+        break;
+
       case 'update_asset':
         if (!id) {
           return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
@@ -1028,7 +1037,7 @@ async function handleRequest(request: NextRequest, method: string) {
       });
     }
     
-    // Return the response with the same status code
+    // For asset create/update/delete, backend now returns an assets wrapper only; proxy through as-is
     return NextResponse.json(responseData, { status: response.status });
     
   } catch (error) {

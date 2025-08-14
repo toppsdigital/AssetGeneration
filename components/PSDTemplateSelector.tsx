@@ -93,6 +93,26 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
   useEffect(() => {
     if (isVisible) {
       fetchPhysicalJsonFiles();
+      // Also fetch latest assets from backend to ensure UI is up to date
+      (async () => {
+        try {
+          if (!mergedJobData?.job_id) return;
+          console.log('🔄 Fetching latest assets for job on selector mount:', mergedJobData.job_id);
+          const resp = await contentPipelineApi.getAssets(mergedJobData.job_id);
+          if (resp.success && resp.assets?.assets && Array.isArray(resp.assets.assets)) {
+            const assetsArray = resp.assets.assets as any[];
+            const newAssets: Record<string, any> = {};
+            assetsArray.forEach(a => {
+              const assetId = a.asset_id || a.id || a.name;
+              if (!assetId) return;
+              newAssets[assetId] = a;
+            });
+            onJobDataUpdate?.({ job_id: mergedJobData.job_id, assets: newAssets });
+          }
+        } catch (e) {
+          console.warn('⚠️ Failed to fetch assets on load:', e);
+        }
+      })();
     }
   }, [isVisible]);
 
@@ -574,21 +594,39 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       }
 
       if (response.success) {
-        console.log('✅ Asset saved successfully:', {
-          success: response.success,
-          hasJob: !!response.job,
-          jobAssets: response.job?.assets ? Object.keys(response.job.assets) : 'no job data returned',
-          fullResponse: response
-        });
+        console.log('✅ Asset saved successfully:', response);
         
-        if (response.job && onJobDataUpdate) {
-          console.log('🔄 Calling onJobDataUpdate with job data from response');
-          onJobDataUpdate(response.job);
-        } else if (onJobDataUpdate) {
-          console.log('🔄 No job data in response, triggering refetch to get updated asset list');
-          // Asset created successfully but no job data returned - trigger a refetch
-          // We'll pass a special signal to force a refetch
-          onJobDataUpdate({ _forceRefetch: true, job_id: jobData.job_id });
+        // New API shape: { success, message, assets: { assets: [...] } }
+        if (onJobDataUpdate) {
+          if (response.job) {
+            console.log('🔄 Using legacy job object from response to update UI');
+            onJobDataUpdate(response.job);
+          } else if (response.assets?.assets && Array.isArray(response.assets.assets)) {
+            console.log('🔄 Updating UI using assets array from response');
+            const existingAssets = (mergedJobData?.assets || {}) as Record<string, any>;
+            const updatedAssets: Record<string, any> = { ...existingAssets };
+            (response.assets.assets as any[]).forEach((a: any) => {
+              const assetId = a.asset_id || a.id || a.name;
+              if (!assetId) return;
+              updatedAssets[assetId] = {
+                // Prefer server-provided fields, fall back to config we just sent
+                name: a.name ?? config.name,
+                type: a.type ?? config.type,
+                layer: a.layer ?? config.layer,
+                vfx: a.vfx ?? (config as any).vfx,
+                chrome: a.chrome ?? (config as any).chrome,
+                spot: a.spot ?? (config as any).spot,
+                color: a.color ?? (config as any).color,
+                spot_color_pairs: a.spot_color_pairs ?? (config as any).spotColorPairs,
+                wp_inv_layer: a.wp_inv_layer ?? (config as any).wp_inv_layer,
+                oneOfOneWp: a.oneOfOneWp ?? (config as any).oneOfOneWp
+              };
+            });
+            onJobDataUpdate({ job_id: jobData.job_id, assets: updatedAssets });
+          } else {
+            console.log('ℹ️ No assets array or job in response; forcing refetch');
+            onJobDataUpdate({ _forceRefetch: true, job_id: jobData.job_id });
+          }
         }
       } else {
         console.log('❌ Asset creation failed:', {
@@ -627,25 +665,23 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     
     setSavingAsset(true);
     
-    try {
+      try {
       console.log('🗑️ Removing asset:', id);
       const response = await contentPipelineApi.deleteAsset(jobData.job_id, id);
       
-      if (response.success) {
-        console.log('✅ Asset removed successfully:', {
-          success: response.success,
-          hasJob: !!response.job,
-          fullResponse: response
-        });
-        
-        if (response.job && onJobDataUpdate) {
-          console.log('🔄 Calling onJobDataUpdate with job data from delete response');
-          onJobDataUpdate(response.job);
-        } else if (onJobDataUpdate) {
-          console.log('🔄 No job data in delete response, triggering refetch to get updated asset list');
-          // Asset deleted successfully but no job data returned - trigger a refetch
-          onJobDataUpdate({ _forceRefetch: true, job_id: jobData.job_id });
-        }
+        if (response.success) {
+          console.log('✅ Asset removed successfully:', response);
+          if (onJobDataUpdate) {
+            if (response.job) {
+              onJobDataUpdate(response.job);
+            } else {
+              // Locally remove from existing assets map
+              const existingAssets = (mergedJobData?.assets || {}) as Record<string, any>;
+              const updatedAssets: Record<string, any> = { ...existingAssets };
+              delete updatedAssets[id];
+              onJobDataUpdate({ job_id: jobData.job_id, assets: updatedAssets });
+            }
+          }
       } else {
         console.log('❌ Asset deletion failed:', {
           success: response.success,
