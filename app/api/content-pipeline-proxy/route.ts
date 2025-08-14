@@ -767,8 +767,9 @@ async function handleRequest(request: NextRequest, method: string) {
         apiUrl += `/jobs/${id}/rerun`;
         apiMethod = 'POST';
         // Add rerun-specific data to the body
-        // Calculate total PDF files based on grouped filenames (consistent with create_job)
-        const totalPdfFiles = (body.files || []).length * 2;
+        // Use original_files_total_count from request body if available (correctly calculated from frontend)
+        // This handles _FR/_BK files properly (some files may only have _FR or only _BK)
+        const totalPdfFiles = body.original_files_total_count || (body.files || []).length * 2; // fallback to old logic if not provided
         
         apiBody = {
           ...apiBody,

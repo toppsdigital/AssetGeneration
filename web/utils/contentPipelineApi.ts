@@ -113,6 +113,17 @@ class ContentPipelineAPI {
     // This allows for flexible file counting (pairs, front-only, back-only)
     const totalPdfFiles = jobData.actual_pdf_count || (jobData.files || []).length * 2;
     
+    // Log when using fallback calculation to help debug PDF count issues
+    if (!jobData.actual_pdf_count) {
+      console.warn('⚠️ createJob: Using fallback PDF count calculation (files.length * 2). This may be incorrect for _FR/_BK files.', {
+        filesCount: (jobData.files || []).length,
+        calculatedTotal: totalPdfFiles,
+        files: jobData.files
+      });
+    } else {
+      console.log('✅ createJob: Using provided actual_pdf_count:', totalPdfFiles);
+    }
+    
     const jobPayload = {
       ...jobData,
       job_status: 'uploading',
@@ -381,6 +392,18 @@ class ContentPipelineAPI {
     // Use provided actual_pdf_count if available, otherwise fallback to the old calculation
     // This allows for flexible file counting (pairs, front-only, back-only) - same as createJob
     const totalPdfFiles = jobData.actual_pdf_count || (jobData.files || []).length * 2;
+    
+    // Log when using fallback calculation to help debug PDF count issues
+    if (!jobData.actual_pdf_count) {
+      console.warn('⚠️ rerunJob: Using fallback PDF count calculation (files.length * 2). This may be incorrect for _FR/_BK files.', {
+        jobId,
+        filesCount: (jobData.files || []).length,
+        calculatedTotal: totalPdfFiles,
+        files: jobData.files
+      });
+    } else {
+      console.log('✅ rerunJob: Using provided actual_pdf_count:', totalPdfFiles);
+    }
     
     const jobPayload = {
       ...jobData,
