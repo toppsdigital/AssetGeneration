@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 // For multiple spot/color selections in parallel mode
 interface SpotColorPair {
@@ -284,7 +285,8 @@ export const AssetCreationForm = ({
   // Don't render if modal is not open
   if (!isOpen) return null;
 
-  return (
+  // Use createPortal to render modal at document body level
+  const modalElement = (
     <>
       {/* Modal Backdrop */}
       <div
@@ -292,15 +294,15 @@ export const AssetCreationForm = ({
           position: 'fixed',
           top: 0,
           left: 0,
-          right: 0,
-          bottom: 0,
+          width: '100vw',
+          height: '100vh',
           backgroundColor: 'rgba(0, 0, 0, 0.5)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           zIndex: 9999,
           padding: 20,
-          overflowY: 'auto'
+          overflow: 'auto'
         }}
         onClick={(e) => {
           if (e.target === e.currentTarget) {
@@ -984,13 +986,16 @@ export const AssetCreationForm = ({
               console.log('🔍 Validation check:', { 
                 currentCardType, 
                 actualType,
+                typeToValidate,
                 currentConfigName: currentConfig.name, 
                 currentConfigLayer: currentConfig.layer,
                 currentConfigWpInvLayer: currentConfig.wp_inv_layer,
                 currentConfigVfx: currentConfig.vfx,
                 currentConfigChrome: currentConfig.chrome,
                 spotColorPairs: spotColorPairs,
-                wpInvLayersLength: getWpInvLayers().length
+                validSpotPairs: spotColorPairs.filter(pair => pair.spot && pair.color),
+                wpInvLayersLength: getWpInvLayers().length,
+                hasSuperfractor: currentConfig.chrome === 'superfractor'
               });
 
               if (!currentCardType) {
@@ -1032,8 +1037,13 @@ export const AssetCreationForm = ({
                         validPairs, 
                         validPairsLength: validPairs.length,
                         wpInvLayersLength: getWpInvLayers().length,
-                        currentConfigLayer: currentConfig.layer 
+                        currentConfigLayer: currentConfig.layer,
+                        currentCardType,
+                        actualType 
                       });
+                      
+                      // For front cards that become parallel/multi-parallel, require spot colors
+                      // For original parallel/multi-parallel cards, always require spot colors
                       if (validPairs.length === 0) {
                         validationMessage = 'Select at least one spot layer and color';
                       } else if ((currentConfig.vfx || currentConfig.chrome) && getWpInvLayers().length > 1 && !currentConfig.wp_inv_layer) {
@@ -1129,4 +1139,9 @@ export const AssetCreationForm = ({
       </div>
     </>
   );
+
+  // Render modal at document body level using portal
+  return typeof document !== 'undefined' 
+    ? createPortal(modalElement, document.body)
+    : null;
 };

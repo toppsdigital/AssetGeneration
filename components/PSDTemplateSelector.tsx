@@ -486,16 +486,24 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       // Handle parallel/multi-parallel with multiple spot/color pairs
       if (config.type === 'parallel' || config.type === 'multi-parallel') {
         const validPairs = spotColorPairsFromForm.filter(pair => pair.spot && pair.color);
-        if (validPairs.length === 0) throw new Error('No valid spot/color pairs found');
+        
+        // For parallel types, either need spot/color pairs OR chrome effect (like superfractor)
+        if (validPairs.length === 0 && !config.chrome) {
+          throw new Error('No valid spot/color pairs found');
+        }
         
         assetConfig = {
           ...assetConfig,
-          spot_color_pairs: validPairs.map(pair => ({
-            spot: pair.spot,
-            color: getColorRgbByName(pair.color || '')
-          })),
           vfx: config.vfx
         };
+
+        // Only add spot_color_pairs if there are valid pairs
+        if (validPairs.length > 0) {
+          assetConfig.spot_color_pairs = validPairs.map(pair => ({
+            spot: pair.spot,
+            color: getColorRgbByName(pair.color || '')
+          }));
+        }
 
         // Include wp_inv_layer if VFX or chrome is enabled
         if ((config.vfx || config.chrome) && config.wp_inv_layer) {
