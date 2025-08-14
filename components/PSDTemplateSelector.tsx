@@ -2205,10 +2205,19 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
                         
                         try {
                           // Update chrome for each asset
-                          const updatedAssets = assetsToUpdate.map(asset => ({
-                            ...asset,
-                            chrome: shouldRemoveChrome ? null : 'silver'
-                          }));
+                          const updatedAssets = assetsToUpdate.map(asset => {
+                            if (shouldRemoveChrome) {
+                              // Remove chrome property entirely
+                              const { chrome, ...assetWithoutChrome } = asset;
+                              return assetWithoutChrome;
+                            } else {
+                              // Add silver chrome
+                              return {
+                                ...asset,
+                                chrome: 'silver'
+                              };
+                            }
+                          });
                           
                           console.log(`📦 Bulk updating ${updatedAssets.length} assets:`, updatedAssets);
                           
