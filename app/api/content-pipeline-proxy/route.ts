@@ -1064,7 +1064,7 @@ async function handleRequest(request: NextRequest, method: string) {
       });
     }
     
-    // For asset create/update/delete, backend now returns an assets wrapper only; proxy through as-is
+    // For asset create/update/delete and pdf-extract (EDR import), backend returns assets wrapper; proxy through as-is
     return NextResponse.json(responseData, { status: response.status });
     
   } catch (error) {

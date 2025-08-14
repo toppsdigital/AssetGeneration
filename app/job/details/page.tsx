@@ -164,14 +164,20 @@ function JobDetailsPageContent() {
     ...effectiveJobData,
     // When createFiles='true', use files from jobData (set by createNewFiles)
     // When createFiles!='true', use fresh fileData from useJobFiles hook
-    content_pipeline_files: createFiles === 'true' ? (effectiveJobData.content_pipeline_files || []) : fileData
+    content_pipeline_files: createFiles === 'true' ? (effectiveJobData.content_pipeline_files || []) : fileData,
+    // Ensure assets is always defined, even if empty
+    assets: effectiveJobData.assets || {}
   } : null;
 
   // Debug assets in mergedJobData
   console.log('🔍 mergedJobData assets debug:', {
     hasJobData: !!jobData,
     hasMergedJobData: !!mergedJobData,
+    hasLocalJobData: !!localJobData,
+    hasEffectiveJobData: !!effectiveJobData,
     jobDataAssets: jobData?.assets ? Object.keys(jobData.assets) : 'no assets',
+    localJobDataAssets: localJobData?.assets ? Object.keys(localJobData.assets) : 'no assets',
+    effectiveJobDataAssets: effectiveJobData?.assets ? Object.keys(effectiveJobData.assets) : 'no assets',
     mergedJobDataAssets: mergedJobData?.assets ? Object.keys(mergedJobData.assets) : 'no assets',
     jobDataTimestamp: new Date().toISOString()
   });
@@ -1196,7 +1202,8 @@ function JobDetailsPageContent() {
                   ...updatedJobData, // Overlay new server data (including updated assets)
                   api_files: updatedJobData.files || effectiveJobData?.api_files || [],
                   Subset_name: updatedJobData.source_folder || effectiveJobData?.Subset_name,
-                  // Force a new object reference to trigger React re-render
+                  // Force new object references to trigger React re-render
+                  assets: updatedJobData?.assets ? { ...updatedJobData.assets } : (effectiveJobData?.assets ? { ...effectiveJobData.assets } : {}),
                   _cacheTimestamp: Date.now()
                 };
                 
@@ -1206,7 +1213,10 @@ function JobDetailsPageContent() {
                   jobId: updatedJobData?.job_id,
                   hasAssets: !!mappedJobData.assets,
                   assetsCount: mappedJobData.assets ? Object.keys(mappedJobData.assets).length : 0,
-                  assetIds: mappedJobData.assets ? Object.keys(mappedJobData.assets) : []
+                  assetIds: mappedJobData.assets ? Object.keys(mappedJobData.assets) : [],
+                  updatedJobDataType: typeof updatedJobData?.assets,
+                  updatedJobDataAssets: updatedJobData?.assets,
+                  mappedJobDataAssets: mappedJobData.assets
                 });
                 
                 // Update React Query cache

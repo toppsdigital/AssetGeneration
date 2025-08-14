@@ -35,7 +35,7 @@ interface AssetsTableProps {
   onCreateAssets: () => Promise<void>;
   onJobDataUpdate?: (updatedJobData: any) => void;
   onEDRPdfUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
-  onAddAsset: () => void;
+  onAddAsset?: () => void;
 }
 
 // Hardcoded color mapping for consistent color selection
@@ -205,40 +205,42 @@ export const AssetsTable = ({
           Assets to Generate ({configuredAssets.length})
         </h3>
         <div style={{ display: 'flex', gap: 10 }}>
-          <button
-            onClick={onAddAsset}
-            disabled={savingAsset || creatingAssets || processingPdf}
-            style={{
-              padding: '10px 18px',
-              background: (savingAsset || creatingAssets || processingPdf)
-                ? 'rgba(156, 163, 175, 0.3)'
-                : 'linear-gradient(135deg, #10b981, #059669)',
-              border: 'none',
-              borderRadius: 8,
-              color: 'white',
-              fontSize: 15,
-              fontWeight: 600,
-              cursor: (savingAsset || creatingAssets || processingPdf) ? 'not-allowed' : 'pointer',
-              transition: 'all 0.2s',
-              opacity: (savingAsset || creatingAssets || processingPdf) ? 0.6 : 1,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8
-            }}
-            onMouseOver={(e) => {
-              if (!savingAsset && !creatingAssets && !processingPdf) {
-                e.currentTarget.style.background = 'linear-gradient(135deg, #059669, #047857)';
-              }
-            }}
-            onMouseOut={(e) => {
-              if (!savingAsset && !creatingAssets && !processingPdf) {
-                e.currentTarget.style.background = 'linear-gradient(135deg, #10b981, #059669)';
-              }
-            }}
-          >
-            <span style={{ fontSize: 16 }}>+</span>
-            Add Asset
-          </button>
+          {onAddAsset && (
+            <button
+              onClick={onAddAsset}
+              disabled={savingAsset || creatingAssets || processingPdf}
+              style={{
+                padding: '10px 18px',
+                background: (savingAsset || creatingAssets || processingPdf)
+                  ? 'rgba(156, 163, 175, 0.3)'
+                  : 'linear-gradient(135deg, #10b981, #059669)',
+                border: 'none',
+                borderRadius: 8,
+                color: 'white',
+                fontSize: 15,
+                fontWeight: 600,
+                cursor: (savingAsset || creatingAssets || processingPdf) ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s',
+                opacity: (savingAsset || creatingAssets || processingPdf) ? 0.6 : 1,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8
+              }}
+              onMouseOver={(e) => {
+                if (!savingAsset && !creatingAssets && !processingPdf) {
+                  e.currentTarget.style.background = 'linear-gradient(135deg, #059669, #047857)';
+                }
+              }}
+              onMouseOut={(e) => {
+                if (!savingAsset && !creatingAssets && !processingPdf) {
+                  e.currentTarget.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+                }
+              }}
+            >
+              <span style={{ fontSize: 16 }}>+</span>
+              Add Asset
+            </button>
+          )}
           <button
             onClick={() => document.getElementById('edr-pdf-input')?.click()}
             disabled={savingAsset || creatingAssets || processingPdf}
@@ -693,7 +695,10 @@ export const AssetsTable = ({
             No assets configured yet
           </div>
           <div style={{ color: '#6b7280', fontSize: 13 }}>
-            Click the "Add Asset" button to get started
+            {onAddAsset 
+              ? 'Click the "Add Asset" button to get started'
+              : 'Select a PSD template to create new assets'
+            }
           </div>
         </div>
       )}
