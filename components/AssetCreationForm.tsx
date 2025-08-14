@@ -299,8 +299,8 @@ export const AssetCreationForm = ({
                 const existingNames = getConfiguredAssets().map(asset => asset.name);
                 
                 if (type === 'front') {
-                  // For front type, initialize with one empty pair and allow configuration
-                  setSpotColorPairs([{ spot: '', color: undefined }]);
+                  // For front type, initialize with no spot pairs - user can add with + button
+                  setSpotColorPairs([]);
                   const layersForType = getLayersByType(type);
                   const autoSelectedLayer = layersForType.length === 1 ? layersForType[0] : '';
                   const initialConfig = { 
@@ -364,9 +364,7 @@ export const AssetCreationForm = ({
                 }}>
                   Base Layer & Optional Spot Colors
                 </label>
-                <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>
-                  CMYK only = Base • CMYK + Superfractor = Parallel • CMYK + 1 spot = Parallel • CMYK + 2+ spots = Multi-parallel
-                </div>
+
               </div>
 
               {/* Base Layer Selection for Front */}
@@ -378,7 +376,7 @@ export const AssetCreationForm = ({
                   color: '#f8f8f8',
                   marginBottom: 8
                 }}>
-                  Select Base Layer (CMYK)
+                  Select Base Layer
                   {(() => {
                     const layersForType = getLayersByType(currentCardType);
                     return layersForType.length === 1 ? (
@@ -429,7 +427,7 @@ export const AssetCreationForm = ({
                   fontWeight: 600,
                   color: '#f8f8f8'
                 }}>
-                  Optional Spot Colors
+                  Spot Colors
                 </label>
                 <button
                   onClick={() => {
@@ -464,7 +462,18 @@ export const AssetCreationForm = ({
               
               {/* Multiple Spot/Color Rows */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {spotColorPairs.map((pair, index) => {
+                {spotColorPairs.length === 0 ? (
+                  <div style={{ 
+                    fontSize: 12, 
+                    color: '#9ca3af', 
+                    fontStyle: 'italic',
+                    textAlign: 'center',
+                    padding: '12px 0'
+                  }}>
+                    Click + to add spot colors
+                  </div>
+                ) : (
+                  spotColorPairs.map((pair, index) => {
                   const spotGroup = getColorVariants()[0]; // Always use first spot group
                   return (
                     <div key={index} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
@@ -596,7 +605,8 @@ export const AssetCreationForm = ({
                       </button>
                     </div>
                   );
-                })}
+                  })
+                )}
               </div>
             </div>
           ) : (
@@ -892,7 +902,7 @@ export const AssetCreationForm = ({
                     break;
                   case 'front':
                     if (!currentConfig.layer) {
-                      validationMessage = 'Select base layer (CMYK)';
+                      validationMessage = 'Select base layer';
                     } else if ((currentConfig.vfx || currentConfig.chrome) && getWpInvLayers().length > 1 && !currentConfig.wp_inv_layer) {
                       // Only require wp_inv layer selection if VFX/chrome is enabled and there are multiple layers
                       validationMessage = 'Select wp_inv layer';
