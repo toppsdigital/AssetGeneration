@@ -88,6 +88,14 @@ export const AssetCreationForm = ({
       const cardTypeForUI = editingAsset.type === 'base' || editingAsset.type === 'parallel' || editingAsset.type === 'multi-parallel' 
         ? 'front' 
         : editingAsset.type;
+      
+      console.log('🔄 Setting form data for editing:', {
+        originalType: editingAsset.type,
+        cardTypeForUI,
+        layer: editingAsset.layer,
+        availableLayers: getLayersByType(cardTypeForUI)
+      });
+      
       setCurrentCardType(cardTypeForUI);
       
       // Set the configuration

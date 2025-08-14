@@ -188,171 +188,174 @@ export const AssetsTable = ({
       background: 'rgba(255, 255, 255, 0.05)',
       borderRadius: 12,
       border: '1px solid rgba(255, 255, 255, 0.1)',
-      padding: 20
+      padding: 24
     }}>
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         marginBottom: 16
       }}>
         <h3 style={{
-          fontSize: 18,
+          fontSize: 20,
           fontWeight: 600,
           color: '#f8f8f8',
           margin: 0
         }}>
           Assets to Generate ({configuredAssets.length})
         </h3>
-        <button
-          onClick={onAddAsset}
-          disabled={savingAsset || creatingAssets || processingPdf}
-          style={{
-            padding: '8px 16px',
-            background: (savingAsset || creatingAssets || processingPdf)
-              ? 'rgba(156, 163, 175, 0.3)'
-              : 'linear-gradient(135deg, #10b981, #059669)',
-            border: 'none',
-            borderRadius: 8,
-            color: 'white',
-            fontSize: 14,
-            fontWeight: 600,
-            cursor: (savingAsset || creatingAssets || processingPdf) ? 'not-allowed' : 'pointer',
-            transition: 'all 0.2s',
-            opacity: (savingAsset || creatingAssets || processingPdf) ? 0.6 : 1,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8
-          }}
-          onMouseOver={(e) => {
-            if (!savingAsset && !creatingAssets && !processingPdf) {
-              e.currentTarget.style.background = 'linear-gradient(135deg, #059669, #047857)';
-            }
-          }}
-          onMouseOut={(e) => {
-            if (!savingAsset && !creatingAssets && !processingPdf) {
-              e.currentTarget.style.background = 'linear-gradient(135deg, #10b981, #059669)';
-            }
-          }}
-        >
-          <span style={{ fontSize: 16 }}>+</span>
-          Add Asset
-        </button>
-        <button
-          onClick={() => document.getElementById('edr-pdf-input')?.click()}
-          disabled={savingAsset || creatingAssets || processingPdf}
-          style={{
-            padding: '8px 16px',
-            background: (savingAsset || creatingAssets || processingPdf)
-              ? 'rgba(156, 163, 175, 0.3)'
-              : 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
-            border: 'none',
-            borderRadius: 8,
-            color: 'white',
-            fontSize: 14,
-            fontWeight: 600,
-            cursor: (savingAsset || creatingAssets || processingPdf) ? 'not-allowed' : 'pointer',
-            transition: 'all 0.2s',
-            opacity: (savingAsset || creatingAssets || processingPdf) ? 0.6 : 1,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6
-          }}
-          onMouseEnter={(e) => {
-            if (!savingAsset && !creatingAssets && !processingPdf) {
-              e.currentTarget.style.transform = 'scale(1.02)';
-              e.currentTarget.style.boxShadow = '0 4px 12px rgba(139, 92, 246, 0.3)';
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (!savingAsset && !creatingAssets && !processingPdf) {
-              e.currentTarget.style.transform = 'scale(1)';
-              e.currentTarget.style.boxShadow = 'none';
-            }
-          }}
-        >
-          {processingPdf ? (
-            <>
-              <div style={{
-                width: 14,
-                height: 14,
-                border: '2px solid rgba(255, 255, 255, 0.3)',
-                borderTop: '2px solid white',
-                borderRadius: '50%',
-                animation: 'spin 1s linear infinite'
-              }} />
-              Processing PDF...
-            </>
-          ) : (
-            <>
-              📋 Import from EDR
-            </>
-          )}
-        </button>
-        <input
-          id="edr-pdf-input"
-          type="file"
-          accept=".pdf"
-          style={{ display: 'none' }}
-          disabled={processingPdf}
-          onChange={onEDRPdfUpload}
-        />
-        
-        {/* Upload Progress Indicator */}
-        {processingPdf && uploadProgress > 0 && (
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button
+            onClick={onAddAsset}
+            disabled={savingAsset || creatingAssets || processingPdf}
+            style={{
+              padding: '10px 18px',
+              background: (savingAsset || creatingAssets || processingPdf)
+                ? 'rgba(156, 163, 175, 0.3)'
+                : 'linear-gradient(135deg, #10b981, #059669)',
+              border: 'none',
+              borderRadius: 8,
+              color: 'white',
+              fontSize: 15,
+              fontWeight: 600,
+              cursor: (savingAsset || creatingAssets || processingPdf) ? 'not-allowed' : 'pointer',
+              transition: 'all 0.2s',
+              opacity: (savingAsset || creatingAssets || processingPdf) ? 0.6 : 1,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8
+            }}
+            onMouseOver={(e) => {
+              if (!savingAsset && !creatingAssets && !processingPdf) {
+                e.currentTarget.style.background = 'linear-gradient(135deg, #059669, #047857)';
+              }
+            }}
+            onMouseOut={(e) => {
+              if (!savingAsset && !creatingAssets && !processingPdf) {
+                e.currentTarget.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+              }
+            }}
+          >
+            <span style={{ fontSize: 16 }}>+</span>
+            Add Asset
+          </button>
+          <button
+            onClick={() => document.getElementById('edr-pdf-input')?.click()}
+            disabled={savingAsset || creatingAssets || processingPdf}
+            style={{
+              padding: '10px 18px',
+              background: (savingAsset || creatingAssets || processingPdf)
+                ? 'rgba(156, 163, 175, 0.3)'
+                : 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
+              border: 'none',
+              borderRadius: 8,
+              color: 'white',
+              fontSize: 15,
+              fontWeight: 600,
+              cursor: (savingAsset || creatingAssets || processingPdf) ? 'not-allowed' : 'pointer',
+              transition: 'all 0.2s',
+              opacity: (savingAsset || creatingAssets || processingPdf) ? 0.6 : 1,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6
+            }}
+            onMouseEnter={(e) => {
+              if (!savingAsset && !creatingAssets && !processingPdf) {
+                e.currentTarget.style.transform = 'scale(1.02)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(139, 92, 246, 0.3)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!savingAsset && !creatingAssets && !processingPdf) {
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.boxShadow = 'none';
+              }
+            }}
+          >
+            {processingPdf ? (
+              <>
+                <div style={{
+                  width: 14,
+                  height: 14,
+                  border: '2px solid rgba(255, 255, 255, 0.3)',
+                  borderTop: '2px solid white',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite'
+                }} />
+                Processing PDF...
+              </>
+            ) : (
+              <>
+                📋 Import from EDR
+              </>
+            )}
+          </button>
+          <input
+            id="edr-pdf-input"
+            type="file"
+            accept=".pdf"
+            style={{ display: 'none' }}
+            disabled={processingPdf}
+            onChange={onEDRPdfUpload}
+          />
+        </div>
+      </div>
+
+      {/* Upload Progress Indicator moved below header */}
+      {processingPdf && uploadProgress > 0 && (
+        <div style={{
+          marginTop: 4,
+          marginBottom: 12,
+          fontSize: 13,
+          color: '#9ca3af'
+        }}>
           <div style={{
-            marginTop: 12,
-            fontSize: 12,
-            color: '#9ca3af'
+            background: 'rgba(255, 255, 255, 0.1)',
+            borderRadius: 4,
+            height: 6,
+            marginBottom: 4,
+            overflow: 'hidden'
           }}>
             <div style={{
-              background: 'rgba(255, 255, 255, 0.1)',
-              borderRadius: 4,
-              height: 6,
-              marginBottom: 4,
-              overflow: 'hidden'
-            }}>
-              <div style={{
-                background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)',
-                height: '100%',
-                width: `${uploadProgress}%`,
-                transition: 'width 0.3s ease'
-              }} />
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              {uploadProgress < 10 && 'Getting upload instructions...'}
-              {uploadProgress >= 10 && uploadProgress < 90 && 'Uploading file...'}
-              {uploadProgress >= 90 && uploadProgress < 95 && 'Upload complete...'}
-              {uploadProgress >= 95 && 'Processing PDF...'}
-            </div>
+              background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)',
+              height: '100%',
+              width: `${uploadProgress}%`,
+              transition: 'width 0.3s ease'
+            }} />
           </div>
-        )}
-      </div>
+          <div style={{ textAlign: 'center' }}>
+            {uploadProgress < 10 && 'Getting upload instructions...'}
+            {uploadProgress >= 10 && uploadProgress < 90 && 'Uploading file...'}
+            {uploadProgress >= 90 && uploadProgress < 95 && 'Upload complete...'}
+            {uploadProgress >= 95 && 'Processing PDF...'}
+          </div>
+        </div>
+      )}
       
       {configuredAssets.length > 0 ? (
         <div style={{
           background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(147, 51, 234, 0.05))',
           borderRadius: 12,
           overflow: 'hidden',
-          marginBottom: 20,
+          marginBottom: 24,
           border: '1px solid rgba(255, 255, 255, 0.1)',
           boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
         }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 15, lineHeight: 1.5 }}>
             <thead>
               <tr style={{ 
                 background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05))',
                 borderBottom: '2px solid rgba(255, 255, 255, 0.1)'
               }}>
-                <th style={{ padding: '10px 12px', textAlign: 'left', color: '#f8f8f8', fontSize: 13, fontWeight: 600, letterSpacing: '0.05em', maxWidth: '150px', width: '150px' }}>NAME</th>
-                <th style={{ padding: '10px 12px', textAlign: 'left', color: '#f8f8f8', fontSize: 13, fontWeight: 600, letterSpacing: '0.05em' }}>LAYERS</th>
-                <th style={{ padding: '10px 12px', textAlign: 'left', color: '#f8f8f8', fontSize: 13, fontWeight: 600, letterSpacing: '0.05em' }}>VFX</th>
+                <th style={{ padding: '12px 14px', textAlign: 'left', color: '#f8f8f8', fontSize: 14, fontWeight: 600, letterSpacing: '0.05em', maxWidth: '300px', width: '300px' }}>NAME</th>
+                <th style={{ padding: '12px 14px', textAlign: 'left', color: '#f8f8f8', fontSize: 14, fontWeight: 600, letterSpacing: '0.05em' }}>LAYERS</th>
+                <th style={{ padding: '12px 14px', textAlign: 'left', color: '#f8f8f8', fontSize: 14, fontWeight: 600, letterSpacing: '0.05em' }}>VFX</th>
                 <th 
                   style={{ 
-                    padding: '10px 12px', 
+                    padding: '12px 14px', 
                     textAlign: 'center', 
                     color: '#f8f8f8', 
-                    fontSize: 13, 
+                    fontSize: 14, 
                     fontWeight: 600, 
                     letterSpacing: '0.05em',
                     cursor: 'pointer',
@@ -391,12 +394,12 @@ export const AssetsTable = ({
                   onMouseOut={(e) => e.currentTarget.style.background = index % 2 === 0 ? 'transparent' : 'rgba(255, 255, 255, 0.02)'}
                   >
                     <td style={{ 
-                      padding: '10px 12px', 
+                      padding: '12px 14px', 
                       color: '#f8f8f8', 
-                      fontSize: 13,
+                      fontSize: 14,
                       fontWeight: 500,
-                      maxWidth: '150px',
-                      width: '150px'
+                      maxWidth: '300px',
+                      width: '300px'
                     }}>
                       <div style={{
                         display: 'flex',
@@ -405,7 +408,7 @@ export const AssetsTable = ({
                       }}>
                         <span style={{
                           color: '#f8f8f8',
-                          fontSize: 13,
+                          fontSize: 14,
                           fontWeight: 600,
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
@@ -427,7 +430,7 @@ export const AssetsTable = ({
                                  '#f9a8d4',
                           padding: '2px 6px',
                           borderRadius: 3,
-                          fontSize: 10,
+                          fontSize: 11,
                           fontWeight: 600,
                           letterSpacing: '0.02em',
                           alignSelf: 'flex-start'
@@ -436,14 +439,13 @@ export const AssetsTable = ({
                         </span>
                       </div>
                     </td>
-                    <td style={{ padding: '10px 12px', color: '#e5e7eb', fontSize: 13, textAlign: 'center' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
+                    <td style={{ padding: '12px 14px', color: '#e5e7eb', fontSize: 14, textAlign: 'left' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
                         {/* Show asset layer first */}
                         {asset.layer && (
                           <>
                             <span style={{
-                              fontSize: 12,
-                              fontFamily: 'monospace',
+                              fontSize: 14,
                               color: '#e5e7eb'
                             }}>
                               {asset.layer}
@@ -455,25 +457,24 @@ export const AssetsTable = ({
                         {asset.spotColorPairs && asset.spotColorPairs.length > 0 && (
                           <div>
                             {asset.spotColorPairs.map((pair, idx) => (
-                              <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2, justifyContent: 'center' }}>
+                              <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, justifyContent: 'flex-start' }}>
                                 <span style={{
-                                  fontSize: 12,
-                                  fontFamily: 'monospace',
+                                  fontSize: 14,
                                   color: '#e5e7eb'
                                 }}>
                                   {pair.spot}
                                 </span>
                                 {pair.color && (
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                     <span style={{
-                                      width: 8,
-                                      height: 8,
+                                      width: 10,
+                                      height: 10,
                                       borderRadius: '50%',
                                       background: pair.color?.startsWith('R') ? getColorHexByRgb(pair.color) : getColorHexByName(pair.color || ''),
                                       display: 'inline-block',
                                       border: '1px solid rgba(255, 255, 255, 0.2)'
                                     }} />
-                                    <span style={{ fontSize: 12, color: '#d1d5db' }}>
+                                    <span style={{ fontSize: 14, color: '#d1d5db' }}>
                                       {pair.color?.startsWith('R') ? getColorDisplayNameByRgb(pair.color) : HARDCODED_COLORS.find(c => c.name === pair.color)?.name || pair.color}
                                     </span>
                                   </div>
@@ -486,25 +487,24 @@ export const AssetsTable = ({
                         {/* Legacy single spot/color display */}
                         {asset.spot && (!asset.spotColorPairs || asset.spotColorPairs.length === 0) && (
                           <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-start' }}>
                               <span style={{
-                                fontSize: 12,
-                                fontFamily: 'monospace',
+                                fontSize: 14,
                                 color: '#e5e7eb'
                               }}>
                                 {asset.spot}
                               </span>
                               {asset.color && (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                   <span style={{
-                                    width: 8,
-                                    height: 8,
+                                    width: 10,
+                                    height: 10,
                                     borderRadius: '50%',
                                     background: asset.color?.startsWith('R') ? getColorHexByRgb(asset.color) : getColorHexByName(asset.color || ''),
                                     display: 'inline-block',
                                     border: '1px solid rgba(255, 255, 255, 0.2)'
                                   }} />
-                                  <span style={{ fontSize: 12, color: '#d1d5db' }}>
+                                  <span style={{ fontSize: 14, color: '#d1d5db' }}>
                                     {asset.color?.startsWith('R') ? getColorDisplayNameByRgb(asset.color) : HARDCODED_COLORS.find(c => c.name === asset.color)?.name || asset.color}
                                   </span>
                                 </div>
@@ -519,14 +519,14 @@ export const AssetsTable = ({
                         )}
                       </div>
                     </td>
-                    <td style={{ padding: '10px 12px', color: '#e5e7eb', fontSize: 13 }}>
+                    <td style={{ padding: '12px 14px', color: '#e5e7eb', fontSize: 14 }}>
                       {asset.vfx ? (
                         <span style={{
                           background: 'rgba(147, 51, 234, 0.1)',
                           color: '#c084fc',
                           padding: '2px 6px',
                           borderRadius: 4,
-                          fontSize: 12
+                          fontSize: 14
                         }}>
                           {asset.vfx}
                         </span>
@@ -534,44 +534,67 @@ export const AssetsTable = ({
                         <span style={{ color: '#6b7280' }}>—</span>
                       )}
                     </td>
-                    <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                    <td style={{ padding: '12px 14px', textAlign: 'center', fontSize: 14 }}>
                       {asset.type === 'wp' || asset.type === 'back' || asset.type === 'wp-1of1' || getWpInvLayers().length === 0 ? (
                         <span style={{ color: '#6b7280' }}>—</span>
                       ) : (
-                        <span style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 3,
-                          background: asset.chrome ? 'rgba(34, 197, 94, 0.2)' : 'rgba(156, 163, 175, 0.2)',
-                          color: asset.chrome ? '#86efac' : '#9ca3af',
-                          padding: '3px 8px',
-                          borderRadius: 12,
-                          fontSize: 12,
-                          fontWeight: 600
-                        }}>
-                          <span style={{
-                            width: 5,
-                            height: 5,
-                            borderRadius: '50%',
-                            background: asset.chrome ? '#86efac' : '#6b7280'
-                          }} />
-                          {asset.chrome ? (typeof asset.chrome === 'string' ? asset.chrome.toUpperCase() : 'ON') : 'OFF'}
-                        </span>
+                        (() => {
+                          const isStringChrome = typeof asset.chrome === 'string';
+                          const chromeValue = isStringChrome ? String(asset.chrome).toLowerCase() : '';
+                          const isSuperfractor = chromeValue === 'superfractor';
+                          const isSilver = chromeValue === 'silver';
+                          const pillStyles: React.CSSProperties = {
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            padding: '2px 6px',
+                            borderRadius: 4,
+                            fontSize: 14,
+                            background: !asset.chrome
+                              ? 'rgba(156, 163, 175, 0.2)'
+                              : isSuperfractor
+                                ? 'rgba(251, 191, 36, 0.15)'
+                                : isSilver
+                                  ? 'rgba(229, 231, 235, 0.15)'
+                                  : 'rgba(34, 197, 94, 0.15)',
+                            color: !asset.chrome
+                              ? '#9ca3af'
+                              : isSuperfractor
+                                ? '#fbbf24'
+                                : isSilver
+                                  ? '#d1d5db'
+                                  : '#86efac',
+                            border: '1px solid rgba(255, 255, 255, 0.08)'
+                          };
+                          const dotColor = !asset.chrome
+                            ? '#6b7280'
+                            : isSuperfractor
+                              ? '#f59e0b'
+                              : isSilver
+                                ? '#d1d5db'
+                                : '#86efac';
+                          const label = asset.chrome
+                            ? (isStringChrome ? String(asset.chrome) : 'on')
+                            : 'off';
+                          return (
+                            <span style={pillStyles}>{label}</span>
+                          );
+                        })()
                       )}
                     </td>
-                    <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                      <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                    <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                      <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
                         <button
                           onClick={() => onEditAsset(asset)}
                           disabled={savingAsset}
                           style={{
-                            width: 26,
-                            height: 26,
+                            width: 28,
+                            height: 28,
                             background: savingAsset ? 'rgba(156, 163, 175, 0.1)' : 'rgba(59, 130, 246, 0.1)',
                             border: '1px solid ' + (savingAsset ? 'rgba(156, 163, 175, 0.2)' : 'rgba(59, 130, 246, 0.2)'),
                             borderRadius: 6,
                             color: savingAsset ? '#9ca3af' : '#60a5fa',
-                            fontSize: 14,
+                            fontSize: 15,
                             cursor: savingAsset ? 'not-allowed' : 'pointer',
                             display: 'inline-flex',
                             alignItems: 'center',
@@ -603,13 +626,13 @@ export const AssetsTable = ({
                           onClick={() => onRemoveAsset(asset.id)}
                           disabled={savingAsset}
                           style={{
-                            width: 26,
-                            height: 26,
+                            width: 28,
+                            height: 28,
                             background: savingAsset ? 'rgba(156, 163, 175, 0.1)' : 'rgba(239, 68, 68, 0.1)',
                             border: '1px solid ' + (savingAsset ? 'rgba(156, 163, 175, 0.2)' : 'rgba(239, 68, 68, 0.2)'),
                             borderRadius: 6,
                             color: savingAsset ? '#9ca3af' : '#ef4444',
-                            fontSize: 14,
+                            fontSize: 15,
                             cursor: savingAsset ? 'not-allowed' : 'pointer',
                             display: 'inline-flex',
                             alignItems: 'center',
@@ -677,41 +700,42 @@ export const AssetsTable = ({
 
       {/* Generate All Assets Button */}
       {configuredAssets.length > 0 && (
-        <button
-          onClick={onCreateAssets}
-          disabled={creatingAssets || !canCreateAssets}
-          style={{
-            width: '100%',
-            padding: '16px 32px',
-            background: creatingAssets 
-              ? 'rgba(156, 163, 175, 0.5)' 
-              : 'linear-gradient(135deg, #10b981, #059669)',
-            border: 'none',
-            borderRadius: 12,
-            color: 'white',
-            fontSize: 16,
-            fontWeight: 600,
-            cursor: creatingAssets ? 'not-allowed' : 'pointer',
-            transition: 'all 0.2s',
-            boxShadow: creatingAssets ? 'none' : '0 8px 24px rgba(16, 185, 129, 0.3)'
-          }}
-        >
-          {creatingAssets ? (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-              <div style={{
-                width: 16,
-                height: 16,
-                border: '2px solid rgba(255, 255, 255, 0.3)',
-                borderTop: '2px solid white',
-                borderRadius: '50%',
-                animation: 'spin 1s linear infinite'
-              }} />
-              Creating Assets...
-            </div>
-          ) : (
-            `🎨 Generate All Assets (${configuredAssets.length})`
-          )}
-        </button>
+        <div style={{ textAlign: 'center', marginTop: 16 }}>
+          <button
+            onClick={onCreateAssets}
+            disabled={creatingAssets || !canCreateAssets}
+            style={{
+              padding: '16px 36px',
+              background: creatingAssets 
+                ? 'rgba(156, 163, 175, 0.5)' 
+                : 'linear-gradient(135deg, #10b981, #059669)',
+              border: 'none',
+              borderRadius: 12,
+              color: 'white',
+              fontSize: 18,
+              fontWeight: 600,
+              cursor: creatingAssets ? 'not-allowed' : 'pointer',
+              transition: 'all 0.2s',
+              boxShadow: creatingAssets ? 'none' : '0 8px 24px rgba(16, 185, 129, 0.3)'
+            }}
+          >
+            {creatingAssets ? (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                <div style={{
+                  width: 16,
+                  height: 16,
+                  border: '2px solid rgba(255, 255, 255, 0.3)',
+                  borderTop: '2px solid white',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite'
+                }} />
+                Creating Assets...
+              </div>
+            ) : (
+              `🎨 Generate All Assets (${configuredAssets.length})`
+            )}
+          </button>
+        </div>
       )}
     </div>
   );
