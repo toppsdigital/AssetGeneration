@@ -43,17 +43,21 @@ const HARDCODED_COLORS = [
   { name: 'Aqua', rgb: 'R0G255B255' },
   { name: 'Black', rgb: 'R51G51B51' },
   { name: 'Blue', rgb: 'R0G102B204' },
+  { name: 'Brown', rgb: 'R102G51B51' },
   { name: 'Gold', rgb: 'R204G153B0' },
   { name: 'Green', rgb: 'R0G204B51' },
   { name: 'Magenta', rgb: 'R255G0B204' },
   { name: 'Orange', rgb: 'R255G102B0' },
+  { name: 'Papradischa', rgb: 'R255G102B153' },
+  { name: 'Peach', rgb: 'R255G204B204' },
   { name: 'Pink', rgb: 'R255G102B153' },
   { name: 'Purple', rgb: 'R153G51B255' },
   { name: 'Red', rgb: 'R255G0B0' },
   { name: 'Refractor', rgb: 'R153G153B153' },
   { name: 'Rose Gold', rgb: 'R255G102B102' },
   { name: 'Silver', rgb: 'R153G153B153' },
-  { name: 'White', rgb: 'R255G255B255' },
+  { name: 'Tan', rgb: 'R204G204B153' },
+  { name: 'White', rgb: 'R255G255B204' },
   { name: 'Yellow', rgb: 'R255G255B0' }
 ];
 
@@ -162,12 +166,34 @@ export const AssetsTable = ({
       if (response.success) {
         console.log(`✅ Successfully ${action}d chrome ${shouldRemoveChrome ? 'from' : 'to'} ${assetsToUpdate.length} assets`);
         
-        // Update job data with response
-        if (response.job && onJobDataUpdate) {
-          console.log('🔄 Updating job data from bulk chrome response');
-          onJobDataUpdate(response.job);
+        // Extract updated assets from normalized response - API proxy now ensures consistent format
+        const extractedAssets = response.assets;
+        
+        // Update job data with the extracted assets
+        if (extractedAssets && typeof extractedAssets === 'object' && Object.keys(extractedAssets).length > 0 && onJobDataUpdate) {
+          console.log('🔄 Chrome: Updating job data from normalized bulk response:', {
+            assetsCount: Object.keys(extractedAssets).length,
+            assetIds: Object.keys(extractedAssets),
+            jobId: jobData.job_id,
+            isNormalized: response._normalized,
+            assetsSource: response._assets_source
+          });
+          
+          // Create job data update with the new assets
+          onJobDataUpdate({ 
+            job_id: jobData.job_id, 
+            assets: extractedAssets,
+            _cacheTimestamp: Date.now() // Force UI refresh
+          });
         } else if (onJobDataUpdate) {
-          console.log('🔄 Triggering job data refresh after bulk chrome update');
+          console.log('🔄 Chrome: No valid assets found in normalized response, triggering refetch');
+          console.log('🔄 Chrome: Response structure:', {
+            hasAssets: !!response.assets,
+            assetsType: typeof response.assets,
+            assetsCount: response.assets ? Object.keys(response.assets).length : 0,
+            isNormalized: response._normalized,
+            operation: response._operation
+          });
           onJobDataUpdate({ _forceRefetch: true, job_id: jobData.job_id });
         }
       } else {

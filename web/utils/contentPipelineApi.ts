@@ -668,6 +668,19 @@ class ContentPipelineAPI {
     message: string;
     updated_count?: number;
     job?: JobData;
+    assets?: Record<string, any>;
+    result?: {
+      complete_assets?: {
+        assets?: Record<string, any>;
+        [key: string]: any;
+      };
+      assets_record?: {
+        assets?: Record<string, any>;
+        [key: string]: any;
+      };
+      [key: string]: any;
+    };
+    [key: string]: any;
   }> {
     console.log(`📦 Bulk updating ${assets.length} assets for job: ${jobId}`, assets);
     
