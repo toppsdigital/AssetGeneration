@@ -6,6 +6,8 @@ export { JobStatusBadge } from './JobStatusBadge';
 export { default as PageTitle } from './PageTitle';
 export { default as PsdCanvas } from './PsdCanvas';
 export { PSDTemplateSelector } from './PSDTemplateSelector';
+export { AssetCreationForm } from './AssetCreationForm';
+export { AssetsTable } from './AssetsTable';
 export { default as QueryProvider } from './QueryProvider';
 export { default as RegularImageViewer } from './RegularImageViewer';
 export { default as SignOutButton } from './SignOutButton';
