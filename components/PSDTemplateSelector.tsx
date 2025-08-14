@@ -457,26 +457,26 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     setSpotColorPairs([{ spot: '', color: undefined }]);
   };
 
-  const addAsset = async () => {
-    if (!currentCardType || !jobData?.job_id || savingAsset) return;
+  const addAssetWithConfig = async (config: AssetConfig, spotColorPairsFromForm: SpotColorPair[]) => {
+    if (!jobData?.job_id || savingAsset) return;
     
     setSavingAsset(true);
     
     try {
       // Build asset configuration
       let assetConfig: any = {
-        type: currentCardType
+        type: config.type
       };
       
       // Only include chrome if it has a value
-      if (currentConfig.chrome) {
-        assetConfig.chrome = currentConfig.chrome;
+      if (config.chrome) {
+        assetConfig.chrome = config.chrome;
       }
 
       // Handle parallel/multi-parallel with multiple spot/color pairs
-      if (currentCardType === 'parallel' || currentCardType === 'multi-parallel') {
-        const validPairs = spotColorPairs.filter(pair => pair.spot && pair.color);
-        if (validPairs.length === 0) return;
+      if (config.type === 'parallel' || config.type === 'multi-parallel') {
+        const validPairs = spotColorPairsFromForm.filter(pair => pair.spot && pair.color);
+        if (validPairs.length === 0) throw new Error('No valid spot/color pairs found');
         
         assetConfig = {
           ...assetConfig,
@@ -484,47 +484,47 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
             spot: pair.spot,
             color: getColorRgbByName(pair.color || '')
           })),
-          vfx: currentConfig.vfx
+          vfx: config.vfx
         };
 
         // Include wp_inv_layer if VFX or chrome is enabled
-        if ((currentConfig.vfx || currentConfig.chrome) && currentConfig.wp_inv_layer) {
-          assetConfig.wp_inv_layer = currentConfig.wp_inv_layer;
+        if ((config.vfx || config.chrome) && config.wp_inv_layer) {
+          assetConfig.wp_inv_layer = config.wp_inv_layer;
         }
       } else {
         // Handle other card types
-        if (!currentConfig.layer) return;
+        if (!config.layer) throw new Error('Layer is required');
         
         assetConfig = {
           ...assetConfig,
-          layer: currentConfig.layer,
-          spot: currentConfig.spot,
-          color: currentConfig.color ? getColorRgbByName(currentConfig.color) : undefined,
-          vfx: currentConfig.vfx
+          layer: config.layer,
+          spot: config.spot,
+          color: config.color ? getColorRgbByName(config.color) : undefined,
+          vfx: config.vfx
         };
 
         // Include wp_inv_layer if VFX or chrome is enabled
-        if ((currentConfig.vfx || currentConfig.chrome) && currentConfig.wp_inv_layer) {
-          assetConfig.wp_inv_layer = currentConfig.wp_inv_layer;
+        if ((config.vfx || config.chrome) && config.wp_inv_layer) {
+          assetConfig.wp_inv_layer = config.wp_inv_layer;
         }
       }
 
       // Asset payload with name and configuration - backend will generate ID
       const assetPayload = {
         ...assetConfig,
-        name: currentConfig.name?.trim()
+        name: config.name?.trim()
       };
 
       let response;
-      if (editingAssetId) {
+      if (config.id && config.id !== '') {
         // Update existing asset
-        response = await contentPipelineApi.updateAsset(jobData.job_id, editingAssetId, assetPayload);
+        response = await contentPipelineApi.updateAsset(jobData.job_id, config.id, assetPayload);
       } else {
         // Create new asset - backend will generate ID and store this config
         response = await contentPipelineApi.createAsset(jobData.job_id, assetPayload);
         
         // If creating a new BASE asset with superfractor chrome, also create a wp-1of1 version
-        if (response.success && currentCardType === 'base' && currentConfig.chrome === 'superfractor' && currentConfig.oneOfOneWp) {
+        if (response.success && config.type === 'base' && config.chrome === 'superfractor' && config.oneOfOneWp) {
           console.log('🎯 Creating additional wp-1of1 asset for BASE + superfractor...');
           
           // Get WP layers for the wp-1of1 asset
@@ -533,7 +533,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
             const wp1of1Payload = {
               type: 'wp-1of1',
               layer: wpLayers[0], // Use first available WP layer - no VFX or chrome like regular wp
-              name: `${currentConfig.name?.trim()}_WP_1OF1`
+              name: `${config.name?.trim()}_WP_1OF1`
             };
             
             try {
@@ -571,15 +571,29 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
           hasCallback: !!onJobDataUpdate,
           response: response
         });
+        throw new Error('Asset creation failed');
       }
-      
-      resetCurrentConfig();
     } catch (error) {
       console.error('❌ Error saving asset:', error);
       alert(`Failed to save asset: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw error; // Re-throw so the form knows there was an error
     } finally {
       setSavingAsset(false);
     }
+  };
+
+  // Keep the old addAsset function for backward compatibility with edit functionality
+  const addAsset = async () => {
+    if (!currentCardType || !jobData?.job_id || savingAsset) return;
+    
+    const config = {
+      ...currentConfig,
+      type: currentCardType,
+      id: editingAssetId || ''
+    } as AssetConfig;
+    
+    await addAssetWithConfig(config, spotColorPairs);
+    resetCurrentConfig();
   };
 
   const removeAsset = async (id: string) => {
@@ -1041,13 +1055,9 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                 generateAssetName={generateAssetName}
                 savingAsset={savingAsset}
                 editingAssetId={editingAssetId}
-                onAddAsset={async (config, spotColorPairs) => {
-                  // Store the original spot/color pairs for the add operation
-                  setSpotColorPairs(spotColorPairs);
-                  setCurrentConfig(config);
-                  setCurrentCardType(config.type);
-                  setEditingAssetId(config.id || null);
-                  await addAsset();
+                onAddAsset={async (config, spotColorPairsFromForm) => {
+                  // Call addAsset directly with the config from the form
+                  await addAssetWithConfig(config, spotColorPairsFromForm);
                 }}
                 onResetConfig={resetCurrentConfig}
               />
