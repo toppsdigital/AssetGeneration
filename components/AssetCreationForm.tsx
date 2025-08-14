@@ -351,21 +351,7 @@ export const AssetCreationForm = ({
           {/* Layer Selection - Different layout for front vs others */}
           {currentCardType === 'front' ? (
             <div>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                marginBottom: 8
-              }}>
-                <label style={{
-                  fontSize: 14,
-                  fontWeight: 600,
-                  color: '#f8f8f8'
-                }}>
-                  Base Layer & Optional Spot Colors
-                </label>
 
-              </div>
 
               {/* Base Layer Selection for Front */}
               <div style={{ marginBottom: 12 }}>
@@ -415,65 +401,94 @@ export const AssetCreationForm = ({
                 </select>
               </div>
 
-              {/* Spot Colors Section */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                marginBottom: 8
-              }}>
-                <label style={{
-                  fontSize: 14,
-                  fontWeight: 600,
-                  color: '#f8f8f8'
-                }}>
-                  Spot Colors
-                </label>
-                <button
-                  onClick={() => {
-                    if (spotColorPairs.length < 3) {
-                      setSpotColorPairs(prev => [...prev, { spot: '', color: undefined }]);
-                    }
-                  }}
-                  disabled={spotColorPairs.length >= 3}
-                  style={{
-                    width: 24,
-                    height: 24,
-                    background: spotColorPairs.length >= 3
-                      ? 'rgba(156, 163, 175, 0.3)'
-                      : 'rgba(34, 197, 94, 0.2)',
-                    border: '1px solid ' + (spotColorPairs.length >= 3
-                      ? 'rgba(156, 163, 175, 0.3)'
-                      : 'rgba(34, 197, 94, 0.4)'),
-                    borderRadius: 6,
-                    color: spotColorPairs.length >= 3 ? '#6b7280' : '#86efac',
-                    fontSize: 16,
-                    cursor: spotColorPairs.length >= 3 ? 'not-allowed' : 'pointer',
+              {/* Add Spot Colors Button - Only show if spot layers exist */}
+              {getSpotLayers().length > 0 && spotColorPairs.length === 0 ? (
+                <div style={{ marginBottom: 12 }}>
+                  <button
+                    onClick={() => {
+                      setSpotColorPairs([{ spot: '', color: undefined }]);
+                    }}
+                    style={{
+                      padding: '8px 16px',
+                      background: 'rgba(34, 197, 94, 0.2)',
+                      border: '1px solid rgba(34, 197, 94, 0.4)',
+                      borderRadius: 8,
+                      color: '#86efac',
+                      fontSize: 14,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseOver={(e) => {
+                      e.currentTarget.style.background = 'rgba(34, 197, 94, 0.3)';
+                      e.currentTarget.style.borderColor = 'rgba(34, 197, 94, 0.6)';
+                    }}
+                    onMouseOut={(e) => {
+                      e.currentTarget.style.background = 'rgba(34, 197, 94, 0.2)';
+                      e.currentTarget.style.borderColor = 'rgba(34, 197, 94, 0.4)';
+                    }}
+                  >
+                    <span style={{ fontSize: 16 }}>+</span>
+                    Add Spot Colors
+                  </button>
+                </div>
+              ) : getSpotLayers().length > 0 && spotColorPairs.length > 0 ? (
+                /* Spot Colors Section - Only shown when there are pairs and spot layers exist */
+                <div>
+                  <div style={{
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    transition: 'all 0.2s'
-                    }}
-                    title={spotColorPairs.length >= 3 ? "Maximum 3 spots allowed" : "Add another spot/color pair"}
-                  >
-                    +
-                  </button>
-              </div>
-              
-              {/* Multiple Spot/Color Rows */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {spotColorPairs.length === 0 ? (
-                  <div style={{ 
-                    fontSize: 12, 
-                    color: '#9ca3af', 
-                    fontStyle: 'italic',
-                    textAlign: 'center',
-                    padding: '12px 0'
+                    gap: 8,
+                    marginBottom: 8
                   }}>
-                    Click + to add spot colors
+                    <label style={{
+                      fontSize: 14,
+                      fontWeight: 600,
+                      color: '#f8f8f8'
+                    }}>
+                      Spot Colors
+                    </label>
+                    <button
+                      onClick={() => {
+                        const maxSpots = Math.min(3, getSpotLayers().length);
+                        if (spotColorPairs.length < maxSpots) {
+                          setSpotColorPairs(prev => [...prev, { spot: '', color: undefined }]);
+                        }
+                      }}
+                      disabled={spotColorPairs.length >= Math.min(3, getSpotLayers().length)}
+                      style={{
+                        width: 24,
+                        height: 24,
+                        background: spotColorPairs.length >= Math.min(3, getSpotLayers().length)
+                          ? 'rgba(156, 163, 175, 0.3)'
+                          : 'rgba(34, 197, 94, 0.2)',
+                        border: '1px solid ' + (spotColorPairs.length >= Math.min(3, getSpotLayers().length)
+                          ? 'rgba(156, 163, 175, 0.3)'
+                          : 'rgba(34, 197, 94, 0.4)'),
+                        borderRadius: 6,
+                        color: spotColorPairs.length >= Math.min(3, getSpotLayers().length) ? '#6b7280' : '#86efac',
+                        fontSize: 16,
+                        cursor: spotColorPairs.length >= Math.min(3, getSpotLayers().length) ? 'not-allowed' : 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transition: 'all 0.2s'
+                      }}
+                      title={
+                        spotColorPairs.length >= Math.min(3, getSpotLayers().length) 
+                          ? `Maximum ${Math.min(3, getSpotLayers().length)} spots allowed` 
+                          : "Add another spot/color pair"
+                      }
+                    >
+                      +
+                    </button>
                   </div>
-                ) : (
-                  spotColorPairs.map((pair, index) => {
+                  
+                  {/* Multiple Spot/Color Rows */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {spotColorPairs.map((pair, index) => {
                   const spotGroup = getColorVariants()[0]; // Always use first spot group
                   return (
                     <div key={index} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
@@ -604,10 +619,12 @@ export const AssetCreationForm = ({
                         ×
                       </button>
                     </div>
-                  );
+                    );
                   })
-                )}
-              </div>
+                  }
+                  </div>
+                </div>
+              ) : null}
             </div>
           ) : (
             /* Regular Layer Selection for non-parallel types */
