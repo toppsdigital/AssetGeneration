@@ -389,8 +389,7 @@ class ContentPipelineAPI {
       original_files_total_count: totalPdfFiles,
       original_files_completed_count: 0,
       original_files_failed_count: 0,
-      // Add rerun-specific fields
-      rerun_job_id: jobId,
+      // Rerun flag only (omit rerun_job_id per updated policy)
       operation: 'rerun'
     };
     

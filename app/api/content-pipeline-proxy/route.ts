@@ -691,7 +691,7 @@ async function handleRequest(request: NextRequest, method: string) {
         
         apiBody = {
           ...apiBody,
-          rerun_job_id: id, // Mark this as a rerun of the specified job
+          // Do not include rerun_job_id per updated policy
           operation: 'rerun', // Backend may need this flag
           job_status: 'uploading', // Set initial status same as create_job
           original_files_total_count: totalPdfFiles,
