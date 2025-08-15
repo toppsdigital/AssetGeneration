@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { contentPipelineApi, FileData } from '../web/utils/contentPipelineApi';
 import { UIJobData } from '../web/hooks/useJobData';
 
@@ -234,7 +234,7 @@ export const useFileManager = ({
     }
   }, [jobData, queryClient, jobKeys, setLocalJobData]);
 
-  return {
+  return useMemo(() => ({
     // State
     filesLoaded,
     loadingFiles,
@@ -244,5 +244,5 @@ export const useFileManager = ({
     // Functions
     loadExistingFiles,
     createNewFiles
-  };
+  }), [filesLoaded, loadingFiles, loadExistingFiles, createNewFiles]);
 };
