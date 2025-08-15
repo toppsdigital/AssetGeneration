@@ -120,7 +120,11 @@ function JobPreviewPageContent() {
       };
     }
 
-    console.log(`🎯 [Preview] Found file data for ${fileId}:`, targetFile);
+    console.log(`🎯 [Preview] Found file data for ${fileId}:`, {
+      filename: targetFile.filename,
+      extracted_files: targetFile.extracted_files,
+      firefly_assets: targetFile.firefly_assets
+    });
 
     // Extract assets based on mode
     let assetPaths: string[] = [];
@@ -129,12 +133,40 @@ function JobPreviewPageContent() {
     if (mode === 'extracted-assets') {
       // Get extracted layer assets
       const extractedFiles = targetFile.extracted_files || {};
-      assetPaths = Object.values(extractedFiles).flat().filter(Boolean) as string[];
+      console.log(`📂 [Preview] Extracted files structure:`, extractedFiles);
+      
+      // Extract file paths from asset objects or strings
+      const rawAssets = Object.values(extractedFiles).flat().filter(Boolean);
+      assetPaths = rawAssets.map((asset: any) => {
+        if (typeof asset === 'string') {
+          return asset;
+        } else if (asset && typeof asset === 'object' && asset.file_path) {
+          return asset.file_path;
+        } else {
+          console.warn(`🚫 [Preview] Invalid extracted asset format:`, asset);
+          return null;
+        }
+      }).filter(Boolean) as string[];
+      
       modeDisplayName = 'Extracted Layers';
     } else if (mode === 'digital-assets') {
       // Get digital collectible assets (Firefly)
       const fireflyAssets = targetFile.firefly_assets || {};
-      assetPaths = Object.values(fireflyAssets).flat().filter(Boolean) as string[];
+      console.log(`🎨 [Preview] Firefly assets structure:`, fireflyAssets);
+      
+      // Extract file paths from asset objects or strings
+      const rawAssets = Object.values(fireflyAssets).flat().filter(Boolean);
+      assetPaths = rawAssets.map((asset: any) => {
+        if (typeof asset === 'string') {
+          return asset;
+        } else if (asset && typeof asset === 'object' && asset.file_path) {
+          return asset.file_path;
+        } else {
+          console.warn(`🚫 [Preview] Invalid firefly asset format:`, asset);
+          return null;
+        }
+      }).filter(Boolean) as string[];
+      
       modeDisplayName = 'Digital Collectibles';
     } else {
       return {
@@ -145,7 +177,8 @@ function JobPreviewPageContent() {
       };
     }
 
-    console.log(`🖼️ [Preview] Found ${assetPaths.length} ${modeDisplayName.toLowerCase()} for ${fileId}`);
+    console.log(`🖼️ [Preview] Found ${assetPaths.length} ${modeDisplayName.toLowerCase()} for ${fileId}:`, assetPaths);
+    console.log(`🔍 [Preview] Asset paths types:`, assetPaths.map(path => ({ path, type: typeof path })));
 
     if (assetPaths.length === 0) {
       return {
@@ -162,9 +195,16 @@ function JobPreviewPageContent() {
       '.tif', '.tiff', '.svg', '.ico', '.avif', '.heic', '.heif'
     ];
     
-    // Filter to only include image files and create asset items
+    // Filter to only include valid string paths and image files
     const imageAssets = assetPaths
-      .filter((filePath: string) => {
+      .filter((filePath: any): filePath is string => {
+        // First, ensure filePath is a valid string
+        if (typeof filePath !== 'string' || !filePath.trim()) {
+          console.log(`🚫 [Preview] Excluding invalid path:`, filePath, typeof filePath);
+          return false;
+        }
+        
+        // Then check if it's an image file
         const filename = filePath.split('/').pop() || filePath;
         const extension = filename.toLowerCase().substring(filename.lastIndexOf('.'));
         const isImage = imageExtensions.includes(extension);
