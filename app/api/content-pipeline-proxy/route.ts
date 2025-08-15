@@ -548,6 +548,11 @@ async function handleRequest(request: NextRequest, method: string) {
         apiMethod = 'POST';
         break;
         
+      case 'batch_get_jobs':
+        apiUrl += '/jobs/batch/get';
+        apiMethod = 'POST';
+        break;
+        
       case 'update_pdf_status':
         if (!id) {
           return NextResponse.json({ error: 'Group filename is required' }, { status: 400 });
