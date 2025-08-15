@@ -163,7 +163,7 @@ function NewJobPageContent() {
     sourceFolder: string;
     files: string[];
     description?: string;
-    actual_pdf_count?: number;
+    original_files_total_count?: number;
   }) => {
     try {
       let response;
@@ -177,8 +177,8 @@ function NewJobPageContent() {
           source_folder: jobData.sourceFolder,
           files: jobData.files,
           description: jobData.description,
-          // Pass actual PDF count with correct field name for backend
-          ...(jobData.actual_pdf_count ? { original_files_total_count: jobData.actual_pdf_count } : {})
+          // Pass individual PDF files count with correct field name for backend
+          ...(jobData.original_files_total_count ? { original_files_total_count: jobData.original_files_total_count } : {})
         }, cacheClearingCallback);
         console.log('Job re-run successfully via Content Pipeline API:', response.job.job_id);
       } else {
@@ -190,7 +190,7 @@ function NewJobPageContent() {
         files: jobData.files,
         description: jobData.description,
         // Pass actual PDF count with correct field name for backend
-        ...(jobData.actual_pdf_count ? { original_files_total_count: jobData.actual_pdf_count } : {})
+        ...(jobData.original_files_total_count ? { original_files_total_count: jobData.original_files_total_count } : {})
       });
       console.log('Job created successfully via Content Pipeline API:', response.job.job_id);
       }
@@ -251,16 +251,23 @@ function NewJobPageContent() {
         });
         
         filenames = Array.from(fileGroups);
+        // Count individual PDF files with _FR and _BK after deduplication
         actualPdfCount = validFiles.length;
         
         console.log('📊 Rerun File Processing (same as new job):');
         console.log(`  Total files selected: ${formData.selectedFiles.length}`);
         console.log(`  Unique files after deduplication: ${seenFiles.size}`);
         console.log(`  Duplicates skipped: ${formData.selectedFiles.length - seenFiles.size}`);
-        console.log(`  Valid _FR/_BK files: ${validFiles.length}`, validFiles);
+        console.log(`  Valid _FR/_BK individual PDF files: ${validFiles.length}`);
         console.log(`  Invalid files (skipped): ${invalidFiles.length}`, invalidFiles);
-        console.log(`  Grouped file prefixes: ${filenames.length}`, filenames);
-        console.log(`  Actual PDF count (for original_files_total_count): ${actualPdfCount}`);
+        console.log(`  Unique base names for processing: ${filenames.length}`);
+        console.log(`  Original files total count (individual PDFs): ${actualPdfCount}`);
+        
+        // Detailed breakdown for debugging the 218 vs 109 issue
+        console.log('🔍 Detailed valid files breakdown (rerun):');
+        validFiles.forEach((file, index) => {
+          console.log(`    ${index + 1}. ${file}`);
+        });
         
         if (filenames.length === 0) {
           throw new Error('No valid PDF file pairs found. Please ensure files end with _FR.pdf and _BK.pdf');
@@ -309,18 +316,25 @@ function NewJobPageContent() {
           }
         });
         
-        // Create final filenames array and count actual PDF files
+        // Create final filenames array and count individual PDF files
         filenames = Array.from(fileMap.keys());
-        actualPdfCount = validFiles.length; // Count individual PDF files, not pairs
+        actualPdfCount = validFiles.length; // Count individual PDF files with _FR and _BK
         
         console.log('📊 File Processing Summary:');
         console.log(`  Total files selected: ${formData.selectedFiles.length}`);
         console.log(`  Unique files after deduplication: ${seenFiles.size}`);
         console.log(`  Duplicates skipped: ${formData.selectedFiles.length - seenFiles.size}`);
-        console.log(`  Valid _FR/_BK files: ${validFiles.length}`, validFiles);
+        console.log(`  Valid _FR/_BK individual PDF files: ${validFiles.length}`);
         console.log(`  Invalid files (skipped): ${invalidFiles.length}`, invalidFiles);
-        console.log(`  Unique base names: ${filenames.length}`, filenames);
-        console.log(`  Actual PDF count (for original_files_total_count): ${actualPdfCount}`);
+        console.log(`  Unique base names for processing: ${filenames.length}`);
+        console.log(`  Original files total count (individual PDFs): ${actualPdfCount}`);
+        
+        // Show first few files for verification (not full list)
+        console.log('🔍 Sample valid files (first 5):');
+        validFiles.slice(0, 5).forEach((file, index) => {
+          console.log(`    ${index + 1}. ${file}`);
+        });
+        if (validFiles.length > 5) console.log(`    ... and ${validFiles.length - 5} more files`);
         
         // Show file type breakdown
         const pairs: string[] = [];
@@ -333,10 +347,25 @@ function NewJobPageContent() {
           else if (info.bk) backOnly.push(baseName);
         });
         
-        console.log(`  Complete pairs (_FR + _BK): ${pairs.length}`, pairs);
+        console.log(`  Complete pairs (_FR + _BK): ${pairs.length}`);
         console.log(`  Front only (_FR): ${frontOnly.length}`, frontOnly);
         console.log(`  Back only (_BK): ${backOnly.length}`, backOnly);
         console.log(`  📊 Count verification: ${pairs.length * 2 + frontOnly.length + backOnly.length} should equal ${actualPdfCount}`);
+        
+        // Critical debugging: Show the math
+        const expectedCount = pairs.length * 2 + frontOnly.length + backOnly.length;
+        console.log(`🔍 DEBUGGING COUNT MISMATCH:`);
+        console.log(`    Pairs: ${pairs.length} × 2 = ${pairs.length * 2}`);
+        console.log(`    Front only: ${frontOnly.length}`);
+        console.log(`    Back only: ${backOnly.length}`);
+        console.log(`    Expected total: ${expectedCount}`);
+        console.log(`    Actual actualPdfCount: ${actualPdfCount}`);
+        console.log(`    Match: ${expectedCount === actualPdfCount ? '✅' : '❌'}`);
+        
+        if (expectedCount !== actualPdfCount) {
+          console.error(`🚨 COUNT MISMATCH DETECTED! Expected ${expectedCount} but got ${actualPdfCount}`);
+          console.log(`🔍 All valid files:`, validFiles);
+        }
         
         // Ensure we have valid files before proceeding
         if (filenames.length === 0) {
@@ -377,19 +406,19 @@ function NewJobPageContent() {
         sourceFolder: generateFilePath(formData.appName),
         files: filenames,
         description: formData.description,
-        // Pass actual PDF count for accurate total_count calculation (for both new jobs and reruns)
-        actual_pdf_count: actualPdfCount
+        // Pass individual PDF files count for accurate total_count calculation (for both new jobs and reruns)
+        original_files_total_count: actualPdfCount
       };
       
       console.log('🚀 Creating job with payload:', {
         ...jobPayload,
         operation: isRerun ? 'rerun' : 'create',
-        actualPdfCountWillBeMappedTo: 'original_files_total_count',
         stats: {
           totalFilesSelected: totalSelected,
           uniqueFilesAfterDeduplication: uniqueFiles,
           duplicatesSkipped: duplicatesSkipped,
-          validPdfFiles: actualPdfCount
+          originalFilesTotalCount: actualPdfCount,
+          explanation: 'Count of individual PDF files with _FR and _BK'
         }
       });
       

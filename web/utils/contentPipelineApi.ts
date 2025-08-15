@@ -112,33 +112,18 @@ class ContentPipelineAPI {
   private baseUrl = '/api/content-pipeline-proxy';
 
   // Job operations
-  async createJob(jobData: Omit<JobData, 'job_id' | 'created_at' | 'last_updated' | 'priority' | 'metadata' | 'job_status'> & { actual_pdf_count?: number }): Promise<JobResponse> {
-    // Use provided actual_pdf_count if available, otherwise fallback to the old calculation
-    // This allows for flexible file counting (pairs, front-only, back-only)
-    const totalPdfFiles = jobData.actual_pdf_count || (jobData.files || []).length * 2;
-    
-    // Log when using fallback calculation to help debug PDF count issues
-    if (!jobData.actual_pdf_count) {
-      console.warn('⚠️ createJob: Using fallback PDF count calculation (files.length * 2). This may be incorrect for _FR/_BK files.', {
-        filesCount: (jobData.files || []).length,
-        calculatedTotal: totalPdfFiles,
-        files: jobData.files
-      });
-    } else {
-      console.log('✅ createJob: Using provided actual_pdf_count:', totalPdfFiles);
-    }
+  async createJob(jobData: Omit<JobData, 'job_id' | 'created_at' | 'last_updated' | 'priority' | 'metadata' | 'job_status'> & { original_files_total_count?: number }): Promise<JobResponse> {
+    // Use the exact count provided by frontend (already handles deduplication and _FR/_BK counting)
+    console.log('✅ createJob: Using original_files_total_count from frontend:', jobData.original_files_total_count);
     
     const jobPayload = {
       ...jobData,
       job_status: 'uploading',
       files: jobData.files || [],
-      original_files_total_count: totalPdfFiles,
+      original_files_total_count: jobData.original_files_total_count,
       original_files_completed_count: 0,
       original_files_failed_count: 0
     };
-    
-    // Remove the helper field from the payload
-    delete (jobPayload as any).actual_pdf_count;
 
     const response = await fetch(`${this.baseUrl}?operation=create_job`, {
       method: 'POST',
@@ -390,38 +375,22 @@ class ContentPipelineAPI {
   // Re-run a job with new parameters - uses same payload structure as createJob
   async rerunJob(
     jobId: string, 
-    jobData: Omit<JobData, 'job_id' | 'created_at' | 'last_updated' | 'job_status'> & { actual_pdf_count?: number },
+    jobData: Omit<JobData, 'job_id' | 'created_at' | 'last_updated' | 'job_status'> & { original_files_total_count?: number },
     onCacheClear?: CacheClearingCallback
   ): Promise<JobResponse> {
-    // Use provided actual_pdf_count if available, otherwise fallback to the old calculation
-    // This allows for flexible file counting (pairs, front-only, back-only) - same as createJob
-    const totalPdfFiles = jobData.actual_pdf_count || (jobData.files || []).length * 2;
-    
-    // Log when using fallback calculation to help debug PDF count issues
-    if (!jobData.actual_pdf_count) {
-      console.warn('⚠️ rerunJob: Using fallback PDF count calculation (files.length * 2). This may be incorrect for _FR/_BK files.', {
-        jobId,
-        filesCount: (jobData.files || []).length,
-        calculatedTotal: totalPdfFiles,
-        files: jobData.files
-      });
-    } else {
-      console.log('✅ rerunJob: Using provided actual_pdf_count:', totalPdfFiles);
-    }
+    // Use the exact count provided by frontend (already handles deduplication and _FR/_BK counting)
+    console.log('✅ rerunJob: Using original_files_total_count from frontend:', jobData.original_files_total_count);
     
     const jobPayload = {
       ...jobData,
       job_status: 'uploading',
       files: jobData.files || [],
-      original_files_total_count: totalPdfFiles,
+      original_files_total_count: jobData.original_files_total_count,
       original_files_completed_count: 0,
       original_files_failed_count: 0,
       // Rerun flag only (omit rerun_job_id per updated policy)
       operation: 'rerun'
     };
-    
-    // Remove the helper field from the payload
-    delete (jobPayload as any).actual_pdf_count;
 
     const response = await fetch(`${this.baseUrl}?operation=rerun_job&id=${encodeURIComponent(jobId)}`, {
       method: 'POST',
