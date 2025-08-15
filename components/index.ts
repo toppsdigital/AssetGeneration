@@ -21,4 +21,13 @@ export { ConfirmationModal } from './ConfirmationModal';
 // Skeleton components
 export { JobHeaderSkeleton } from './skeletons/JobHeaderSkeleton';
 export { LoadingProgress } from './skeletons/LoadingProgress';
-export { FileCardSkeleton } from './skeletons/FileCardSkeleton'; 
+export { FileCardSkeleton } from './skeletons/FileCardSkeleton';
+
+// Job Details components
+export { 
+  JobDetailsLoadingState,
+  JobDetailsErrorState,
+  UploadWarningBanner,
+  AssetCreationOverlay,
+  JobDetailsContent
+} from './JobDetails'; 

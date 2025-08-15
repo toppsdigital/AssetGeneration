@@ -1,6 +1,10 @@
 // Upload management hooks
 export { useFileUpload } from './useFileUpload';
 export { useUploadEngine } from './useUploadEngine';
+export { useJobDetailsData } from './useJobDetailsData';
+export { useFileManager } from './useFileManager';
+export { usePSDTemplateManager } from './usePSDTemplateManager';
+export { useLoadingStateManager } from './useLoadingStateManager';
 
 // Job data hooks (from web/hooks)
 export { 
