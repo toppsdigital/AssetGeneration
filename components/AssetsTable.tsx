@@ -178,27 +178,27 @@ export const AssetsTable = ({
       
       // Create updated versions of the assets we're changing
       const chromeUpdatedAssets = assetsToUpdate.map(asset => {
+        // Start with exact copy of asset to preserve all existing properties and field names
+        const { oneOfOneWp, ...assetWithoutUIProps } = asset; // Remove only UI-specific properties
+        const updatedAsset = { ...assetWithoutUIProps };
+        
         if (shouldRemoveChrome) {
-          // Start with clean asset (no chrome, no oneOfOneWp)
-          const cleanAsset = createCleanAsset(asset);
-          delete cleanAsset.chrome; // Remove chrome entirely
+          // Remove chrome entirely
+          delete updatedAsset.chrome;
           
-          // Only include wp_inv_layer if VFX needs it
-          if (asset.vfx) {
+          // Only remove wp_inv_layer if asset doesn't have VFX (since VFX also needs it)
+          if (!asset.vfx) {
+            delete updatedAsset.wp_inv_layer;
+          } else {
+            // Keep existing wp_inv_layer for VFX, or set it if missing
             const wpInvLayers = getWpInvLayers();
             const firstWpInvLayer = wpInvLayers.length > 0 ? wpInvLayers[0] : asset.wp_inv_layer;
             if (firstWpInvLayer) {
-              cleanAsset.wp_inv_layer = firstWpInvLayer;
+              updatedAsset.wp_inv_layer = firstWpInvLayer;
             }
-          } else {
-            // If no VFX, remove wp_inv_layer too
-            delete cleanAsset.wp_inv_layer;
           }
-          
-          return cleanAsset;
         } else {
-          // Start with clean asset and add chrome
-          const cleanAsset = createCleanAsset(asset);
+          // Add chrome and wp_inv_layer, preserve everything else exactly as is
           const wpInvLayers = getWpInvLayers();
           const firstWpInvLayer = wpInvLayers.length > 0 ? wpInvLayers[0] : undefined;
           
@@ -206,13 +206,13 @@ export const AssetsTable = ({
             console.warn(`⚠️ No wp_inv_layer available for asset ${asset.name}, chrome may not work properly`);
           }
           
-          cleanAsset.chrome = 'silver';
+          updatedAsset.chrome = 'silver';
           if (firstWpInvLayer) {
-            cleanAsset.wp_inv_layer = firstWpInvLayer;
+            updatedAsset.wp_inv_layer = firstWpInvLayer;
           }
-          
-          return cleanAsset;
         }
+        
+        return updatedAsset;
       });
       
       // Combine unchanged + updated assets for complete bulk update
