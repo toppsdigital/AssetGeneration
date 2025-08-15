@@ -38,7 +38,7 @@ if (typeof document !== 'undefined') {
   document.head.appendChild(style);
 }
 
-// UIJobData interface is now imported from useJobData hook
+// UIJobData interface is now imported from shared types
 
 // Skeleton components are now imported from components/
 

@@ -100,6 +100,7 @@ export type MutationType =
   | 'updateJob' 
   | 'deleteJob'
   | 'createFiles'
+  | 'batchGetFiles'
   | 'updateFile'
   | 'updateFileStatus'
   | 'updatePdfFileStatus'

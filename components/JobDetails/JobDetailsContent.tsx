@@ -5,7 +5,7 @@ import { JobHeader, PSDTemplateSelector, DownloadSection, FilesSection } from '.
 import { UploadWarningBanner } from './UploadWarningBanner';
 import { AssetCreationOverlay } from './AssetCreationOverlay';
 import styles from '../../styles/Edit.module.css';
-import { UIJobData } from '../../web/hooks/useJobData';
+import { UIJobData } from '../../types';
 
 interface JobDetailsContentProps {
   mergedJobData: UIJobData;

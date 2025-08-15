@@ -2,9 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { ConfirmationModal } from './ConfirmationModal';
-import { contentPipelineApi } from '../web/utils/contentPipelineApi';
-import { useQueryClient } from '@tanstack/react-query';
-import { jobKeys } from '../web/hooks/useJobData';
+import { useAppDataStore } from '../hooks/useAppDataStore';
 
 interface DownloadSectionProps {
   jobData: any;
@@ -13,7 +11,11 @@ interface DownloadSectionProps {
 }
 
 export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: DownloadSectionProps) => {
-  const queryClient = useQueryClient();
+  // Use centralized data store for download and regeneration operations
+  const { mutate: downloadMutation } = useAppDataStore('downloadUrl', { 
+    jobId: jobData?.job_id || '', 
+    autoRefresh: false 
+  });
   
   // Check if job object has a valid download URL that hasn't expired
   const hasValidDownloadUrl = () => {
@@ -57,7 +59,10 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
     setRefreshingDownloadUrl(true);
     
     try {
-      const response = await contentPipelineApi.updateDownloadUrl(jobData.job_id);
+      const response = await downloadMutation({
+        type: 'refreshDownloadUrl',
+        jobId: jobData.job_id
+      });
       
       if (response.success && response.download_url && response.download_url_expires) {
         console.log('✅ New download URL generated and saved:', response.download_url);
@@ -94,7 +99,10 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
     
     try {
       // Use updateDownloadUrl which generates AND saves the URL to the job object
-      const response = await contentPipelineApi.updateDownloadUrl(jobData.job_id);
+      const response = await downloadMutation({
+        type: 'refreshDownloadUrl',
+        jobId: jobData.job_id
+      });
       
       if (response.success && response.download_url && response.download_url_expires) {
         console.log('✅ Download URL created and saved to job object:', response.download_url);
@@ -190,8 +198,11 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
     try {
       console.log('🔄 Calling regenerate assets endpoint for job:', jobData.job_id);
       
-      // Call the regenerate API endpoint
-      const response = await contentPipelineApi.regenerateAssets(jobData.job_id);
+      // Call the regenerate API endpoint via centralized data store
+      const response = await downloadMutation({
+        type: 'regenerateAssets',
+        jobId: jobData.job_id
+      });
       
       console.log('✅ Assets regeneration successful:', response);
       
@@ -204,17 +215,9 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
           onJobDataUpdate(response.job);
         }
         
-        // Update React Query cache with the new job data
-        queryClient.setQueryData(jobKeys.detail(jobData.job_id), {
-          job: response.job
-        });
+        // useAppDataStore automatically handles cache updates
+        console.log('✅ useAppDataStore automatically updated caches for regenerated assets');
       }
-      
-      // Also invalidate related caches to ensure consistency
-      queryClient.removeQueries({ queryKey: jobKeys.files(jobData.job_id) });
-      queryClient.removeQueries({ queryKey: jobKeys.all });
-      queryClient.invalidateQueries({ queryKey: jobKeys.files(jobData.job_id) });
-      queryClient.invalidateQueries({ queryKey: jobKeys.all });
       
       setShowRegenerateModal(false);
       

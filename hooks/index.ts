@@ -1,19 +1,9 @@
 // Upload management hooks
 export { useFileUpload } from './useFileUpload';
 export { useUploadEngine } from './useUploadEngine';
-export { useJobDetailsData } from './useJobDetailsData';
 export { useFileManager } from './useFileManager';
 export { usePSDTemplateManager } from './usePSDTemplateManager';
 export { useLoadingStateManager } from './useLoadingStateManager';
-
-// Job data hooks (from web/hooks)
-export { 
-  useJobData, 
-  useJobFiles, 
-  useUpdateJobStatus, 
-  createJobDataFromParams,
-  jobKeys 
-} from '../web/hooks/useJobData';
 
 // NEW: Centralized App Data Store
 export { useAppDataStore, dataStoreKeys } from './useAppDataStore';
@@ -24,9 +14,11 @@ export type {
   SelectorOptions,
   MutationPayload,
   MutationType,
-  UIJobData,
   DataStoreConfig
 } from './useAppDataStore.types';
+
+// Shared types
+export type { UIJobData } from '../types';
 
 // Data store configuration
 export { default as AppDataStoreConfig, ConfigHelpers } from './useAppDataStore.config';
