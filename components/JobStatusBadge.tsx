@@ -2,6 +2,10 @@ interface JobStatusBadgeProps {
   status: string;
   totalPdfFiles?: number;
   uploadedPdfFiles?: number;
+  extractedFilesTotalCount?: number;
+  extractedFilesCompletedCount?: number;
+  fireflyAssetsCompletedCount?: number;
+  fireflyAssetsTotalCount?: number;
   className?: string;
 }
 
@@ -28,7 +32,11 @@ const isStatusActive = (status: string) => {
 export const JobStatusBadge = ({ 
   status, 
   totalPdfFiles = 0, 
-  uploadedPdfFiles = 0, 
+  uploadedPdfFiles = 0,
+  extractedFilesTotalCount = 0,
+  extractedFilesCompletedCount = 0,
+  fireflyAssetsCompletedCount = 0,
+  fireflyAssetsTotalCount = 0,
   className = '' 
 }: JobStatusBadgeProps) => {
   return (
@@ -72,6 +80,28 @@ export const JobStatusBadge = ({
             opacity: 0.9
           }}>
             ({uploadedPdfFiles}/{totalPdfFiles} files)
+          </span>
+        )}
+        {/* Show extraction progress when status is extracting */}
+        {status?.toLowerCase() === 'extracting' && extractedFilesTotalCount > 0 && (
+          <span style={{ 
+            fontSize: 12, 
+            fontWeight: 500,
+            marginLeft: 4,
+            opacity: 0.9
+          }}>
+            ({extractedFilesCompletedCount}/{extractedFilesTotalCount} files)
+          </span>
+        )}
+        {/* Show generation progress when status is generating */}
+        {status?.toLowerCase() === 'generating' && fireflyAssetsTotalCount > 0 && (
+          <span style={{ 
+            fontSize: 12, 
+            fontWeight: 500,
+            marginLeft: 4,
+            opacity: 0.9
+          }}>
+            ({fireflyAssetsCompletedCount}/{fireflyAssetsTotalCount} assets)
           </span>
         )}
       </span>

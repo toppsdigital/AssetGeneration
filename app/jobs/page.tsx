@@ -644,6 +644,32 @@ export default function JobsPage() {
                           fontWeight: 600
                         }}>
                           {getStatusIcon(job.job_status)} {capitalizeStatus(job.job_status || 'Unknown Status')}
+                          {/* Show extraction progress when status is extracting */}
+                          {job.job_status?.toLowerCase() === 'extracting' && 
+                           job.extracted_files_total_count && 
+                           parseInt(job.extracted_files_total_count) > 0 && (
+                            <span style={{ 
+                              fontSize: 12, 
+                              fontWeight: 500,
+                              marginLeft: 4,
+                              opacity: 0.9
+                            }}>
+                              ({job.extracted_files_completed_count || 0}/{job.extracted_files_total_count} files)
+                            </span>
+                          )}
+                          {/* Show generation progress when status is generating */}
+                          {job.job_status?.toLowerCase() === 'generating' && 
+                           job.firefly_assets_total_count && 
+                           parseInt(job.firefly_assets_total_count) > 0 && (
+                            <span style={{ 
+                              fontSize: 12, 
+                              fontWeight: 500,
+                              marginLeft: 4,
+                              opacity: 0.9
+                            }}>
+                              ({job.firefly_assets_completed_count || 0}/{job.firefly_assets_total_count} assets)
+                            </span>
+                          )}
                         </span>
                         <span style={{ color: '#9ca3af', fontSize: 12 }}>
                           📁 {job.files?.length || 0}

@@ -109,14 +109,19 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
           console.log('🔄 Fetching latest assets for job on selector mount:', mergedJobData.job_id);
           const resp = await contentPipelineApi.getAssets(mergedJobData.job_id);
           console.log('🔍 getAssets response:', resp);
-          // New response shape: { assets: { assets: { id: asset } , ... }, job_id }
-          const serverAssetsMapping = (resp as any)?.assets?.assets;
-          console.log('🔍 Extracted serverAssetsMapping:', serverAssetsMapping);
-          if (serverAssetsMapping && typeof serverAssetsMapping === 'object') {
+          // Normalized response shape: { assets: { id: asset, ... }, job_id }
+          const serverAssetsMapping = (resp as any)?.assets;
+          console.log('🔍 Extracted serverAssetsMapping from normalized response:', serverAssetsMapping);
+          if (serverAssetsMapping && typeof serverAssetsMapping === 'object' && Object.keys(serverAssetsMapping).length > 0) {
             console.log('✅ Calling onJobDataUpdate with assets:', Object.keys(serverAssetsMapping));
             onJobDataUpdate?.({ job_id: mergedJobData.job_id, assets: serverAssetsMapping });
-      } else {
-            console.warn('⚠️ Unexpected assets response shape', resp);
+          } else {
+            console.warn('⚠️ No assets found in normalized response or empty assets object:', {
+              hasAssets: !!resp?.assets,
+              assetsType: typeof resp?.assets,
+              assetsKeys: resp?.assets ? Object.keys(resp.assets) : [],
+              fullResponse: resp
+            });
           }
         } catch (e) {
           console.warn('⚠️ Failed to fetch assets on load:', e);
@@ -610,12 +615,12 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
           if (response.job) {
             console.log('🔄 Using legacy job object from response to update UI');
           onJobDataUpdate(response.job);
-          } else if ((response as any)?.assets?.assets && typeof (response as any).assets.assets === 'object') {
-            console.log('🔄 Replacing UI assets with server-provided assets mapping');
-            const mapping = (response as any).assets.assets as Record<string, any>;
+          } else if ((response as any)?.assets && typeof (response as any).assets === 'object') {
+            console.log('🔄 Replacing UI assets with server-provided normalized assets mapping');
+            const mapping = (response as any).assets as Record<string, any>;
             onJobDataUpdate({ job_id: jobData.job_id, assets: mapping });
           } else {
-            console.log('ℹ️ No assets array or job in response; forcing refetch');
+            console.log('ℹ️ No assets or job in response; forcing refetch');
           onJobDataUpdate({ _forceRefetch: true, job_id: jobData.job_id });
           }
         }
@@ -665,9 +670,9 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
           if (onJobDataUpdate) {
             if ((response as any)?.job) {
               onJobDataUpdate((response as any).job);
-            } else if ((response as any)?.assets?.assets && typeof (response as any).assets.assets === 'object') {
-              // Replace with authoritative mapping from server after deletion
-              const mapping = (response as any).assets.assets as Record<string, any>;
+            } else if ((response as any)?.assets && typeof (response as any).assets === 'object') {
+              // Replace with authoritative normalized mapping from server after deletion
+              const mapping = (response as any).assets as Record<string, any>;
               onJobDataUpdate({ job_id: jobData.job_id, assets: mapping });
       } else {
               // Fallback: remove locally
@@ -882,18 +887,17 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       hasAssets: !!(response as any)?.assets,
       hasAssetsAssets: !!(response as any)?.assets?.assets,
       assetsType: typeof (response as any)?.assets,
-      assetsAssetsType: typeof (response as any)?.assets?.assets,
       assetsKeys: (response as any)?.assets ? Object.keys((response as any).assets) : 'no assets',
-      assetsAssetsKeys: (response as any)?.assets?.assets ? Object.keys((response as any).assets.assets) : 'no assets.assets'
+      isNormalized: (response as any)?._normalized
     });
 
     setUploadProgress(95);
 
-    // Update job data from new response structure similar to asset list
+    // Update job data from normalized response structure
     if (onJobDataUpdate) {
-      if ((response as any)?.assets?.assets && typeof (response as any).assets.assets === 'object') {
-        console.log('🔄 EDR: Using nested assets.assets mapping');
-        const mapping = (response as any).assets.assets as Record<string, any>;
+      if ((response as any)?.assets && typeof (response as any).assets === 'object') {
+        console.log('🔄 EDR: Using normalized assets mapping');
+        const mapping = (response as any).assets as Record<string, any>;
         console.log('🔄 EDR: Assets mapping:', mapping);
         console.log('🔄 EDR: Calling onJobDataUpdate with mapping keys:', Object.keys(mapping));
         onJobDataUpdate({ job_id: jobData?.job_id, assets: mapping });

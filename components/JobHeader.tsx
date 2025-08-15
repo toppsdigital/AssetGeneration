@@ -15,6 +15,10 @@ interface JobHeaderProps {
     job_status?: string;
     created_at?: string;
     content_pipeline_files?: any[];
+    extracted_files_total_count?: string;
+    extracted_files_completed_count?: string;
+    firefly_assets_completed_count?: string;
+    firefly_assets_total_count?: string;
   };
   totalPdfFiles?: number;
   uploadedPdfFiles?: number;
@@ -90,6 +94,10 @@ export const JobHeader = ({
             status={jobData.job_status || 'Unknown'}
             totalPdfFiles={totalPdfFiles}
             uploadedPdfFiles={uploadedPdfFiles}
+            extractedFilesTotalCount={jobData.extracted_files_total_count ? parseInt(jobData.extracted_files_total_count) : 0}
+            extractedFilesCompletedCount={jobData.extracted_files_completed_count ? parseInt(jobData.extracted_files_completed_count) : 0}
+            fireflyAssetsCompletedCount={jobData.firefly_assets_completed_count ? parseInt(jobData.firefly_assets_completed_count) : 0}
+            fireflyAssetsTotalCount={jobData.firefly_assets_total_count ? parseInt(jobData.firefly_assets_total_count) : 0}
           />
           
           {/* Job Title - Horizontally aligned */}
