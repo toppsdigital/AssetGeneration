@@ -177,8 +177,8 @@ function NewJobPageContent() {
           source_folder: jobData.sourceFolder,
           files: jobData.files,
           description: jobData.description,
-          // Pass actual PDF count for consistent payload structure
-          ...(jobData.actual_pdf_count ? { actual_pdf_count: jobData.actual_pdf_count } : {})
+          // Pass actual PDF count with correct field name for backend
+          ...(jobData.actual_pdf_count ? { original_files_total_count: jobData.actual_pdf_count } : {})
         }, cacheClearingCallback);
         console.log('Job re-run successfully via Content Pipeline API:', response.job.job_id);
       } else {
@@ -189,7 +189,8 @@ function NewJobPageContent() {
         source_folder: jobData.sourceFolder,
         files: jobData.files,
         description: jobData.description,
-        ...(jobData.actual_pdf_count ? { actual_pdf_count: jobData.actual_pdf_count } : {})
+        // Pass actual PDF count with correct field name for backend
+        ...(jobData.actual_pdf_count ? { original_files_total_count: jobData.actual_pdf_count } : {})
       });
       console.log('Job created successfully via Content Pipeline API:', response.job.job_id);
       }
@@ -223,13 +224,21 @@ function NewJobPageContent() {
           throw new Error('Please select a folder containing PDF files');
         }
         
-        // Process files exactly like a new job
+        // Process files exactly like a new job WITH deduplication
         const fileGroups = new Set<string>();
         const validFiles: string[] = [];
         const invalidFiles: string[] = [];
+        const seenFiles = new Set<string>(); // Track seen filenames to prevent duplicates
         
         Array.from(formData.selectedFiles).forEach(file => {
           const fileName = file.name;
+          
+          // Skip if we've already processed this exact filename (deduplication)
+          if (seenFiles.has(fileName)) {
+            console.warn(`⚠️ Skipping duplicate file: ${fileName}`);
+            return;
+          }
+          seenFiles.add(fileName);
           
           if (fileName.match(/_(FR|BK)\.pdf$/i)) {
             const baseName = fileName.replace(/_(FR|BK)\.pdf$/i, '');
@@ -245,10 +254,13 @@ function NewJobPageContent() {
         actualPdfCount = validFiles.length;
         
         console.log('📊 Rerun File Processing (same as new job):');
+        console.log(`  Total files selected: ${formData.selectedFiles.length}`);
+        console.log(`  Unique files after deduplication: ${seenFiles.size}`);
+        console.log(`  Duplicates skipped: ${formData.selectedFiles.length - seenFiles.size}`);
         console.log(`  Valid _FR/_BK files: ${validFiles.length}`, validFiles);
         console.log(`  Invalid files (skipped): ${invalidFiles.length}`, invalidFiles);
         console.log(`  Grouped file prefixes: ${filenames.length}`, filenames);
-        console.log(`  Actual PDF count: ${actualPdfCount}`);
+        console.log(`  Actual PDF count (for original_files_total_count): ${actualPdfCount}`);
         
         if (filenames.length === 0) {
           throw new Error('No valid PDF file pairs found. Please ensure files end with _FR.pdf and _BK.pdf');
@@ -260,13 +272,21 @@ function NewJobPageContent() {
         }
 
         // Process files individually (allowing _FR only, _BK only, or both)
-        // Track each individual PDF file for accurate counting
+        // Track each individual PDF file for accurate counting WITH deduplication
         const validFiles: string[] = [];
         const invalidFiles: string[] = [];
         const fileMap = new Map<string, { fr: boolean; bk: boolean }>();
+        const seenFiles = new Set<string>(); // Track seen filenames to prevent duplicates
         
         Array.from(formData.selectedFiles).forEach(file => {
           const fileName = file.name;
+          
+          // Skip if we've already processed this exact filename (deduplication)
+          if (seenFiles.has(fileName)) {
+            console.warn(`⚠️ Skipping duplicate file: ${fileName}`);
+            return;
+          }
+          seenFiles.add(fileName);
           
           // Only process files that match _FR.pdf or _BK.pdf pattern
           if (fileName.match(/_(FR|BK)\.pdf$/i)) {
@@ -295,10 +315,12 @@ function NewJobPageContent() {
         
         console.log('📊 File Processing Summary:');
         console.log(`  Total files selected: ${formData.selectedFiles.length}`);
+        console.log(`  Unique files after deduplication: ${seenFiles.size}`);
+        console.log(`  Duplicates skipped: ${formData.selectedFiles.length - seenFiles.size}`);
         console.log(`  Valid _FR/_BK files: ${validFiles.length}`, validFiles);
         console.log(`  Invalid files (skipped): ${invalidFiles.length}`, invalidFiles);
         console.log(`  Unique base names: ${filenames.length}`, filenames);
-        console.log(`  Actual PDF count (for total_count): ${actualPdfCount}`);
+        console.log(`  Actual PDF count (for original_files_total_count): ${actualPdfCount}`);
         
         // Show file type breakdown
         const pairs: string[] = [];
@@ -314,6 +336,7 @@ function NewJobPageContent() {
         console.log(`  Complete pairs (_FR + _BK): ${pairs.length}`, pairs);
         console.log(`  Front only (_FR): ${frontOnly.length}`, frontOnly);
         console.log(`  Back only (_BK): ${backOnly.length}`, backOnly);
+        console.log(`  📊 Count verification: ${pairs.length * 2 + frontOnly.length + backOnly.length} should equal ${actualPdfCount}`);
         
         // Ensure we have valid files before proceeding
         if (filenames.length === 0) {
@@ -321,8 +344,34 @@ function NewJobPageContent() {
         }
       }
       
-      // Create job using Content Pipeline API
-      const createdJob = await createJob({
+      // Calculate totals for logging (we need to access seenFiles from either path)
+      let totalSelected = formData.selectedFiles!.length;
+      let uniqueFiles = 0;
+      let duplicatesSkipped = 0;
+      
+      if (isRerun) {
+        // Use the seenFiles from rerun processing
+        const rerunSeenFiles = new Set<string>();
+        Array.from(formData.selectedFiles!).forEach(file => {
+          if (!rerunSeenFiles.has(file.name)) {
+            rerunSeenFiles.add(file.name);
+          }
+        });
+        uniqueFiles = rerunSeenFiles.size;
+        duplicatesSkipped = totalSelected - uniqueFiles;
+      } else {
+        // For new jobs, we already have the counts from the processing above
+        uniqueFiles = Array.from(formData.selectedFiles!).reduce((seen, file) => {
+          if (!seen.has(file.name)) {
+            seen.add(file.name);
+          }
+          return seen;
+        }, new Set<string>()).size;
+        duplicatesSkipped = totalSelected - uniqueFiles;
+      }
+      
+      // Prepare job data for API call
+      const jobPayload = {
         appName: formData.appName,
         filenamePrefix: formData.filenamePrefix,
         sourceFolder: generateFilePath(formData.appName),
@@ -330,7 +379,22 @@ function NewJobPageContent() {
         description: formData.description,
         // Pass actual PDF count for accurate total_count calculation (for both new jobs and reruns)
         actual_pdf_count: actualPdfCount
+      };
+      
+      console.log('🚀 Creating job with payload:', {
+        ...jobPayload,
+        operation: isRerun ? 'rerun' : 'create',
+        actualPdfCountWillBeMappedTo: 'original_files_total_count',
+        stats: {
+          totalFilesSelected: totalSelected,
+          uniqueFilesAfterDeduplication: uniqueFiles,
+          duplicatesSkipped: duplicatesSkipped,
+          validPdfFiles: actualPdfCount
+        }
       });
+      
+      // Create job using Content Pipeline API
+      const createdJob = await createJob(jobPayload);
 
       setJobCreated(createdJob);
       console.log(`${isRerun ? 'Job re-run' : 'Job created'} successfully, navigating to job details page...`);
