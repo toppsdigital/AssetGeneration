@@ -10,9 +10,18 @@ import {
   JobHeaderSkeleton, 
   LoadingProgress,
   FileCardSkeleton,
-  FileCard 
+  FileCard,
+  JobDetailsLoadingState,
+  JobDetailsErrorState,
+  JobDetailsContent
 } from '../../../components';
-import { useUploadEngine } from '../../../hooks';
+import { 
+  useUploadEngine, 
+  useJobDetailsData, 
+  useFileManager, 
+  usePSDTemplateManager, 
+  useLoadingStateManager 
+} from '../../../hooks';
 import styles from '../../../styles/Edit.module.css';
 import Spinner from '../../../components/Spinner';
 import { contentPipelineApi, JobData, FileData } from '../../../web/utils/contentPipelineApi';
@@ -40,231 +49,57 @@ function JobDetailsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
-  // Extract query parameters using useSearchParams
-  const jobId = searchParams.get('jobId');
+  // Extract query parameters using useSearchParams  
   const startUpload = searchParams.get('startUpload');
   const createFiles = searchParams.get('createFiles');
   
   // React Query hooks for smart caching
   const queryClient = useQueryClient();
   
-  // Always fetch fresh job data when opening details page
-  useEffect(() => {
-    if (jobId) {
-      const cachedJobData = queryClient.getQueryData<UIJobData>(jobKeys.detail(jobId));
-      const isFromFreshJobCreation = startUpload === 'true' && createFiles === 'true';
-      
-      // Detect navigation source from referrer or session storage
-      const referrer = document.referrer;
-      const isFromJobsList = referrer.includes('/jobs') && !referrer.includes('/job/preview');
-      const isFromPreview = referrer.includes('/job/preview');
-      const sessionNavigationSource = sessionStorage.getItem('navigationSource');
-      
-      console.log('📋 Job details page cache strategy:', {
-        jobId,
-        hasCache: !!cachedJobData,
-        status: cachedJobData?.job_status,
-        isFromFreshJobCreation,
-        isFromJobsList,
-        isFromPreview,
-        referrer,
-        sessionNavigationSource,
-        startUpload,
-        createFiles
-      });
-      
-      // ALWAYS force fresh fetch to ensure we have the latest job data
-      // This is important for getting real-time status updates and progress information
-      const shouldForceFreshFetch = true;
-      const cacheStrategy = 'Always force fresh fetch to get latest job status and progress data';
-      
-      console.log('📋 Cache decision:', { shouldForceFreshFetch, cacheStrategy });
-      
-      if (shouldForceFreshFetch) {
-        console.log('🔄 Forcing cache invalidation for fresh job data:', cacheStrategy);
-        queryClient.removeQueries({ queryKey: jobKeys.detail(jobId) });
-        queryClient.removeQueries({ queryKey: jobKeys.files(jobId) });
-      }
-      
-      // Clear navigation source after using it
-      sessionStorage.removeItem('navigationSource');
-    }
-  }, [jobId, queryClient, startUpload, createFiles]);
+  // Use centralized job details data management
+  const {
+    jobData,
+    effectiveJobData,
+    mergedJobData,
+    fileData,
+    localJobData,
+    isLoading: isLoadingJob,
+    isLoadingFiles,
+    error,
+    refetchJobData,
+    updateJobDataForUpload,
+    setLocalJobData,
+    jobId
+  } = useJobDetailsData({ startUpload, createFiles });
   
-  // Always use React Query caching - let it handle cached data automatically
-  const { 
-    data: jobData, 
-    isLoading: isLoadingJob, 
-    error: jobError,
-    isFetching: isRefetchingJob,
-    refetch: refetchJobData
-  } = useJobData(jobId || null);
-
-  // Local state to force UI updates when cache doesn't trigger re-render
-  const [localJobData, setLocalJobData] = useState(null);
-  
-  // Use local data if available, otherwise use React Query data
-  const effectiveJobData = localJobData || jobData;
-  
-  // Debug logging for cache behavior - simplified without aggressive cross-cache syncing
-  useEffect(() => {
-    console.log('🔍 React Query State:', {
-      jobId,
-      hasJobData: !!jobData,
-      isLoading: isLoadingJob,
-      isFetching: isRefetchingJob,
-      hasError: !!jobError,
-      jobStatus: jobData?.job_status,
-      source: jobData ? 'Cache/Fresh Data' : 'None',
-      timestamp: new Date().toISOString()
-    });
-    
-    // Removed aggressive cross-cache synchronization to prevent excessive refetches
-    // React Query's built-in staleness handling should be sufficient
-  }, [jobId, jobData, isLoadingJob, isRefetchingJob, jobError]);
-
-  // Debug logging for local job data changes (file status updates)
-  useEffect(() => {
-    if (localJobData?.content_pipeline_files) {
-      console.log('🔍 Local Job Data File Status Update:', {
-        jobId: localJobData.job_id,
-        filesCount: localJobData.content_pipeline_files.length,
-        fileStatuses: localJobData.content_pipeline_files.map(file => ({
-          filename: file.filename,
-          originalFileStatuses: file.original_files ? Object.entries(file.original_files).map(([name, info]) => ({
-            name,
-            status: (info as any)?.status
-          })) : []
-        })),
-        timestamp: new Date().toISOString()
-      });
-    }
-  }, [localJobData?.content_pipeline_files]);
-  
-
-  
-  // File data fetching with caching - only when NOT creating files
-  const shouldFetchFiles = createFiles !== 'true';
-  
-  console.log('🔍 useJobFiles parameters:', {
-    createFiles,
-    shouldFetchFiles,
-    jobId: shouldFetchFiles ? (jobData?.job_id || null) : null,
-    apiFilesCount: shouldFetchFiles ? (jobData?.api_files || []).length : 0,
-    enabled: shouldFetchFiles
+  // Initialize other managers with hooks
+  const fileManager = useFileManager({ 
+    jobData, 
+    setLocalJobData, 
+    queryClient, 
+    jobKeys 
   });
   
-  const { 
-    data: fileData = [], 
-    isLoading: isLoadingFiles,
-    error: filesError,
-    refetch: refetchFileData 
-  } = useJobFiles(
-    shouldFetchFiles ? (jobData?.job_id || null) : null, 
-    shouldFetchFiles ? (jobData?.api_files || []) : [],
-    shouldFetchFiles // Disable the hook when createFiles=true
-  );
+  const psdTemplateManager = usePSDTemplateManager(jobData?.job_status);
   
-  // Merge cached job data with fresh file data
-  const mergedJobData = effectiveJobData ? {
-    ...effectiveJobData,
-    // When createFiles='true', use files from jobData (set by createNewFiles)
-    // When createFiles!='true', use fresh fileData from useJobFiles hook
-    content_pipeline_files: createFiles === 'true' ? (effectiveJobData.content_pipeline_files || []) : fileData,
-    // Ensure assets is always defined, even if empty
-    assets: effectiveJobData.assets || {}
-  } : null;
-
-  // Debug assets in mergedJobData
-  console.log('🔍 mergedJobData assets debug:', {
-    hasJobData: !!jobData,
-    hasMergedJobData: !!mergedJobData,
-    hasLocalJobData: !!localJobData,
-    hasEffectiveJobData: !!effectiveJobData,
-    jobDataAssets: jobData?.assets ? Object.keys(jobData.assets) : 'no assets',
-    localJobDataAssets: localJobData?.assets ? Object.keys(localJobData.assets) : 'no assets',
-    effectiveJobDataAssets: effectiveJobData?.assets ? Object.keys(effectiveJobData.assets) : 'no assets',
-    mergedJobDataAssets: mergedJobData?.assets ? Object.keys(mergedJobData.assets) : 'no assets',
-    jobDataTimestamp: new Date().toISOString()
-  });
-
-  // Debug logging for upload data flow
-  console.log('🔍 Upload Data Flow Debug:', {
-    createFiles,
-    hasJobData: !!jobData,
-    hasMergedJobData: !!mergedJobData,
-    jobDataFiles: jobData?.content_pipeline_files?.length || 0,
-    mergedJobDataFiles: mergedJobData?.content_pipeline_files?.length || 0,
-    fileDataLength: fileData.length,
-    timestamp: new Date().toISOString()
-  });
-  
-  // Debug logging for file source
-  console.log('🔍 mergedJobData file source:', {
-    createFiles,
-    usingJobDataFiles: createFiles === 'true',
-    jobDataFilesCount: jobData?.content_pipeline_files?.length || 0,
-    fileDataCount: fileData.length,
-    finalCount: mergedJobData?.content_pipeline_files?.length || 0,
-    jobDataExists: !!jobData,
-    jobDataStructure: jobData ? Object.keys(jobData) : 'no jobData',
-    shouldFetchFiles,
-    jobStatus: jobData?.job_status
+  const loadingStateManager = useLoadingStateManager({
+    isLoadingJob,
+    isLoadingFiles,
+    jobData,
+    fileData,
+    filesLoaded: fileManager.filesLoaded,
+    createFiles
   });
   
   // Status update mutation
   const updateJobStatusMutation = useUpdateJobStatus();
-  const [physicalJsonFiles, setPhysicalJsonFiles] = useState<Array<{name: string; lastModified: string | null; json_url?: string}>>([]);
-  const [loadingPhysicalFiles, setLoadingPhysicalFiles] = useState(false);
-  const [selectedPhysicalFile, setSelectedPhysicalFile] = useState<string>('');
-  const [jsonData, setJsonData] = useState<any>(null);
-  const [loadingJsonData, setLoadingJsonData] = useState(false);
-  const [selectedLayers, setSelectedLayers] = useState<Set<string>>(new Set());
-  const [selectedExtractedLayers, setSelectedExtractedLayers] = useState<Set<string>>(new Set());
   const [creatingAssets, setCreatingAssets] = useState(false);
 
-  // Enhanced loading state management - derived from React Query states
-  const isLoading = isLoadingJob && !jobData; // Only show loading if no cached data
-  const isLoadingData = isLoadingJob || isLoadingFiles;
-  const error = jobError || filesError;
-  
-  // Legacy state variables still needed by existing components
-  const [filesLoaded, setFilesLoaded] = useState(false);
-  const [loadingFiles, setLoadingFiles] = useState(false);
-  
-  // Temporary legacy setters (will be removed after full React Query migration)
-  const [loading, setLoading] = useState(false);
-  const [legacyError, setError] = useState<string | null>(null);
-  const [legacyJobData, setJobData] = useState<UIJobData | null>(null);
-  
-  const [loadingStep, setLoadingStep] = useState(1);
-  const [loadingMessage, setLoadingMessage] = useState('Initializing...');
-  const [loadingDetail, setLoadingDetail] = useState<string | undefined>(undefined);
+  // Enhanced loading state management - derived from hooks
+  const isLoading = loadingStateManager.loading;
   
   // Track if file creation has been triggered to prevent double execution
   const fileCreationTriggeredRef = useRef(false);
-
-  // Create a proper data updater that updates React Query cache with synchronization
-  const updateJobDataForUpload = useCallback((updater: (prev: any) => any) => {
-    // Update both React Query caches using synchronization utility
-    if (jobData?.job_id) {
-      syncJobDataAcrossCaches(queryClient, jobData.job_id, updater);
-      
-      // Skip refetch during uploads - local updates are sufficient
-      // The increment API calls provide real-time progress updates
-      console.log('✅ Updated job data locally (skipping refetch during uploads)');
-    }
-    
-    // CRITICAL: Update the local state that the UI actually uses
-    // effectiveJobData = localJobData || jobData, so we need to update localJobData
-    setLocalJobData(prev => {
-      const baseData = prev || jobData;
-      return baseData ? updater(baseData) : null;
-    });
-    
-    // Also update legacy state for any remaining dependencies
-    setJobData(updater);
-  }, [jobData?.job_id, queryClient, jobData]);
 
   // Upload management with comprehensive upload engine
   const uploadEngine = useUploadEngine({ 
@@ -997,439 +832,97 @@ function JobDetailsPageContent() {
 
   if (loading) {
     return (
-      <div className={styles.pageContainer}>
-        <div className={styles.editContainer}>
-          <main className={styles.mainContent}>
-            <div style={{
-              maxWidth: 1200,
-              width: '100%',
-              background: 'rgba(255, 255, 255, 0.06)',
-              backdropFilter: 'blur(20px)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: 16,
-              padding: 32,
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
-            }}>
-              {/* Job Header Skeleton */}
-              <JobHeaderSkeleton />
-              
-              {/* Loading Progress */}
-              <LoadingProgress
-                step={loadingStep}
-                totalSteps={getTotalLoadingSteps()}
-                message={loadingMessage}
-                detail={loadingDetail}
-              />
-              
-              {/* Files Section Skeleton */}
-              <div style={{ marginTop: 32 }}>
-                <div style={{
-                  width: '200px',
-                  height: 32,
-                  background: 'linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 100%)',
-                  backgroundSize: '200% 100%',
-                  animation: 'shimmer 2s infinite',
-                  borderRadius: 8,
-                  marginBottom: 24
-                }} />
-                
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-                  {[0, 1].map((index) => (
-                    <FileCardSkeleton key={index} index={index} />
-                  ))}
-                </div>
-              </div>
-            </div>
-          </main>
-        </div>
-      </div>
+      <JobDetailsLoadingState
+        loadingStep={loadingStep}
+        totalSteps={getTotalLoadingSteps()}
+        loadingMessage={loadingMessage}
+        loadingDetail={loadingDetail}
+      />
     );
   }
 
   if (error) {
-    return (
-      <div className={styles.pageContainer}>
-        <div className={styles.loading}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>❌</div>
-          <h2>Error Loading Job Details</h2>
-          <p>{error?.message || 'Unknown error occurred'}</p>
-          <button 
-            onClick={() => router.push('/jobs')}
-            style={{
-              marginTop: 16,
-              padding: '8px 16px',
-              background: '#3b82f6',
-              color: 'white',
-              border: 'none',
-              borderRadius: 8,
-              cursor: 'pointer'
-            }}
-          >
-            Back to Jobs
-          </button>
-        </div>
-      </div>
-    );
+    return <JobDetailsErrorState error={error} />;
   }
 
   if (!mergedJobData) {
-    return (
-      <div className={styles.pageContainer}>
-        <div className={styles.loading}>
-          <h2>No Job Data Found</h2>
-          <button 
-            onClick={() => router.push('/jobs')}
-            style={{
-              marginTop: 16,
-              padding: '8px 16px',
-              background: '#3b82f6',
-              color: 'white',
-              border: 'none',
-              borderRadius: 8,
-              cursor: 'pointer'
-            }}
-          >
-            Back to Jobs
-          </button>
-        </div>
-      </div>
-    );
+    return <JobDetailsErrorState error={null} message="No Job Data Found" />;
   }
 
   return (
-    <div className={styles.pageContainer}>
-      
-      {/* Upload Warning Banner */}
-      {uploadsInProgress && (
-        <div style={{
-          position: 'fixed',
-          top: 80, // Below the navbar
-          left: 0,
-          right: 0,
-          background: 'linear-gradient(90deg, rgba(245, 158, 11, 0.98), rgba(217, 119, 6, 0.98))', // Slightly more opaque to compensate
-          color: 'white',
-          padding: '12px 24px',
-          textAlign: 'center',
-          fontSize: 14,
-          fontWeight: 500,
-          zIndex: 100, // Lowered to allow browser dialogs above
-          // Removed backdropFilter to prevent interference with native confirm dialogs
-          border: '1px solid rgba(245, 158, 11, 0.3)',
-          boxShadow: '0 4px 20px rgba(245, 158, 11, 0.2)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-            <span style={{ fontSize: 16 }}>⚠️</span>
-            <span>
-              Upload in progress ({uploadEngine.uploadedPdfFiles}/{uploadEngine.totalPdfFiles} files) - 
-              Please don't close this tab or use the browser back button
-            </span>
-            <div style={{
-              width: 16,
-              height: 16,
-              border: '2px solid rgba(255, 255, 255, 0.3)',
-              borderTop: '2px solid white',
-              borderRadius: '50%',
-              animation: 'spin 1s linear infinite',
-              marginLeft: 8
-            }} />
-          </div>
-        </div>
-      )}
-      
-      <div className={styles.editContainer} style={uploadsInProgress ? { paddingTop: '60px' } : {}}>
-        <main className={styles.mainContent}>
-          <div style={{
-            maxWidth: 1200,
-            width: '100%',
-            background: 'rgba(255, 255, 255, 0.06)',
-            backdropFilter: 'blur(20px)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            borderRadius: 16,
-            padding: 32,
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
-          }}>
-            
-            {/* Job Header - Now uses JobHeader component */}
-            <JobHeader 
-              jobData={mergedJobData}
-              totalPdfFiles={uploadEngine.totalPdfFiles}
-              uploadedPdfFiles={uploadEngine.uploadedPdfFiles}
-              onRerunJob={mergedJobData && !uploadsInProgress ? () => {
-                // Navigate to new job page with pre-filled form data (no files - user will select folder)
-                console.log('🔄 Rerun Job - Pre-filling form with job data:', {
-                  job_id: mergedJobData.job_id,
-                  app_name: mergedJobData.app_name,
-                  filename_prefix: mergedJobData.filename_prefix,
-                  description: mergedJobData.description
-                });
-                
-                const queryParams = new URLSearchParams({
-                  rerun: 'true',
-                  sourceJobId: mergedJobData.job_id || '',
-                  appName: mergedJobData.app_name || '',
-                  filenamePrefix: mergedJobData.filename_prefix || '',
-                  description: mergedJobData.description || ''
-                  // No files parameter - user will select folder like a new job
-                });
-                
-                console.log('🔗 Rerun Navigation URL:', `/new-job?${queryParams.toString()}`);
-                router.push(`/new-job?${queryParams.toString()}`);
-              } : undefined}
-            />
-
-
-
-            {/* PSD Template Selector - Now uses PSDTemplateSelector component */}
-            <PSDTemplateSelector
-              jobData={jobData}
-              mergedJobData={mergedJobData}
-              isVisible={(mergedJobData?.job_status?.toLowerCase() === 'extracted' || mergedJobData?.job_status?.toLowerCase() === 'generation-failed') && !loading && !loadingFiles}
-              creatingAssets={creatingAssets}
-              setCreatingAssets={setCreatingAssets}
-              onJobDataUpdate={(updatedJobData) => {
-                console.log('🎯 onJobDataUpdate called with:', {
-                  hasUpdatedJobData: !!updatedJobData,
-                  isForceRefetch: !!updatedJobData?._forceRefetch,
-                  updatedJobDataAssets: updatedJobData?.assets ? Object.keys(updatedJobData.assets) : 'no assets',
-                  currentJobDataAssets: jobData?.assets ? Object.keys(jobData.assets) : 'no assets'
-                });
-                
-                // Handle force refetch case (when backend doesn't return job data)
-                if (updatedJobData?._forceRefetch) {
-                  console.log('🔄 Force refetch requested - asset created but no job data returned');
-                  refetchJobData().then((result) => {
-                    console.log('✅ Refetched job data after asset creation:', {
-                      hasData: !!result.data,
-                      assets: result.data?.assets ? Object.keys(result.data.assets) : 'no assets'
-                    });
-                    if (result.data) {
-                      setLocalJobData(result.data);
-                    }
-                  });
-                  return;
-                }
-                
-                // Normal case: Update React Query cache with updated job data from asset operations
-                // Map API response to UIJobData format to preserve UI-specific fields
-                const mappedJobData = {
-                  ...effectiveJobData, // Preserve existing UI fields (api_files, content_pipeline_files, etc.)
-                  ...updatedJobData, // Overlay new server data (including updated assets)
-                  api_files: updatedJobData.files || effectiveJobData?.api_files || [],
-                  Subset_name: updatedJobData.source_folder || effectiveJobData?.Subset_name,
-                  // Force new object references to trigger React re-render
-                  assets: updatedJobData?.assets ? { ...updatedJobData.assets } : (effectiveJobData?.assets ? { ...effectiveJobData.assets } : {}),
-                  _cacheTimestamp: Date.now()
-                };
-                
-                console.log('🔄 Updating job data from PSDTemplateSelector:', {
-                  previous: Object.keys(effectiveJobData?.assets || {}),
-                  new: Object.keys(updatedJobData?.assets || {}),
-                  jobId: updatedJobData?.job_id,
-                  hasAssets: !!mappedJobData.assets,
-                  assetsCount: mappedJobData.assets ? Object.keys(mappedJobData.assets).length : 0,
-                  assetIds: mappedJobData.assets ? Object.keys(mappedJobData.assets) : [],
-                  updatedJobDataType: typeof updatedJobData?.assets,
-                  updatedJobDataAssets: updatedJobData?.assets,
-                  mappedJobDataAssets: mappedJobData.assets
-                });
-                
-                // Update React Query cache
-                if (jobData?.job_id) {
-                  syncJobDataAcrossCaches(queryClient, jobData.job_id, () => mappedJobData);
-                }
-                
-                // FORCE UI UPDATE: Update local state to ensure UI reflects new data immediately
-                console.log('🚀 Setting local job data to force UI update');
-                setLocalJobData(mappedJobData);
-              }}
-            />
-
-            {/* Download Section - Shows when job is completed */}
-            <DownloadSection
-              jobData={mergedJobData}
-              isVisible={(['complete', 'completed'].includes(mergedJobData?.job_status?.toLowerCase() || '') ||
-                        (mergedJobData?.download_url && mergedJobData?.download_url_expires)) && 
-                        !loading && !loadingFiles}
-              onJobDataUpdate={(updatedJobData) => {
-                // Update React Query cache with updated job data (e.g., new download URL or regenerated job status)
-                updateJobDataForUpload((prevJobData) => {
-                  console.log('🔄 Updating job data from DownloadSection:', {
-                    previous: prevJobData?.job_status,
-                    new: updatedJobData?.job_status,
-                    jobId: updatedJobData?.job_id
-                  });
-                  
-                  // Map API response to UIJobData format to preserve UI-specific fields
-                  const mappedJobData = {
-                    ...prevJobData, // Preserve existing UI fields (api_files, content_pipeline_files, etc.)
-                    ...updatedJobData, // Overlay new server data (including updated download URLs, job status, etc.)
-                    api_files: updatedJobData.files || prevJobData?.api_files || [],
-                    Subset_name: updatedJobData.source_folder || prevJobData?.Subset_name
-                  };
-                  
-                  return mappedJobData;
-                });
-              }}
-            />
-
-            {/* Files Section - Now uses FilesSection component */}
-            {(() => {
-              console.log('🔍 FilesSection Props Debug:', {
-                mergedJobDataFiles: mergedJobData?.content_pipeline_files?.length || 0,
-                jobDataFiles: jobData?.content_pipeline_files?.length || 0,
-                uploadingFiles: uploadEngine.uploadingFiles?.size || 0,
-                loadingFiles,
-                filesLoaded,
-                loadingStep,
-                loadingMessage,
-                uploadsStarted: uploadEngine.uploadStarted,
-                totalPdfFiles: uploadEngine.totalPdfFiles,
-                uploadedPdfFiles: uploadEngine.uploadedPdfFiles
-              });
-              return null;
-            })()}
-            <FilesSection
-              mergedJobData={mergedJobData}
-              jobData={jobData}
-              uploadingFiles={uploadEngine.uploadingFiles}
-              loadingFiles={loadingFiles}
-              filesLoaded={filesLoaded}
-              loadingStep={loadingStep}
-              loadingMessage={loadingMessage}
-              loadingDetail={loadingDetail}
-            />
-
-          </div>
-        </main>
-      </div>
-
-      {/* Fullscreen Blocking Overlay for Asset Creation */}
-      {creatingAssets && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.85)', // Slightly darker to compensate for removed blur
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000 // Lowered from 9999 to allow browser dialogs to show above
-        }}>
-          <div style={{
-            backgroundColor: '#1f2937',
-            borderRadius: 16,
-            padding: 48,
-            textAlign: 'center',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-            maxWidth: 400,
-            width: '90%'
-          }}>
-            {/* Spinning loader */}
-            <div style={{
-              width: 64,
-              height: 64,
-              border: '4px solid rgba(16, 185, 129, 0.2)',
-              borderTop: '4px solid #10b981',
-              borderRadius: '50%',
-              animation: 'spin 1s linear infinite',
-              margin: '0 auto 24px auto'
-            }} />
-            
-            <h2 style={{
-              color: '#f8f8f8',
-              fontSize: 24,
-              fontWeight: 600,
-              margin: '0 0 12px 0'
-            }}>
-              🎨 Creating Digital Assets
-            </h2>
-            
-            <p style={{
-              color: '#9ca3af',
-              fontSize: 16,
-              margin: '0 0 24px 0',
-              lineHeight: 1.5
-            }}>
-              Processing your selected colors and layers...
-            </p>
-            
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-              color: '#10b981',
-              fontSize: 14
-            }}>
-              <div style={{
-                width: 8,
-                height: 8,
-                backgroundColor: '#10b981',
-                borderRadius: '50%',
-                animation: 'pulse 1.5s ease-in-out infinite'
-              }} />
-              <span>This may take a few moments...</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <style jsx>{`
-        @keyframes pulse {
-          0%, 100% {
-            opacity: 1;
-          }
-          50% {
-            opacity: 0.5;
-          }
+    <JobDetailsContent
+      mergedJobData={mergedJobData}
+      jobData={jobData}
+      uploadEngine={uploadEngine}
+      uploadsInProgress={uploadsInProgress}
+      creatingAssets={creatingAssets}
+      setCreatingAssets={setCreatingAssets}
+      loadingFiles={loadingFiles}
+      filesLoaded={filesLoaded}
+      loadingStep={loadingStep}
+      loadingMessage={loadingMessage}
+      loadingDetail={loadingDetail}
+      loading={loading}
+      onJobDataUpdate={(updatedJobData) => {
+        console.log('🎯 onJobDataUpdate called with:', {
+          hasUpdatedJobData: !!updatedJobData,
+          isForceRefetch: !!updatedJobData?._forceRefetch,
+          updatedJobDataAssets: updatedJobData?.assets ? Object.keys(updatedJobData.assets) : 'no assets',
+          currentJobDataAssets: jobData?.assets ? Object.keys(jobData.assets) : 'no assets'
+        });
+        
+        // Handle force refetch case (when backend doesn't return job data)
+        if (updatedJobData?._forceRefetch) {
+          console.log('🔄 Force refetch requested - asset created but no job data returned');
+          refetchJobData().then((result) => {
+            console.log('✅ Refetched job data after asset creation:', {
+              hasData: !!result.data,
+              assets: result.data?.assets ? Object.keys(result.data.assets) : 'no assets'
+            });
+            if (result.data) {
+              setLocalJobData(result.data);
+            }
+          });
+          return;
         }
         
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
+        // Normal case: Update React Query cache with updated job data from asset operations
+        // Map API response to UIJobData format to preserve UI-specific fields
+        const mappedJobData = {
+          ...effectiveJobData, // Preserve existing UI fields (api_files, content_pipeline_files, etc.)
+          ...updatedJobData, // Overlay new server data (including updated assets)
+          api_files: updatedJobData.files || effectiveJobData?.api_files || [],
+          Subset_name: updatedJobData.source_folder || effectiveJobData?.Subset_name,
+          // Force new object references to trigger React re-render
+          assets: updatedJobData?.assets ? { ...updatedJobData.assets } : (effectiveJobData?.assets ? { ...effectiveJobData.assets } : {}),
+          _cacheTimestamp: Date.now()
+        };
+        
+        console.log('🔄 Updating job data from PSDTemplateSelector:', {
+          previous: Object.keys(effectiveJobData?.assets || {}),
+          new: Object.keys(updatedJobData?.assets || {}),
+          jobId: updatedJobData?.job_id,
+          hasAssets: !!mappedJobData.assets,
+          assetsCount: mappedJobData.assets ? Object.keys(mappedJobData.assets).length : 0,
+          assetIds: mappedJobData.assets ? Object.keys(mappedJobData.assets) : [],
+          updatedJobDataType: typeof updatedJobData?.assets,
+          updatedJobDataAssets: updatedJobData?.assets,
+          mappedJobDataAssets: mappedJobData.assets
+        });
+        
+        // Update React Query cache
+        if (jobData?.job_id) {
+          syncJobDataAcrossCaches(queryClient, jobData.job_id, () => mappedJobData);
         }
         
-        @keyframes shimmer {
-          0% { 
-            background-position: -200% 0; 
-          }
-          100% { 
-            background-position: 200% 0; 
-          }
-        }
-        
-        @keyframes fadeIn {
-          0% {
-            opacity: 0;
-            transform: translateY(10px);
-          }
-          100% {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        
-        @keyframes gradient-shift {
-          0% {
-            background-position: 0% 50%;
-          }
-          50% {
-            background-position: 100% 50%;
-          }
-          100% {
-            background-position: 0% 50%;
-          }
-        }
-        
-        .uploading-text {
-          animation: pulse 2s infinite;
-        }
-      `}</style>
-    </div>
+        // FORCE UI UPDATE: Update local state to ensure UI reflects new data immediately
+        console.log('🚀 Setting local job data to force UI update');
+        setLocalJobData(mappedJobData);
+      }}
+      updateJobDataForUpload={updateJobDataForUpload}
+      refetchJobData={refetchJobData}
+      setLocalJobData={setLocalJobData}
+    />
   );
 }
 
