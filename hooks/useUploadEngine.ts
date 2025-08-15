@@ -2,9 +2,9 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { contentPipelineApi, JobData, FileData } from '../web/utils/contentPipelineApi';
+import { JobData, FileData } from '../web/utils/contentPipelineApi';
 import { useQueryClient } from '@tanstack/react-query';
-import { jobKeys, syncJobDataAcrossCaches } from '../web/hooks/useJobData';
+import { useAppDataStore } from './useAppDataStore';
 
 interface UseUploadEngineProps {
   jobData: any;
@@ -39,6 +39,12 @@ export const useUploadEngine = ({
 }: UseUploadEngineProps): UseUploadEngineReturn => {
   const router = useRouter();
   const queryClient = useQueryClient();
+  
+  // Use centralized data store for PDF file status operations
+  const { mutate: fileStatusMutation } = useAppDataStore('jobFiles', { 
+    jobId: jobData?.job_id || '', 
+    autoRefresh: false 
+  });
   
   // Upload state
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
@@ -349,8 +355,15 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
     console.log('🔄 Updating status for', pdfFilename, 'in group', groupFilename, 'to', status);
 
     try {
-      // Update backend first - single source of truth
-      const response = await contentPipelineApi.updatePdfFileStatus(groupFilename, pdfFilename, status);
+      // Update backend first - single source of truth via centralized data store
+      const response = await fileStatusMutation({
+        type: 'updatePdfFileStatus',
+        fileId: groupFilename,
+        data: {
+          pdfFilename,
+          status
+        }
+      });
 
       if (!response?.file?.original_files) {
         throw new Error('Backend response missing file property');
@@ -377,29 +390,8 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
         });
       }
 
-      // Also update React Query cache if available
-      if (jobData.job_id) {
-        const cachedData = queryClient.getQueryData(jobKeys.detail(jobData.job_id));
-        if (cachedData) {
-          queryClient.setQueryData(jobKeys.detail(jobData.job_id), (prev: any) => {
-            if (!prev?.content_pipeline_files) return prev;
-            
-            const updatedFiles = prev.content_pipeline_files.map((file: any) =>
-              file.filename === groupFilename
-                ? {
-                    ...file,
-                    original_files: response.file.original_files,
-                    extracted_files: response.file.extracted_files || file.extracted_files,
-                    firefly_assets: response.file.firefly_assets || file.firefly_assets,
-                    last_updated: new Date().toISOString()
-                  }
-                : file
-            );
-            
-            return { ...prev, content_pipeline_files: updatedFiles };
-          });
-        }
-      }
+      // useAppDataStore automatically handles all cache updates
+      console.log('✅ useAppDataStore automatically updated caches for file status change');
       
       console.log('✅ Backend and local state synced for', groupFilename);
       
@@ -445,8 +437,8 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
       
       // Also sync React Query cache to ensure UI updates
       if (queryClient) {
-        console.log('🔄 Syncing local file status update to React Query cache for job:', jobData.job_id);
-        syncJobDataAcrossCaches(queryClient, jobData.job_id, updater);
+        console.log('✅ useAppDataStore automatically handles cache synchronization for job:', jobData.job_id);
+        // Cache synchronization is now handled automatically by useAppDataStore
       }
     }
   }, [setJobData, jobData?.job_id, queryClient]);
@@ -527,7 +519,13 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
           status: 'uploaded' as const
         }));
         
-        const statusResponse = await contentPipelineApi.batchUpdatePdfFileStatus(groupFilename, pdfUpdates);
+        const statusResponse = await fileStatusMutation({
+          type: 'batchUpdatePdfFileStatus',
+          fileId: groupFilename,
+          data: {
+            pdfUpdates
+          }
+        });
         
         if (statusResponse?.file?.original_files) {
           // Update both local state and React Query cache with backend response
@@ -553,8 +551,8 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
             
             // Also sync React Query cache to ensure UI updates
             if (queryClient) {
-              console.log('🔄 Syncing file status updates to React Query cache for job:', jobData.job_id);
-              syncJobDataAcrossCaches(queryClient, jobData.job_id, updater);
+              console.log('✅ useAppDataStore automatically handles cache synchronization for job:', jobData.job_id);
+              // Cache synchronization is now handled automatically by useAppDataStore
             }
           }
         }
@@ -626,7 +624,13 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
           status: 'upload-failed' as const
         }));
         
-        const statusResponse = await contentPipelineApi.batchUpdatePdfFileStatus(groupFilename, pdfUpdates);
+        const statusResponse = await fileStatusMutation({
+          type: 'batchUpdatePdfFileStatus',
+          fileId: groupFilename,
+          data: {
+            pdfUpdates
+          }
+        });
         
         if (statusResponse?.file?.original_files) {
           // Update local state with backend response

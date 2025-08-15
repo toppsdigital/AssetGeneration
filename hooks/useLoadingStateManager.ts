@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { UIJobData } from '../web/hooks/useJobData';
+import { UIJobData } from '../types';
 
 interface UseLoadingStateManagerProps {
   isLoadingJob: boolean;

@@ -441,6 +441,10 @@ export function useAppDataStore<T = any>(
           if (!payload.data) throw new Error('File data required');
           return await contentPipelineApi.batchCreateFiles(payload.data);
           
+        case 'batchGetFiles':
+          if (!payload.data) throw new Error('File names required');
+          return await contentPipelineApi.batchGetFiles(payload.data);
+          
         case 'updateFile':
           if (!payload.fileId || !payload.data) throw new Error('File ID and data required');
           return await contentPipelineApi.updateFile(payload.fileId, payload.data);
@@ -519,6 +523,7 @@ export function useAppDataStore<T = any>(
           break;
           
         case 'createFiles':
+        case 'batchGetFiles':
         case 'updateFile':
         case 'updatePdfFileStatus':
         case 'batchUpdatePdfFileStatus':

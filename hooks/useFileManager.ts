@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
-import { contentPipelineApi, FileData } from '../web/utils/contentPipelineApi';
-import { UIJobData } from '../web/hooks/useJobData';
+import { FileData } from '../web/utils/contentPipelineApi';
+import { UIJobData } from '../types';
+import { useAppDataStore } from './useAppDataStore';
 
 interface UseFileManagerProps {
   jobData: UIJobData | null;
@@ -18,6 +19,12 @@ export const useFileManager = ({
   const [filesLoaded, setFilesLoaded] = useState(false);
   const [loadingFiles, setLoadingFiles] = useState(false);
 
+  // Use centralized data store for file operations
+  const { mutate: filesMutation } = useAppDataStore('jobFiles', { 
+    jobId: jobData?.job_id || '', 
+    autoRefresh: false 
+  });
+
   // Load existing file objects using batch read
   const loadExistingFiles = useCallback(async () => {
     if (!jobData || !jobData.api_files || jobData.api_files.length === 0) return;
@@ -26,8 +33,11 @@ export const useFileManager = ({
       setLoadingFiles(true);
       console.log('Fetching existing file objects for:', jobData.api_files);
       
-      // Batch read existing files
-      const batchResponse = await contentPipelineApi.batchGetFiles(jobData.api_files);
+      // Batch read existing files via centralized data store
+      const batchResponse = await filesMutation({
+        type: 'batchGetFiles',
+        data: jobData.api_files
+      });
       console.log('Batch read response:', batchResponse);
       
       // Validate response before processing
@@ -162,8 +172,11 @@ export const useFileManager = ({
         original_files: fileObj.original_files
       }));
       
-      // Batch create files
-      const batchResponse = await contentPipelineApi.batchCreateFiles(apiFileData);
+      // Batch create files via centralized data store
+      const batchResponse = await filesMutation({
+        type: 'createFiles',
+        data: apiFileData
+      });
       console.log('Batch create response:', batchResponse);
       
       // Handle the response - some files may already exist

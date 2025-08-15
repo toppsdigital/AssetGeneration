@@ -208,13 +208,14 @@ class ContentPipelineAPI {
   }
 
   async batchGetJobs(jobIds: string[]): Promise<BatchJobsResponse> {
-    const response = await fetch('/api/content-pipeline-proxy', {
+    console.log(`🔄 [ContentPipelineAPI] Batch fetching ${jobIds.length} jobs:`, jobIds);
+    
+    const response = await fetch(`${this.baseUrl}?operation=batch_get_jobs`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        operation: 'batch_get_jobs',
         job_ids: jobIds
       }),
     });
@@ -224,7 +225,10 @@ class ContentPipelineAPI {
       throw new Error(error.error || `Failed to batch get jobs: ${response.status}`);
     }
 
-    return response.json();
+    const result = await response.json();
+    console.log(`✅ [ContentPipelineAPI] Batch fetched ${result.found_count}/${result.total_requested} jobs`);
+    
+    return result;
   }
 
   // File operations
