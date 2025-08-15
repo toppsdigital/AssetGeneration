@@ -113,44 +113,55 @@ export const AssetsTable = ({
   const handleBulkChromeToggle = async () => {
     if (savingAsset || !jobData?.job_id) return;
     
-    // Find all eligible assets (excludes wp, back, wp-1of1, and requires wp_inv layers)
+    // Find all eligible assets (only base, parallel, multi-parallel types, and requires wp_inv layers)
     const eligibleAssets = configuredAssets.filter(asset => 
-      asset.type !== 'wp' && 
-      asset.type !== 'back' && 
-      asset.type !== 'wp-1of1' &&
+      (asset.type === 'base' || asset.type === 'parallel' || asset.type === 'multi-parallel') &&
       getWpInvLayers().length > 0
     );
     
     if (eligibleAssets.length === 0) {
-      console.log('📋 No eligible assets for chrome operations');
+      console.log('📋 No eligible assets for chrome operations (only base, parallel, multi-parallel types)');
       return;
     }
     
     // Check current chrome state - if any have silver chrome, remove it; otherwise add silver
+    // Only consider silver chrome for toggle (ignore superfractor and other chrome values)
     const assetsWithSilverChrome = eligibleAssets.filter(asset => asset.chrome === 'silver');
+    const assetsWithNoChrome = eligibleAssets.filter(asset => !asset.chrome || asset.chrome === '');
     const shouldRemoveChrome = assetsWithSilverChrome.length > 0;
     
     const assetsToUpdate = shouldRemoveChrome 
       ? assetsWithSilverChrome  // Only update assets with silver chrome
-      : eligibleAssets.filter(asset => !asset.chrome); // Only update assets with no chrome
+      : assetsWithNoChrome; // Only update assets with no chrome (don't touch superfractor, etc.)
     
     if (assetsToUpdate.length === 0) {
-      console.log('📋 No assets need chrome update');
+      console.log('📋 No assets need chrome update', {
+        eligibleAssets: eligibleAssets.length,
+        withSilverChrome: assetsWithSilverChrome.length,
+        withNoChrome: assetsWithNoChrome.length,
+        shouldRemove: shouldRemoveChrome
+      });
       return;
     }
     
     const action = shouldRemoveChrome ? 'remove' : 'apply';
-    console.log(`🔧 ${shouldRemoveChrome ? 'Removing' : 'Applying'} chrome ${shouldRemoveChrome ? 'from' : 'to'} ${assetsToUpdate.length} assets`);
+    console.log(`🔧 ${shouldRemoveChrome ? 'Removing silver' : 'Applying silver'} chrome ${shouldRemoveChrome ? 'from' : 'to'} ${assetsToUpdate.length} assets (base/parallel/multi-parallel only)`);
     
     try {
-      // Update chrome for each asset
-      const updatedAssets = assetsToUpdate.map(asset => {
+      // Create a complete assets array: unchanged assets + chrome-updated assets
+      const assetsToUpdateIds = new Set(assetsToUpdate.map(a => a.id));
+      
+      // Start with all assets that are NOT being updated (wp, wp-1of1, superfractor, etc.)
+      const unchangedAssets = configuredAssets.filter(asset => !assetsToUpdateIds.has(asset.id));
+      
+      // Create updated versions of the assets we're changing
+      const chromeUpdatedAssets = assetsToUpdate.map(asset => {
         if (shouldRemoveChrome) {
           // Remove chrome property entirely
           const { chrome, ...assetWithoutChrome } = asset;
           return assetWithoutChrome;
         } else {
-          // Add silver chrome
+          // Add silver chrome only to assets without chrome
           return {
             ...asset,
             chrome: 'silver'
@@ -158,10 +169,16 @@ export const AssetsTable = ({
         }
       });
       
-      console.log(`📦 Bulk updating ${updatedAssets.length} assets:`, updatedAssets);
+      // Combine unchanged + updated assets for complete bulk update
+      const allAssets = [...unchangedAssets, ...chromeUpdatedAssets];
       
-      // Make single bulk update API call
-      const response = await contentPipelineApi.bulkUpdateAssets(jobData.job_id, updatedAssets);
+      console.log(`📦 Bulk updating all ${allAssets.length} assets (${unchangedAssets.length} unchanged + ${chromeUpdatedAssets.length} chrome-updated):`, {
+        unchanged: unchangedAssets.map(a => `${a.name} (${a.type})`),
+        chromeUpdated: chromeUpdatedAssets.map(a => `${a.name} (${a.type})`)
+      });
+      
+      // Make single bulk update API call with ALL assets
+      const response = await contentPipelineApi.bulkUpdateAssets(jobData.job_id, allAssets);
       
       if (response.success) {
         console.log(`✅ Successfully ${action}d chrome ${shouldRemoveChrome ? 'from' : 'to'} ${assetsToUpdate.length} assets`);
@@ -401,7 +418,7 @@ export const AssetsTable = ({
                       e.currentTarget.style.color = '#f8f8f8';
                     }
                   }}
-                  title="Click to toggle chrome on/off for all eligible assets (excludes wp, back, wp-1of1)"
+                  title="Click to toggle silver chrome on/off for base, parallel, and multi-parallel assets only"
                 >
                   CHROME
                 </th>
