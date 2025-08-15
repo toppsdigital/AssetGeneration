@@ -767,16 +767,20 @@ async function handleRequest(request: NextRequest, method: string) {
         apiUrl += `/jobs/${id}/rerun`;
         apiMethod = 'POST';
         // Add rerun-specific data to the body
-        // Use original_files_total_count from request body if available (correctly calculated from frontend)
-        // This handles _FR/_BK files properly (some files may only have _FR or only _BK)
-        const totalPdfFiles = body.original_files_total_count || (body.files || []).length * 2; // fallback to old logic if not provided
+        // Use original_files_total_count from request body (calculated correctly from frontend)
+        // Frontend handles _FR/_BK files properly and deduplication
+        
+        console.log('✅ rerunJob: Using original_files_total_count from frontend:', {
+          original_files_total_count: body.original_files_total_count,
+          files_count: (body.files || []).length
+        });
         
         apiBody = {
           ...apiBody,
           // Do not include rerun_job_id per updated policy
           operation: 'rerun', // Backend may need this flag
           job_status: 'uploading', // Set initial status same as create_job
-          original_files_total_count: totalPdfFiles,
+          original_files_total_count: body.original_files_total_count, // Use frontend calculated value directly
           original_files_completed_count: 0,
           original_files_failed_count: 0
         };
