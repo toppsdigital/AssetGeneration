@@ -18,9 +18,30 @@ interface AssetItem {
 function JobPreviewPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const jobId = searchParams.get('jobId');
-  const fileId = searchParams.get('fileId'); 
-  const mode = searchParams.get('mode'); // 'extracted-assets' or 'digital-assets'
+  
+  // New URL format parameters
+  let jobId = searchParams.get('jobId');
+  let fileId = searchParams.get('fileId'); 
+  let mode = searchParams.get('mode'); // 'extracted-assets' or 'digital-assets'
+  
+  // Legacy URL format parameters (for backward compatibility)
+  const legacyJobPath = searchParams.get('jobPath');
+  const legacyFileName = searchParams.get('fileName');
+  const legacyType = searchParams.get('type');
+  
+  // Handle backward compatibility with old URL format
+  if (!jobId && !fileId && !mode && legacyJobPath && legacyFileName && legacyType) {
+    console.log(`🔄 [Preview] Converting legacy URL format to new format`);
+    jobId = legacyJobPath;
+    fileId = legacyFileName + '.pdf'; // Add extension since legacy format didn't include it
+    mode = legacyType === 'firefly' ? 'digital-assets' : 'extracted-assets';
+    
+    // Redirect to new URL format
+    const newUrl = `/job/preview?jobId=${encodeURIComponent(jobId)}&fileId=${encodeURIComponent(fileId)}&mode=${mode}`;
+    console.log(`🔄 [Preview] Redirecting to new URL format:`, newUrl);
+    router.replace(newUrl);
+    return null; // Don't render while redirecting
+  }
   
   const [expandedImageIndex, setExpandedImageIndex] = useState<number | null>(null);
   
@@ -37,14 +58,33 @@ function JobPreviewPageContent() {
     autoRefresh: false 
   });
 
+  // Debug current URL parameters
+  console.log(`🔍 [Preview] Current URL parameters:`, {
+    jobId,
+    fileId,
+    mode,
+    allParams: Object.fromEntries(searchParams.entries())
+  });
+
   // Find the specific file and extract assets based on mode
   const { fileData, assets, displayName, error } = useMemo(() => {
     if (!jobId || !fileId || !mode) {
+      console.warn(`⚠️ [Preview] Missing required parameters:`, {
+        jobId: jobId || 'MISSING',
+        fileId: fileId || 'MISSING', 
+        mode: mode || 'MISSING',
+        allParams: Object.fromEntries(searchParams.entries())
+      });
+      
       return {
         fileData: null,
         assets: [],
         displayName: '',
-        error: 'Missing required parameters: jobId, fileId, and mode are required'
+        error: `Missing required parameters. Expected: jobId, fileId, and mode. Got: ${JSON.stringify({
+          jobId: jobId || 'missing',
+          fileId: fileId || 'missing',
+          mode: mode || 'missing'
+        })}`
       };
     }
 
@@ -232,27 +272,60 @@ function JobPreviewPageContent() {
         <div className={styles.loading}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>❌</div>
           <h2>Error Loading Assets</h2>
-          <p>{error}</p>
-          {jobId && (
+          <p style={{ marginBottom: 16 }}>{error}</p>
+          
+          {!jobId && !fileId && !mode && (
+            <div style={{ 
+              background: 'rgba(255, 255, 255, 0.05)', 
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              borderRadius: 8,
+              padding: 16,
+              marginBottom: 16,
+              fontSize: 14,
+              color: '#9ca3af'
+            }}>
+              <p><strong>How to access this page:</strong></p>
+              <p>• Navigate from Job Details → File Card → "Preview" button</p>
+              <p>• URL format: <code>/job/preview?jobId=...&fileId=...&mode=...</code></p>
+            </div>
+          )}
+          
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+            {jobId && (
+              <button 
+                onClick={() => {
+                  sessionStorage.setItem('navigationSource', 'preview');
+                  router.push(`/job/details?jobId=${encodeURIComponent(jobId)}`);
+                }}
+                style={{
+                  padding: '8px 16px',
+                  background: '#3b82f6',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer'
+                }}
+              >
+                Back to Job Details
+              </button>
+            )}
+            
             <button 
               onClick={() => {
-                // Set navigation source for cache strategy in job details page
-                sessionStorage.setItem('navigationSource', 'preview');
-                router.push(`/job/details?jobId=${encodeURIComponent(jobId)}`);
+                router.push('/jobs');
               }}
               style={{
-                marginTop: 16,
                 padding: '8px 16px',
-                background: '#3b82f6',
+                background: '#6b7280',
                 color: 'white',
                 border: 'none',
                 borderRadius: 8,
                 cursor: 'pointer'
               }}
             >
-              Back to Job Details
+              Go to Jobs List
             </button>
-          )}
+          </div>
         </div>
       </div>
     );

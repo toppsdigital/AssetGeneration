@@ -350,18 +350,18 @@ const FileCard: React.FC<FileCardProps> = ({
                 {allUploaded ? (
                   <button
                     onClick={() => {
-                      // Collect file paths from ALL extracted files (including _seq) for preview
-                      const filePaths = Object.values(allExtractedFiles).map(extractedFile => 
-                        extractedFile.file_path
-                      ).filter(path => path);
+                      // Navigate to preview with simplified parameters
+                      const jobId = jobData?.job_id || '';
+                      const fileId = file.filename;
+                      const mode = 'extracted-assets';
                       
-                      const baseName = file.filename.replace('.pdf', '').replace('.PDF', '');
-                      // Use jobId since jobPath is not available
-                      const jobPath = jobData?.job_id || '';
+                      console.log(`🔍 [FileCard] Navigating to extracted assets preview:`, {
+                        jobId,
+                        fileId,
+                        mode
+                      });
                       
-                      // Pass the file paths as a query parameter
-                      const filePathsParam = encodeURIComponent(JSON.stringify(filePaths));
-                      router.push(`/job/preview?jobPath=${encodeURIComponent(jobPath)}&fileName=${encodeURIComponent(baseName)}&type=extracted&filePaths=${filePathsParam}`);
+                      router.push(`/job/preview?jobId=${encodeURIComponent(jobId)}&fileId=${encodeURIComponent(fileId)}&mode=${mode}`);
                     }}
                     style={{
                       background: 'rgba(59, 130, 246, 0.2)',
@@ -486,19 +486,18 @@ const FileCard: React.FC<FileCardProps> = ({
                 return allSucceeded ? (
                   <button
                     onClick={() => {
-                      // Use the actual file paths from digital collectibles
-                      const assetUrls = Object.values(file.firefly_assets || {}).map(asset => 
-                        asset.file_path
-                      ).filter(url => url);
+                      // Navigate to preview with simplified parameters
+                      const jobId = jobData?.job_id || '';
+                      const fileId = file.filename;
+                      const mode = 'digital-assets';
                       
-                      console.log('🎨 Digital collectibles preview - Asset URLs:', assetUrls);
+                      console.log(`🎨 [FileCard] Navigating to digital assets preview:`, {
+                        jobId,
+                        fileId,
+                        mode
+                      });
                       
-                      const baseName = file.filename.replace('.pdf', '').replace('.PDF', '');
-                      const jobPath = jobData?.job_id || '';
-                      
-                      // Pass the asset URLs as a query parameter
-                      const assetUrlsParam = encodeURIComponent(JSON.stringify(assetUrls));
-                      router.push(`/job/preview?jobPath=${encodeURIComponent(jobPath)}&fileName=${encodeURIComponent(baseName)}&type=firefly&assetUrls=${assetUrlsParam}`);
+                      router.push(`/job/preview?jobId=${encodeURIComponent(jobId)}&fileId=${encodeURIComponent(fileId)}&mode=${mode}`);
                     }}
                     style={{
                       background: 'rgba(52, 211, 153, 0.2)',
