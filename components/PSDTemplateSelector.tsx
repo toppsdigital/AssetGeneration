@@ -910,42 +910,17 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     });
     
     console.log('✅ PDF Extract API Response:', response);
-    console.log('📋 Full JSON Response:', JSON.stringify(response, null, 2));
-    console.log('🔍 EDR Response Analysis:', {
-      hasAssets: !!(response as any)?.assets,
-      hasAssetsAssets: !!(response as any)?.assets?.assets,
-      assetsType: typeof (response as any)?.assets,
-      assetsKeys: (response as any)?.assets ? Object.keys((response as any).assets) : 'no assets',
-      isNormalized: (response as any)?._normalized
-    });
-
     setUploadProgress(95);
 
-    // Update job data from normalized response structure
-    if (onJobDataUpdate) {
-      if ((response as any)?.assets && typeof (response as any).assets === 'object') {
-        console.log('🔄 EDR: Using normalized assets mapping');
-        const mapping = (response as any).assets as Record<string, any>;
-        console.log('🔄 EDR: Assets mapping:', mapping);
-        console.log('🔄 EDR: Calling onJobDataUpdate with mapping keys:', Object.keys(mapping));
-        onJobDataUpdate({ job_id: jobData?.job_id, assets: mapping });
-      } else if ((response as any)?.assets && typeof (response as any).assets === 'object' && (response as any).job_id) {
-        console.log('🔄 EDR: Using direct assets mapping (EDR format)');
-        const mapping = (response as any).assets as Record<string, any>;
-        console.log('🔄 EDR: Direct assets mapping:', mapping);
-        console.log('🔄 EDR: Calling onJobDataUpdate with direct mapping keys:', Object.keys(mapping));
-        onJobDataUpdate({ job_id: jobData?.job_id, assets: mapping });
-      } else if ((response as any)?.job) {
-        console.log('🔄 EDR: Using legacy job object structure');
-        console.log('🔄 EDR: Job object assets:', (response as any).job.assets);
-        onJobDataUpdate((response as any).job);
-      } else {
-        console.log('🔄 EDR: No assets mapping or job in response, triggering refetch');
-        console.log('🔄 EDR: Response structure:', Object.keys(response as any));
-      onJobDataUpdate({ _forceRefetch: true, job_id: jobData?.job_id });
-      }
+    // Update job data - now uses consistent normalized response structure (same as get assets)
+    if (onJobDataUpdate && (response as any)?.assets && typeof (response as any).assets === 'object') {
+      console.log('🔄 EDR: Using normalized assets mapping (consistent with get assets format)');
+      const assets = (response as any).assets as Record<string, any>;
+      console.log('🔄 EDR: Updating job with', Object.keys(assets).length, 'assets');
+      onJobDataUpdate({ job_id: jobData?.job_id, assets });
     } else {
-      console.log('❌ EDR: Could not update job data - missing onJobDataUpdate callback');
+      console.warn('⚠️ EDR: No assets found in normalized response - this should not happen with the new consistent format');
+      console.log('🔍 EDR: Response structure:', Object.keys(response as any));
     }
   };
 
