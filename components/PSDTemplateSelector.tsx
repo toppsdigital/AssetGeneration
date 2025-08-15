@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { contentPipelineApi } from '../web/utils/contentPipelineApi';
+import { useAppDataStore } from '../hooks/useAppDataStore';
 import { AssetCreationForm } from './AssetCreationForm';
 import { AssetsTable } from './AssetsTable';
 
@@ -43,6 +43,16 @@ interface AssetConfig {
 
 export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatingAssets, setCreatingAssets, onJobDataUpdate }: PSDTemplateSelectorProps) => {
   const router = useRouter();
+  
+  // Use centralized data store for asset operations
+  const { 
+    mutate: assetMutation,
+    data: jobAssets,
+    refresh: refreshAssets
+  } = useAppDataStore('jobAssets', { 
+    jobId: jobData?.job_id || '', 
+    autoRefresh: false 
+  });
   
   // State management
   const [physicalJsonFiles, setPhysicalJsonFiles] = useState<PSDFile[]>([]);
@@ -106,22 +116,16 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
             console.log('❌ No job ID available for asset fetch, skipping');
             return;
           }
-          console.log('🔄 Fetching latest assets for job on selector mount:', mergedJobData.job_id);
-          const resp = await contentPipelineApi.getAssets(mergedJobData.job_id);
-          console.log('🔍 getAssets response:', resp);
-          // Normalized response shape: { assets: { id: asset, ... }, job_id }
-          const serverAssetsMapping = (resp as any)?.assets;
-          console.log('🔍 Extracted serverAssetsMapping from normalized response:', serverAssetsMapping);
-          if (serverAssetsMapping && typeof serverAssetsMapping === 'object' && Object.keys(serverAssetsMapping).length > 0) {
-            console.log('✅ Calling onJobDataUpdate with assets:', Object.keys(serverAssetsMapping));
-            onJobDataUpdate?.({ job_id: mergedJobData.job_id, assets: serverAssetsMapping });
+          console.log('🔄 Refreshing latest assets for job on selector mount:', mergedJobData.job_id);
+          // Use centralized data store to refresh assets
+          await refreshAssets();
+          
+          // Update parent component with cached assets from centralized store
+          if (jobAssets && typeof jobAssets === 'object' && Object.keys(jobAssets).length > 0) {
+            console.log('✅ Calling onJobDataUpdate with cached assets:', Object.keys(jobAssets));
+            onJobDataUpdate?.({ job_id: mergedJobData.job_id, assets: jobAssets });
           } else {
-            console.warn('⚠️ No assets found in normalized response or empty assets object:', {
-              hasAssets: !!resp?.assets,
-              assetsType: typeof resp?.assets,
-              assetsKeys: resp?.assets ? Object.keys(resp.assets) : [],
-              fullResponse: resp
-            });
+            console.warn('⚠️ No assets found in centralized store');
           }
         } catch (e) {
           console.warn('⚠️ Failed to fetch assets on load:', e);
@@ -266,7 +270,11 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
         assetsPreview: assets.map((asset: any) => ({ name: asset.name, type: asset.type }))
       });
 
-      const response = await contentPipelineApi.generateAssets(jobData!.job_id!, payload);
+      const response = await assetMutation({
+        type: 'generateAssets',
+        jobId: jobData!.job_id!,
+        data: payload
+      });
       
       console.log('✅ Assets creation response:', response);
       
@@ -577,10 +585,19 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       let response;
       if (config.id && config.id !== '') {
         // Update existing asset
-        response = await contentPipelineApi.updateAsset(jobData.job_id, config.id, assetPayload);
+        response = await assetMutation({
+          type: 'updateAsset',
+          jobId: jobData.job_id,
+          assetId: config.id,
+          data: assetPayload
+        });
       } else {
         // Create new asset - backend will generate ID and store this config
-        response = await contentPipelineApi.createAsset(jobData.job_id, assetPayload);
+        response = await assetMutation({
+          type: 'createAsset',
+          jobId: jobData.job_id,
+          data: assetPayload
+        });
         
         // If creating a new asset with superfractor chrome and oneOfOneWp enabled, also create a wp-1of1 version
         // This applies to both original 'base' type and 'front' cards that become 'parallel' due to superfractor
@@ -597,7 +614,11 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
             };
             
             try {
-              const wp1of1Response = await contentPipelineApi.createAsset(jobData.job_id, wp1of1Payload);
+              const wp1of1Response = await assetMutation({
+                type: 'createAsset',
+                jobId: jobData.job_id,
+                data: wp1of1Payload
+              });
               console.log('✅ wp-1of1 asset created for superfractor + oneOfOneWp:', wp1of1Response);
             } catch (wp1of1Error) {
               console.error('❌ Error creating wp-1of1 asset:', wp1of1Error);
@@ -663,7 +684,11 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     
     try {
       console.log('🗑️ Removing asset:', id);
-      const response = await contentPipelineApi.deleteAsset(jobData.job_id, id);
+      const response = await assetMutation({
+        type: 'deleteAsset',
+        jobId: jobData.job_id,
+        assetId: id
+      });
       
         {
           console.log('✅ Asset removed successfully:', response);
@@ -878,8 +903,11 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
 
     setUploadProgress(90);
 
-    // Call the content pipeline API with S3 key
-    const response = await contentPipelineApi.extractPdfData(requestPayload);
+    // Call the content pipeline API with S3 key via centralized data store
+    const response = await assetMutation({
+      type: 'extractPdfData',
+      data: requestPayload
+    });
     
     console.log('✅ PDF Extract API Response:', response);
     console.log('📋 Full JSON Response:', JSON.stringify(response, null, 2));
