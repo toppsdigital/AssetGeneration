@@ -78,6 +78,14 @@ export interface JobListResponse {
   };
 }
 
+export interface BatchJobsResponse {
+  jobs: JobData[];
+  found_count: number;
+  not_found_job_ids: string[];
+  total_requested: number;
+  unprocessed_count: number;
+}
+
 export interface FileResponse {
   file: FileData;
   message?: string;
@@ -194,6 +202,26 @@ class ContentPipelineAPI {
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.error || `Failed to list jobs: ${response.status}`);
+    }
+
+    return response.json();
+  }
+
+  async batchGetJobs(jobIds: string[]): Promise<BatchJobsResponse> {
+    const response = await fetch('/api/content-pipeline-proxy', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        operation: 'batch_get_jobs',
+        job_ids: jobIds
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || `Failed to batch get jobs: ${response.status}`);
     }
 
     return response.json();
