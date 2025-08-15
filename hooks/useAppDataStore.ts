@@ -358,6 +358,14 @@ export function useAppDataStore<T = any>(
       }
       
       if (selector === 'jobDetails' && data) {
+        // Check if auto-refresh is explicitly disabled for this job request
+        if (!options.autoRefresh) {
+          if (DEBUG_CONFIG.ENABLE_AUTO_REFRESH_LOGGING) {
+            console.log(`⏸️ [DataStore] Auto-refresh disabled for job ${options.jobId} - cached data + single background fetch only`);
+          }
+          return false; // No polling, just initial fetch + cache
+        }
+        
         const job = data as any; // Type will be validated at runtime
         const jobStatus = job?.job_status || '';
         
