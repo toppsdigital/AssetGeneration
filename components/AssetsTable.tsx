@@ -151,25 +151,54 @@ export const AssetsTable = ({
       // Create a complete assets array: unchanged assets + chrome-updated assets
       const assetsToUpdateIds = new Set(assetsToUpdate.map(a => a.id));
       
+      // Helper function to create clean asset object with only essential properties
+      const createCleanAsset = (asset: AssetConfig) => {
+        const cleanAsset: any = {
+          name: asset.name,
+          type: asset.type,
+          layer: asset.layer
+        };
+        
+        // Only include properties that have values (no redundant id since asset_id already exists)
+        if (asset.spot) cleanAsset.spot = asset.spot;
+        if (asset.color) cleanAsset.color = asset.color;
+        if (asset.spotColorPairs) cleanAsset.spotColorPairs = asset.spotColorPairs;
+        if (asset.vfx) cleanAsset.vfx = asset.vfx;
+        if (asset.chrome) cleanAsset.chrome = asset.chrome;
+        if (asset.wp_inv_layer) cleanAsset.wp_inv_layer = asset.wp_inv_layer;
+        
+        return cleanAsset;
+      };
+      
       // Start with all assets that are NOT being updated (wp, wp-1of1, superfractor, etc.)
-      const unchangedAssets = configuredAssets.filter(asset => !assetsToUpdateIds.has(asset.id));
+      // Clean them to remove redundant properties like oneOfOneWp boolean
+      const unchangedAssets = configuredAssets
+        .filter(asset => !assetsToUpdateIds.has(asset.id))
+        .map(asset => createCleanAsset(asset));
       
       // Create updated versions of the assets we're changing
       const chromeUpdatedAssets = assetsToUpdate.map(asset => {
         if (shouldRemoveChrome) {
-          // Remove chrome property entirely, and wp_inv_layer only if no VFX
-          const { chrome, ...assetWithoutChrome } = asset;
+          // Start with clean asset (no chrome, no oneOfOneWp)
+          const cleanAsset = createCleanAsset(asset);
+          delete cleanAsset.chrome; // Remove chrome entirely
           
-          // Only remove wp_inv_layer if asset doesn't have VFX (since VFX also needs wp_inv_layer)
-          if (!asset.vfx) {
-            const { wp_inv_layer, ...assetWithoutWpInv } = assetWithoutChrome;
-            return assetWithoutWpInv;
+          // Only include wp_inv_layer if VFX needs it
+          if (asset.vfx) {
+            const wpInvLayers = getWpInvLayers();
+            const firstWpInvLayer = wpInvLayers.length > 0 ? wpInvLayers[0] : asset.wp_inv_layer;
+            if (firstWpInvLayer) {
+              cleanAsset.wp_inv_layer = firstWpInvLayer;
+            }
           } else {
-            // Keep wp_inv_layer because VFX needs it
-            return assetWithoutChrome;
+            // If no VFX, remove wp_inv_layer too
+            delete cleanAsset.wp_inv_layer;
           }
+          
+          return cleanAsset;
         } else {
-          // Add silver chrome and set wp_inv_layer
+          // Start with clean asset and add chrome
+          const cleanAsset = createCleanAsset(asset);
           const wpInvLayers = getWpInvLayers();
           const firstWpInvLayer = wpInvLayers.length > 0 ? wpInvLayers[0] : undefined;
           
@@ -177,11 +206,12 @@ export const AssetsTable = ({
             console.warn(`⚠️ No wp_inv_layer available for asset ${asset.name}, chrome may not work properly`);
           }
           
-          return {
-            ...asset,
-            chrome: 'silver',
-            wp_inv_layer: firstWpInvLayer
-          };
+          cleanAsset.chrome = 'silver';
+          if (firstWpInvLayer) {
+            cleanAsset.wp_inv_layer = firstWpInvLayer;
+          }
+          
+          return cleanAsset;
         }
       });
       
