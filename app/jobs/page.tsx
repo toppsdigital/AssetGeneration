@@ -35,6 +35,7 @@ export default function JobsPage() {
   }), [userFilter, statusFilter]);
 
   // Use centralized data store for jobs list with auto-refresh
+  // This will show cached data immediately (if available) while fetching fresh data in background
   const { 
     data: jobs = [], 
     isLoading, 
@@ -44,6 +45,19 @@ export default function JobsPage() {
     isAutoRefreshActive,
     forceRefreshJobsList
   } = useAppDataStore('jobs', dataStoreOptions);
+
+  // Debug logging to track cached vs fresh data usage
+  useEffect(() => {
+    if (jobs.length > 0) {
+      if (isLoading) {
+        console.log(`📋 [JobsPage] Showing cached jobs data while loading: ${jobs.length} jobs`);
+      } else if (isRefreshing) {
+        console.log(`💾 [JobsPage] Showing cached jobs data while refreshing: ${jobs.length} jobs`);
+      } else {
+        console.log(`✅ [JobsPage] Showing fresh jobs data: ${jobs.length} jobs`);
+      }
+    }
+  }, [jobs, isLoading, isRefreshing]);
 
   // Track when jobs were last fetched (including when data doesn't change)
   const previousIsRefreshing = useRef(isRefreshing);

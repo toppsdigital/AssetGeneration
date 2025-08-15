@@ -115,7 +115,7 @@ export function useAppDataStore<T = any>(
   // Query function based on selector
   const queryFn = useCallback(async (): Promise<T> => {
     if (selector === 'jobs') {
-      console.log(`🔄 [DataStore] Fetching jobs with filters:`, {
+      console.log(`🔄 [DataStore] Fetching fresh jobs data:`, {
         userFilter: options.filters?.userFilter,
         statusFilter: options.filters?.statusFilter,
         autoRefresh: options.autoRefresh,
@@ -274,8 +274,8 @@ export function useAppDataStore<T = any>(
     const { staleTime, gcTime } = finalConfig.cache;
     switch (selector) {
       case 'jobs':
-        // Use very low staleTime for jobs list to ensure immediate fetching when filters change
-        return { staleTime: 0, gcTime: gcTime.jobsList };
+        // Use moderate staleTime to show cached data immediately while fetching fresh data in background
+        return { staleTime: 5 * 1000, gcTime: gcTime.jobsList }; // 5 seconds stale time
       case 'jobDetails':
         return { staleTime: staleTime.jobs, gcTime: gcTime.jobs };
       case 'jobFiles':
@@ -303,7 +303,8 @@ export function useAppDataStore<T = any>(
     staleTime: cacheSettings.staleTime,
     gcTime: cacheSettings.gcTime,
     refetchOnWindowFocus: false,
-    refetchOnMount: selector === 'jobs' ? true : false, // Always fetch immediately when filters change for jobs
+    refetchOnMount: selector === 'jobs' ? true : false, // Show cached data immediately, then fetch fresh data in background
+    // This combination ensures: cached data shown instantly + fresh data fetched in background
     // Use React Query's built-in polling instead of manual timers
     refetchInterval: (data) => {
       if (!options.autoRefresh || !finalConfig.autoRefresh.enabled || !isAutoRefreshAllowedOnPage) {
