@@ -706,7 +706,7 @@ export default function JobsPage() {
                       )}
                       
                       {/* Only show View Details button when not actively processing */}
-                      {!['extracting', 'generating'].includes(job.job_status?.toLowerCase() || '') && (
+                      {!['uploading', 'extracting', 'generating'].includes(job.job_status?.toLowerCase() || '') && (
                         <button
                           onClick={() => viewJobDetails(job)}
                           style={{
@@ -732,7 +732,7 @@ export default function JobsPage() {
                       )}
                       
                       {/* Show processing indicator when actively processing */}
-                      {['extracting', 'generating'].includes(job.job_status?.toLowerCase() || '') && (
+                      {['uploading', 'extracting', 'generating'].includes(job.job_status?.toLowerCase() || '') && (
                         <div style={{
                           padding: '8px 16px',
                           background: 'rgba(245, 158, 11, 0.1)',
