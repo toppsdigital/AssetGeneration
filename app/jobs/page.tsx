@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueries } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
@@ -45,16 +45,28 @@ export default function JobsPage() {
     forceRefreshJobsList
   } = useAppDataStore('jobs', dataStoreOptions);
 
-  // Track jobs list updates
+  // Track when jobs were last fetched (including when data doesn't change)
+  const previousIsRefreshing = useRef(isRefreshing);
+  
   useEffect(() => {
-    if (jobs && jobs.length >= 0) {
+    // Update timestamp when:
+    // 1. Jobs data changes, OR 
+    // 2. Fetching just completed (was fetching, now not fetching)
+    const fetchJustCompleted = previousIsRefreshing.current && !isRefreshing;
+    
+    if (jobs && jobs.length >= 0 && (fetchJustCompleted || !isLoading)) {
       setJobsListLastUpdate(new Date().toISOString());
+      console.log(`📊 [JobsPage] Jobs updated at ${new Date().toLocaleTimeString()}, count: ${jobs.length}, fetchCompleted: ${fetchJustCompleted}`);
     }
-  }, [jobs]);
+    
+    // Update ref for next render
+    previousIsRefreshing.current = isRefreshing;
+  }, [jobs, isRefreshing, isLoading]);
 
   // Update relative timestamps every 10 seconds
   useEffect(() => {
     const interval = setInterval(() => {
+      console.log(`🔄 [JobsPage] Force updating relative timestamps at ${new Date().toLocaleTimeString()}`);
       forceUpdate({});
     }, 10000); // Update every 10 seconds
 
@@ -230,9 +242,17 @@ export default function JobsPage() {
 
   // Helper function to format relative time
   const getRelativeTime = (timestamp: string) => {
+    if (!timestamp) return 'never';
+    
     const now = new Date().getTime();
     const past = new Date(timestamp).getTime();
     const diffInSeconds = Math.floor((now - past) / 1000);
+    
+    // Debug logging (can be removed later)
+    if (diffInSeconds < 0) {
+      console.warn(`⚠️ [JobsPage] Negative time difference: ${diffInSeconds}s (now: ${now}, past: ${past})`);
+      return 'just now';
+    }
     
     if (diffInSeconds < 5) {
       return 'just now';
