@@ -48,7 +48,7 @@ function JobDetailsPageContent() {
   // React Query hooks for smart caching
   const queryClient = useQueryClient();
   
-  // Smart cache strategy based on navigation source
+  // Always fetch fresh job data when opening details page
   useEffect(() => {
     if (jobId) {
       const cachedJobData = queryClient.getQueryData<UIJobData>(jobKeys.detail(jobId));
@@ -73,27 +73,15 @@ function JobDetailsPageContent() {
         createFiles
       });
       
-      let shouldForceFreshFetch = false;
-      let cacheStrategy = '';
-      
-      if (isFromFreshJobCreation) {
-        shouldForceFreshFetch = true;
-        cacheStrategy = 'Force fresh fetch for new job creation/rerun';
-      } else if (isFromJobsList || sessionNavigationSource === 'jobs-list') {
-        shouldForceFreshFetch = true;
-        cacheStrategy = 'Force fresh fetch from jobs list navigation';
-      } else if (isFromPreview || sessionNavigationSource === 'preview') {
-        shouldForceFreshFetch = false;
-        cacheStrategy = 'Use cached data for preview ↔ details navigation';
-      } else {
-        shouldForceFreshFetch = false;
-        cacheStrategy = 'Use cached data with staleness (default)';
-      }
+      // ALWAYS force fresh fetch to ensure we have the latest job data
+      // This is important for getting real-time status updates and progress information
+      const shouldForceFreshFetch = true;
+      const cacheStrategy = 'Always force fresh fetch to get latest job status and progress data';
       
       console.log('📋 Cache decision:', { shouldForceFreshFetch, cacheStrategy });
       
       if (shouldForceFreshFetch) {
-        console.log('🔄 Forcing cache invalidation:', cacheStrategy);
+        console.log('🔄 Forcing cache invalidation for fresh job data:', cacheStrategy);
         queryClient.removeQueries({ queryKey: jobKeys.detail(jobId) });
         queryClient.removeQueries({ queryKey: jobKeys.files(jobId) });
       }
