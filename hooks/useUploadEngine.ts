@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { contentPipelineApi, JobData, FileData } from '../web/utils/contentPipelineApi';
 import { useQueryClient } from '@tanstack/react-query';
-import { jobKeys } from '../web/hooks/useJobData';
+import { jobKeys, syncJobDataAcrossCaches } from '../web/hooks/useJobData';
 
 interface UseUploadEngineProps {
   jobData: any;
@@ -417,8 +417,8 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
   ): void => {
     console.log('📱 Updating local file status:', pdfFilename, 'to', status);
     
-    if (setJobData) {
-      setJobData(prev => {
+    if (setJobData && jobData?.job_id) {
+      const updater = (prev: any) => {
         if (!prev?.content_pipeline_files) return prev;
         
         const updatedFiles = prev.content_pipeline_files.map((file: any) =>
@@ -438,9 +438,18 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
         );
         
         return { ...prev, content_pipeline_files: updatedFiles };
-      });
+      };
+      
+      // Update local state
+      setJobData(updater);
+      
+      // Also sync React Query cache to ensure UI updates
+      if (queryClient) {
+        console.log('🔄 Syncing local file status update to React Query cache for job:', jobData.job_id);
+        syncJobDataAcrossCaches(queryClient, jobData.job_id, updater);
+      }
     }
-  }, [setJobData]);
+  }, [setJobData, jobData?.job_id, queryClient]);
 
 
 
@@ -521,9 +530,9 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
         const statusResponse = await contentPipelineApi.batchUpdatePdfFileStatus(groupFilename, pdfUpdates);
         
         if (statusResponse?.file?.original_files) {
-          // Update local state with backend response
-          if (setJobData) {
-            setJobData(prev => {
+          // Update both local state and React Query cache with backend response
+          if (setJobData && jobData?.job_id) {
+            const updater = (prev: any) => {
               if (!prev?.content_pipeline_files) return prev;
               
               const updatedFiles = prev.content_pipeline_files.map((file: any) =>
@@ -537,7 +546,16 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
               );
               
               return { ...prev, content_pipeline_files: updatedFiles };
-            });
+            };
+            
+            // Update local state
+            setJobData(updater);
+            
+            // Also sync React Query cache to ensure UI updates
+            if (queryClient) {
+              console.log('🔄 Syncing file status updates to React Query cache for job:', jobData.job_id);
+              syncJobDataAcrossCaches(queryClient, jobData.job_id, updater);
+            }
           }
         }
         

@@ -134,6 +134,24 @@ function JobDetailsPageContent() {
     // Removed aggressive cross-cache synchronization to prevent excessive refetches
     // React Query's built-in staleness handling should be sufficient
   }, [jobId, jobData, isLoadingJob, isRefetchingJob, jobError]);
+
+  // Debug logging for local job data changes (file status updates)
+  useEffect(() => {
+    if (localJobData?.content_pipeline_files) {
+      console.log('🔍 Local Job Data File Status Update:', {
+        jobId: localJobData.job_id,
+        filesCount: localJobData.content_pipeline_files.length,
+        fileStatuses: localJobData.content_pipeline_files.map(file => ({
+          filename: file.filename,
+          originalFileStatuses: file.original_files ? Object.entries(file.original_files).map(([name, info]) => ({
+            name,
+            status: (info as any)?.status
+          })) : []
+        })),
+        timestamp: new Date().toISOString()
+      });
+    }
+  }, [localJobData?.content_pipeline_files]);
   
 
   
@@ -248,9 +266,17 @@ function JobDetailsPageContent() {
       // The increment API calls provide real-time progress updates
       console.log('✅ Updated job data locally (skipping refetch during uploads)');
     }
+    
+    // CRITICAL: Update the local state that the UI actually uses
+    // effectiveJobData = localJobData || jobData, so we need to update localJobData
+    setLocalJobData(prev => {
+      const baseData = prev || jobData;
+      return baseData ? updater(baseData) : null;
+    });
+    
     // Also update legacy state for any remaining dependencies
     setJobData(updater);
-  }, [jobData?.job_id, queryClient]);
+  }, [jobData?.job_id, queryClient, jobData]);
 
   // Upload management with comprehensive upload engine
   const uploadEngine = useUploadEngine({ 
