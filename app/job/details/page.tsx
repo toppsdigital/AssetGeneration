@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, useCallback, Suspense, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { 
   JobHeader, 
   PSDTemplateSelector, 
@@ -17,6 +18,7 @@ import {
 } from '../../../components';
 import { 
   useUploadEngine, 
+  useFileManager,
   usePSDTemplateManager, 
   useLoadingStateManager 
 } from '../../../hooks';
@@ -45,6 +47,7 @@ if (typeof document !== 'undefined') {
 function JobDetailsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
   
   // Extract query parameters using useSearchParams  
   const startUpload = searchParams.get('startUpload');
@@ -95,24 +98,32 @@ function JobDetailsPageContent() {
   // Local state for UI management
   const [localJobData, setLocalJobData] = useState(null);
   const [creatingAssets, setCreatingAssets] = useState(false);
-  const [filesLoaded, setFilesLoaded] = useState(false);
-  const [loadingFiles, setLoadingFiles] = useState(false);
   
-  // Initialize other managers with hooks (simplified)
-  const fileManager = {
-    filesLoaded,
-    setFilesLoaded,
-    loadingFiles,
-    setLoadingFiles,
-    createNewFiles: async () => {
-      // Handle file creation through useAppDataStore mutations if needed
-      console.log('📁 File creation requested');
-      setLoadingFiles(true);
-      // Implementation would use mutateJob for file operations
-      setLoadingFiles(false);
-      setFilesLoaded(true);
+  // Simple callback to update job data (for upload engine compatibility)
+  const updateJobDataForUpload = (updater: any) => {
+    if (typeof updater === 'function') {
+      const updated = updater(mergedJobData);
+      setLocalJobData(updated);
+      // Optionally trigger a refetch to sync with server
+      refetchJobData();
+    } else {
+      setLocalJobData(updater);
+      refetchJobData();
     }
   };
+  
+  // Create minimal jobKeys for compatibility (legacy useFileManager still needs this)
+  const jobKeys = {
+    detail: (id: string) => ['job', id]
+  };
+  
+  // Import the actual file manager hook
+  const fileManager = useFileManager({
+    jobData: mergedJobData,
+    setLocalJobData: updateJobDataForUpload,
+    queryClient,
+    jobKeys
+  });
   
   const psdTemplateManager = usePSDTemplateManager(jobData?.job_status);
   
@@ -131,19 +142,6 @@ function JobDetailsPageContent() {
   // Track if file creation has been triggered to prevent double execution
   const fileCreationTriggeredRef = useRef(false);
   
-  // Simple callback to update job data (for upload engine compatibility)
-  const updateJobDataForUpload = (updater: any) => {
-    if (typeof updater === 'function') {
-      const updated = updater(mergedJobData);
-      setLocalJobData(updated);
-      // Optionally trigger a refetch to sync with server
-      refetchJobData();
-    } else {
-      setLocalJobData(updater);
-      refetchJobData();
-    }
-  };
-
   // Upload management with comprehensive upload engine
   const uploadEngine = useUploadEngine({ 
     jobData: mergedJobData, 
