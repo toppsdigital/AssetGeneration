@@ -8,10 +8,10 @@ import styles from '../../styles/Home.module.css';
 import PageTitle from '../../components/PageTitle';
 import Spinner from '../../components/Spinner';
 import { JobData } from '../../web/utils/contentPipelineApi';
-import { getAppIcon, getAppDisplayName } from '../../utils/fileOperations';
+import { getAppIcon } from '../../utils/fileOperations';
 import { useAppDataStore, dataStoreKeys } from '../../hooks/useAppDataStore';
 import { contentPipelineApi } from '../../web/utils/contentPipelineApi';
-import AppDataStoreConfig, { ConfigHelpers } from '../../hooks/useAppDataStore.config';
+import { ConfigHelpers } from '../../hooks/useAppDataStore.config';
 
 export default function JobsPage() {
   const router = useRouter();
@@ -24,15 +24,6 @@ export default function JobsPage() {
   // Timestamp tracking
   const [jobsListLastUpdate, setJobsListLastUpdate] = useState<string | null>(null);
   const [, forceUpdate] = useState({});
-
-  // Debug logging for filter changes
-  console.log('🔍 Filter state:', { 
-    userFilter, 
-    statusFilter, 
-    hasSession: !!session, 
-    sessionStatus,
-    userEmail: session?.user?.email 
-  });
 
   // Build options for useAppDataStore (memoized to prevent unnecessary re-renders)
   const dataStoreOptions = useMemo(() => ({
@@ -83,7 +74,6 @@ export default function JobsPage() {
       .map((job: JobData) => job.job_id)
       .filter(Boolean); // Remove any undefined/null job IDs
 
-    console.log(`🔍 [JobsPage] Found ${filtered.length} non-completed jobs to poll individually:`, filtered);
     return filtered;
   }, [jobs]);
 
@@ -92,9 +82,7 @@ export default function JobsPage() {
     queries: nonCompletedJobIds.map(jobId => ({
       queryKey: dataStoreKeys.jobs.detail(jobId),
       queryFn: async () => {
-        console.log(`🌐 [JobsPage] Polling individual job ${jobId}`);
         const response = await contentPipelineApi.getJob(jobId);
-        console.log(`✅ [JobsPage] Individual job ${jobId} status: ${response.job.job_status}`);
         
         return {
           ...response.job,
@@ -108,7 +96,6 @@ export default function JobsPage() {
       refetchInterval: (query) => {
         const data = query.state.data;
         if (!data) {
-          console.log(`🔄 [JobsPage] No data for job ${jobId}, polling every 5000ms`);
           return 5000;
         }
         
@@ -116,11 +103,9 @@ export default function JobsPage() {
         const shouldNotPoll = ConfigHelpers.shouldJobNeverPoll(jobStatus);
         
         if (shouldNotPoll) {
-          console.log(`⏹️ [JobsPage] Job ${jobId} is ${jobStatus}, stopping individual polling`);
           return false;
         }
         
-        console.log(`🔄 [JobsPage] Job ${jobId} (${jobStatus}) will poll again in 5000ms`);
         return 5000; // Poll every 5 seconds
       },
       refetchIntervalInBackground: true,
@@ -166,25 +151,6 @@ export default function JobsPage() {
       return job;
     });
   }, [jobs, individualJobsMap]);
-
-  // Debug logging for filter changes (useAppDataStore handles refetch automatically)
-  useEffect(() => {
-    console.log('📊 userFilter state changed:', { 
-      userFilter, 
-      sessionStatus, 
-      hasSessionEmail: !!session?.user?.email,
-      timestamp: new Date().toISOString(),
-      autoRefreshActive: isAutoRefreshActive
-    });
-  }, [userFilter, isAutoRefreshActive, session?.user?.email, sessionStatus]);
-
-  useEffect(() => {
-    console.log('📊 statusFilter state changed:', { 
-      statusFilter, 
-      timestamp: new Date().toISOString(),
-      autoRefreshActive: isAutoRefreshActive
-    });
-  }, [statusFilter, isAutoRefreshActive]);
 
   // Navigate to job details page - useAppDataStore will handle data consistency
   const viewJobDetails = (job: JobData) => {
@@ -283,7 +249,6 @@ export default function JobsPage() {
 
   // Handle manual refresh using centralized data store
   const handleRefresh = () => {
-    console.log('🔄 Manual refresh triggered via useAppDataStore');
     refetch();
   };
 
@@ -372,18 +337,7 @@ export default function JobsPage() {
                        border: '1px solid rgba(255, 255, 255, 0.08)'
                      }}>
                        <button
-                         onClick={() => {
-                           console.log('🔄 User filter changed:', { 
-                             from: userFilter, 
-                             to: 'all',
-                             sessionStatus,
-                             hasSession: !!session,
-                             hasSessionEmail: !!session?.user?.email,
-                             userEmail: session?.user?.email,
-                             timestamp: new Date().toISOString()
-                           });
-                           setUserFilter('all');
-                         }}
+                                                 onClick={() => setUserFilter('all')}
                          style={{
                            width: '110px',
                            padding: '14px 0',
@@ -425,18 +379,7 @@ export default function JobsPage() {
                          All Jobs
                        </button>
                        <button
-                         onClick={() => {
-                           console.log('🔄 User filter changed:', { 
-                             from: userFilter, 
-                             to: 'my',
-                             sessionStatus,
-                             hasSession: !!session,
-                             hasSessionEmail: !!session?.user?.email,
-                             userEmail: session?.user?.email,
-                             timestamp: new Date().toISOString()
-                           });
-                           setUserFilter('my');
-                         }}
+                                                 onClick={() => setUserFilter('my')}
                          style={{
                            width: '110px',
                            padding: '14px 0',
@@ -489,11 +432,10 @@ export default function JobsPage() {
                    }}>
                      <select
                        value={statusFilter}
-                       onChange={(e) => {
-                         const newStatus = e.target.value as 'all' | 'in-progress' | 'completed';
-                         console.log('🔄 Status filter changed:', { from: statusFilter, to: newStatus });
-                         setStatusFilter(newStatus);
-                       }}
+                                             onChange={(e) => {
+                        const newStatus = e.target.value as 'all' | 'in-progress' | 'completed';
+                        setStatusFilter(newStatus);
+                      }}
                        style={{
                          padding: '12px 40px 12px 16px',
                          background: 'rgba(255, 255, 255, 0.04)',
