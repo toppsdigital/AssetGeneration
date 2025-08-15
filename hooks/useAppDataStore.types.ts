@@ -96,15 +96,21 @@ export interface SelectorOptions {
 // Mutation types
 export type MutationType = 
   | 'createJob'
+  | 'rerunJob'
   | 'updateJob' 
   | 'deleteJob'
   | 'createFiles'
   | 'updateFile'
   | 'updateFileStatus'
+  | 'updatePdfFileStatus'
+  | 'batchUpdatePdfFileStatus'
   | 'createAsset'
   | 'updateAsset'
   | 'deleteAsset'
+  | 'bulkUpdateAssets'
   | 'generateAssets'
+  | 'regenerateAssets'
+  | 'extractPdfData'
   | 'refreshDownloadUrl';
 
 export interface MutationPayload {

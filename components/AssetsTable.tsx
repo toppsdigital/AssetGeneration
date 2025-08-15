@@ -1,6 +1,6 @@
 'use client';
 
-import { contentPipelineApi } from '../web/utils/contentPipelineApi';
+import { useAppDataStore } from '../hooks/useAppDataStore';
 
 // For multiple spot/color selections in parallel mode
 interface SpotColorPair {
