@@ -15,7 +15,7 @@ interface AssetConfig {
   layer: string;
   spot?: string;
   color?: string;
-  spotColorPairs?: SpotColorPair[]; // For PARALLEL cards with multiple combinations
+  spot_color_pairs?: SpotColorPair[]; // For PARALLEL cards with multiple combinations
   vfx?: string;
   chrome: string | boolean;
   oneOfOneWp?: boolean; // For BASE assets with superfractor chrome
@@ -162,7 +162,11 @@ export const AssetsTable = ({
         // Only include properties that have values (no redundant id since asset_id already exists)
         if (asset.spot) cleanAsset.spot = asset.spot;
         if (asset.color) cleanAsset.color = asset.color;
-        if (asset.spotColorPairs) cleanAsset.spotColorPairs = asset.spotColorPairs;
+        
+        if (asset.spot_color_pairs && asset.spot_color_pairs.length > 0) {
+          cleanAsset.spot_color_pairs = asset.spot_color_pairs;
+        }
+        
         if (asset.vfx) cleanAsset.vfx = asset.vfx;
         if (asset.chrome) cleanAsset.chrome = asset.chrome;
         if (asset.wp_inv_layer) cleanAsset.wp_inv_layer = asset.wp_inv_layer;
@@ -545,9 +549,9 @@ export const AssetsTable = ({
                         )}
                         
                         {/* Show spot values from spot_color_pairs */}
-                        {asset.spotColorPairs && asset.spotColorPairs.length > 0 && (
+                        {asset.spot_color_pairs && asset.spot_color_pairs.length > 0 && (
                           <div>
-                            {asset.spotColorPairs.map((pair, idx) => (
+                            {asset.spot_color_pairs.map((pair, idx) => (
                               <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, justifyContent: 'flex-start' }}>
                                 <span style={{
                                   fontSize: 14,
@@ -576,7 +580,7 @@ export const AssetsTable = ({
                         )}
                         
                         {/* Legacy single spot/color display */}
-                        {asset.spot && (!asset.spotColorPairs || asset.spotColorPairs.length === 0) && (
+                        {asset.spot && (!asset.spot_color_pairs || asset.spot_color_pairs.length === 0) && (
                           <div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-start' }}>
                               <span style={{
@@ -605,7 +609,7 @@ export const AssetsTable = ({
                         )}
                         
                         {/* Fallback: Show dash for empty cases */}
-                        {!asset.layer && (!asset.spotColorPairs || asset.spotColorPairs.length === 0) && !asset.spot && (
+                        {!asset.layer && (!asset.spot_color_pairs || asset.spot_color_pairs.length === 0) && !asset.spot && (
                           <span style={{ color: '#6b7280' }}>—</span>
                         )}
                       </div>

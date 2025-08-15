@@ -34,7 +34,7 @@ interface AssetConfig {
   layer: string;
   spot?: string;
   color?: string;
-  spotColorPairs?: SpotColorPair[]; // For PARALLEL cards with multiple combinations
+  spot_color_pairs?: SpotColorPair[]; // For PARALLEL cards with multiple combinations
   vfx?: string;
   chrome: string | boolean;
   oneOfOneWp?: boolean; // For BASE assets with superfractor chrome
@@ -66,7 +66,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
   const [processingPdf, setProcessingPdf] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   
-  const [spotColorPairs, setSpotColorPairs] = useState<SpotColorPair[]>([{ spot: '', color: undefined }]);
+  const [spot_color_pairs, setSpot_color_pairs] = useState<SpotColorPair[]>([{ spot: '', color: undefined }]);
 
   // Auto-select PSD file when only one option is available
   useEffect(() => {
@@ -369,7 +369,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       layer: assetData.layer || '',
       spot: assetData.spot,
       color: assetData.color,
-      spotColorPairs: assetData.spotColorPairs || assetData.spot_color_pairs || [],
+      spot_color_pairs: assetData.spot_color_pairs || [],
       vfx: assetData.vfx,
       chrome: assetData.chrome || false,
       oneOfOneWp: assetData.oneOfOneWp || false,
@@ -397,8 +397,8 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       nameParts.push('base');
     } else if (type === 'parallel') {
       // For parallel, add color names with spot suffixes
-      if (config.spotColorPairs && config.spotColorPairs.length > 0) {
-        const colorParts = config.spotColorPairs
+      if (config.spot_color_pairs && config.spot_color_pairs.length > 0) {
+        const colorParts = config.spot_color_pairs
           .filter(pair => pair.spot && pair.color)
           .map((pair, index) => {
             const colorName = pair.color?.toLowerCase() || '';
@@ -425,8 +425,8 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       }
     } else if (type === 'multi-parallel') {
       // For multi-parallel, add color names with spot suffixes
-      if (config.spotColorPairs && config.spotColorPairs.length > 0) {
-        const colorParts = config.spotColorPairs
+      if (config.spot_color_pairs && config.spot_color_pairs.length > 0) {
+        const colorParts = config.spot_color_pairs
           .filter(pair => pair.spot && pair.color)
           .map((pair, index) => {
             const colorName = pair.color?.toLowerCase() || '';
@@ -490,7 +490,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     setCurrentConfig({ chrome: false, oneOfOneWp: false, name: '', wp_inv_layer: '' });
     setCurrentCardType(null);
     setEditingAssetId(null);
-    setSpotColorPairs([{ spot: '', color: undefined }]);
+    setSpot_color_pairs([{ spot: '', color: undefined }]);
   };
 
   const openAssetModal = () => {
@@ -504,7 +504,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     resetCurrentConfig();
   };
 
-  const addAssetWithConfig = async (config: AssetConfig, spotColorPairsFromForm: SpotColorPair[]) => {
+  const addAssetWithConfig = async (config: AssetConfig, spot_color_pairs_from_form: SpotColorPair[]) => {
     if (!jobData?.job_id || savingAsset) return;
     
     setSavingAsset(true);
@@ -522,7 +522,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
 
       // Handle parallel/multi-parallel with multiple spot/color pairs
       if (config.type === 'parallel' || config.type === 'multi-parallel') {
-        const validPairs = spotColorPairsFromForm.filter(pair => pair.spot && pair.color);
+        const validPairs = spot_color_pairs_from_form.filter(pair => pair.spot && pair.color);
         
         // For parallel types, either need spot/color pairs OR chrome effect (like superfractor)
         if (validPairs.length === 0 && !config.chrome) {
@@ -652,7 +652,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       id: editingAssetId || ''
     } as AssetConfig;
     
-    await addAssetWithConfig(config, spotColorPairs);
+    await addAssetWithConfig(config, spot_color_pairs);
     resetCurrentConfig();
   };
 
@@ -706,16 +706,16 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     
     // For parallel assets, populate the spot/color pairs
     if (asset.type === 'parallel' || asset.type === 'multi-parallel') {
-      if (asset.spotColorPairs && asset.spotColorPairs.length > 0) {
+      if (asset.spot_color_pairs && asset.spot_color_pairs.length > 0) {
         // New format with multiple pairs - convert RGB values to color names for UI
-        const convertedPairs = asset.spotColorPairs.map(pair => ({
+        const convertedPairs = asset.spot_color_pairs.map(pair => ({
           spot: pair.spot,
           color: pair.color?.startsWith('R') ? getColorNameByRgb(pair.color) : pair.color
         }));
-        setSpotColorPairs(convertedPairs);
+        setSpot_color_pairs(convertedPairs);
       } else if (asset.spot && asset.color) {
         // Legacy format with single spot/color
-        setSpotColorPairs([{
+        setSpot_color_pairs([{
           spot: asset.spot,
           color: asset.color?.startsWith('R') ? getColorNameByRgb(asset.color) : asset.color
         }]);
@@ -1175,9 +1175,9 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
         savingAsset={savingAsset}
         editingAssetId={editingAssetId}
         editingAsset={editingAsset}
-        onAddAsset={async (config, spotColorPairsFromForm) => {
+        onAddAsset={async (config, spot_color_pairs_from_form) => {
           // Call addAsset directly with the config from the form
-          await addAssetWithConfig(config, spotColorPairsFromForm);
+          await addAssetWithConfig(config, spot_color_pairs_from_form);
         }}
         onResetConfig={resetCurrentConfig}
       />

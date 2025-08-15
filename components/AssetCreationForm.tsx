@@ -16,7 +16,7 @@ interface AssetConfig {
   layer: string;
   spot?: string;
   color?: string;
-  spotColorPairs?: SpotColorPair[]; // For PARALLEL cards with multiple combinations
+  spot_color_pairs?: SpotColorPair[]; // For PARALLEL cards with multiple combinations
   vfx?: string;
   chrome: string | boolean;
   oneOfOneWp?: boolean; // For BASE assets with superfractor chrome
@@ -33,7 +33,7 @@ interface AssetCreationFormProps {
   savingAsset: boolean;
   editingAssetId: string | null;
   editingAsset: AssetConfig | null;
-  onAddAsset: (config: AssetConfig, spotColorPairs: SpotColorPair[]) => Promise<void>;
+  onAddAsset: (config: AssetConfig, spot_color_pairs: SpotColorPair[]) => Promise<void>;
   onResetConfig: () => void;
 }
 
@@ -81,7 +81,7 @@ export const AssetCreationForm = ({
     name: '',
     wp_inv_layer: ''
   });
-  const [spotColorPairs, setSpotColorPairs] = useState<SpotColorPair[]>([{ spot: '', color: undefined }]);
+  const [spot_color_pairs, setSpot_color_pairs] = useState<SpotColorPair[]>([{ spot: '', color: undefined }]);
 
   // Effect to populate form when editing an existing asset
   useEffect(() => {
@@ -115,20 +115,20 @@ export const AssetCreationForm = ({
       });
       
       // Set spot color pairs for parallel/multi-parallel assets
-      if (editingAsset.spotColorPairs && editingAsset.spotColorPairs.length > 0) {
+      if (editingAsset.spot_color_pairs && editingAsset.spot_color_pairs.length > 0) {
         // Convert RGB values back to color names for the UI
-        const convertedPairs = editingAsset.spotColorPairs.map(pair => ({
+        const convertedPairs = editingAsset.spot_color_pairs.map(pair => ({
           spot: pair.spot,
           color: pair.color?.startsWith('R') ? getColorNameByRgb(pair.color) : pair.color
         }));
-        setSpotColorPairs(convertedPairs);
+        setSpot_color_pairs(convertedPairs);
       } else if (editingAsset.spot && editingAsset.color) {
         // Handle legacy single spot/color format
         const colorName = editingAsset.color.startsWith('R') ? getColorNameByRgb(editingAsset.color) : editingAsset.color;
-        setSpotColorPairs([{ spot: editingAsset.spot, color: colorName }]);
+        setSpot_color_pairs([{ spot: editingAsset.spot, color: colorName }]);
       } else {
         // No spot colors - start with empty array for 'front' type
-        setSpotColorPairs([]);
+        setSpot_color_pairs([]);
       }
     } else {
       // Reset form when not editing
@@ -139,7 +139,7 @@ export const AssetCreationForm = ({
         name: '',
         wp_inv_layer: ''
       });
-      setSpotColorPairs([]);
+      setSpot_color_pairs([]);
     }
   }, [editingAsset, editingAssetId]);
 
@@ -243,21 +243,21 @@ export const AssetCreationForm = ({
       const existingNames = getConfiguredAssets().map(asset => asset.name);
       const configForName = {
         ...currentConfig,
-        spotColorPairs: currentCardType === 'parallel' || currentCardType === 'multi-parallel' 
-          ? spotColorPairs 
+        spot_color_pairs: currentCardType === 'parallel' || currentCardType === 'multi-parallel' 
+          ? spot_color_pairs 
           : undefined
       };
       console.log('🔍 Name generation config:', { 
         cardType: currentCardType, 
         vfx: configForName.vfx, 
         chrome: configForName.chrome,
-        spotColorPairs: configForName.spotColorPairs
+        spot_color_pairs: configForName.spot_color_pairs
       });
       // For 'front' type, determine name type (special handling for base + superfractor)
       let typeForNaming = currentCardType;
       if (currentCardType === 'front') {
-        const actualType = determineActualAssetType(currentCardType, configForName, spotColorPairs);
-        const validSpotPairs = spotColorPairs.filter(pair => pair.spot && pair.color);
+        const actualType = determineActualAssetType(currentCardType, configForName, spot_color_pairs);
+        const validSpotPairs = spot_color_pairs.filter(pair => pair.spot && pair.color);
         
         // If it becomes parallel due to superfractor (not spot colors), use 'base' for naming
         if (actualType === 'parallel' && configForName.chrome === 'superfractor' && validSpotPairs.length === 0) {
@@ -296,7 +296,7 @@ export const AssetCreationForm = ({
         console.log('🚫 Not updating name - appears to be user-edited');
       }
     }
-  }, [currentCardType, currentConfig.layer, currentConfig.vfx, currentConfig.chrome, currentConfig.oneOfOneWp, spotColorPairs, editingAssetId, getConfiguredAssets, generateAssetName]);
+  }, [currentCardType, currentConfig.layer, currentConfig.vfx, currentConfig.chrome, currentConfig.oneOfOneWp, spot_color_pairs, editingAssetId, getConfiguredAssets, generateAssetName]);
 
   // Auto-select wp_inv layer when VFX or chrome is enabled and only one wp_inv layer exists
   useEffect(() => {
@@ -317,7 +317,7 @@ export const AssetCreationForm = ({
     console.log('🔍 handleAddAsset called:', { 
       currentCardType, 
       currentConfig, 
-      spotColorPairs,
+      spot_color_pairs,
       editingAssetId 
     });
     
@@ -328,7 +328,7 @@ export const AssetCreationForm = ({
     
     // Determine the actual asset type for 'front' cards
     const actualType = currentCardType === 'front' 
-      ? determineActualAssetType(currentCardType, currentConfig, spotColorPairs)
+      ? determineActualAssetType(currentCardType, currentConfig, spot_color_pairs)
       : currentCardType;
 
     const assetConfig = {
@@ -340,13 +340,13 @@ export const AssetCreationForm = ({
     console.log('🔍 Calling onAddAsset with config:', assetConfig);
     
     try {
-      await onAddAsset(assetConfig, spotColorPairs);
+      await onAddAsset(assetConfig, spot_color_pairs);
       
       console.log('✅ onAddAsset completed successfully, resetting form');
       // Only reset form if the operation was successful
       setCurrentConfig({ chrome: false, oneOfOneWp: false, name: '', wp_inv_layer: '' });
       setCurrentCardType(null);
-      setSpotColorPairs([]);
+      setSpot_color_pairs([]);
       // Close modal on successful add
       onClose();
     } catch (error) {
@@ -359,7 +359,7 @@ export const AssetCreationForm = ({
   const handleClose = () => {
     setCurrentConfig({ chrome: false, oneOfOneWp: false, name: '', wp_inv_layer: '' });
     setCurrentCardType(null);
-    setSpotColorPairs([]);
+    setSpot_color_pairs([]);
     onClose();
   };
 
@@ -479,7 +479,7 @@ export const AssetCreationForm = ({
                 
                 if (type === 'front') {
                   // For front type, initialize with no spot pairs - user can add with + button
-                  setSpotColorPairs([]);
+                  setSpot_color_pairs([]);
                   const layersForType = getLayersByType(type);
                   const autoSelectedLayer = layersForType.length === 1 ? layersForType[0] : '';
                   const initialConfig = { 
@@ -493,7 +493,7 @@ export const AssetCreationForm = ({
                   setCurrentConfig(initialConfig);
                 } else {
                   // For other types (wp, back), clear spot/color pairs
-                  setSpotColorPairs([]);
+                  setSpot_color_pairs([]);
                   const layersForType = getLayersByType(type);
                   const autoSelectedLayer = layersForType.length === 1 ? layersForType[0] : '';
                   const initialConfig = { 
@@ -581,11 +581,11 @@ export const AssetCreationForm = ({
               </div>
 
               {/* Add Spot Colors Button - Only show if spot layers exist */}
-              {getSpotLayers().length > 0 && spotColorPairs.length === 0 ? (
+              {getSpotLayers().length > 0 && spot_color_pairs.length === 0 ? (
                 <div style={{ marginBottom: 12 }}>
                   <button
                     onClick={() => {
-                      setSpotColorPairs([{ spot: '', color: undefined }]);
+                      setSpot_color_pairs([{ spot: '', color: undefined }]);
                     }}
                     style={{
                       padding: '10px 18px',
@@ -613,7 +613,7 @@ export const AssetCreationForm = ({
                     Add Spot Colors
                   </button>
                 </div>
-              ) : getSpotLayers().length > 0 && spotColorPairs.length > 0 ? (
+              ) : getSpotLayers().length > 0 && spot_color_pairs.length > 0 ? (
                 /* Spot Colors Section - Only shown when there are pairs and spot layers exist */
                 <div>
                   <div style={{
@@ -632,31 +632,31 @@ export const AssetCreationForm = ({
                     <button
                       onClick={() => {
                         const maxSpots = Math.min(3, getSpotLayers().length);
-                        if (spotColorPairs.length < maxSpots) {
-                          setSpotColorPairs(prev => [...prev, { spot: '', color: undefined }]);
+                        if (spot_color_pairs.length < maxSpots) {
+                          setSpot_color_pairs(prev => [...prev, { spot: '', color: undefined }]);
                         }
                       }}
-                      disabled={spotColorPairs.length >= Math.min(3, getSpotLayers().length)}
+                      disabled={spot_color_pairs.length >= Math.min(3, getSpotLayers().length)}
                       style={{
                         width: 24,
                         height: 24,
-                        background: spotColorPairs.length >= Math.min(3, getSpotLayers().length)
+                        background: spot_color_pairs.length >= Math.min(3, getSpotLayers().length)
                           ? 'rgba(156, 163, 175, 0.3)'
                           : 'rgba(34, 197, 94, 0.2)',
-                        border: '1px solid ' + (spotColorPairs.length >= Math.min(3, getSpotLayers().length)
+                        border: '1px solid ' + (spot_color_pairs.length >= Math.min(3, getSpotLayers().length)
                           ? 'rgba(156, 163, 175, 0.3)'
                           : 'rgba(34, 197, 94, 0.4)'),
                         borderRadius: 6,
-                        color: spotColorPairs.length >= Math.min(3, getSpotLayers().length) ? '#6b7280' : '#86efac',
+                        color: spot_color_pairs.length >= Math.min(3, getSpotLayers().length) ? '#6b7280' : '#86efac',
                         fontSize: 16,
-                        cursor: spotColorPairs.length >= Math.min(3, getSpotLayers().length) ? 'not-allowed' : 'pointer',
+                        cursor: spot_color_pairs.length >= Math.min(3, getSpotLayers().length) ? 'not-allowed' : 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         transition: 'all 0.2s'
                       }}
                       title={
-                        spotColorPairs.length >= Math.min(3, getSpotLayers().length) 
+                        spot_color_pairs.length >= Math.min(3, getSpotLayers().length) 
                           ? `Maximum ${Math.min(3, getSpotLayers().length)} spots allowed` 
                           : "Add another spot/color pair"
                       }
@@ -667,7 +667,7 @@ export const AssetCreationForm = ({
                   
                   {/* Multiple Spot/Color Rows */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {spotColorPairs.map((pair, index) => {
+                    {spot_color_pairs.map((pair, index) => {
                   const spotGroup = getColorVariants()[0]; // Always use first spot group
                   return (
                     <div key={index} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -686,9 +686,9 @@ export const AssetCreationForm = ({
                         <select
                           value={pair.spot || ''}
                           onChange={(e) => {
-                            const newPairs = [...spotColorPairs];
+                            const newPairs = [...spot_color_pairs];
                             newPairs[index] = { ...newPairs[index], spot: e.target.value };
-                            setSpotColorPairs(newPairs);
+                            setSpot_color_pairs(newPairs);
                           }}
                           style={{
                             width: '100%',
@@ -702,7 +702,7 @@ export const AssetCreationForm = ({
                         >
                           <option value="" style={{ background: '#1f2937' }}>Select...</option>
                           {getSpotLayers()
-                            .filter(layer => !spotColorPairs.some((p, i) => i !== index && p.spot === layer))
+                            .filter(layer => !spot_color_pairs.some((p, i) => i !== index && p.spot === layer))
                             .map(layer => (
                               <option key={layer} value={layer} style={{ background: '#1f2937' }}>
                                 {layer}
@@ -727,16 +727,16 @@ export const AssetCreationForm = ({
                           value={pair.color || ''}
                           onChange={(e) => {
                             if (e.target.value) {
-                              const newPairs = [...spotColorPairs];
+                              const newPairs = [...spot_color_pairs];
                               newPairs[index] = { 
                                 ...newPairs[index], 
                                 color: e.target.value
                               };
-                              setSpotColorPairs(newPairs);
+                              setSpot_color_pairs(newPairs);
                             } else {
-                              const newPairs = [...spotColorPairs];
+                              const newPairs = [...spot_color_pairs];
                               newPairs[index] = { ...newPairs[index], color: undefined };
-                              setSpotColorPairs(newPairs);
+                              setSpot_color_pairs(newPairs);
                             }
                           }}
                           disabled={!pair.spot}
@@ -767,7 +767,7 @@ export const AssetCreationForm = ({
                       {/* Remove Button - only render when more than one pair to avoid stealing row width */}
                       <button
                         onClick={() => {
-                          setSpotColorPairs(prev => prev.filter((_, i) => i !== index));
+                          setSpot_color_pairs(prev => prev.filter((_, i) => i !== index));
                         }}
                         style={{
                           width: 32,
@@ -1053,7 +1053,7 @@ export const AssetCreationForm = ({
 
               // For front type, determine what it will become
               const actualType: string = currentCardType === 'front' 
-                ? determineActualAssetType(currentCardType, currentConfig, spotColorPairs)
+                ? determineActualAssetType(currentCardType, currentConfig, spot_color_pairs)
                 : currentCardType || '';
 
               // Use actualType for validation (handles front -> base/parallel/multi-parallel conversion)
@@ -1068,8 +1068,8 @@ export const AssetCreationForm = ({
                 currentConfigWpInvLayer: currentConfig.wp_inv_layer,
                 currentConfigVfx: currentConfig.vfx,
                 currentConfigChrome: currentConfig.chrome,
-                spotColorPairs: spotColorPairs,
-                validSpotPairs: spotColorPairs.filter(pair => pair.spot && pair.color),
+                spot_color_pairs: spot_color_pairs,
+                validSpotPairs: spot_color_pairs.filter(pair => pair.spot && pair.color),
                 wpInvLayersLength: getWpInvLayers().length,
                 hasSuperfractor: currentConfig.chrome === 'superfractor'
               });
@@ -1104,9 +1104,9 @@ export const AssetCreationForm = ({
                     if (!currentConfig.layer) {
                       validationMessage = currentCardType === 'front' ? 'Select base layer' : 'Select layer';
                     } else {
-                      const validPairs = spotColorPairs.filter(pair => pair.spot && pair.color);
+                      const validPairs = spot_color_pairs.filter(pair => pair.spot && pair.color);
                       console.log('🔍 Parallel validation:', { 
-                        spotColorPairs, 
+                        spot_color_pairs, 
                         validPairs, 
                         validPairsLength: validPairs.length,
                         wpInvLayersLength: getWpInvLayers().length,
