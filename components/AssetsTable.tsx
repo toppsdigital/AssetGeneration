@@ -76,6 +76,11 @@ export const AssetsTable = ({
   onEDRPdfUpload,
   onAddAsset
 }: AssetsTableProps) => {
+  // Use centralized data store for asset mutations
+  const { mutate: bulkUpdateAssetsMutation } = useAppDataStore('jobAssets', { 
+    jobId: jobData?.job_id || '', 
+    autoRefresh: false 
+  });
   const getColorHexByRgb = (rgbValue: string): string => {
     // Convert RGB string to hex for display
     const rgbMatch = rgbValue.match(/R(\d+)G(\d+)B(\d+)/);
@@ -227,8 +232,12 @@ export const AssetsTable = ({
         chromeUpdated: chromeUpdatedAssets.map(a => `${a.name} (${a.type})`)
       });
       
-      // Make single bulk update API call with ALL assets
-      const response = await contentPipelineApi.bulkUpdateAssets(jobData.job_id, allAssets);
+      // Make single bulk update API call with ALL assets via centralized data store
+      const response = await bulkUpdateAssetsMutation({
+        type: 'bulkUpdateAssets',
+        jobId: jobData.job_id,
+        data: allAssets
+      });
       
       if (response.success) {
         console.log(`✅ Successfully ${action}d chrome ${shouldRemoveChrome ? 'from' : 'to'} ${assetsToUpdate.length} assets`);
