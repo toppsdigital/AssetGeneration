@@ -124,7 +124,7 @@ function JobDetailsPageContent() {
     allFilesUploaded: uploadEngine.allFilesUploaded,
     hasJobData: !!mergedJobData,
     jobDataFilesCount: mergedJobData?.content_pipeline_files?.length || 0,
-    filesLoaded,
+    filesLoaded: fileManager.filesLoaded,
     timestamp: new Date().toISOString()
   });
 
@@ -170,59 +170,10 @@ function JobDetailsPageContent() {
     };
   }, [uploadsInProgress]);
 
-  // Sync legacy state with React Query state - ONLY when NOT in create mode
-  useEffect(() => {
-    // Skip sync when in create mode to avoid conflicts with createNewFiles()
-    if (createFiles === 'true') {
-      console.log('🔄 Skipping legacy state sync - in create mode');
-      return;
-    }
-    
-    // Update file loading states based on React Query
-    const hasFiles = fileData.length > 0;
-    const shouldMarkFilesLoaded = !isLoadingFiles && (hasFiles || (jobData && (!jobData.api_files || jobData.api_files.length === 0)));
-    
-    console.log('🔄 Syncing legacy state (fetch mode):', {
-      isLoadingFiles,
-      fileDataLength: fileData.length,
-      hasApiFiles: jobData?.api_files?.length || 0,
-      shouldMarkFilesLoaded,
-      currentFilesLoaded: filesLoaded
-    });
-    
-    setFilesLoaded(shouldMarkFilesLoaded);
-    setLoadingFiles(isLoadingFiles);
-    
-    // Sync loading state
-    setLoading(isLoadingJob && !jobData);
-    
-    // Update loading steps and messages based on React Query state
-    if (isLoadingJob && !jobData) {
-      setLoadingStep(1);
-      setLoadingMessage('Loading job details...');
-      setLoadingDetail('Fetching job information');
-    } else if (isLoadingFiles) {
-      setLoadingStep(2);
-      setLoadingMessage('Loading files...');
-      setLoadingDetail(`Fetching ${jobData?.api_files?.length || 0} file objects`);
-    } else if (shouldMarkFilesLoaded) {
-      const isExtracted = jobData?.job_status?.toLowerCase() === 'extracted';
-      setLoadingStep(isExtracted ? 4 : 2);
-      setLoadingMessage(isExtracted ? 'Ready for PSD selection' : 'Files loaded successfully');
-      setLoadingDetail(`${fileData.length} files ready`);
-    }
-    
-    // Clear any legacy errors if React Query data is successful
-    if (jobData && !error) {
-      setError(null);
-    }
-  }, [createFiles, isLoadingFiles, fileData, isLoadingJob, jobData, error, filesLoaded]);
+  // Legacy state sync is now handled by useLoadingStateManager hook
 
-  // Calculate total loading steps based on job status
-  const getTotalLoadingSteps = () => {
-    const isExtracted = mergedJobData?.job_status?.toLowerCase() === 'extracted';
-    return isExtracted ? 4 : 2; // 1-2 for basic loading, 3-4 for extracted jobs with PSD loading
-  };
+  // Get total loading steps from loading state manager
+  const getTotalLoadingSteps = loadingStateManager.getTotalLoadingSteps;
 
   // PDF upload tracking is now handled by uploadState hook
 
@@ -250,12 +201,12 @@ function JobDetailsPageContent() {
   // Reset file loading state when job ID changes (navigation to different job)
   useEffect(() => {
     console.log('🔄 Job ID changed, resetting file loading state');
-    setFilesLoaded(false);
-    setLoadingFiles(false);
+    fileManager.setFilesLoaded(false);
+    fileManager.setLoadingFiles(false);
     uploadEngine.resetUploadState();
     // Reset file creation trigger
     fileCreationTriggeredRef.current = false;
-  }, [jobData?.job_id]);
+  }, [jobData?.job_id, fileManager, uploadEngine]);
 
   // Auto-trigger file creation when createFiles=true
   useEffect(() => {
@@ -263,507 +214,47 @@ function JobDetailsPageContent() {
       createFiles,
       shouldFetchFiles: createFiles !== 'true',
       hasJobData: !!jobData,
-      filesLoaded,
+      filesLoaded: fileManager.filesLoaded,
       jobId: jobData?.job_id,
       apiFilesCount: jobData?.api_files?.length || 0,
       alreadyTriggered: fileCreationTriggeredRef.current
     });
     
-    if (createFiles === 'true' && jobData && !filesLoaded && !fileCreationTriggeredRef.current) {
+    if (createFiles === 'true' && jobData && !fileManager.filesLoaded && !fileCreationTriggeredRef.current) {
       console.log('🔄 Auto-triggering file creation for new job');
       fileCreationTriggeredRef.current = true;
-      createNewFiles();
-    } else if (createFiles !== 'true' && jobData && !filesLoaded) {
+      fileManager.createNewFiles();
+    } else if (createFiles !== 'true' && jobData && !fileManager.filesLoaded) {
       console.log('📋 createFiles=false, will fetch existing files via useJobFiles hook');
-    } else if (filesLoaded) {
+    } else if (fileManager.filesLoaded) {
       console.log('📋 Files already loaded, no action needed');
     } else {
       console.log('📋 Waiting for job data...');
     }
-  }, [createFiles, jobData, filesLoaded]);
+  }, [createFiles, jobData, fileManager]);
 
   // Trigger upload check when files are loaded
   useEffect(() => {
-    uploadEngine.checkAndStartUpload(filesLoaded);
-  }, [filesLoaded, uploadEngine]);
+    uploadEngine.checkAndStartUpload(fileManager.filesLoaded);
+  }, [fileManager.filesLoaded, uploadEngine]);
 
   // (Reset logic moved to dedicated useEffect above)
 
   // Upload completion monitoring is now handled by the upload engine
 
-  // Fetch physical JSON files when status is "extracted"
-  useEffect(() => {
-    if (jobData?.job_status?.toLowerCase() === 'extracted') {
-      fetchPhysicalJsonFiles();
-    }
-  }, [jobData?.job_status]);
+  // PSD template fetching is now handled by usePSDTemplateManager hook
 
-  // Function to fetch physical JSON files from S3 proxy
-  const fetchPhysicalJsonFiles = async () => {
-    try {
-      setLoadingPhysicalFiles(true);
-      // Only set loading step for PSD loading if status is extracted
-      if (jobData?.job_status?.toLowerCase() === 'extracted') {
-        setLoadingStep(3);
-        setLoadingMessage('Loading PSD templates...');
-        setLoadingDetail('Fetching available physical PSD files');
-      }
-      
-      console.log('🔍 Fetching physical JSON files from public endpoint...');
-      
-      const response = await fetch('/api/s3-proxy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          client_method: 'fetch_public_files',
-          public_url: 'https://topps-nexus-powertools.s3.us-east-1.amazonaws.com/asset_generator/dev/public/digital_to_physical_psd_files.json',
-          file_type: 'psd'
-        }),
-      });
+  // Physical JSON file fetching is now handled by usePSDTemplateManager hook
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch JSON files: ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log('📁 Physical PSD files response:', data);
-      
-      // The new API returns files in the format:
-      // { files: [{ file_name: "...", display_name: "...", json_url: "..." }], total_count: ... }
-      const physicalFiles = (data.files || []).map((file: any) => ({
-        name: file.file_name || file.name || '',
-        lastModified: null, // Not available in the new format
-        json_url: file.json_url // Store the json_url for later use
-      }));
-      
-      console.log('🎯 Formatted physical JSON files:', physicalFiles);
-      setPhysicalJsonFiles(physicalFiles);
-      
-    } catch (error) {
-      console.error('❌ Error fetching physical JSON files:', error);
-    } finally {
-      setLoadingPhysicalFiles(false);
-    }
-  };
-
-  // Function to download and parse JSON file via S3 proxy (to avoid CORS)
-  const downloadJsonFile = async (selectedFile: string) => {
-    try {
-      setLoadingJsonData(true);
-      // Only set loading step for JSON data if status is extracted
-      if (jobData?.job_status?.toLowerCase() === 'extracted') {
-        setLoadingStep(4);
-        setLoadingMessage('Loading PSD data...');
-        setLoadingDetail(`Parsing ${selectedFile.split('/').pop()?.replace('.json', '.psd') || 'template'}`);
-      }
-      setJsonData(null);
-      
-      console.log('🔍 Downloading JSON via S3 proxy for selected file:', selectedFile);
-      
-      // Find the selected file in physicalJsonFiles to get its json_url
-      const selectedFileData = physicalJsonFiles.find(file => file.name === selectedFile);
-      
-      if (!selectedFileData || !selectedFileData.json_url) {
-        throw new Error(`JSON URL not found for file: ${selectedFile}`);
-      }
-      
-      console.log('🔗 Using JSON URL:', selectedFileData.json_url);
-      console.log('📋 Available physical files:', physicalJsonFiles.map(f => ({ name: f.name, json_url: f.json_url })));
-      
-      const jsonUrl = selectedFileData.json_url;
-      
-      // Always use S3 proxy to avoid CORS issues, but handle both file paths and full URLs
-      const requestBody = { 
-        client_method: 'get',
-        filename: jsonUrl,
-        download: true,  // This tells the proxy to fetch and return the content directly
-        direct_url: jsonUrl.startsWith('http://') || jsonUrl.startsWith('https://') // Flag for proxy to know it's a direct URL
-      };
-      
-      console.log('📤 S3 proxy request body:', requestBody);
-      
-      const response = await fetch('/api/s3-proxy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
-      });
-      
-      console.log('📥 S3 proxy response status:', response.status);
-      console.log('📥 S3 proxy response headers:', Object.fromEntries(response.headers.entries()));
-      
-      if (!response.ok) {
-        // Try to get more details about the error
-        let errorDetails = `Status: ${response.status}`;
-        try {
-          const errorBody = await response.text();
-          console.log('❌ S3 proxy error response body:', errorBody);
-          errorDetails += ` - ${errorBody}`;
-        } catch (e) {
-          console.log('❌ Could not read error response body:', e);
-        }
-        throw new Error(`Failed to download JSON via proxy: ${errorDetails}`);
-      }
-      
-      const jsonData = await response.json();
-      console.log('📋 JSON data loaded successfully via proxy, keys:', Object.keys(jsonData || {}));
-      
-      if (jsonData && typeof jsonData === 'object') {
-        setJsonData(jsonData);
-      } else {
-        throw new Error('Invalid JSON content received from proxy');
-      }
-      
-    } catch (error) {
-      console.error('❌ Error downloading JSON via proxy:', error);
-      setJsonData(null);
-    } finally {
-      setLoadingJsonData(false);
-    }
-  };
-
-  // Download JSON when file is selected
-  useEffect(() => {
-    if (selectedPhysicalFile) {
-      downloadJsonFile(selectedPhysicalFile);
-    } else {
-      setJsonData(null);
-    }
-    // Clear selected layers when changing files
-    setSelectedLayers(new Set());
-    setSelectedExtractedLayers(new Set());
-  }, [selectedPhysicalFile]);
+  // JSON file downloading is now handled by usePSDTemplateManager hook
 
 
 
-  const loadJobDetails = async () => {
-    try {
-      setLoading(true);
-      setLoadingStep(1);
-      setLoadingMessage('Loading job details...');
-      setLoadingDetail('Fetching job information from API');
-      
-      // Reset file-related state when loading a new job
-      setFilesLoaded(false);
-      setLoadingFiles(false);
-      
-      console.log('Loading job details for jobId:', jobId);
-      const response = await contentPipelineApi.getJob(jobId as string);
-      
-      console.log('Job details loaded:', response.job);
-      
-      // Map API response to our local interface, preserving existing files
-      setJobData(prevJobData => {
-        const mappedJobData: UIJobData = {
-          ...response.job,
-          api_files: response.job.files, // Store API files separately
-          files: prevJobData?.files || [], // Preserve existing legacy files
-          content_pipeline_files: prevJobData?.content_pipeline_files || [], // Preserve existing Content Pipeline files
-            Subset_name: response.job.source_folder // Map source_folder to Subset_name for UI compatibility
-        };
-        
-        console.log('🔄 setJobData called from: loadJobDetails (preserving existing files) at', new Date().toISOString());
-        console.log('📊 Preserved files:', mappedJobData.content_pipeline_files?.length || 0);
-        return mappedJobData;
-      });
-      
-    } catch (error) {
-      console.error('Error loading job details:', error);
-      setError('Failed to load job details: ' + (error as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Job details loading is now handled by useJobDetailsData hook
 
-  // Load existing file objects using batch read
-  const loadExistingFiles = async () => {
-    if (!jobData || !jobData.api_files || jobData.api_files.length === 0) return;
-    
-    try {
-      setLoadingFiles(true);
-      setLoadingStep(2);
-      setLoadingMessage('Loading files...');
-      setLoadingDetail(`Fetching ${jobData.api_files.length} file objects`);
-      
-      console.log('Fetching existing file objects for:', jobData.api_files);
-      
-      // Batch read existing files
-      const batchResponse = await contentPipelineApi.batchGetFiles(jobData.api_files);
-      
-      console.log('Batch read response:', batchResponse);
-      
-      // Validate response before processing
-      if (!batchResponse.files || !Array.isArray(batchResponse.files)) {
-        console.error('Invalid response format from batchGetFiles:', batchResponse);
-        throw new Error('Invalid response format from API');
-      }
-      
-      // Map API response to our ContentPipelineFile format
-      const fileObjects: FileData[] = batchResponse.files.map(apiFile => ({
-        filename: apiFile.filename,
-        job_id: apiFile.job_id,
-        last_updated: apiFile.last_updated || new Date().toISOString(),
-        original_files: apiFile.original_files || {},
-        extracted_files: apiFile.extracted_files || {},
-        firefly_assets: apiFile.firefly_assets || {}
-      }));
-      
-      // Only update if we actually got files back
-      if (fileObjects.length > 0) {
-        // Update job data with fetched files
-        const updatedJobData = {
-          ...jobData,
-          content_pipeline_files: fileObjects
-        };
-        
-        console.log('✅ Loaded existing files successfully, checking if upload should start...');
-        console.log('Job status:', jobData.job_status);
-        console.log('Files loaded:', fileObjects.length);
-        
-        console.log('🔄 setJobData called from: loadExistingFiles at', new Date().toISOString());
-        setJobData(updatedJobData);
-        setFilesLoaded(true);
-        
-        // Set appropriate completion step based on job status
-        const isExtracted = jobData.job_status?.toLowerCase() === 'extracted';
-        setLoadingStep(isExtracted ? 2 : 2); // Step 2 for file loading completion
-        setLoadingMessage(isExtracted ? 'Files loaded - Ready for PSD selection' : 'Files loaded successfully');
-        setLoadingDetail(`${fileObjects.length} file objects ready`);
-      } else {
-        console.warn('⚠️ No files returned from API, keeping existing state');
-        setFilesLoaded(true); // Still mark as loaded to prevent retries
-        
-        const isExtracted = jobData.job_status?.toLowerCase() === 'extracted';
-        setLoadingStep(isExtracted ? 2 : 2);
-        setLoadingMessage(isExtracted ? 'Files ready - Ready for PSD selection' : 'Files loaded');
-        setLoadingDetail('No additional files found');
-      }
-      
-    } catch (error) {
-      console.error('Error fetching file objects:', error);
-      setError('Failed to fetch file objects: ' + (error as Error).message);
-      // Don't set filesLoaded to true on error to allow retries
-    } finally {
-      setLoadingFiles(false);
-    }
-  };
+  // File loading is now handled by useFileManager hook
 
-  // Create new file objects using batch create
-  const createNewFiles = async () => {
-    if (!jobData || !jobData.api_files || jobData.api_files.length === 0) {
-      console.log('createNewFiles: No job data or api_files found');
-      return;
-    }
-    
-    try {
-      setLoadingFiles(true);
-      setLoadingStep(2);
-      setLoadingMessage('Creating file objects...');
-      setLoadingDetail(`Setting up ${jobData.api_files.length} file entries`);
-      
-      console.log('Creating file objects for:', jobData.api_files);
-      console.log('Job data:', { job_id: jobData.job_id, app_name: jobData.app_name });
-      
-      // Sanitize app name to ensure it's URL-safe and consistent with S3 paths
-      const sanitizeAppName = (str: string) => str.trim().replace(/[^a-zA-Z0-9\-_]/g, '-').replace(/-+/g, '-');
-      const sanitizedAppName = sanitizeAppName(jobData.app_name || '');
-      
-      console.log('Sanitized app name:', sanitizedAppName, 'from original:', jobData.app_name);
-      
-      // Get actual pending files to determine what files need to be created
-      const pendingFiles = (window as any).pendingUploadFiles;
-      const actualFiles = pendingFiles?.files || [];
-      
-      console.log('Actual files to be uploaded:', actualFiles.map((f: File) => f.name));
-      
-      // Create a mapping of actual file names to their base names (for grouping)
-      // Only process files that match our strict naming convention
-      const fileNameToBaseMap = new Map<string, string>();
-      actualFiles.forEach((file: File) => {
-        const fileName = file.name;
-        // Only accept files ending with _FR.pdf or _BK.pdf (strict naming)
-        if (fileName.match(/_(FR|BK)\.pdf$/i)) {
-          const baseName = fileName.replace(/_(FR|BK)\.pdf$/i, '');
-          fileNameToBaseMap.set(fileName, baseName);
-        } else {
-          console.warn(`⚠️ Skipping file with invalid naming: ${fileName} (must end with _FR.pdf or _BK.pdf)`);
-        }
-      });
-      
-      // Group files by their base names (only for valid files)
-      const fileGroups = new Map<string, {name: string, type: 'front' | 'back'}[]>();
-      actualFiles.forEach((file: File) => {
-        const fileName = file.name;
-        const baseName = fileNameToBaseMap.get(fileName);
-        if (!baseName) return; // Skip files that don't match our naming convention
-        
-        // Determine card type based on strict filename convention
-        let cardType: 'front' | 'back' = 'front';
-        if (fileName.match(/_BK\.pdf$/i)) {
-          cardType = 'back';
-        } else if (fileName.match(/_FR\.pdf$/i)) {
-          cardType = 'front';
-        } else {
-          // This shouldn't happen since we filtered above, but be safe
-          console.warn(`⚠️ Unexpected filename pattern: ${fileName}`);
-          return;
-        }
-        
-        if (!fileGroups.has(baseName)) {
-          fileGroups.set(baseName, []);
-        }
-        fileGroups.get(baseName)!.push({name: fileName, type: cardType});
-      });
-      
-      console.log('File groups created:', Array.from(fileGroups.entries()));
-      
-      // Create file objects based on the actual files being uploaded
-      const fileObjects: FileData[] = Array.from(fileGroups.entries()).map(([baseName, files]) => {
-        const originalFiles: Record<string, {
-          card_type: 'front' | 'back';
-          file_path: string;
-          status: 'uploading' | 'uploaded' | 'upload-failed';
-        }> = {};
-        
-        // Add each actual file to the original_files object
-        files.forEach(file => {
-          originalFiles[file.name] = {
-            card_type: file.type,
-            file_path: `${sanitizedAppName}/PDFs/${file.name}`,
-          status: 'uploading'
-        };
-        });
-        
-        return {
-          filename: baseName,
-          last_updated: new Date().toISOString(),
-          original_files: originalFiles
-        };
-      });
-      
-      // Create FileData objects for the API with flattened structure
-      const apiFileData: FileData[] = fileObjects.map(fileObj => ({
-        filename: fileObj.filename,
-        job_id: jobData.job_id,
-        original_files: fileObj.original_files
-      }));
-      
-      // Batch create files
-      const batchResponse = await contentPipelineApi.batchCreateFiles(apiFileData);
-      
-      console.log('Batch create response:', batchResponse);
-      
-      // Handle the response - some files may already exist
-      let finalFileObjects: FileData[] = [];
-      
-              // Add successfully created files
-        if (batchResponse.created_files && batchResponse.created_files.length > 0) {
-          console.log('✅ Successfully created files:', batchResponse.created_files.length);
-        const createdFiles = batchResponse.created_files.map((apiFile: any) => ({
-            filename: apiFile.filename,
-            last_updated: apiFile.last_updated || new Date().toISOString(),
-            original_files: apiFile.original_files || apiFile.metadata?.original_files || {},
-            extracted_files: apiFile.extracted_files || apiFile.metadata?.extracted_files || {},
-            firefly_assets: apiFile.firefly_assets || apiFile.metadata?.firefly_assets || {}
-          }));
-        finalFileObjects = [...finalFileObjects, ...createdFiles];
-      }
-      
-      // Handle existing files returned by the API
-      if (batchResponse.existing_files && batchResponse.existing_files.length > 0) {
-        console.log('📁 Found existing files:', batchResponse.existing_files.length);
-        const existingFiles = batchResponse.existing_files.map((apiFile: any) => ({
-              filename: apiFile.filename,
-              job_id: apiFile.job_id,
-              last_updated: apiFile.last_updated || new Date().toISOString(),
-          original_files: apiFile.original_files || apiFile.metadata?.original_files || {},
-          extracted_files: apiFile.extracted_files || apiFile.metadata?.extracted_files || {},
-          firefly_assets: apiFile.firefly_assets || apiFile.metadata?.firefly_assets || {}
-            }));
-        finalFileObjects = [...finalFileObjects, ...existingFiles];
-        
-        console.log('🔍 Existing files details:', existingFiles.map(f => ({
-          filename: f.filename,
-          hasOriginalFiles: Object.keys(f.original_files || {}).length > 0,
-          hasExtractedFiles: Object.keys(f.extracted_files || {}).length > 0,
-          hasFireflyAssets: Object.keys(f.firefly_assets || {}).length > 0
-        })));
-      }
-      
-      // Handle any failed files (log for debugging)
-      if (batchResponse.failed_files && batchResponse.failed_files.length > 0) {
-        console.warn('⚠️ Some files failed to create:', batchResponse.failed_files.length);
-        console.warn('Failed files details:', batchResponse.failed_files);
-        // Backend now handles existing files gracefully, so we just log any genuine failures
-      }
-      
-      console.log('📁 Final file objects count:', finalFileObjects.length);
-      
-      // Only update if we actually got files back
-      if (finalFileObjects.length > 0) {
-        // Update React Query cache with all files (created + existing)
-        const updatedJobData = {
-          ...jobData,
-          content_pipeline_files: finalFileObjects
-        };
-        
-        console.log('Setting job data with file objects:', updatedJobData);
-        console.log('🔄 Updating React Query cache from: createNewFiles at', new Date().toISOString());
-        
-        // Update React Query cache and local UI state for immediate render
-        queryClient.setQueryData(jobKeys.detail(jobData.job_id), updatedJobData);
-        setLocalJobData(updatedJobData as any);
-        setFilesLoaded(true);
-        
-        // Verify the cache was updated
-        const cachedData = queryClient.getQueryData<UIJobData>(jobKeys.detail(jobData.job_id));
-        console.log('🔍 Cache verification after update:', {
-          updatedFiles: finalFileObjects.length,
-          cachedFiles: cachedData?.content_pipeline_files?.length || 0,
-          cacheUpdateSuccessful: !!cachedData?.content_pipeline_files?.length,
-          finalFileObjectsSample: finalFileObjects.slice(0, 2).map(f => ({
-            filename: f.filename,
-            hasOriginalFiles: Object.keys(f.original_files || {}).length > 0
-          })),
-          updatedJobDataStructure: Object.keys(updatedJobData)
-        });
-        
-        // Set appropriate completion step and message based on what was found
-        const isExtracted = jobData.job_status?.toLowerCase() === 'extracted';
-        const createdCount = batchResponse.created_files?.length || 0;
-        const existingCount = batchResponse.existing_files?.length || 0;
-        
-        let completionMessage = 'Files ready';
-        if (createdCount > 0 && existingCount > 0) {
-          completionMessage = `${createdCount} files created, ${existingCount} existing files loaded`;
-        } else if (createdCount > 0) {
-          completionMessage = `${createdCount} files created successfully`;
-        } else if (existingCount > 0) {
-          completionMessage = `${existingCount} existing files loaded`;
-        }
-        
-        setLoadingStep(isExtracted ? 2 : 2); // Step 2 for file creation completion
-        setLoadingMessage(isExtracted ? `${completionMessage} - Ready for PSD selection` : completionMessage);
-        setLoadingDetail(`${finalFileObjects.length} files ready for upload`);
-        
-        console.log('createNewFiles completed successfully, filesLoaded set to true');
-      } else {
-        console.warn('⚠️ No files created, keeping existing state');
-        setFilesLoaded(true); // Still mark as loaded to prevent retries
-        
-        const isExtracted = jobData.job_status?.toLowerCase() === 'extracted';
-        setLoadingStep(isExtracted ? 2 : 2);
-        setLoadingMessage(isExtracted ? 'Files ready - Ready for PSD selection' : 'Files ready');
-        setLoadingDetail('No new files to create');
-      }
-      
-    } catch (error) {
-      console.error('Error creating file objects:', error);
-      setError('Failed to create file objects: ' + (error as Error).message);
-      // Don't set filesLoaded to true on error to allow retries
-    } finally {
-      setLoadingFiles(false);
-    }
-  };
+  // File creation is now handled by useFileManager hook
 
     // Update job status using Content Pipeline API with cache synchronization
   const updateJobStatus = async (status: JobData['job_status']): Promise<void> => {
@@ -794,8 +285,8 @@ function JobDetailsPageContent() {
         return updatedJob;
       });
       
-      // Also update legacy state for backward compatibility
-      setJobData(prevJobData => {
+      // Also update local state for backward compatibility
+      setLocalJobData(prevJobData => {
         if (!prevJobData) return prevJobData;
         
         return {
@@ -830,13 +321,13 @@ function JobDetailsPageContent() {
 
 
 
-  if (loading) {
+  if (isLoading) {
     return (
       <JobDetailsLoadingState
-        loadingStep={loadingStep}
+        loadingStep={loadingStateManager.loadingStep}
         totalSteps={getTotalLoadingSteps()}
-        loadingMessage={loadingMessage}
-        loadingDetail={loadingDetail}
+        loadingMessage={loadingStateManager.loadingMessage}
+        loadingDetail={loadingStateManager.loadingDetail}
       />
     );
   }
@@ -857,12 +348,12 @@ function JobDetailsPageContent() {
       uploadsInProgress={uploadsInProgress}
       creatingAssets={creatingAssets}
       setCreatingAssets={setCreatingAssets}
-      loadingFiles={loadingFiles}
-      filesLoaded={filesLoaded}
-      loadingStep={loadingStep}
-      loadingMessage={loadingMessage}
-      loadingDetail={loadingDetail}
-      loading={loading}
+      loadingFiles={fileManager.loadingFiles}
+      filesLoaded={fileManager.filesLoaded}
+      loadingStep={loadingStateManager.loadingStep}
+      loadingMessage={loadingStateManager.loadingMessage}
+      loadingDetail={loadingStateManager.loadingDetail}
+      loading={isLoading}
       onJobDataUpdate={(updatedJobData) => {
         console.log('🎯 onJobDataUpdate called with:', {
           hasUpdatedJobData: !!updatedJobData,
