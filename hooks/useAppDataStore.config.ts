@@ -244,6 +244,15 @@ export type StatusFilter = typeof JOBS_FILTER_CONFIG.STATUS_FILTERS[keyof typeof
 export type ForceRefreshEvent = typeof FORCE_REFRESH_CONFIG.JOBS_LIST_FORCE_REFRESH_EVENTS[number];
 
 // Default export with all configuration
+/**
+ * AUTO-REFRESH PAGE RESTRICTIONS
+ * Pages where auto-refresh polling is allowed to run
+ */
+export const ALLOWED_AUTO_REFRESH_PAGES = [
+  '/test-datastore', // Test page for useAppDataStore
+  '/jobs',           // Main jobs list page
+] as const;
+
 export default {
   AUTO_REFRESH_INTERVALS,
   JOB_STATUS_CONFIG,
@@ -252,6 +261,7 @@ export default {
   JOBS_FILTER_CONFIG,
   DEBUG_CONFIG,
   FORCE_REFRESH_CONFIG,
+  ALLOWED_AUTO_REFRESH_PAGES,
   ConfigHelpers,
   ConfigValidation,
 } as const;

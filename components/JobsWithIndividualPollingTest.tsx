@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { useQueries } from '@tanstack/react-query';
+import { usePathname } from 'next/navigation';
 import { useAppDataStore, dataStoreKeys } from '../hooks/useAppDataStore';
 import { ConfigHelpers } from '../hooks/useAppDataStore.config';
 import { contentPipelineApi } from '../web/utils/contentPipelineApi';
@@ -13,6 +14,11 @@ export default function JobsWithIndividualPollingTest() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'in-progress' | 'completed'>('all');
   const [autoRefreshJobs, setAutoRefreshJobs] = useState(true);
   const [autoRefreshIndividual, setAutoRefreshIndividual] = useState(true);
+  
+  const pathname = usePathname();
+  
+  // Define pages where auto-refresh is allowed
+  const isAutoRefreshAllowedOnPage = AppDataStoreConfig.ALLOWED_AUTO_REFRESH_PAGES.includes(pathname as any);
 
   // Build options for jobs list (memoized to prevent infinite re-renders)
   const jobsOptions = useMemo(() => ({
@@ -52,7 +58,7 @@ export default function JobsWithIndividualPollingTest() {
 
   // Use React Query's useQueries for proper polling
   const individualJobQueries = useQueries({
-    queries: autoRefreshIndividual ? nonCompletedJobIds.map(jobId => ({
+    queries: (autoRefreshIndividual && isAutoRefreshAllowedOnPage) ? nonCompletedJobIds.map(jobId => ({
       queryKey: dataStoreKeys.jobs.detail(jobId),
       queryFn: async () => {
         console.log(`🌐 [ReactQuery] Making network call for job ${jobId}`);
@@ -71,10 +77,14 @@ export default function JobsWithIndividualPollingTest() {
           Subset_name: response.job.source_folder
         };
       },
-      enabled: autoRefreshIndividual,
+      enabled: autoRefreshIndividual && isAutoRefreshAllowedOnPage,
       refetchInterval: (data, query) => {
-        if (!autoRefreshIndividual) {
-          console.log(`⏸️ [ReactQuery] Auto-refresh disabled for job ${jobId}`);
+        if (!autoRefreshIndividual || !isAutoRefreshAllowedOnPage) {
+          if (!isAutoRefreshAllowedOnPage) {
+            console.log(`⏸️ [ReactQuery] Auto-refresh disabled for job ${jobId} - page ${pathname} not allowed`);
+          } else {
+            console.log(`⏸️ [ReactQuery] Auto-refresh disabled for job ${jobId}`);
+          }
           return false;
         }
         
@@ -115,7 +125,9 @@ export default function JobsWithIndividualPollingTest() {
 
   const individualPollingInfo = {
     totalNonCompleted: nonCompletedJobIds.length,
-    pollingEnabled: autoRefreshIndividual,
+    pollingEnabled: autoRefreshIndividual && isAutoRefreshAllowedOnPage,
+    pageAllowed: isAutoRefreshAllowedOnPage,
+    currentPage: pathname,
   };
 
   return (
@@ -258,6 +270,11 @@ export default function JobsWithIndividualPollingTest() {
             <span className={`ml-1 font-semibold ${individualPollingInfo.pollingEnabled ? 'text-green-600' : 'text-red-600'}`}>
               {individualPollingInfo.pollingEnabled ? 'YES' : 'NO'}
             </span>
+            {!individualPollingInfo.pageAllowed && (
+              <div className="text-xs text-orange-600 mt-1">
+                ⚠️ Auto-refresh disabled: Page '{individualPollingInfo.currentPage}' not in allowed list {JSON.stringify(AppDataStoreConfig.ALLOWED_AUTO_REFRESH_PAGES)}
+              </div>
+            )}
           </div>
           <div>
             <strong>Jobs Being Polled:</strong> {individualPollingInfo.totalNonCompleted}
@@ -335,7 +352,10 @@ export default function JobsWithIndividualPollingTest() {
                             return <span className="text-gray-500">⏹️ Not Polling</span>;
                           }
                           
-                          if (!autoRefreshIndividual) {
+                          if (!autoRefreshIndividual || !isAutoRefreshAllowedOnPage) {
+                            if (!isAutoRefreshAllowedOnPage) {
+                              return <span className="text-orange-500">⏸️ Page Not Allowed</span>;
+                            }
                             return <span className="text-orange-500">⏸️ Polling Disabled</span>;
                           }
                           

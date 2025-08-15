@@ -1,6 +1,7 @@
 // Centralized App Data Store Hook
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { usePathname } from 'next/navigation';
 import { contentPipelineApi } from '../web/utils/contentPipelineApi';
 import { 
   AppDataStoreReturn, 
@@ -58,7 +59,11 @@ export function useAppDataStore<T = any>(
 ): AppDataStoreReturn<T> {
   
   const queryClient = useQueryClient();
+  const pathname = usePathname();
   // React Query now handles polling internally via refetchInterval
+  
+  // Define pages where auto-refresh is allowed
+  const isAutoRefreshAllowedOnPage = AppDataStoreConfig.ALLOWED_AUTO_REFRESH_PAGES.includes(pathname as any);
   
   // Merge config with centralized configuration and user overrides
   const finalConfig = useMemo(() => ({
@@ -293,7 +298,10 @@ export function useAppDataStore<T = any>(
     refetchOnMount: false,
     // Use React Query's built-in polling instead of manual timers
     refetchInterval: (data) => {
-      if (!options.autoRefresh || !finalConfig.autoRefresh.enabled) {
+      if (!options.autoRefresh || !finalConfig.autoRefresh.enabled || !isAutoRefreshAllowedOnPage) {
+        if (!isAutoRefreshAllowedOnPage && DEBUG_CONFIG.ENABLE_AUTO_REFRESH_LOGGING) {
+          console.log(`⏸️ [DataStore] Auto-refresh disabled - page ${pathname} not in allowed list:`, AppDataStoreConfig.ALLOWED_AUTO_REFRESH_PAGES);
+        }
         return false; // Disable polling
       }
       
@@ -545,6 +553,6 @@ export function useAppDataStore<T = any>(
     forceRefreshJobsList,
     
     // Auto-refresh is now handled internally by React Query's refetchInterval
-    isAutoRefreshActive: options.autoRefresh && finalConfig.autoRefresh.enabled,
+    isAutoRefreshActive: options.autoRefresh && finalConfig.autoRefresh.enabled && isAutoRefreshAllowedOnPage,
   };
 }
