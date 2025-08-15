@@ -1,14 +1,17 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useQueries } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
 import styles from '../../styles/Home.module.css';
 import PageTitle from '../../components/PageTitle';
 import Spinner from '../../components/Spinner';
-import { contentPipelineApi, JobData } from '../../web/utils/contentPipelineApi';
+import { JobData } from '../../web/utils/contentPipelineApi';
 import { getAppIcon, getAppDisplayName } from '../../utils/fileOperations';
+import { useAppDataStore, dataStoreKeys } from '../../hooks/useAppDataStore';
+import { contentPipelineApi } from '../../web/utils/contentPipelineApi';
+import AppDataStoreConfig, { ConfigHelpers } from '../../hooks/useAppDataStore.config';
 
 export default function JobsPage() {
   const router = useRouter();
@@ -17,6 +20,10 @@ export default function JobsPage() {
   // Filter states
   const [userFilter, setUserFilter] = useState<'all' | 'my'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'in-progress' | 'completed'>('all');
+  
+  // Timestamp tracking
+  const [jobsListLastUpdate, setJobsListLastUpdate] = useState<string | null>(null);
+  const [, forceUpdate] = useState({});
 
   // Debug logging for filter changes
   console.log('🔍 Filter state:', { 
@@ -27,117 +34,166 @@ export default function JobsPage() {
     userEmail: session?.user?.email 
   });
 
-  // React Query to fetch and cache jobs data
+  // Build options for useAppDataStore (memoized to prevent unnecessary re-renders)
+  const dataStoreOptions = useMemo(() => ({
+    filters: {
+      ...(userFilter === 'my' && { userFilter: 'my' }),
+      ...(statusFilter !== 'all' && { statusFilter }),
+    },
+    autoRefresh: true, // Enable auto-refresh polling
+  }), [userFilter, statusFilter]);
+
+  // Use centralized data store for jobs list with auto-refresh
   const { 
     data: jobs = [], 
     isLoading, 
     error, 
-    refetch,
-    isRefetching 
-  } = useQuery({
-    queryKey: ['jobs', userFilter, statusFilter], // Remove session from queryKey - userFilter change is sufficient
-    queryFn: async () => {
-      console.log('🚀 React Query queryFn triggered with filters:', { 
-        userFilter, 
-        statusFilter,
-        sessionStatus,
-        hasSessionEmail: !!session?.user?.email,
-        timestamp: new Date().toISOString()
-      });
-      
-      // Build filter options
-      const filterOptions: any = {};
-      
-      console.log('Session debug:', { 
-        hasSession: !!session, 
-        hasUser: !!session?.user, 
-        email: session?.user?.email,
-        userFilter,
-        statusFilter 
-      });
-      
-      // Add user filter 
-      if (userFilter === 'my') {
-        // Use my_jobs parameter - let server handle all session logic (same as job creation)
-        filterOptions.my_jobs = true;
-        console.log('✅ Setting my_jobs filter: true (server will handle session validation)');
-      } else {
-        console.log('📋 No user filter (showing all users)');
-      }
-      
-      // Add status filter  
-      if (statusFilter === 'in-progress') {
-        filterOptions.status = 'in-progress';
-        console.log('✅ Setting status filter to in-progress');
-      } else if (statusFilter === 'completed') {
-        filterOptions.status = 'completed';
-        console.log('✅ Setting status filter to completed');
-      } else {
-        console.log('📋 No status filter (showing all statuses)');
-      }
-      
-      console.log('🌐 Final filterOptions being sent to API:', filterOptions);
-      
-      const response = await contentPipelineApi.listJobs(filterOptions);
-      console.log('📥 Jobs fetched from API:', response);
-      
-      // Sort jobs by creation date (most recent first)
-      const sortedJobs = response.jobs.sort((a, b) => 
-        new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
-      );
-      
-      console.log('📊 Final sorted jobs count:', sortedJobs.length);
-      return sortedJobs;
-    },
-    // Always enabled - but handle missing session gracefully in the queryFn
-    enabled: true,
-    // Refetch every 5 seconds for real-time updates
-    refetchInterval: 5000,
-    // Keep previous data while refetching to prevent UI flicker
-    placeholderData: (previousData) => previousData,
-    // Consider data stale immediately to ensure real-time status updates
-    staleTime: 0,
-    // Cache data for 10 minutes
-    gcTime: 10 * 60 * 1000,
-    // Retry failed requests
-    retry: 3,
-    // Refetch on window focus for real-time updates
-    refetchOnWindowFocus: true,
+    refresh: refetch,
+    isRefreshing,
+    isAutoRefreshActive,
+    forceRefreshJobsList
+  } = useAppDataStore('jobs', dataStoreOptions);
+
+  // Track jobs list updates
+  useEffect(() => {
+    if (jobs && jobs.length >= 0) {
+      setJobsListLastUpdate(new Date().toISOString());
+    }
+  }, [jobs]);
+
+  // Update relative timestamps every 10 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      forceUpdate({});
+    }, 10000); // Update every 10 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Extract non-completed job IDs for individual polling
+  const nonCompletedJobIds = useMemo(() => {
+    if (!jobs || !Array.isArray(jobs)) return [];
+    
+    const filtered = jobs
+      .filter((job: JobData) => {
+        const jobStatus = job?.job_status || '';
+        const shouldNotPoll = ConfigHelpers.shouldJobNeverPoll(jobStatus);
+        return !shouldNotPoll;
+      })
+      .map((job: JobData) => job.job_id)
+      .filter(Boolean); // Remove any undefined/null job IDs
+
+    console.log(`🔍 [JobsPage] Found ${filtered.length} non-completed jobs to poll individually:`, filtered);
+    return filtered;
+  }, [jobs]);
+
+  // Use React Query's useQueries for individual job polling
+  const individualJobQueries = useQueries({
+    queries: nonCompletedJobIds.map(jobId => ({
+      queryKey: dataStoreKeys.jobs.detail(jobId),
+      queryFn: async () => {
+        console.log(`🌐 [JobsPage] Polling individual job ${jobId}`);
+        const response = await contentPipelineApi.getJob(jobId);
+        console.log(`✅ [JobsPage] Individual job ${jobId} status: ${response.job.job_status}`);
+        
+        return {
+          ...response.job,
+          api_files: response.job.files,
+          files: [],
+          content_pipeline_files: [],
+          Subset_name: response.job.source_folder
+        };
+      },
+      enabled: true,
+      refetchInterval: (query) => {
+        const data = query.state.data;
+        if (!data) {
+          console.log(`🔄 [JobsPage] No data for job ${jobId}, polling every 5000ms`);
+          return 5000;
+        }
+        
+        const jobStatus = data.job_status || '';
+        const shouldNotPoll = ConfigHelpers.shouldJobNeverPoll(jobStatus);
+        
+        if (shouldNotPoll) {
+          console.log(`⏹️ [JobsPage] Job ${jobId} is ${jobStatus}, stopping individual polling`);
+          return false;
+        }
+        
+        console.log(`🔄 [JobsPage] Job ${jobId} (${jobStatus}) will poll again in 5000ms`);
+        return 5000; // Poll every 5 seconds
+      },
+      refetchIntervalInBackground: true,
+      staleTime: 0,
+      gcTime: 5 * 60 * 1000,
+      refetchOnMount: true,
+      refetchOnWindowFocus: false,
+      retry: (failureCount, error) => {
+        console.error(`❌ [JobsPage] Individual job query failed for ${jobId} (attempt ${failureCount + 1}):`, error);
+        return failureCount < 3;
+      },
+    })),
   });
 
-  // Track state changes with useEffect
+  // Create a map of individual job data for easy lookup
+  const individualJobsMap = useMemo(() => {
+    const map: Record<string, any> = {};
+    individualJobQueries.forEach((query, index) => {
+      const jobId = nonCompletedJobIds[index];
+      if (jobId && query.data) {
+        map[jobId] = query.data;
+      }
+    });
+    return map;
+  }, [individualJobQueries, nonCompletedJobIds]);
+
+  // Merge jobs list with individual job updates for real-time status
+  const enhancedJobs = useMemo(() => {
+    if (!jobs) return [];
+    
+    return jobs.map((job: JobData) => {
+      const individualUpdate = individualJobsMap[job.job_id];
+      if (individualUpdate) {
+        // Use individual job data for more up-to-date status
+        return {
+          ...job,
+          ...individualUpdate,
+          // Preserve original created_at and other stable fields from jobs list
+          created_at: job.created_at,
+          user_name: job.user_name,
+        };
+      }
+      return job;
+    });
+  }, [jobs, individualJobsMap]);
+
+  // Debug logging for filter changes (useAppDataStore handles refetch automatically)
   useEffect(() => {
     console.log('📊 userFilter state changed:', { 
       userFilter, 
       sessionStatus, 
       hasSessionEmail: !!session?.user?.email,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      autoRefreshActive: isAutoRefreshActive
     });
-    
-    // Force refetch when userFilter changes to ensure fresh API call
-    console.log('🔄 Manually triggering refetch due to userFilter change');
-    refetch();
-  }, [userFilter, refetch]);
+  }, [userFilter, isAutoRefreshActive, session?.user?.email, sessionStatus]);
 
   useEffect(() => {
     console.log('📊 statusFilter state changed:', { 
       statusFilter, 
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      autoRefreshActive: isAutoRefreshActive
     });
-    
-    // Force refetch when statusFilter changes
-    console.log('🔄 Manually triggering refetch due to statusFilter change');
-    refetch();
-  }, [statusFilter, refetch]);
+  }, [statusFilter, isAutoRefreshActive]);
 
-  // Navigate to job details page - React Query will handle data fetching
+  // Navigate to job details page - useAppDataStore will handle data consistency
   const viewJobDetails = (job: JobData) => {
     if (!job.job_id) return;
     
     // Set navigation source for cache strategy in job details page
     sessionStorage.setItem('navigationSource', 'jobs-list');
     
-    // Simple navigation - React Query cache will provide the data
+    // Simple navigation - useAppDataStore cache will provide consistent data
     router.push(`/job/details?jobId=${job.job_id}`);
   };
 
@@ -206,8 +262,28 @@ export default function JobsPage() {
     return status.charAt(0).toUpperCase() + status.slice(1);
   };
 
-  // Handle manual refresh
+  // Helper function to format relative time
+  const getRelativeTime = (timestamp: string) => {
+    const now = new Date().getTime();
+    const past = new Date(timestamp).getTime();
+    const diffInSeconds = Math.floor((now - past) / 1000);
+    
+    if (diffInSeconds < 5) {
+      return 'just now';
+    } else if (diffInSeconds < 60) {
+      return `${diffInSeconds}s ago`;
+    } else if (diffInSeconds < 3600) {
+      const minutes = Math.floor(diffInSeconds / 60);
+      return `${minutes}m ago`;
+    } else {
+      const hours = Math.floor(diffInSeconds / 3600);
+      return `${hours}h ago`;
+    }
+  };
+
+  // Handle manual refresh using centralized data store
   const handleRefresh = () => {
+    console.log('🔄 Manual refresh triggered via useAppDataStore');
     refetch();
   };
 
@@ -502,7 +578,7 @@ export default function JobsPage() {
                        background: '#3b82f6'
                      }} />
                      <span style={{ fontWeight: 500 }}>
-                       {jobs.length} {jobs.length === 1 ? 'Job' : 'Jobs'}
+                       {enhancedJobs.length} {enhancedJobs.length === 1 ? 'Job' : 'Jobs'}
                      </span>
                    </div>
 
@@ -513,7 +589,7 @@ export default function JobsPage() {
                      background: 'linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.1), transparent)'
                    }} />
 
-                   {/* Last Updated */}
+                   {/* Jobs Update Status */}
                    <div style={{
                      display: 'flex',
                      alignItems: 'center',
@@ -525,10 +601,15 @@ export default function JobsPage() {
                        width: 8,
                        height: 8,
                        borderRadius: '50%',
-                       background: '#10b981'
+                       background: isAutoRefreshActive ? '#10b981' : '#64748b'
                      }} />
                      <span style={{ fontWeight: 500 }}>
-                       Last updated {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                       {isAutoRefreshActive ? (
+                         jobsListLastUpdate ? 
+                           `Jobs updated ${getRelativeTime(jobsListLastUpdate)}` : 
+                           'Jobs loading...'
+                       ) : 'Auto-refresh off'}
+                       {isRefreshing && ' • Updating...'}
                      </span>
                    </div>
                  </div>
@@ -570,7 +651,7 @@ export default function JobsPage() {
             </div>
           </div>
 
-          {jobs.length === 0 ? (
+          {enhancedJobs.length === 0 ? (
             <div style={{ 
               textAlign: 'center', 
               padding: '48px 0',
@@ -608,7 +689,7 @@ export default function JobsPage() {
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {jobs.map((job) => (
+              {enhancedJobs.map((job) => (
                 <div
                   key={job.job_id}
                   style={{
