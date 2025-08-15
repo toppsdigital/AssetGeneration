@@ -26,6 +26,7 @@ export const dataStoreKeys = {
     list: (filters: Record<string, any>) => [...dataStoreKeys.jobs.lists(), { filters }] as const,
     details: () => [...dataStoreKeys.jobs.all, 'detail'] as const,
     detail: (id: string) => [...dataStoreKeys.jobs.details(), id] as const,
+    batch: (ids: string[]) => [...dataStoreKeys.jobs.all, 'batch', ids.sort()] as const, // Sort for consistent cache key
   },
   
   // Files
@@ -107,10 +108,12 @@ export function useAppDataStore<T = any>(
         return options.jobId ? dataStoreKeys.assets.byJob(options.jobId) : [];
       case 'downloadUrl':
         return options.jobId ? dataStoreKeys.downloads.byJob(options.jobId) : [];
+      case 'batchJobs':
+        return options.jobIds && options.jobIds.length > 0 ? dataStoreKeys.jobs.batch(options.jobIds) : [];
       default:
         return [];
     }
-  }, [selector, options.filters, options.jobId]);
+  }, [selector, options.filters, options.jobId, options.jobIds]);
 
   // Query function based on selector
   const queryFn = useCallback(async (): Promise<T> => {
@@ -264,6 +267,32 @@ export function useAppDataStore<T = any>(
         } as T;
       }
       
+      case 'batchJobs': {
+        if (!options.jobIds || options.jobIds.length === 0) {
+          console.log(`📋 [DataStore] No job IDs provided for batch fetch`);
+          return { jobs: [], found_count: 0, not_found_job_ids: [], total_requested: 0, unprocessed_count: 0 } as T;
+        }
+        
+        console.log(`🔄 [DataStore] Batch fetching ${options.jobIds.length} jobs:`, options.jobIds);
+        const response = await contentPipelineApi.batchGetJobs(options.jobIds);
+        
+        // Transform jobs to match the expected UI format
+        const transformedJobs = response.jobs.map(job => ({
+          ...job,
+          api_files: job.files,
+          files: [],
+          content_pipeline_files: [],
+          Subset_name: job.source_folder
+        }));
+        
+        console.log(`✅ [DataStore] Batch fetched ${response.found_count}/${response.total_requested} jobs`);
+        if (response.not_found_job_ids.length > 0) {
+          console.warn(`⚠️ [DataStore] Jobs not found:`, response.not_found_job_ids);
+        }
+        
+        return { ...response, jobs: transformedJobs } as T;
+      }
+      
       default:
         throw new Error(`Unknown selector: ${selector}`);
     }
@@ -284,6 +313,8 @@ export function useAppDataStore<T = any>(
         return { staleTime: staleTime.assets, gcTime: gcTime.assets };
       case 'downloadUrl':
         return { staleTime: 30 * 60 * 1000, gcTime: 60 * 60 * 1000 }; // 30min/1hr for download URLs
+      case 'batchJobs':
+        return { staleTime: 0, gcTime: gcTime.jobs }; // Fresh data for batch polling
       default:
         return { staleTime: staleTime.jobs, gcTime: gcTime.jobs };
     }
@@ -340,6 +371,30 @@ export function useAppDataStore<T = any>(
         // For all non-completed jobs, poll every 5 seconds
         const interval = finalConfig.autoRefresh.intervals.activeJobs; // 5000ms = 5 seconds
         console.log(`🔄 [DataStore] Polling non-completed job ${options.jobId} (${jobStatus}) every ${interval}ms`);
+        return interval;
+      }
+      
+      if (selector === 'batchJobs' && data) {
+        const batchData = data as any; // BatchJobsResponse type
+        if (!batchData.jobs || batchData.jobs.length === 0) {
+          return 5000; // Still poll if no jobs found
+        }
+        
+        // Check if any of the returned jobs should still be polled
+        const shouldContinuePolling = batchData.jobs.some((job: any) => {
+          const jobStatus = job?.job_status || '';
+          return !ConfigHelpers.shouldJobNeverPoll(jobStatus);
+        });
+        
+        if (!shouldContinuePolling) {
+          console.log(`⏹️ [DataStore] Stopping batch polling - all jobs completed`);
+          return false;
+        }
+        
+        const interval = finalConfig.autoRefresh.intervals.activeJobs; // 5000ms = 5 seconds
+        if (DEBUG_CONFIG.ENABLE_AUTO_REFRESH_LOGGING) {
+          console.log(`🔄 [DataStore] Batch polling ${batchData.jobs.length} non-completed jobs every ${interval}ms`);
+        }
         return interval;
       }
       
@@ -478,6 +533,11 @@ export function useAppDataStore<T = any>(
           queryClient.invalidateQueries({ queryKey: dataStoreKeys.assets.byJob(optionsToUse.jobId) });
         }
         break;
+      case 'batchJobs':
+        if (optionsToUse.jobIds && optionsToUse.jobIds.length > 0) {
+          queryClient.invalidateQueries({ queryKey: dataStoreKeys.jobs.batch(optionsToUse.jobIds) });
+        }
+        break;
     }
   }, [queryClient, selector, options]);
 
@@ -501,6 +561,11 @@ export function useAppDataStore<T = any>(
       case 'jobAssets':
         if (options.jobId) {
           queryClient.removeQueries({ queryKey: dataStoreKeys.assets.byJob(options.jobId) });
+        }
+        break;
+      case 'batchJobs':
+        if (options.jobIds && options.jobIds.length > 0) {
+          queryClient.removeQueries({ queryKey: dataStoreKeys.jobs.batch(options.jobIds) });
         }
         break;
     }

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+// Removed unused useQuery import - now using centralized useAppDataStore
 import { useSession } from 'next-auth/react';
 import styles from '../../styles/Home.module.css';
 import PageTitle from '../../components/PageTitle';
@@ -103,67 +103,17 @@ export default function JobsPage() {
     return filtered;
   }, [jobs]);
 
-  // Use optimized batch API for individual job polling (single request instead of N requests)
+  // Use centralized data store for optimized batch job polling
+  const batchOptions = useMemo(() => ({
+    jobIds: nonCompletedJobIds,
+    autoRefresh: true
+  }), [nonCompletedJobIds]);
+
   const { 
     data: batchJobsData, 
     isLoading: isBatchLoading,
     error: batchError 
-  } = useQuery({
-    queryKey: ['batch-jobs', ...nonCompletedJobIds.sort()], // Sort for consistent cache key
-    queryFn: async () => {
-      if (nonCompletedJobIds.length === 0) {
-        return { jobs: [], found_count: 0, not_found_job_ids: [], total_requested: 0, unprocessed_count: 0 };
-      }
-      
-      console.log(`🔄 [JobsPage] Batch fetching ${nonCompletedJobIds.length} non-completed jobs:`, nonCompletedJobIds);
-      const response = await contentPipelineApi.batchGetJobs(nonCompletedJobIds);
-      
-      // Transform jobs to match the expected format
-      const transformedJobs = response.jobs.map(job => ({
-        ...job,
-        api_files: job.files,
-        files: [],
-        content_pipeline_files: [],
-        Subset_name: job.source_folder
-      }));
-      
-      console.log(`✅ [JobsPage] Batch fetched ${response.found_count}/${response.total_requested} jobs`);
-      if (response.not_found_job_ids.length > 0) {
-        console.warn(`⚠️ [JobsPage] Jobs not found:`, response.not_found_job_ids);
-      }
-      
-      return { ...response, jobs: transformedJobs };
-    },
-    enabled: nonCompletedJobIds.length > 0,
-    refetchInterval: (query) => {
-      const data = query.state.data;
-      if (!data || data.jobs.length === 0) {
-        return 5000; // Still poll if no data or no jobs found
-      }
-      
-      // Check if any of the returned jobs should still be polled
-      const shouldContinuePolling = data.jobs.some(job => {
-        const jobStatus = job.job_status || '';
-        return !ConfigHelpers.shouldJobNeverPoll(jobStatus);
-      });
-      
-      if (!shouldContinuePolling) {
-        console.log(`⏹️ [JobsPage] Stopping batch polling - all jobs completed`);
-        return false;
-      }
-      
-      return 5000; // Poll every 5 seconds
-    },
-    refetchIntervalInBackground: true,
-    staleTime: 0,
-    gcTime: 5 * 60 * 1000,
-    refetchOnMount: true,
-    refetchOnWindowFocus: false,
-    retry: (failureCount, error) => {
-      console.error(`❌ [JobsPage] Batch job query failed (attempt ${failureCount + 1}):`, error);
-      return failureCount < 3;
-    },
-  });
+  } = useAppDataStore('batchJobs', batchOptions);
 
   // Create a map of individual job data for easy lookup (from batch response)
   const individualJobsMap = useMemo(() => {
