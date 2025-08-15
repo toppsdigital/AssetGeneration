@@ -157,14 +157,30 @@ export const AssetsTable = ({
       // Create updated versions of the assets we're changing
       const chromeUpdatedAssets = assetsToUpdate.map(asset => {
         if (shouldRemoveChrome) {
-          // Remove chrome property entirely
+          // Remove chrome property entirely, and wp_inv_layer only if no VFX
           const { chrome, ...assetWithoutChrome } = asset;
-          return assetWithoutChrome;
+          
+          // Only remove wp_inv_layer if asset doesn't have VFX (since VFX also needs wp_inv_layer)
+          if (!asset.vfx) {
+            const { wp_inv_layer, ...assetWithoutWpInv } = assetWithoutChrome;
+            return assetWithoutWpInv;
+          } else {
+            // Keep wp_inv_layer because VFX needs it
+            return assetWithoutChrome;
+          }
         } else {
-          // Add silver chrome only to assets without chrome
+          // Add silver chrome and set wp_inv_layer
+          const wpInvLayers = getWpInvLayers();
+          const firstWpInvLayer = wpInvLayers.length > 0 ? wpInvLayers[0] : undefined;
+          
+          if (!firstWpInvLayer) {
+            console.warn(`⚠️ No wp_inv_layer available for asset ${asset.name}, chrome may not work properly`);
+          }
+          
           return {
             ...asset,
-            chrome: 'silver'
+            chrome: 'silver',
+            wp_inv_layer: firstWpInvLayer
           };
         }
       });
