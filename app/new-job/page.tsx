@@ -2,12 +2,10 @@
 
 import React, { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useQueryClient } from '@tanstack/react-query';
 import styles from '../../styles/Home.module.css';
 import PageTitle from '../../components/PageTitle';
 import Spinner from '../../components/Spinner';
-import contentPipelineApi from '../../web/utils/contentPipelineApi';
-import { createCacheClearingCallback } from '../../web/hooks/useJobData';
+import { useAppDataStore } from '../../hooks/useAppDataStore';
 import { getAppIcon } from '../../utils/fileOperations';
 
 interface NewJobFormData {
@@ -21,7 +19,9 @@ interface NewJobFormData {
 function NewJobPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const queryClient = useQueryClient();
+  
+  // Use centralized data store for job mutations
+  const { mutate: createJobMutation, forceRefreshJobsList } = useAppDataStore('jobs');
   
   // Check if this is a re-run operation
   const isRerun = searchParams.get('rerun') === 'true';
@@ -156,7 +156,7 @@ function NewJobPageContent() {
     return Object.keys(newErrors).length === 0;
   };
 
-  // Create or rerun job using Content Pipeline API
+  // Create or rerun job using centralized data store
   const createJob = async (jobData: {
     appName: string;
     filenamePrefix: string;
@@ -166,38 +166,42 @@ function NewJobPageContent() {
     original_files_total_count?: number;
   }) => {
     try {
-      let response;
-      
-      if (isRerun && sourceJobId) {
-        // Use rerun API for re-run operations with cache clearing
-        const cacheClearingCallback = createCacheClearingCallback(queryClient);
-        response = await contentPipelineApi.rerunJob(sourceJobId, {
+      const jobPayload = {
         app_name: jobData.appName,
-          filename_prefix: jobData.filenamePrefix,
-          source_folder: jobData.sourceFolder,
-          files: jobData.files,
-          description: jobData.description,
-          // Pass individual PDF files count with correct field name for backend
-          ...(jobData.original_files_total_count ? { original_files_total_count: jobData.original_files_total_count } : {})
-        }, cacheClearingCallback);
-        console.log('Job re-run successfully via Content Pipeline API:', response.job.job_id);
-      } else {
-        // Use create API for new jobs
-        response = await contentPipelineApi.createJob({
-          app_name: jobData.appName,
-          filename_prefix: jobData.filenamePrefix,
+        filename_prefix: jobData.filenamePrefix,
         source_folder: jobData.sourceFolder,
         files: jobData.files,
         description: jobData.description,
-        // Pass actual PDF count with correct field name for backend
-        ...(jobData.original_files_total_count ? { original_files_total_count: jobData.original_files_total_count } : {})
-      });
-      console.log('Job created successfully via Content Pipeline API:', response.job.job_id);
+        original_files_total_count: jobData.original_files_total_count
+      };
+
+      let response;
+      
+      if (isRerun && sourceJobId) {
+        // Use rerun mutation via centralized data store
+        console.log('🔄 Re-running job via useAppDataStore:', sourceJobId);
+        response = await createJobMutation({
+          type: 'rerunJob',
+          jobId: sourceJobId,
+          data: jobPayload
+        });
+        console.log('✅ Job re-run successfully via useAppDataStore:', response.job.job_id);
+      } else {
+        // Use create mutation via centralized data store
+        console.log('🔄 Creating job via useAppDataStore');
+        response = await createJobMutation({
+          type: 'createJob',
+          data: jobPayload
+        });
+        console.log('✅ Job created successfully via useAppDataStore:', response.job.job_id);
       }
+      
+      // Force refresh jobs list to show the new job immediately
+      await forceRefreshJobsList();
       
       return response.job;
     } catch (error) {
-      console.error(`Error ${isRerun ? 're-running' : 'creating'} job via API:`, error);
+      console.error(`❌ Error ${isRerun ? 're-running' : 'creating'} job via useAppDataStore:`, error);
       throw error;
     }
   };

@@ -425,6 +425,14 @@ export function useAppDataStore<T = any>(
       console.log(`🔄 [DataStore] Performing mutation:`, payload);
       
       switch (payload.type) {
+        case 'createJob':
+          if (!payload.data) throw new Error('Job data required');
+          return await contentPipelineApi.createJob(payload.data);
+          
+        case 'rerunJob':
+          if (!payload.jobId || !payload.data) throw new Error('Job ID and data required for rerun');
+          return await contentPipelineApi.rerunJob(payload.jobId, payload.data);
+          
         case 'updateJob':
           if (!payload.jobId || !payload.data) throw new Error('Job ID and data required');
           return await contentPipelineApi.updateJob(payload.jobId, payload.data);
@@ -437,6 +445,25 @@ export function useAppDataStore<T = any>(
           if (!payload.fileId || !payload.data) throw new Error('File ID and data required');
           return await contentPipelineApi.updateFile(payload.fileId, payload.data);
           
+        case 'updatePdfFileStatus':
+          if (!payload.fileId || !payload.data?.pdfFilename || !payload.data?.status) {
+            throw new Error('File ID, PDF filename, and status required');
+          }
+          return await contentPipelineApi.updatePdfFileStatus(
+            payload.fileId, 
+            payload.data.pdfFilename, 
+            payload.data.status
+          );
+          
+        case 'batchUpdatePdfFileStatus':
+          if (!payload.fileId || !payload.data?.pdfUpdates) {
+            throw new Error('File ID and PDF updates required');
+          }
+          return await contentPipelineApi.batchUpdatePdfFileStatus(
+            payload.fileId, 
+            payload.data.pdfUpdates
+          );
+          
         case 'createAsset':
           if (!payload.jobId || !payload.data) throw new Error('Job ID and asset data required');
           return await contentPipelineApi.createAsset(payload.jobId, payload.data);
@@ -448,6 +475,22 @@ export function useAppDataStore<T = any>(
         case 'deleteAsset':
           if (!payload.jobId || !payload.assetId) throw new Error('Job ID and asset ID required');
           return await contentPipelineApi.deleteAsset(payload.jobId, payload.assetId);
+          
+        case 'bulkUpdateAssets':
+          if (!payload.jobId || !payload.data) throw new Error('Job ID and assets data required');
+          return await contentPipelineApi.bulkUpdateAssets(payload.jobId, payload.data);
+          
+        case 'generateAssets':
+          if (!payload.jobId || !payload.data) throw new Error('Job ID and assets data required');
+          return await contentPipelineApi.generateAssets(payload.jobId, payload.data);
+          
+        case 'regenerateAssets':
+          if (!payload.jobId) throw new Error('Job ID required');
+          return await contentPipelineApi.regenerateAssets(payload.jobId);
+          
+        case 'extractPdfData':
+          if (!payload.data) throw new Error('PDF data required');
+          return await contentPipelineApi.extractPdfData(payload.data);
           
         case 'refreshDownloadUrl':
           if (!payload.jobId) throw new Error('Job ID required');
@@ -462,6 +505,12 @@ export function useAppDataStore<T = any>(
       
       // Invalidate related queries based on mutation type
       switch (variables.type) {
+        case 'createJob':
+        case 'rerunJob':
+          // Invalidate all jobs lists to show the new/rerun job
+          queryClient.invalidateQueries({ queryKey: dataStoreKeys.jobs.all });
+          break;
+          
         case 'updateJob':
           if (variables.jobId) {
             queryClient.invalidateQueries({ queryKey: dataStoreKeys.jobs.detail(variables.jobId) });
@@ -471,17 +520,32 @@ export function useAppDataStore<T = any>(
           
         case 'createFiles':
         case 'updateFile':
+        case 'updatePdfFileStatus':
+        case 'batchUpdatePdfFileStatus':
           queryClient.invalidateQueries({ queryKey: dataStoreKeys.files.all });
           if (variables.jobId) {
             queryClient.invalidateQueries({ queryKey: dataStoreKeys.files.byJob(variables.jobId) });
+            queryClient.invalidateQueries({ queryKey: dataStoreKeys.jobs.detail(variables.jobId) });
           }
           break;
           
         case 'createAsset':
         case 'updateAsset':
         case 'deleteAsset':
+        case 'bulkUpdateAssets':
+        case 'generateAssets':
+        case 'regenerateAssets':
           if (variables.jobId) {
             queryClient.invalidateQueries({ queryKey: dataStoreKeys.assets.byJob(variables.jobId) });
+            queryClient.invalidateQueries({ queryKey: dataStoreKeys.jobs.detail(variables.jobId) });
+            queryClient.invalidateQueries({ queryKey: dataStoreKeys.jobs.all });
+          }
+          break;
+          
+        case 'extractPdfData':
+          // PDF extraction might affect files and job status
+          if (variables.jobId) {
+            queryClient.invalidateQueries({ queryKey: dataStoreKeys.files.byJob(variables.jobId) });
             queryClient.invalidateQueries({ queryKey: dataStoreKeys.jobs.detail(variables.jobId) });
           }
           break;
