@@ -206,7 +206,7 @@ function JobDetailsPageContent() {
     uploadEngine.resetUploadState();
     // Reset file creation trigger
     fileCreationTriggeredRef.current = false;
-  }, [jobData?.job_id, fileManager, uploadEngine]);
+  }, [jobData?.job_id]); // Remove fileManager and uploadEngine from dependencies to prevent infinite loops
 
   // Auto-trigger file creation when createFiles=true
   useEffect(() => {
@@ -231,12 +231,12 @@ function JobDetailsPageContent() {
     } else {
       console.log('📋 Waiting for job data...');
     }
-  }, [createFiles, jobData, fileManager]);
+  }, [createFiles, jobData?.job_id, fileManager.filesLoaded]); // Use specific primitive values instead of objects
 
   // Trigger upload check when files are loaded
   useEffect(() => {
     uploadEngine.checkAndStartUpload(fileManager.filesLoaded);
-  }, [fileManager.filesLoaded, uploadEngine]);
+  }, [fileManager.filesLoaded]); // Remove uploadEngine from dependencies to prevent infinite loops
 
   // (Reset logic moved to dedicated useEffect above)
 
