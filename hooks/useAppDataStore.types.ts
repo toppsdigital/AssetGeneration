@@ -76,10 +76,12 @@ export type DataSelector =
   | 'jobDetails' 
   | 'jobFiles' 
   | 'jobAssets'
-  | 'downloadUrl';
+  | 'downloadUrl'
+  | 'batchJobs'; // Batch fetch multiple jobs by IDs
 
 export interface SelectorOptions {
   jobId?: string;
+  jobIds?: string[]; // For batch job requests ('batchJobs' selector)
   filters?: {
     userFilter?: string;
     statusFilter?: string;
