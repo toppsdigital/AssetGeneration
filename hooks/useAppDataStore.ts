@@ -114,7 +114,14 @@ export function useAppDataStore<T = any>(
 
   // Query function based on selector
   const queryFn = useCallback(async (): Promise<T> => {
-    console.log(`🔄 [DataStore] Fetching data for selector: ${selector}`, options);
+    if (selector === 'jobs') {
+      console.log(`🔄 [DataStore] Fetching jobs with filters:`, {
+        userFilter: options.filters?.userFilter,
+        statusFilter: options.filters?.statusFilter,
+        autoRefresh: options.autoRefresh,
+        timestamp: new Date().toLocaleTimeString()
+      });
+    }
     
     switch (selector) {
       case 'jobs': {
@@ -267,7 +274,8 @@ export function useAppDataStore<T = any>(
     const { staleTime, gcTime } = finalConfig.cache;
     switch (selector) {
       case 'jobs':
-        return { staleTime: staleTime.jobsList, gcTime: gcTime.jobsList };
+        // Use very low staleTime for jobs list to ensure immediate fetching when filters change
+        return { staleTime: 0, gcTime: gcTime.jobsList };
       case 'jobDetails':
         return { staleTime: staleTime.jobs, gcTime: gcTime.jobs };
       case 'jobFiles':
@@ -295,7 +303,7 @@ export function useAppDataStore<T = any>(
     staleTime: cacheSettings.staleTime,
     gcTime: cacheSettings.gcTime,
     refetchOnWindowFocus: false,
-    refetchOnMount: false,
+    refetchOnMount: selector === 'jobs' ? true : false, // Always fetch immediately when filters change for jobs
     // Use React Query's built-in polling instead of manual timers
     refetchInterval: (data) => {
       if (!options.autoRefresh || !finalConfig.autoRefresh.enabled || !isAutoRefreshAllowedOnPage) {
@@ -306,10 +314,13 @@ export function useAppDataStore<T = any>(
       }
       
       if (selector === 'jobs') {
-        // Jobs list always polls every 10 seconds when enabled
+        // Jobs list always polls every 30 seconds when enabled (regardless of filters)
         const interval = finalConfig.autoRefresh.intervals.jobsList;
         if (DEBUG_CONFIG.ENABLE_AUTO_REFRESH_LOGGING) {
-          console.log(`⏰ [DataStore] React Query polling jobs list every ${interval}ms`);
+          console.log(`⏰ [DataStore] Jobs list auto-refresh active: ${interval}ms interval, filters:`, {
+            userFilter: options.filters?.userFilter,
+            statusFilter: options.filters?.statusFilter
+          });
         }
         return interval;
       }
