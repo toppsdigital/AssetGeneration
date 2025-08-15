@@ -57,7 +57,7 @@ function JobDetailsPageContent() {
   // Skip data fetching if no jobId is provided
   const hasJobId = Boolean(jobId);
   
-  // Use centralized data store for all data fetching (cached first, no auto-refresh)
+  // Use centralized data store for job data (no files/assets if we need to create them)
   const { 
     data: jobData, 
     isLoading: isLoadingJob, 
@@ -67,25 +67,31 @@ function JobDetailsPageContent() {
   } = useAppDataStore('jobDetails', { 
     jobId: jobId || '', 
     autoRefresh: false,
-    includeFiles: true,
-    includeAssets: true
+    includeFiles: createFiles !== 'true', // Only fetch files if not creating new ones
+    includeAssets: false // Don't include assets initially - will fetch separately when status is ready
   });
+  
+  // Only fetch assets if job status indicates they should exist
+  const shouldFetchAssets = jobData?.job_status && ['extracted', 'generating', 'generating-failed', 'completed'].includes(jobData.job_status);
   
   const { 
     data: jobAssets, 
     isLoading: isLoadingAssets,
     mutate: mutateAssets
   } = useAppDataStore('jobAssets', { 
-    jobId: jobId || '', 
+    jobId: shouldFetchAssets ? (jobId || '') : '', // Only fetch if status is appropriate
     autoRefresh: false 
   });
+  
+  // Only fetch existing files if we're not creating new ones
+  const shouldFetchFiles = createFiles !== 'true';
   
   const { 
     data: jobFiles, 
     isLoading: isLoadingFiles,
     refresh: refetchFiles
   } = useAppDataStore('jobFiles', { 
-    jobId: jobId || '', 
+    jobId: shouldFetchFiles ? (jobId || '') : '', // Only fetch if not creating
     autoRefresh: false 
   });
 
@@ -254,6 +260,7 @@ function JobDetailsPageContent() {
     console.log('📋 File handling decision useEffect triggered:', {
       createFiles,
       hasJobData: !!jobData,
+      shouldFetchFiles,
       hasJobFiles: !!jobFiles,
       filesLoaded: fileManager.filesLoaded,
       jobId: jobData?.job_id,
@@ -261,10 +268,10 @@ function JobDetailsPageContent() {
     });
     
     if (createFiles === 'true' && jobData && !fileManager.filesLoaded && !fileCreationTriggeredRef.current) {
-      console.log('🔄 Auto-triggering file creation for new job');
+      console.log('🔄 Auto-triggering file creation for new job (createFiles=true)');
       fileCreationTriggeredRef.current = true;
       fileManager.createNewFiles();
-    } else if (createFiles !== 'true' && jobFiles && !fileManager.filesLoaded) {
+    } else if (shouldFetchFiles && jobFiles && !fileManager.filesLoaded) {
       console.log('📋 Files loaded from useAppDataStore, setting filesLoaded=true');
       fileManager.setFilesLoaded(true);
     } else if (fileManager.filesLoaded) {
@@ -272,7 +279,7 @@ function JobDetailsPageContent() {
     } else {
       console.log('📋 Waiting for job data or files...');
     }
-  }, [createFiles, jobData?.job_id, jobFiles, fileManager.filesLoaded]);
+  }, [createFiles, jobData?.job_id, shouldFetchFiles, jobFiles, fileManager.filesLoaded]);
 
   // Trigger upload check when files are loaded
   useEffect(() => {

@@ -181,11 +181,21 @@ export function useAppDataStore<T = any>(
         }
         
         if (options.includeAssets) {
-          try {
-            const assetsResponse = await contentPipelineApi.getAssets(options.jobId);
-            mappedData.assets = assetsResponse.assets;
-          } catch (error) {
-            console.warn(`⚠️ [DataStore] Failed to fetch assets for job ${options.jobId}:`, error);
+          // Only fetch assets if job status indicates they should exist
+          const shouldFetchAssets = mappedData.job_status && 
+            ['extracted', 'generating', 'generating-failed', 'completed'].includes(mappedData.job_status);
+            
+          if (shouldFetchAssets) {
+            try {
+              const assetsResponse = await contentPipelineApi.getAssets(options.jobId);
+              mappedData.assets = assetsResponse.assets;
+              console.log(`✅ [DataStore] Fetched assets for job ${options.jobId} (status: ${mappedData.job_status})`);
+            } catch (error) {
+              console.warn(`⚠️ [DataStore] Failed to fetch assets for job ${options.jobId}:`, error);
+            }
+          } else {
+            console.log(`ℹ️ [DataStore] Skipping assets fetch for job ${options.jobId} - status '${mappedData.job_status}' not ready for assets`);
+            mappedData.assets = {}; // Set empty assets object
           }
         }
         
@@ -221,6 +231,10 @@ export function useAppDataStore<T = any>(
       
       case 'jobAssets': {
         if (!options.jobId) throw new Error('Job ID is required for jobAssets selector');
+        
+        // Note: Assets should only be fetched when job status is 'extracted' or later
+        // Caller should check job status before calling this selector
+        console.log(`🔄 [DataStore] Fetching assets for job ${options.jobId} (ensure job status is 'extracted' or later)`);
         
         const response = await contentPipelineApi.getAssets(options.jobId);
         console.log(`✅ [DataStore] Fetched assets for job ${options.jobId}`);
