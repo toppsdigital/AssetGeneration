@@ -126,7 +126,7 @@ export const JOBS_FILTER_CONFIG = {
  */
 export const DEBUG_CONFIG = {
   // Enable detailed console logging for auto-refresh events
-  ENABLE_AUTO_REFRESH_LOGGING: false, // Disabled to reduce console noise
+  ENABLE_AUTO_REFRESH_LOGGING: true, // Temporarily enabled for debugging filter changes
   
   // Enable detailed console logging for cache operations
   ENABLE_CACHE_LOGGING: false, // Disabled to reduce console noise
