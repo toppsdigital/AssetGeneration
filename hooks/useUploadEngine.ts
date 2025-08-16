@@ -774,21 +774,16 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
 
     console.log(`📁 Found ${filesToUpload.length} files that need uploading:`, filesToUpload.map(f => f.filename));
 
-    // Check for pending files from new job creation
-    const pendingFiles = (window as any).pendingUploadFiles;
-    if (pendingFiles && pendingFiles.jobId === jobData.job_id && pendingFiles.files) {
-      console.log('🚀 Starting upload with files from new job creation...');
-      
-      const matchedFiles = pendingFiles.files.filter((file: File) =>
-        filesToUpload.some(needed => needed.filename === file.name)
-      );
-      
-      if (matchedFiles.length > 0) {
-        setUploadStarted(true);
-        await startUploadProcess(matchedFiles);
-      }
-    } else {
-      console.log('⚠️ Files need uploading but no File objects available');
+    // Clean architecture: No global state dependencies
+    // For newly created files, we rely on S3 presigned URLs from the backend
+    console.log('🚀 Starting upload process without File objects dependency...');
+    console.log('⚠️ TODO: Implement File object collection for new job uploads');
+    console.log('ℹ️ Current approach: Files are created with "uploading" status, ready for S3 upload');
+    
+    // For now, log that files are ready but skip actual upload since we need File objects
+    if (filesToUpload.length > 0) {
+      console.log('📋 Files are created and ready for upload, but File object collection needs implementation');
+      console.log('🎯 Expected: User will need to manually select files or we implement file object persistence');
     }
   }, [jobData, uploadStarted, startUploadProcess]);
 

@@ -166,6 +166,7 @@ export function useAppDataStore<T = any>(
         // Optionally fetch related data
         if (options.includeFiles && mappedData.api_files?.length) {
           try {
+            console.log(`📁 [DataStore] Fetching ${mappedData.api_files.length} existing files for job ${options.jobId}`);
             const filesResponse = await contentPipelineApi.batchGetFiles(mappedData.api_files);
             mappedData.content_pipeline_files = filesResponse.files.map(apiFile => ({
               filename: apiFile.filename,
@@ -178,6 +179,9 @@ export function useAppDataStore<T = any>(
           } catch (error) {
             console.warn(`⚠️ [DataStore] Failed to fetch files for job ${options.jobId}:`, error);
           }
+        } else if (options.includeFiles) {
+          console.log(`📁 [DataStore] No api_files found for job ${options.jobId}, skipping batch_get_files call`);
+          mappedData.content_pipeline_files = []; // Ensure it's always an array
         }
         
         if (options.includeAssets) {

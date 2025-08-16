@@ -62,7 +62,7 @@ function JobDetailsPageContent() {
   } = useAppDataStore('jobDetails', { 
     jobId: jobId || '', 
     autoRefresh: false,
-    includeFiles: true, // Always include files
+    includeFiles: createFiles !== 'true', // Only fetch existing files, not for new jobs
     includeAssets: true  // Always include assets when ready
   });
 
@@ -207,14 +207,10 @@ function JobDetailsPageContent() {
   // Initial job loading and setup
   useEffect(() => {
     if (jobId) {
-      // Debug: Check if pending files are available
-      console.log('🔍 Initial page load - checking pending files:', {
+      // Clean architecture: No global state dependencies
+      console.log('🔍 Initial page load - pure useAppDataStore approach:', {
         jobId,
-        pendingFiles: (window as any).pendingUploadFiles ? {
-          jobId: (window as any).pendingUploadFiles.jobId,
-          filesCount: (window as any).pendingUploadFiles.files?.length || 0,
-          fileNames: (window as any).pendingUploadFiles.files?.map((f: File) => f.name) || []
-        } : null
+        approach: 'Pure React Query cache + useAppDataStore mutations'
       });
       
       // React Query handles job data loading automatically
