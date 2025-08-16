@@ -175,6 +175,25 @@ function JobDetailsPageContent() {
     timestamp: new Date().toISOString()
   });
 
+  // Debug data flow for upload tracking (after uploadEngine is initialized)
+  console.log('🔍 Job Details Data Flow Debug:', {
+    timestamp: new Date().toISOString(),
+    jobId: jobId,
+    hasLocalJobData: !!localJobData,
+    hasJobData: !!jobData,
+    hasMergedJobData: !!mergedJobData,
+    mergedJobDataFilesCount: mergedJobData?.content_pipeline_files?.length || 0,
+    uploadEngineUploadedCount: uploadEngine.uploadedPdfFiles,
+    uploadEngineTotalCount: uploadEngine.totalPdfFiles,
+    uploadEngineUploadingFilesCount: uploadEngine.uploadingFiles.size,
+    uploadEngineUploadingFilesList: Array.from(uploadEngine.uploadingFiles),
+    mergedJobDataFileStatuses: mergedJobData?.content_pipeline_files?.map((file: any) => ({
+      filename: file.filename,
+      originalFilesCount: Object.keys(file.original_files || {}).length,
+      originalFileStatuses: Object.entries(file.original_files || {}).map(([name, info]: [string, any]) => `${name}:${info.status}`)
+    })) || []
+  });
+
   // Check if uploads are in progress
   const uploadsInProgress = uploadEngine.uploadStarted && !uploadEngine.allFilesUploaded;
 
