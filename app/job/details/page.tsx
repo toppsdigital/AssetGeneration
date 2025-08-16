@@ -89,15 +89,20 @@ function JobDetailsPageContent() {
       await mutateJob({
         type: 'createFiles',
         jobId: jobData.job_id, // ✅ Add jobId so cache invalidation works
-        data: jobData.api_files.map(filename => ({
-          filename,
+        data: jobData.api_files.map(baseName => ({
+          filename: baseName,
           job_id: jobData.job_id,
-          file_path: `asset_generator/dev/uploads/${filename}`,
+          file_path: `asset_generator/dev/uploads/${baseName}`,
           original_files: {
-            [filename]: {
-              card_type: filename.includes('_FR') ? 'front' : 'back',
+            [`${baseName}_FR.pdf`]: {
+              card_type: 'front',
               status: 'uploading',
-              file_path: `asset_generator/dev/uploads/${filename}`
+              file_path: `asset_generator/dev/uploads/${baseName}_FR.pdf`
+            },
+            [`${baseName}_BK.pdf`]: {
+              card_type: 'back', 
+              status: 'uploading',
+              file_path: `asset_generator/dev/uploads/${baseName}_BK.pdf`
             }
           }
         }))
