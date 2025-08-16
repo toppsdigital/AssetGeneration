@@ -27,9 +27,8 @@ interface JobDetailsContentProps {
   loadingDetail?: string;
   loading: boolean;
   onJobDataUpdate: (updatedJobData: any) => void;
-  updateJobDataForUpload: (updater: (prev: any) => any) => void;
+  updateJobDataForUpload: () => void; // Simplified to just refresh function
   refetchJobData: () => Promise<any>;
-  setLocalJobData: (data: any) => void;
 }
 
 export const JobDetailsContent = ({
@@ -47,8 +46,7 @@ export const JobDetailsContent = ({
   loading,
   onJobDataUpdate,
   updateJobDataForUpload,
-  refetchJobData,
-  setLocalJobData
+  refetchJobData
 }: JobDetailsContentProps) => {
   const router = useRouter();
 
@@ -133,22 +131,8 @@ export const JobDetailsContent = ({
                 return shouldShow;
               })()}
               onJobDataUpdate={(updatedJobData) => {
-                updateJobDataForUpload((prevJobData) => {
-                  console.log('🔄 Updating job data from DownloadSection:', {
-                    previous: prevJobData?.job_status,
-                    new: updatedJobData?.job_status,
-                    jobId: updatedJobData?.job_id
-                  });
-                  
-                  const mappedJobData = {
-                    ...prevJobData,
-                    ...updatedJobData,
-                    api_files: updatedJobData.files || prevJobData?.api_files || [],
-                    Subset_name: updatedJobData.source_folder || prevJobData?.Subset_name
-                  };
-                  
-                  return mappedJobData;
-                });
+                console.log('🔄 DownloadSection triggered job data update - refreshing via useAppDataStore');
+                updateJobDataForUpload(); // Just refresh, no manual state updates
               }}
             />
 

@@ -28,6 +28,18 @@ export const FilesSection = ({
   loadingDetail,
   className = ''
 }: FilesSectionProps) => {
+  // Debug file data flow to FileCard
+  console.log('🔍 FilesSection Data Flow Debug:', {
+    timestamp: new Date().toISOString(),
+    mergedJobDataFilesCount: mergedJobData?.content_pipeline_files?.length || 0,
+    uploadingFilesCount: uploadingFiles.size,
+    uploadingFilesList: Array.from(uploadingFiles),
+    mergedJobDataSample: mergedJobData?.content_pipeline_files?.[0] ? {
+      filename: mergedJobData.content_pipeline_files[0].filename,
+      originalFilesCount: Object.keys(mergedJobData.content_pipeline_files[0].original_files || {}).length,
+      lastUpdated: mergedJobData.content_pipeline_files[0].last_updated
+    } : 'no files'
+  });
   const shouldShowLoading = () => {
     // Show loading only while we truly await data; if we already have content_pipeline_files, don't mask them
     if (mergedJobData?.content_pipeline_files && mergedJobData.content_pipeline_files.length > 0) return false;
