@@ -206,9 +206,19 @@ export function useAppDataStore<T = any>(
       case 'jobFiles': {
         if (!options.jobId) throw new Error('Job ID is required for jobFiles selector');
         
-        // First get the job to find the file list
-        const jobResponse = await contentPipelineApi.getJob(options.jobId);
-        const apiFiles = jobResponse.job.files || [];
+        // First try to get job data from cache to avoid redundant get_job call
+        const cachedJobData = queryClient.getQueryData(dataStoreKeys.jobs.detail(options.jobId));
+        let apiFiles: string[] = [];
+        
+        if (cachedJobData && (cachedJobData as any).files) {
+          console.log(`🎯 [DataStore] Using cached job data for files list (job ${options.jobId})`);
+          apiFiles = (cachedJobData as any).files || [];
+        } else {
+          console.log(`📞 [DataStore] No cached job data found, fetching job to get files list (job ${options.jobId})`);
+          // Fallback: get the job to find the file list
+          const jobResponse = await contentPipelineApi.getJob(options.jobId);
+          apiFiles = jobResponse.job.files || [];
+        }
         
         if (apiFiles.length === 0) {
           console.log(`📁 [DataStore] No files found for job ${options.jobId}`);
@@ -539,14 +549,80 @@ export function useAppDataStore<T = any>(
         case 'createFiles':
         case 'batchGetFiles':
         case 'updateFile':
-        case 'updatePdfFileStatus':
-        case 'batchUpdatePdfFileStatus':
           queryClient.invalidateQueries({ queryKey: dataStoreKeys.files.all });
           if (variables.jobId) {
             queryClient.invalidateQueries({ queryKey: dataStoreKeys.files.byJob(variables.jobId) });
             queryClient.invalidateQueries({ queryKey: dataStoreKeys.jobs.detail(variables.jobId) });
           }
           break;
+          
+                    case 'updatePdfFileStatus':
+            case 'batchUpdatePdfFileStatus':
+              // These mutations return updated file data - update cache directly instead of invalidating
+              const jobIdForFileUpdate = variables.jobId || options.jobId; // Use jobId from payload or hook options
+              
+              if (jobIdForFileUpdate && data?.file) {
+                console.log(`✅ [DataStore] Updating cache with ${variables.type} response for job ${jobIdForFileUpdate}`, {
+                  responseFileData: {
+                    filename: data.file.filename,
+                    originalFilesCount: Object.keys(data.file.original_files || {}).length,
+                    originalFileStatuses: Object.entries(data.file.original_files || {}).map(([name, info]: [string, any]) => `${name}:${info.status}`)
+                  }
+                });
+                
+                // Update the files cache with the updated file data
+                queryClient.setQueryData(
+                  dataStoreKeys.files.byJob(jobIdForFileUpdate),
+                  (prevFiles: any[]) => {
+                    console.log(`🔄 [DataStore] Updating files cache for job ${jobIdForFileUpdate}:`, {
+                      prevFilesCount: Array.isArray(prevFiles) ? prevFiles.length : 'not array',
+                      targetFilename: data.file.filename
+                    });
+                    
+                    if (!Array.isArray(prevFiles)) return prevFiles;
+                    
+                    const updatedFiles = prevFiles.map(file => 
+                      file.filename === data.file.filename ? data.file : file
+                    );
+                    
+                    console.log(`✅ [DataStore] Files cache updated for job ${jobIdForFileUpdate}`);
+                    return updatedFiles;
+                  }
+                );
+                
+                // Update the job details cache to include the updated file
+                queryClient.setQueryData(
+                  dataStoreKeys.jobs.detail(jobIdForFileUpdate),
+                  (prevJob: any) => {
+                    console.log(`🔄 [DataStore] Updating job details cache for job ${jobIdForFileUpdate}:`, {
+                      hasPrevJob: !!prevJob,
+                      prevJobFilesCount: prevJob?.content_pipeline_files?.length || 0,
+                      targetFilename: data.file.filename
+                    });
+                    
+                    if (!prevJob?.content_pipeline_files) return prevJob;
+                    
+                    const updatedJob = {
+                      ...prevJob,
+                      content_pipeline_files: prevJob.content_pipeline_files.map((file: any) => 
+                        file.filename === data.file.filename ? data.file : file
+                      )
+                    };
+                    
+                    console.log(`✅ [DataStore] Job details cache updated for job ${jobIdForFileUpdate}`);
+                    return updatedJob;
+                  }
+                );
+              } else {
+                // Fallback to invalidation if no response data
+                console.log(`⚠️ [DataStore] No file data in ${variables.type} response or no jobId available, falling back to invalidation`);
+                queryClient.invalidateQueries({ queryKey: dataStoreKeys.files.all });
+                if (jobIdForFileUpdate) {
+                  queryClient.invalidateQueries({ queryKey: dataStoreKeys.files.byJob(jobIdForFileUpdate) });
+                  queryClient.invalidateQueries({ queryKey: dataStoreKeys.jobs.detail(jobIdForFileUpdate) });
+                }
+              }
+              break;
           
         case 'createAsset':
         case 'updateAsset':

@@ -57,7 +57,7 @@ function JobDetailsPageContent() {
   // Skip data fetching if no jobId is provided
   const hasJobId = Boolean(jobId);
   
-  // Use centralized data store for job data (no files/assets if we need to create them)
+  // Use centralized data store for job data - single call with all needed data
   const { 
     data: jobData, 
     isLoading: isLoadingJob, 
@@ -67,7 +67,7 @@ function JobDetailsPageContent() {
   } = useAppDataStore('jobDetails', { 
     jobId: jobId || '', 
     autoRefresh: false,
-    includeFiles: createFiles !== 'true', // Only fetch files if not creating new ones
+    includeFiles: true, // Always include files in main job call to avoid separate get_job request
     includeAssets: false // Don't include assets initially - will fetch separately when status is ready
   });
   
@@ -83,17 +83,9 @@ function JobDetailsPageContent() {
     autoRefresh: false 
   });
   
-  // Only fetch existing files if we're not creating new ones
-  const shouldFetchFiles = createFiles !== 'true';
-  
-  const { 
-    data: jobFiles, 
-    isLoading: isLoadingFiles,
-    refresh: refetchFiles
-  } = useAppDataStore('jobFiles', { 
-    jobId: shouldFetchFiles ? (jobId || '') : '', // Only fetch if not creating
-    autoRefresh: false 
-  });
+  // Extract files from job data instead of separate call
+  const jobFiles = jobData?.content_pipeline_files || [];
+  const isLoadingFiles = false; // Files are loaded with job data
 
   // Local state for UI management
   const [localJobData, setLocalJobData] = useState(null);
@@ -143,7 +135,7 @@ function JobDetailsPageContent() {
   });
 
   // Enhanced loading state management - derived from hooks
-  const isLoading = loadingStateManager.loading || isLoadingJob || isLoadingAssets || isLoadingFiles;
+  const isLoading = loadingStateManager.loading || isLoadingJob || isLoadingAssets;
   
   // Track if file creation has been triggered to prevent double execution
   const fileCreationTriggeredRef = useRef(false);
@@ -279,8 +271,7 @@ function JobDetailsPageContent() {
     console.log('📋 File handling decision useEffect triggered:', {
       createFiles,
       hasJobData: !!jobData,
-      shouldFetchFiles,
-      hasJobFiles: !!jobFiles,
+      hasJobFiles: jobFiles.length > 0,
       filesLoaded: fileManager.filesLoaded,
       jobId: jobData?.job_id,
       alreadyTriggered: fileCreationTriggeredRef.current
@@ -290,15 +281,15 @@ function JobDetailsPageContent() {
       console.log('🔄 Auto-triggering file creation for new job (createFiles=true)');
       fileCreationTriggeredRef.current = true;
       fileManager.createNewFiles();
-    } else if (shouldFetchFiles && jobFiles && !fileManager.filesLoaded) {
-      console.log('📋 Files loaded from useAppDataStore, setting filesLoaded=true');
+    } else if (createFiles !== 'true' && jobFiles.length > 0 && !fileManager.filesLoaded) {
+      console.log('📋 Files loaded from jobDetails, setting filesLoaded=true');
       fileManager.setFilesLoaded(true);
     } else if (fileManager.filesLoaded) {
       console.log('📋 Files already loaded, no action needed');
     } else {
       console.log('📋 Waiting for job data or files...');
     }
-  }, [createFiles, jobData?.job_id, shouldFetchFiles, jobFiles, fileManager.filesLoaded]);
+  }, [createFiles, jobData?.job_id, jobFiles.length, fileManager.filesLoaded]);
 
   // Trigger upload check when files are loaded
   useEffect(() => {
@@ -410,19 +401,16 @@ function JobDetailsPageContent() {
         
         // Handle force refetch case (when backend doesn't return job data)
         if (updatedJobData?._forceRefetch) {
-          console.log('🔄 Force refetch requested - refreshing all data via useAppDataStore');
+          console.log('🔄 Force refetch requested - refreshing data via useAppDataStore');
           refetchJobData();
           return;
         }
         
         // Normal case: Job/asset data updated - useAppDataStore handles cache automatically
-        console.log('🔄 Job data updated, refreshing via useAppDataStore');
+        console.log('🔄 Job data updated - relying on useAppDataStore cache management');
         
-        // Update local state for immediate UI feedback
+        // Update local state for immediate UI feedback (no additional refetch needed)
         setLocalJobData(updatedJobData);
-        
-        // Refresh data to ensure consistency (useAppDataStore handles caching)
-        refetchJobData();
       }}
       updateJobDataForUpload={updateJobDataForUpload}
       refetchJobData={refetchJobData}
