@@ -104,7 +104,16 @@ export const JobDetailsContent = ({
             <PSDTemplateSelector
               jobData={jobData}
               mergedJobData={mergedJobData}
-              isVisible={(mergedJobData?.job_status?.toLowerCase() === 'extracted' || mergedJobData?.job_status?.toLowerCase() === 'generation-failed') && !loading && !loadingFiles}
+              isVisible={(() => {
+                const shouldShow = (mergedJobData?.job_status?.toLowerCase() === 'extracted' || mergedJobData?.job_status?.toLowerCase() === 'generation-failed') && !loading && !loadingFiles;
+                console.log('🔍 PSDTemplateSelector visibility check:', {
+                  jobStatus: mergedJobData?.job_status,
+                  loading,
+                  loadingFiles,
+                  shouldShow
+                });
+                return shouldShow;
+              })()}
               creatingAssets={creatingAssets}
               setCreatingAssets={setCreatingAssets}
               onJobDataUpdate={onJobDataUpdate}
@@ -113,9 +122,16 @@ export const JobDetailsContent = ({
             {/* Download Section */}
             <DownloadSection
               jobData={mergedJobData}
-              isVisible={(['complete', 'completed'].includes(mergedJobData?.job_status?.toLowerCase() || '') ||
-                        (mergedJobData?.download_url && mergedJobData?.download_url_expires)) && 
-                        !loading && !loadingFiles}
+              isVisible={(() => {
+                const shouldShow = ['complete', 'completed'].includes(mergedJobData?.job_status?.toLowerCase() || '') && !loading && !loadingFiles;
+                console.log('🔍 DownloadSection visibility check:', {
+                  jobStatus: mergedJobData?.job_status,
+                  loading,
+                  loadingFiles,
+                  shouldShow
+                });
+                return shouldShow;
+              })()}
               onJobDataUpdate={(updatedJobData) => {
                 updateJobDataForUpload((prevJobData) => {
                   console.log('🔄 Updating job data from DownloadSection:', {

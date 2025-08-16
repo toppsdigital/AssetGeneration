@@ -95,15 +95,15 @@ function JobDetailsPageContent() {
     autoRefresh: false 
   });
 
-  // Transform jobData to maintain compatibility with existing components
-  const effectiveJobData = jobData;
-  const mergedJobData = jobData;
-  const fileData = jobFiles || []; // Ensure fileData is always an array
-  const error = jobError;
-  
   // Local state for UI management
   const [localJobData, setLocalJobData] = useState(null);
   const [creatingAssets, setCreatingAssets] = useState(false);
+  
+  // Transform jobData to maintain compatibility with existing components
+  const effectiveJobData = localJobData || jobData;
+  const mergedJobData = localJobData || jobData; // Use localJobData if available (includes created files)
+  const fileData = jobFiles || []; // Ensure fileData is always an array
+  const error = jobError;
   
   // Simple callback to update job data (for upload engine compatibility)
   const updateJobDataForUpload = (updater: any) => {

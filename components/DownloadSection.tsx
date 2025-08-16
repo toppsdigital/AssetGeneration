@@ -11,9 +11,9 @@ interface DownloadSectionProps {
 }
 
 export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: DownloadSectionProps) => {
-  // Use centralized data store for download and regeneration operations
+  // Use centralized data store for download and regeneration operations (only when actually needed)
   const { mutate: downloadMutation } = useAppDataStore('downloadUrl', { 
-    jobId: jobData?.job_id || '', 
+    jobId: '', // Don't auto-fetch download URL - only create when user requests download
     autoRefresh: false 
   });
   
