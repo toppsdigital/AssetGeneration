@@ -83,9 +83,19 @@ function JobDetailsPageContent() {
     setFilesLoaded: () => {}, // No-op, useAppDataStore handles this
     setLoadingFiles: () => {}, // No-op, useAppDataStore handles this
     createNewFiles: async () => {
-      if (!jobData?.job_id || !jobData?.api_files?.length) return;
-      
       console.log('🔨 Creating new files via useAppDataStore');
+      console.log('🔍 Pre-check conditions:', {
+        hasJobId: !!jobData?.job_id,
+        jobId: jobData?.job_id,
+        hasApiFiles: !!jobData?.api_files,
+        apiFilesLength: jobData?.api_files?.length,
+        apiFiles: jobData?.api_files
+      });
+      
+      if (!jobData?.job_id || !jobData?.api_files?.length) {
+        console.log('❌ Early return - missing jobId or api_files');
+        return;
+      }
       
       // Get the actual selected files from sessionStorage to know which PDFs exist
       const uploadSession = sessionStorage.getItem(`upload_${jobData.job_id}`);
