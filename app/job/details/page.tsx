@@ -91,9 +91,12 @@ function JobDetailsPageContent() {
       const uploadSession = sessionStorage.getItem(`upload_${jobData.job_id}`);
       let actualPdfFiles: string[] = [];
       
+      console.log('🔍 Checking sessionStorage for job:', jobData.job_id);
+      
       if (uploadSession) {
         try {
           const session = JSON.parse(uploadSession);
+          console.log('📋 Upload session data:', session);
           actualPdfFiles = session.files?.map((f: any) => f.name).filter((name: string) => 
             name.match(/_(FR|BK)\.pdf$/i)
           ) || [];
@@ -101,40 +104,57 @@ function JobDetailsPageContent() {
         } catch (error) {
           console.error('Failed to parse upload session:', error);
         }
+      } else {
+        console.log('⚠️ No sessionStorage found for upload session');
       }
       
       // If no session data, fall back to assuming both FR and BK exist (backward compatibility)
       if (actualPdfFiles.length === 0) {
         console.log('⚠️ No session data found, assuming both _FR.pdf and _BK.pdf for each base name');
+        console.log('🔍 jobData.api_files:', jobData.api_files);
         actualPdfFiles = jobData.api_files.flatMap(baseName => [
           `${baseName}_FR.pdf`,
           `${baseName}_BK.pdf`
         ]);
+        console.log('📁 Fallback PDF files generated:', actualPdfFiles);
       }
       
       // Group actual PDF files by base name
       const fileGroups = new Map<string, {name: string, type: 'front' | 'back'}[]>();
       actualPdfFiles.forEach(pdfName => {
+        console.log('🔍 Processing PDF file:', pdfName);
         const match = pdfName.match(/^(.+)_(FR|BK)\.pdf$/i);
         if (match) {
           const baseName = match[1];
-          const cardType = match[2].toUpperCase() === 'FR' ? 'front' : 'back';
+          const suffix = match[2].toUpperCase();
+          const cardType = suffix === 'FR' ? 'front' : 'back';
+          
+          console.log(`📝 Matched: baseName="${baseName}", suffix="${suffix}", cardType="${cardType}"`);
           
           if (!fileGroups.has(baseName)) {
             fileGroups.set(baseName, []);
           }
           fileGroups.get(baseName)!.push({name: pdfName, type: cardType});
+        } else {
+          console.warn(`⚠️ PDF file doesn't match expected pattern: ${pdfName}`);
         }
       });
       
       console.log('📋 File groups for creation:', Array.from(fileGroups.entries()));
+      console.log('📊 File groups summary:', Array.from(fileGroups.entries()).map(([base, files]) => ({
+        baseName: base,
+        files: files.map(f => ({ name: f.name, type: f.type }))
+      })));
       
       await mutateJob({
         type: 'createFiles',
         jobId: jobData.job_id, // ✅ Add jobId so cache invalidation works
         data: Array.from(fileGroups.entries()).map(([baseName, pdfs]) => {
           const originalFiles: Record<string, any> = {};
+          console.log(`📁 Creating file object for baseName="${baseName}" with ${pdfs.length} PDFs:`, pdfs);
+          
           pdfs.forEach(pdf => {
+            console.log(`  📄 Adding PDF: ${pdf.name} (${pdf.type})`);
             originalFiles[pdf.name] = {
               card_type: pdf.type,
               status: 'uploading',
@@ -142,12 +162,15 @@ function JobDetailsPageContent() {
             };
           });
           
-          return {
+          const fileObject = {
             filename: baseName,
             job_id: jobData.job_id,
             file_path: `asset_generator/dev/uploads/${baseName}`,
             original_files: originalFiles
           };
+          
+          console.log(`✅ File object created:`, JSON.stringify(fileObject, null, 2));
+          return fileObject;
         })
       });
       
@@ -278,10 +301,21 @@ function JobDetailsPageContent() {
 
   // Simplified file creation - triggered once when needed
   useEffect(() => {
+    console.log('🔍 File creation useEffect check:', {
+      createFiles,
+      hasJobId: !!jobData?.job_id,
+      jobId: jobData?.job_id,
+      fileCreationTriggered: fileCreationTriggeredRef.current,
+      fileDataLength: fileData.length,
+      shouldTrigger: createFiles === 'true' && jobData?.job_id && !fileCreationTriggeredRef.current && fileData.length === 0
+    });
+    
     if (createFiles === 'true' && jobData?.job_id && !fileCreationTriggeredRef.current && fileData.length === 0) {
       console.log('🔄 Auto-triggering file creation for new job');
       fileCreationTriggeredRef.current = true;
       fileManager.createNewFiles();
+    } else {
+      console.log('⏸️ File creation conditions not met');
     }
   }, [createFiles, jobData?.job_id, fileData.length]);
 
