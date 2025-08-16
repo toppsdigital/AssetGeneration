@@ -109,14 +109,15 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     
     if (isVisible) {
       fetchPhysicalJsonFiles();
-      // Also fetch latest assets from backend to ensure UI is up to date
+      
+      // Fetch assets when component becomes visible (status should be 'extracted' or 'generation-failed')
       (async () => {
         try {
           if (!mergedJobData?.job_id) {
             console.log('❌ No job ID available for asset fetch, skipping');
             return;
           }
-          console.log('🔄 Refreshing latest assets for job on selector mount:', mergedJobData.job_id);
+          console.log('🔄 PSDTemplateSelector became visible - refreshing assets for job:', mergedJobData.job_id, 'status:', mergedJobData.job_status);
           // Use centralized data store to refresh assets
           await refreshAssets();
           
@@ -131,6 +132,8 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
           console.warn('⚠️ Failed to fetch assets on load:', e);
         }
       })();
+    } else {
+      console.log(`ℹ️ PSDTemplateSelector not visible for job ${mergedJobData?.job_id} - status '${mergedJobData?.job_status}'`);
     }
   }, [isVisible, mergedJobData?.job_id]);
 

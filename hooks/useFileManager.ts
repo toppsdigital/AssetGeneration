@@ -219,21 +219,20 @@ export const useFileManager = ({
       
       // Only update if we actually got files back
       if (finalFileObjects.length > 0) {
-        // Update React Query cache with all files (created + existing)
+        // Update job data with created files for immediate UI update
         const updatedJobData = {
           ...jobData,
           content_pipeline_files: finalFileObjects
         };
         
-        console.log('Setting job data with file objects:', updatedJobData);
-        console.log('🔄 Updating React Query cache from: createNewFiles at', new Date().toISOString());
+        console.log('✅ Created', finalFileObjects.length, 'file objects:', finalFileObjects.map(f => f.filename));
+        console.log('🔄 Updating local job data from createNewFiles');
         
-        // Update React Query cache and local UI state for immediate render
-        queryClient.setQueryData(jobKeys.detail(jobData.job_id), updatedJobData);
+        // Update local state for immediate UI update (useAppDataStore will handle cache)
         setLocalJobData(updatedJobData);
         setFilesLoaded(true);
         
-        console.log('createNewFiles completed successfully, filesLoaded set to true');
+        console.log('✅ createNewFiles completed successfully, filesLoaded set to true');
       } else {
         console.warn('⚠️ No files created, keeping existing state');
         setFilesLoaded(true); // Still mark as loaded to prevent retries
