@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, useCallback, Suspense, useRef } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+// useQueryClient removed - useAppDataStore handles all cache management
 import { 
   JobHeader, 
   PSDTemplateSelector, 
@@ -17,16 +17,11 @@ import {
   JobDetailsContent
 } from '../../../components';
 import { 
-  useUploadEngine, 
-  useFileManager,
-  usePSDTemplateManager, 
-  useLoadingStateManager 
+  useUploadEngine
 } from '../../../hooks';
-import styles from '../../../styles/Edit.module.css';
-import Spinner from '../../../components/Spinner';
-import { JobData, FileData } from '../../../web/utils/contentPipelineApi';
+// Unused imports removed - simplified component no longer needs complex styling or types
 import { useAppDataStore } from '../../../hooks/useAppDataStore';
-import { getTotalLoadingSteps, getJobTitle } from '../../../utils/fileOperations';
+//import { getTotalLoadingSteps, getJobTitle } from '../../../utils/fileOperations';
 
 // Add CSS animation for spinner
 if (typeof document !== 'undefined') {
@@ -47,7 +42,7 @@ if (typeof document !== 'undefined') {
 function JobDetailsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const queryClient = useQueryClient();
+  // queryClient removed - useAppDataStore handles all cache management
   
   // Extract query parameters using useSearchParams  
   const startUpload = searchParams.get('startUpload');
@@ -57,7 +52,7 @@ function JobDetailsPageContent() {
   // Skip data fetching if no jobId is provided
   const hasJobId = Boolean(jobId);
   
-  // Use centralized data store for job data - single call with all needed data
+  // Single centralized data store call - handles everything
   const { 
     data: jobData, 
     isLoading: isLoadingJob, 
@@ -67,87 +62,68 @@ function JobDetailsPageContent() {
   } = useAppDataStore('jobDetails', { 
     jobId: jobId || '', 
     autoRefresh: false,
-    includeFiles: true, // Always include files in main job call to avoid separate get_job request
-    includeAssets: false // Don't include assets initially - will fetch separately when status is ready
+    includeFiles: true, // Always include files
+    includeAssets: true  // Always include assets when ready
   });
-  
-  // Only fetch assets if job status indicates they should exist
-  const shouldFetchAssets = jobData?.job_status && ['extracted', 'generating', 'generating-failed', 'completed'].includes(jobData.job_status);
-  
-  const { 
-    data: jobAssets, 
-    isLoading: isLoadingAssets,
-    mutate: mutateAssets
-  } = useAppDataStore('jobAssets', { 
-    jobId: shouldFetchAssets ? (jobId || '') : '', // Only fetch if status is appropriate
-    autoRefresh: false 
-  });
-  
-  // Extract files from job data instead of separate call
-  const jobFiles = jobData?.content_pipeline_files || [];
-  const isLoadingFiles = false; // Files are loaded with job data
 
-  // Local state for UI management
-  const [localJobData, setLocalJobData] = useState(null);
+  // UI state only (no data state)
   const [creatingAssets, setCreatingAssets] = useState(false);
   
-  // Transform jobData to maintain compatibility with existing components
-  const effectiveJobData = localJobData || jobData;
-  const mergedJobData = localJobData || jobData; // Use localJobData if available (includes created files)
-  const fileData = jobFiles || []; // Ensure fileData is always an array
+  // Clean data extraction - no local state mixing
+  const fileData = jobData?.content_pipeline_files || [];
+  const jobAssets = jobData?.assets || {};
   const error = jobError;
   
-  // Simple callback to update job data (for upload engine compatibility)
-  const updateJobDataForUpload = (updater: any) => {
-    if (typeof updater === 'function') {
-      const updated = updater(mergedJobData);
-      setLocalJobData(updated);
-      // Optionally trigger a refetch to sync with server
-      refetchJobData();
-    } else {
-      setLocalJobData(updater);
-      refetchJobData();
+  // Removed updateJobDataForUpload - just pass refetchJobData directly
+  
+  // Simplified file manager - no local state management
+  const fileManager = {
+    filesLoaded: fileData.length > 0 || createFiles === 'true',
+    loadingFiles: isLoadingJob,
+    setFilesLoaded: () => {}, // No-op, useAppDataStore handles this
+    setLoadingFiles: () => {}, // No-op, useAppDataStore handles this
+    createNewFiles: async () => {
+      if (!jobData?.job_id || !jobData?.api_files?.length) return;
+      
+      console.log('🔨 Creating new files via useAppDataStore');
+      await mutateJob({
+        type: 'createFiles',
+        data: jobData.api_files.map(filename => ({
+          filename,
+          job_id: jobData.job_id,
+          file_path: `asset_generator/dev/uploads/${filename}`,
+          original_files: {
+            [filename]: {
+              card_type: filename.includes('_FR') ? 'front' : 'back',
+              status: 'uploading',
+              file_path: `asset_generator/dev/uploads/${filename}`
+            }
+          }
+        }))
+      });
+      
+      // useAppDataStore automatically updates cache
+      console.log('✅ Files created, useAppDataStore will handle cache updates');
     }
   };
   
-  // Create minimal jobKeys for compatibility (legacy useFileManager still needs this)
-  const jobKeys = {
-    detail: (id: string) => ['job', id]
-  };
-  
-  // Import the actual file manager hook
-  const fileManager = useFileManager({
-    jobData: mergedJobData,
-    setLocalJobData: updateJobDataForUpload,
-    queryClient,
-    jobKeys
-  });
-  
-  const psdTemplateManager = usePSDTemplateManager(jobData?.job_status);
-  
-  const loadingStateManager = useLoadingStateManager({
-    isLoadingJob,
-    isLoadingFiles,
-    jobData,
-    fileData,
-    filesLoaded: fileManager.filesLoaded,
-    createFiles
-  });
-
-  // Enhanced loading state management - derived from hooks
-  const isLoading = loadingStateManager.loading || isLoadingJob || isLoadingAssets;
+  // Simplified loading state - pure useAppDataStore
+  const isLoading = isLoadingJob;
   
   // Track if file creation has been triggered to prevent double execution
   const fileCreationTriggeredRef = useRef(false);
   
-  // Upload management with comprehensive upload engine
+  // Simplified upload engine - no manual state management
   const uploadEngine = useUploadEngine({ 
-    jobData: mergedJobData, 
-    setJobData: updateJobDataForUpload,
+    jobData: jobData, 
+    setJobData: () => {}, // No-op, useAppDataStore handles updates
     onUploadComplete: async () => {
       console.log('✅ Upload completed! All files have been uploaded successfully.');
       
-      // Navigate to jobs list after a short delay to show completion
+      // Refresh job data to get latest state
+      await refetchJobData();
+      
+      // Navigate to jobs list after a short delay
       setTimeout(() => {
         console.log('📍 Navigating to jobs list...');
         router.push('/jobs');
@@ -155,35 +131,19 @@ function JobDetailsPageContent() {
     }
   });
 
-  // Debug upload engine state after initialization
-  console.log('🔍 Upload Engine State:', {
-    uploadsInProgress: uploadEngine.uploadStarted,
-    totalPdfFiles: uploadEngine.totalPdfFiles,
-    uploadedPdfFiles: uploadEngine.uploadedPdfFiles,
-    allFilesUploaded: uploadEngine.allFilesUploaded,
-    hasJobData: !!mergedJobData,
-    jobDataFilesCount: mergedJobData?.content_pipeline_files?.length || 0,
-    filesLoaded: fileManager.filesLoaded,
-    timestamp: new Date().toISOString()
-  });
-
-  // Debug data flow for upload tracking (after uploadEngine is initialized)
-  console.log('🔍 Job Details Data Flow Debug:', {
+  // Clean debug logging - no mixed state
+  console.log('🔍 Job Details State (Pure useAppDataStore):', {
     timestamp: new Date().toISOString(),
     jobId: jobId,
-    hasLocalJobData: !!localJobData,
     hasJobData: !!jobData,
-    hasMergedJobData: !!mergedJobData,
-    mergedJobDataFilesCount: mergedJobData?.content_pipeline_files?.length || 0,
-    uploadEngineUploadedCount: uploadEngine.uploadedPdfFiles,
-    uploadEngineTotalCount: uploadEngine.totalPdfFiles,
-    uploadEngineUploadingFilesCount: uploadEngine.uploadingFiles.size,
-    uploadEngineUploadingFilesList: Array.from(uploadEngine.uploadingFiles),
-    mergedJobDataFileStatuses: mergedJobData?.content_pipeline_files?.map((file: any) => ({
-      filename: file.filename,
-      originalFilesCount: Object.keys(file.original_files || {}).length,
-      originalFileStatuses: Object.entries(file.original_files || {}).map(([name, info]: [string, any]) => `${name}:${info.status}`)
-    })) || []
+    isLoading: isLoading,
+    filesCount: fileData.length,
+    uploadEngineState: {
+      uploadedCount: uploadEngine.uploadedPdfFiles,
+      totalCount: uploadEngine.totalPdfFiles,
+      uploadingFilesCount: uploadEngine.uploadingFiles.size,
+      uploadStarted: uploadEngine.uploadStarted
+    }
   });
 
   // Check if uploads are in progress
@@ -230,8 +190,7 @@ function JobDetailsPageContent() {
 
   // Legacy state sync is now handled by useLoadingStateManager hook
 
-  // Get total loading steps from loading state manager
-  const getTotalLoadingSteps = loadingStateManager.getTotalLoadingSteps;
+  // No complex loading state management needed
 
   // PDF upload tracking is now handled by uploadState hook
 
@@ -256,45 +215,28 @@ function JobDetailsPageContent() {
   // Legacy file loading useEffect removed - React Query handles this now
   // File data is now automatically loaded via useJobFiles hook
 
-  // Reset file loading state when job ID changes (navigation to different job)
+  // Reset state when job ID changes
   useEffect(() => {
-    console.log('🔄 Job ID changed, resetting file loading state');
-    fileManager.setFilesLoaded(false);
-    fileManager.setLoadingFiles(false);
+    console.log('🔄 Job ID changed, resetting state');
     uploadEngine.resetUploadState();
-    // Reset file creation trigger
     fileCreationTriggeredRef.current = false;
-  }, [jobData?.job_id]); // Remove fileManager and uploadEngine from dependencies to prevent infinite loops
+  }, [jobData?.job_id]);
 
-  // Auto-trigger file creation when createFiles=true or load existing files
+  // Simplified file creation - triggered once when needed
   useEffect(() => {
-    console.log('📋 File handling decision useEffect triggered:', {
-      createFiles,
-      hasJobData: !!jobData,
-      hasJobFiles: jobFiles.length > 0,
-      filesLoaded: fileManager.filesLoaded,
-      jobId: jobData?.job_id,
-      alreadyTriggered: fileCreationTriggeredRef.current
-    });
-    
-    if (createFiles === 'true' && jobData && !fileManager.filesLoaded && !fileCreationTriggeredRef.current) {
-      console.log('🔄 Auto-triggering file creation for new job (createFiles=true)');
+    if (createFiles === 'true' && jobData?.job_id && !fileCreationTriggeredRef.current && fileData.length === 0) {
+      console.log('🔄 Auto-triggering file creation for new job');
       fileCreationTriggeredRef.current = true;
       fileManager.createNewFiles();
-    } else if (createFiles !== 'true' && jobFiles.length > 0 && !fileManager.filesLoaded) {
-      console.log('📋 Files loaded from jobDetails, setting filesLoaded=true');
-      fileManager.setFilesLoaded(true);
-    } else if (fileManager.filesLoaded) {
-      console.log('📋 Files already loaded, no action needed');
-    } else {
-      console.log('📋 Waiting for job data or files...');
     }
-  }, [createFiles, jobData?.job_id, jobFiles.length, fileManager.filesLoaded]);
+  }, [createFiles, jobData?.job_id, fileData.length]);
 
-  // Trigger upload check when files are loaded
+  // Trigger upload check when files are available
   useEffect(() => {
-    uploadEngine.checkAndStartUpload(fileManager.filesLoaded);
-  }, [fileManager.filesLoaded]); // Remove uploadEngine from dependencies to prevent infinite loops
+    if (fileData.length > 0) {
+      uploadEngine.checkAndStartUpload(true);
+    }
+  }, [fileData.length]);
 
   // (Reset logic moved to dedicated useEffect above)
 
@@ -315,7 +257,7 @@ function JobDetailsPageContent() {
   // File creation is now handled by useFileManager hook
 
   // Update job status using centralized data store (handles cache automatically)
-  const updateJobStatus = async (status: JobData['job_status']): Promise<void> => {
+  const updateJobStatus = async (status: string): Promise<void> => {
     if (!jobData?.job_id) return;
     
     try {
@@ -357,10 +299,10 @@ function JobDetailsPageContent() {
   if (isLoading) {
     return (
       <JobDetailsLoadingState
-        loadingStep={loadingStateManager.loadingStep}
-        totalSteps={getTotalLoadingSteps()}
-        loadingMessage={loadingStateManager.loadingMessage}
-        loadingDetail={loadingStateManager.loadingDetail}
+        loadingStep={1}
+        totalSteps={3}
+        loadingMessage="Loading job details..."
+        loadingDetail={`Fetching job ${jobId}`}
       />
     );
   }
@@ -373,48 +315,31 @@ function JobDetailsPageContent() {
     return <JobDetailsErrorState error={error} />;
   }
 
-  if (!mergedJobData && !isLoading) {
+  if (!jobData && !isLoading) {
     return <JobDetailsErrorState error={null} message="No Job Data Found" />;
   }
 
   return (
     <JobDetailsContent
-      mergedJobData={mergedJobData}
+      mergedJobData={jobData}
       jobData={jobData}
       uploadEngine={uploadEngine}
       uploadsInProgress={uploadsInProgress}
       creatingAssets={creatingAssets}
       setCreatingAssets={setCreatingAssets}
-      loadingFiles={fileManager.loadingFiles}
-      filesLoaded={fileManager.filesLoaded}
-      loadingStep={loadingStateManager.loadingStep}
-      loadingMessage={loadingStateManager.loadingMessage}
-      loadingDetail={loadingStateManager.loadingDetail}
+      loadingFiles={false}
+      filesLoaded={fileData.length > 0}
+      loadingStep={1}
+      loadingMessage="Ready"
+      loadingDetail=""
       loading={isLoading}
       onJobDataUpdate={(updatedJobData) => {
-        console.log('🎯 onJobDataUpdate called with:', {
-          hasUpdatedJobData: !!updatedJobData,
-          isForceRefetch: !!updatedJobData?._forceRefetch,
-          updatedJobDataAssets: updatedJobData?.assets ? Object.keys(updatedJobData.assets) : 'no assets',
-          currentJobDataAssets: jobData?.assets ? Object.keys(jobData.assets) : 'no assets'
-        });
-        
-        // Handle force refetch case (when backend doesn't return job data)
-        if (updatedJobData?._forceRefetch) {
-          console.log('🔄 Force refetch requested - refreshing data via useAppDataStore');
-          refetchJobData();
-          return;
-        }
-        
-        // Normal case: Job/asset data updated - useAppDataStore handles cache automatically
-        console.log('🔄 Job data updated - relying on useAppDataStore cache management');
-        
-        // Update local state for immediate UI feedback (no additional refetch needed)
-        setLocalJobData(updatedJobData);
+        // Handle force refetch case or normal updates - both just refresh from server
+        console.log('🎯 onJobDataUpdate - refreshing via useAppDataStore');
+        refetchJobData();
       }}
-      updateJobDataForUpload={updateJobDataForUpload}
+      updateJobDataForUpload={refetchJobData} // Simplified to just refetch
       refetchJobData={refetchJobData}
-      setLocalJobData={setLocalJobData}
     />
   );
 }
@@ -427,12 +352,10 @@ export default function JobDetailsPage() {
         backgroundColor: '#0f172a',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'center'
+        justifyContent: 'center',
+        color: '#e0e0e0'
       }}>
-        <div style={{ textAlign: 'center' }}>
-          <Spinner />
-          <p style={{ marginTop: 16, color: '#e0e0e0' }}>Loading job details...</p>
-        </div>
+        Loading job details...
       </div>
     }>
       <JobDetailsPageContent />

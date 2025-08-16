@@ -358,6 +358,7 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
       // Update backend first - single source of truth via centralized data store
       const response = await fileStatusMutation({
         type: 'updatePdfFileStatus',
+        jobId: jobData.job_id, // Include jobId for proper cache updates
         fileId: groupFilename,
         data: {
           pdfFilename,
@@ -369,28 +370,7 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
         throw new Error('Backend response missing file property');
       }
 
-      // Update local state with backend response
-      if (setJobData) {
-        setJobData(prev => {
-          if (!prev?.content_pipeline_files) return prev;
-          
-          const updatedFiles = prev.content_pipeline_files.map((file: any) =>
-            file.filename === groupFilename
-              ? {
-                  ...file,
-                  original_files: response.file.original_files,
-                  extracted_files: response.file.extracted_files || file.extracted_files,
-                  firefly_assets: response.file.firefly_assets || file.firefly_assets,
-                  last_updated: new Date().toISOString()
-                }
-              : file
-          );
-          
-          return { ...prev, content_pipeline_files: updatedFiles };
-        });
-      }
-
-      // useAppDataStore automatically handles all cache updates
+      // useAppDataStore automatically handles all cache updates - no manual state needed
       console.log('✅ useAppDataStore automatically updated caches for file status change');
       
       console.log('✅ Backend and local state synced for', groupFilename);
@@ -401,47 +381,15 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
     }
   }, [jobData, setJobData, queryClient]);
 
-  // Local file status update (optimistic UI) - no counter updates since group-level handles this
+  // No local file status updates needed - useAppDataStore handles everything
   const updateLocalFileStatus = useCallback((
     groupFilename: string,
     pdfFilename: string,
     status: 'uploading' | 'uploaded' | 'upload-failed'
   ): void => {
-    console.log('📱 Updating local file status:', pdfFilename, 'to', status);
-    
-    if (setJobData && jobData?.job_id) {
-      const updater = (prev: any) => {
-        if (!prev?.content_pipeline_files) return prev;
-        
-        const updatedFiles = prev.content_pipeline_files.map((file: any) =>
-          file.filename === groupFilename
-            ? {
-                ...file,
-                original_files: {
-                  ...file.original_files,
-                  [pdfFilename]: {
-                    ...file.original_files?.[pdfFilename],
-                    status: status
-                  }
-                },
-                last_updated: new Date().toISOString()
-              }
-            : file
-        );
-        
-        return { ...prev, content_pipeline_files: updatedFiles };
-      };
-      
-      // Update local state
-      setJobData(updater);
-      
-      // Also sync React Query cache to ensure UI updates
-      if (queryClient) {
-        console.log('✅ useAppDataStore automatically handles cache synchronization for job:', jobData.job_id);
-        // Cache synchronization is now handled automatically by useAppDataStore
-      }
-    }
-  }, [setJobData, jobData?.job_id, queryClient]);
+    console.log('📱 File status update request:', pdfFilename, 'to', status, '(useAppDataStore will handle)');
+    // useAppDataStore handles all file status updates automatically
+  }, []);
 
 
 
@@ -473,8 +421,10 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
   ): Promise<void> => {
     console.log(`🚀 Uploading file group ${groupFilename} with ${convertedFiles.length} PDFs using streaming approach`);
     
-    // Set optimistic uploading status for all files in group
+    // Set optimistic uploading status for all files in group AND add to uploadingFiles set
     convertedFiles.forEach(({ filename }) => {
+      console.log(`📤 Adding ${filename} to uploadingFiles set for UI tracking`);
+      setUploadingFiles(prev => new Set(prev).add(filename));
       updateLocalFileStatus(groupFilename, filename, 'uploading');
     });
     
@@ -521,48 +471,38 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
         
         const statusResponse = await fileStatusMutation({
           type: 'batchUpdatePdfFileStatus',
+          jobId: jobData.job_id, // Include jobId for proper cache updates
           fileId: groupFilename,
           data: {
             pdfUpdates
           }
         });
         
-        if (statusResponse?.file?.original_files) {
-          // Update both local state and React Query cache with backend response
-          if (setJobData && jobData?.job_id) {
-            const updater = (prev: any) => {
-              if (!prev?.content_pipeline_files) return prev;
-              
-              const updatedFiles = prev.content_pipeline_files.map((file: any) =>
-                file.filename === groupFilename
-                  ? {
-                      ...file,
-                      original_files: statusResponse.file.original_files,
-                      last_updated: new Date().toISOString()
-                    }
-                  : file
-              );
-              
-              return { ...prev, content_pipeline_files: updatedFiles };
-            };
-            
-            // Update local state
-            setJobData(updater);
-            
-            // Also sync React Query cache to ensure UI updates
-            if (queryClient) {
-              console.log('✅ useAppDataStore automatically handles cache synchronization for job:', jobData.job_id);
-              // Cache synchronization is now handled automatically by useAppDataStore
-            }
-          }
-        }
+        // useAppDataStore automatically handles all cache updates
+        console.log('✅ useAppDataStore automatically updated caches for batch file status change');
         
         console.log(`✅ Batch updated ${pdfUpdates.length} PDFs to 'uploaded' status`);
+        
+        // Remove files from uploadingFiles set now that they're uploaded
+        convertedFiles.forEach(({ filename }) => {
+          console.log(`🗑️ Removing ${filename} from uploadingFiles set after successful upload`);
+          setUploadingFiles(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(filename);
+            return newSet;
+          });
+        });
+        
       } catch (error) {
         console.error(`Failed to batch update status for group ${groupFilename}:`, error);
-        // Fallback to local status updates
+        // Remove from uploadingFiles even on error - useAppDataStore will handle data
         convertedFiles.forEach(({ filename }) => {
-          updateLocalFileStatus(groupFilename, filename, 'uploaded');
+          console.log(`🗑️ Removing ${filename} from uploadingFiles set after error`);
+          setUploadingFiles(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(filename);
+            return newSet;
+          });
         });
       }
       
@@ -626,39 +566,38 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
         
         const statusResponse = await fileStatusMutation({
           type: 'batchUpdatePdfFileStatus',
+          jobId: jobData.job_id, // Include jobId for proper cache updates
           fileId: groupFilename,
           data: {
             pdfUpdates
           }
         });
         
-        if (statusResponse?.file?.original_files) {
-          // Update local state with backend response
-          if (setJobData) {
-            setJobData(prev => {
-              if (!prev?.content_pipeline_files) return prev;
-              
-              const updatedFiles = prev.content_pipeline_files.map((file: any) =>
-                file.filename === groupFilename
-                  ? {
-                      ...file,
-                      original_files: statusResponse.file.original_files,
-                      last_updated: new Date().toISOString()
-                    }
-                  : file
-              );
-              
-              return { ...prev, content_pipeline_files: updatedFiles };
-            });
-          }
-        }
+        // useAppDataStore automatically handles cache updates
+        console.log('✅ useAppDataStore automatically updated caches for failed file status change');
         
         console.log(`✅ Batch updated ${pdfUpdates.length} PDFs to 'upload-failed' status`);
+        
+        // Remove files from uploadingFiles set even on failure
+        convertedFiles.forEach(({ filename }) => {
+          console.log(`🗑️ Removing ${filename} from uploadingFiles set after failed upload`);
+          setUploadingFiles(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(filename);
+            return newSet;
+          });
+        });
+        
       } catch (batchError) {
         console.error(`Failed to batch update failed status for group ${groupFilename}:`, batchError);
-        // Fallback to local status updates
+        // Remove from uploadingFiles even on error - useAppDataStore will handle data
         convertedFiles.forEach(({ filename }) => {
-          updateLocalFileStatus(groupFilename, filename, 'upload-failed');
+          console.log(`🗑️ Removing ${filename} from uploadingFiles set after batch error`);
+          setUploadingFiles(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(filename);
+            return newSet;
+          });
         });
       }
       
