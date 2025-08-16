@@ -88,6 +88,7 @@ function JobDetailsPageContent() {
       console.log('🔨 Creating new files via useAppDataStore');
       await mutateJob({
         type: 'createFiles',
+        jobId: jobData.job_id, // ✅ Add jobId so cache invalidation works
         data: jobData.api_files.map(filename => ({
           filename,
           job_id: jobData.job_id,
@@ -102,8 +103,9 @@ function JobDetailsPageContent() {
         }))
       });
       
-      // useAppDataStore automatically updates cache
-      console.log('✅ Files created, useAppDataStore will handle cache updates');
+      // useAppDataStore automatically updates cache via invalidation
+      console.log('✅ Files created, useAppDataStore will invalidate job details cache');
+      console.log('🔄 Waiting for job details cache to refresh with new files...');
     }
   };
   
@@ -131,13 +133,21 @@ function JobDetailsPageContent() {
     }
   });
 
-  // Clean debug logging - no mixed state
+  // Enhanced debug logging to trace file creation → upload flow
   console.log('🔍 Job Details State (Pure useAppDataStore):', {
     timestamp: new Date().toISOString(),
     jobId: jobId,
     hasJobData: !!jobData,
     isLoading: isLoading,
+    createFiles: createFiles,
+    fileCreationTriggered: fileCreationTriggeredRef.current,
+    jobApiFiles: jobData?.api_files?.length || 0,
     filesCount: fileData.length,
+    fileDetails: fileData.map(f => ({
+      filename: f.filename,
+      originalFilesCount: Object.keys(f.original_files || {}).length,
+      hasUploadingStatus: Object.values(f.original_files || {}).some((info: any) => info.status === 'uploading')
+    })),
     uploadEngineState: {
       uploadedCount: uploadEngine.uploadedPdfFiles,
       totalCount: uploadEngine.totalPdfFiles,
@@ -233,8 +243,17 @@ function JobDetailsPageContent() {
 
   // Trigger upload check when files are available
   useEffect(() => {
+    console.log('📁 Upload trigger useEffect:', {
+      fileDataLength: fileData.length,
+      uploadStarted: uploadEngine.uploadStarted,
+      shouldTriggerUpload: fileData.length > 0 && !uploadEngine.uploadStarted
+    });
+    
     if (fileData.length > 0) {
+      console.log('🚀 Files available, triggering upload check...');
       uploadEngine.checkAndStartUpload(true);
+    } else {
+      console.log('⏳ No files available yet, waiting for file creation to complete...');
     }
   }, [fileData.length]);
 
