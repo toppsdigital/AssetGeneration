@@ -86,26 +86,69 @@ function JobDetailsPageContent() {
       if (!jobData?.job_id || !jobData?.api_files?.length) return;
       
       console.log('🔨 Creating new files via useAppDataStore');
+      
+      // Get the actual selected files from sessionStorage to know which PDFs exist
+      const uploadSession = sessionStorage.getItem(`upload_${jobData.job_id}`);
+      let actualPdfFiles: string[] = [];
+      
+      if (uploadSession) {
+        try {
+          const session = JSON.parse(uploadSession);
+          actualPdfFiles = session.files?.map((f: any) => f.name).filter((name: string) => 
+            name.match(/_(FR|BK)\.pdf$/i)
+          ) || [];
+          console.log('📁 Found actual PDF files from session:', actualPdfFiles);
+        } catch (error) {
+          console.error('Failed to parse upload session:', error);
+        }
+      }
+      
+      // If no session data, fall back to assuming both FR and BK exist (backward compatibility)
+      if (actualPdfFiles.length === 0) {
+        console.log('⚠️ No session data found, assuming both _FR.pdf and _BK.pdf for each base name');
+        actualPdfFiles = jobData.api_files.flatMap(baseName => [
+          `${baseName}_FR.pdf`,
+          `${baseName}_BK.pdf`
+        ]);
+      }
+      
+      // Group actual PDF files by base name
+      const fileGroups = new Map<string, {name: string, type: 'front' | 'back'}[]>();
+      actualPdfFiles.forEach(pdfName => {
+        const match = pdfName.match(/^(.+)_(FR|BK)\.pdf$/i);
+        if (match) {
+          const baseName = match[1];
+          const cardType = match[2].toUpperCase() === 'FR' ? 'front' : 'back';
+          
+          if (!fileGroups.has(baseName)) {
+            fileGroups.set(baseName, []);
+          }
+          fileGroups.get(baseName)!.push({name: pdfName, type: cardType});
+        }
+      });
+      
+      console.log('📋 File groups for creation:', Array.from(fileGroups.entries()));
+      
       await mutateJob({
         type: 'createFiles',
         jobId: jobData.job_id, // ✅ Add jobId so cache invalidation works
-        data: jobData.api_files.map(baseName => ({
-          filename: baseName,
-          job_id: jobData.job_id,
-          file_path: `asset_generator/dev/uploads/${baseName}`,
-          original_files: {
-            [`${baseName}_FR.pdf`]: {
-              card_type: 'front',
+        data: Array.from(fileGroups.entries()).map(([baseName, pdfs]) => {
+          const originalFiles: Record<string, any> = {};
+          pdfs.forEach(pdf => {
+            originalFiles[pdf.name] = {
+              card_type: pdf.type,
               status: 'uploading',
-              file_path: `asset_generator/dev/uploads/${baseName}_FR.pdf`
-            },
-            [`${baseName}_BK.pdf`]: {
-              card_type: 'back', 
-              status: 'uploading',
-              file_path: `asset_generator/dev/uploads/${baseName}_BK.pdf`
-            }
-          }
-        }))
+              file_path: `asset_generator/dev/uploads/${pdf.name}`
+            };
+          });
+          
+          return {
+            filename: baseName,
+            job_id: jobData.job_id,
+            file_path: `asset_generator/dev/uploads/${baseName}`,
+            original_files: originalFiles
+          };
+        })
       });
       
       // useAppDataStore automatically updates cache via invalidation
