@@ -12,11 +12,24 @@ export async function PUT(request: NextRequest) {
     console.log('Presigned URL:', presignedUrl);
     console.log('Content-Type:', request.headers.get('content-type'));
     console.log('Content-Length:', request.headers.get('content-length'));
+    
+    // Add request details for debugging
+    console.log('Request method:', request.method);
+    console.log('Request URL:', request.url);
 
     // Convert the request body to an ArrayBuffer to ensure proper handling
-    const bodyBuffer = await request.arrayBuffer();
-    
-    console.log('Body buffer size:', bodyBuffer.byteLength);
+    console.log('🔄 Converting request body to ArrayBuffer...');
+    let bodyBuffer;
+    try {
+      bodyBuffer = await request.arrayBuffer();
+      console.log('✅ Body buffer size:', bodyBuffer.byteLength);
+    } catch (bufferError) {
+      console.error('❌ Failed to convert request body to ArrayBuffer:', bufferError);
+      return NextResponse.json({ 
+        error: 'Failed to process request body', 
+        details: bufferError.message 
+      }, { status: 500 });
+    }
 
     const uploadHeaders: Record<string, string> = {
       'Content-Type': request.headers.get('content-type') || 'application/octet-stream',
@@ -29,11 +42,29 @@ export async function PUT(request: NextRequest) {
 
     console.log('Upload headers:', uploadHeaders);
 
-    const response = await fetch(presignedUrl, {
-      method: 'PUT',
-      headers: uploadHeaders,
-      body: bodyBuffer,
-    });
+    console.log('🚀 Uploading to S3 via presigned URL...');
+    let response;
+    try {
+      // Add timeout and DNS resolution retry logic
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      
+      response = await fetch(presignedUrl, {
+        method: 'PUT',
+        headers: uploadHeaders,
+        body: bodyBuffer,
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      console.log('✅ S3 fetch completed, status:', response.status);
+    } catch (fetchError) {
+      console.error('❌ S3 fetch failed:', fetchError);
+      return NextResponse.json({ 
+        error: 'Failed to connect to S3', 
+        details: fetchError.message 
+      }, { status: 500 });
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -50,6 +81,15 @@ export async function PUT(request: NextRequest) {
 
   } catch (error) {
     console.error('s3-upload: Internal server error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    console.error('Error details:', {
+      name: error?.name,
+      message: error?.message,
+      stack: error?.stack,
+      cause: error?.cause
+    });
+    return NextResponse.json({ 
+      error: 'Internal Server Error',
+      details: error?.message || 'Unknown error'
+    }, { status: 500 });
   }
 } 

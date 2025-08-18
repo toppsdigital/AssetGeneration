@@ -62,7 +62,7 @@ function JobDetailsPageContent() {
   } = useAppDataStore('jobDetails', { 
     jobId: jobId || '', 
     autoRefresh: false,
-    includeFiles: createFiles !== 'true', // Only fetch existing files, not for new jobs
+    includeFiles: true, // Always include files for now - will optimize later
     includeAssets: true  // Always include assets when ready
   });
 
@@ -73,6 +73,16 @@ function JobDetailsPageContent() {
   const fileData = jobData?.content_pipeline_files || [];
   const jobAssets = jobData?.assets || {};
   const error = jobError;
+  
+  // Debug file data state for UI updates
+  console.log('📊 File Data State:', {
+    timestamp: new Date().toISOString(),
+    fileDataLength: fileData.length,
+    isLoadingJob,
+    hasJobData: !!jobData,
+    createFiles,
+    fileNames: fileData.map(f => f.filename)
+  });
   
   // Removed updateJobDataForUpload - just pass refetchJobData directly
   
@@ -187,6 +197,12 @@ function JobDetailsPageContent() {
       // useAppDataStore automatically updates cache via invalidation
       console.log('✅ Files created, useAppDataStore will invalidate job details cache');
       console.log('🔄 Waiting for job details cache to refresh with new files...');
+      
+      // Force an immediate refetch to ensure UI updates quickly  
+      console.log('🚀 Triggering immediate refetch for faster UI update');
+      await refetchJobData();
+      
+      // Note: Upload should trigger automatically via fileData.length useEffect
     }
   };
   

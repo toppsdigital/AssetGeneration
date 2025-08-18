@@ -457,15 +457,13 @@ function NewJobPageContent() {
       console.log('File count:', formData.selectedFiles!.length);
       console.log('Operation type:', isRerun ? 'rerun' : 'new job');
       
-      // Navigate to job details page with upload parameters for both new jobs and reruns
+      // Navigate to job uploading page for both new jobs and reruns
       const queryParams = new URLSearchParams({
-        jobId: createdJob.job_id!,
-        startUpload: 'true',
-        createFiles: 'true'
+        jobId: createdJob.job_id!
       });
       
-      router.push(`/job/details?${queryParams.toString()}`);
-      console.log(`🔗 Navigating to job details with upload params: ${queryParams.toString()}`);
+      router.push(`/job/uploading?${queryParams.toString()}`);
+      console.log(`🔗 Navigating to job uploading page: ${queryParams.toString()}`);
       
     } catch (error) {
       console.error(`Error ${isRerun ? 're-running' : 'creating'} job:`, error);

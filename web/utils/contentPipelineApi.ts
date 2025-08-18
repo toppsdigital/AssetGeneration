@@ -42,7 +42,7 @@ export interface FileData {
   original_files?: Record<string, {
     card_type: 'front' | 'back';
     file_path: string;
-    status: 'uploading' | 'uploaded' | 'upload-failed' | 'extracting' | 'extracted' | 'extraction-failed';
+    status: 'uploading' | 'processing' | 'uploaded' | 'upload-failed' | 'extracting' | 'extracted' | 'extraction-failed';
   }>;
   extracted_files?: Record<string, {
     file_path: string;
@@ -348,7 +348,7 @@ class ContentPipelineAPI {
   async updatePdfFileStatus(
     groupFilename: string, 
     pdfFilename: string, 
-    status: 'uploading' | 'uploaded' | 'upload-failed'
+    status: 'uploading' | 'processing' | 'uploaded' | 'upload-failed'
   ): Promise<FileResponse> {
     const response = await fetch(`${this.baseUrl}?operation=update_pdf_status&id=${encodeURIComponent(groupFilename)}`, {
       method: 'PUT',
@@ -374,7 +374,7 @@ class ContentPipelineAPI {
     groupFilename: string, 
     pdfUpdates: Array<{
       pdf_filename: string;
-      status: 'uploading' | 'uploaded' | 'upload-failed';
+      status: 'uploading' | 'processing' | 'uploaded' | 'upload-failed';
     }>
   ): Promise<FileResponse> {
     const response = await fetch(`${this.baseUrl}?operation=batch_update_pdf_status&id=${encodeURIComponent(groupFilename)}`, {

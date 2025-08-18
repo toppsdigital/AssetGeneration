@@ -57,6 +57,42 @@ export const useUploadEngine = ({
   const [uploadedPdfFiles, setUploadedPdfFiles] = useState(0);
   const [failedPdfFiles, setFailedPdfFiles] = useState(0);
 
+  // Initialize counters from job data when available
+  useEffect(() => {
+    if (!jobData?.content_pipeline_files) {
+      console.log('📊 No job data available for counter initialization');
+      return;
+    }
+
+    let totalFiles = 0;
+    let uploadedFiles = 0;
+    let failedFiles = 0;
+
+    jobData.content_pipeline_files.forEach((fileGroup: any) => {
+      if (fileGroup.original_files) {
+        Object.entries(fileGroup.original_files).forEach(([filename, fileInfo]: [string, any]) => {
+          totalFiles++;
+          if (fileInfo.status === 'uploaded') {
+            uploadedFiles++;
+          } else if (fileInfo.status === 'upload-failed') {
+            failedFiles++;
+          }
+        });
+      }
+    });
+
+    console.log('📊 Initializing upload counters from job data:', {
+      totalFiles,
+      uploadedFiles,
+      failedFiles,
+      jobId: jobData.job_id
+    });
+
+    setTotalPdfFiles(totalFiles);
+    setUploadedPdfFiles(uploadedFiles);
+    setFailedPdfFiles(failedFiles);
+  }, [jobData?.content_pipeline_files, jobData?.job_id]);
+
   // Reset upload state
   const resetUploadState = useCallback(() => {
     setUploadProgress({});
@@ -66,6 +102,8 @@ export const useUploadEngine = ({
     setTotalPdfFiles(0);
     setUploadedPdfFiles(0);
     setFailedPdfFiles(0);
+    uploadMonitoringStartTime.current = null; // Reset monitoring timer
+    console.log('🔄 Upload state reset - cleared all counters and monitoring timer');
   }, []);
 
   // Helper function to wait
@@ -348,7 +386,7 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
   const updateFileStatus = useCallback(async (
     groupFilename: string,
     pdfFilename: string,
-    status: 'uploading' | 'uploaded' | 'upload-failed'
+    status: 'uploading' | 'processing' | 'uploaded' | 'upload-failed'
   ): Promise<void> => {
     if (!jobData?.content_pipeline_files) return;
 
@@ -385,7 +423,7 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
   const updateLocalFileStatus = useCallback((
     groupFilename: string,
     pdfFilename: string,
-    status: 'uploading' | 'uploaded' | 'upload-failed'
+    status: 'uploading' | 'processing' | 'uploaded' | 'upload-failed'
   ): void => {
     console.log('📱 File status update request:', pdfFilename, 'to', status, '(useAppDataStore will handle)');
     // useAppDataStore handles all file status updates automatically
@@ -421,12 +459,35 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
   ): Promise<void> => {
     console.log(`🚀 Uploading file group ${groupFilename} with ${convertedFiles.length} PDFs using streaming approach`);
     
-    // Set optimistic uploading status for all files in group AND add to uploadingFiles set
+    // Set processing status for all files in group AND add to uploadingFiles set
     convertedFiles.forEach(({ filename }) => {
       console.log(`📤 Adding ${filename} to uploadingFiles set for UI tracking`);
       setUploadingFiles(prev => new Set(prev).add(filename));
-      updateLocalFileStatus(groupFilename, filename, 'uploading');
+      updateLocalFileStatus(groupFilename, filename, 'processing');
     });
+    
+    // Update backend status to processing for all files in this group
+    try {
+      const processingUpdates = convertedFiles.map(({ filename }) => ({
+        pdf_filename: filename,
+        status: 'processing' as const
+      }));
+      
+      await fileStatusMutation({
+        type: 'batchUpdatePdfFileStatus',
+        jobId: jobData.job_id,
+        fileId: groupFilename,
+        data: { pdfUpdates: processingUpdates }
+      });
+      
+      console.log(`✅ Set processing status for ${convertedFiles.length} files in group ${groupFilename}`);
+    } catch (error) {
+      console.warn(`⚠️ Failed to set processing status for group ${groupFilename}:`, error);
+      // Continue with upload even if status update fails
+    }
+    
+    // Track files for cleanup - ensure they're always removed from uploadingFiles
+    const filesToCleanup = convertedFiles.map(f => f.filename);
     
     try {
       // Get upload instructions for all files (streaming approach for all)
@@ -453,106 +514,59 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
 
       const instructionsResult = await instructionsResponse.json();
       
+      // Verify upload instructions match file count
+      const instructionsCount = instructionsResult.data?.upload_instructions?.length || 0;
+      console.log(`📋 Upload instructions received: ${instructionsCount} instructions for ${convertedFiles.length} files`);
+      
+      if (instructionsCount !== convertedFiles.length) {
+        console.error(`❌ Mismatch: Expected ${convertedFiles.length} upload instructions, got ${instructionsCount}`);
+        console.error('Files to upload:', convertedFiles.map(f => f.filename));
+        console.error('Upload instructions:', instructionsResult.data?.upload_instructions?.map((inst: any, idx: number) => ({ index: idx, filename: inst.filename || 'unknown' })));
+        throw new Error(`Upload instructions count mismatch: expected ${convertedFiles.length}, got ${instructionsCount}`);
+      }
+      
       // Upload each file using its specific streaming instructions
+      console.log(`📤 Starting individual file uploads for group ${groupFilename} (${convertedFiles.length} files)`);
       for (let i = 0; i < convertedFiles.length; i++) {
-        const { file, fileInfo } = convertedFiles[i];
+        const { file, fileInfo, filename } = convertedFiles[i];
         const uploadInstruction = instructionsResult.data.upload_instructions[i];
-        await uploadLargeFileToS3(file, fileInfo.file_path, uploadInstruction);
-      }
-
-      console.log(`✅ File group ${groupFilename} streaming upload completed successfully`);
-      
-      // Update backend status for all files in the group with a single API call
-      try {
-        const pdfUpdates = convertedFiles.map(({ filename }) => ({
-          pdf_filename: filename,
-          status: 'uploaded' as const
-        }));
         
-        const statusResponse = await fileStatusMutation({
-          type: 'batchUpdatePdfFileStatus',
-          jobId: jobData.job_id, // Include jobId for proper cache updates
-          fileId: groupFilename,
-          data: {
-            pdfUpdates
-          }
-        });
+        console.log(`📤 Uploading file ${i + 1}/${convertedFiles.length}: "${filename}" (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
+        console.log(`    📍 File path: ${fileInfo.file_path}`);
+        console.log(`    📋 Upload instruction type: ${uploadInstruction?.upload_type || 'undefined'}`);
         
-        // useAppDataStore automatically handles all cache updates
-        console.log('✅ useAppDataStore automatically updated caches for batch file status change');
-        
-        console.log(`✅ Batch updated ${pdfUpdates.length} PDFs to 'uploaded' status`);
-        
-        // Remove files from uploadingFiles set now that they're uploaded
-        convertedFiles.forEach(({ filename }) => {
-          console.log(`🗑️ Removing ${filename} from uploadingFiles set after successful upload`);
-          setUploadingFiles(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(filename);
-            return newSet;
-          });
-        });
-        
-      } catch (error) {
-        console.error(`Failed to batch update status for group ${groupFilename}:`, error);
-        // Remove from uploadingFiles even on error - useAppDataStore will handle data
-        convertedFiles.forEach(({ filename }) => {
-          console.log(`🗑️ Removing ${filename} from uploadingFiles set after error`);
-          setUploadingFiles(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(filename);
-            return newSet;
-          });
-        });
-      }
-      
-      // Update counters (only once per group, not per file)
-      setUploadedPdfFiles(prev => prev + convertedFiles.length);
-      console.log(`📊 Updated counters: +${convertedFiles.length} uploaded files`);
-      
-      // Update job's original_files_completed_count in real-time
-      if (jobData?.job_id && setJobData) {
         try {
-          console.log(`🔄 Updating job original_files_completed_count by +${convertedFiles.length}`);
-          
-          // Update job object with incremented completed count
-          const updateResponse = await fetch(`/api/content-pipeline-proxy?operation=update_job&id=${jobData.job_id}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              increment_completed_count: convertedFiles.length
-            })
-          });
-          
-          if (updateResponse.ok) {
-            const result = await updateResponse.json();
-            console.log(`✅ Job completed count updated: +${convertedFiles.length} files`);
-            
-            // Use the complete job object returned from increment API
-            if (result.job) {
-              console.log(`📦 Updating local job data with complete object from increment API`);
-              setJobData(prev => ({
-                ...(prev || {}), // Handle null prev safely
-                ...result.job, // Use entire job object from API response
-                // Preserve UI-specific fields that might not be in API response
-                api_files: result.job.files || prev?.api_files || [],
-                content_pipeline_files: prev?.content_pipeline_files || [],
-                Subset_name: result.job.source_folder || prev?.Subset_name
-              }));
-            } else {
-              // Fallback to manual increment if no job object returned
-              setJobData(prev => ({
-                ...(prev || {}), // Handle null prev safely
-                original_files_completed_count: ((prev?.original_files_completed_count || 0) + convertedFiles.length)
-              }));
-            }
-          } else {
-            console.warn(`⚠️ Failed to update job completed count: ${updateResponse.status}`);
-          }
+          await uploadLargeFileToS3(file, fileInfo.file_path, uploadInstruction);
+          console.log(`    ✅ Successfully uploaded file ${i + 1}/${convertedFiles.length}: "${filename}"`);
         } catch (error) {
-          console.error(`❌ Error updating job completed count:`, error);
+          console.error(`    ❌ Failed to upload file ${i + 1}/${convertedFiles.length}: "${filename}"`, error);
+          throw error; // Re-throw to handle at group level
         }
       }
+      console.log(`✅ All ${convertedFiles.length} files uploaded successfully for group ${groupFilename}`);
+
+      console.log(`✅ File group ${groupFilename} streaming upload completed successfully (status updates now handled by S3 triggers)`);
+      
+      // Remove files from uploadingFiles set now that they're uploaded
+      convertedFiles.forEach(({ filename }) => {
+        console.log(`🗑️ Removing ${filename} from uploadingFiles set after successful upload`);
+        setUploadingFiles(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(filename);
+          return newSet;
+        });
+      });
+      
+      console.log(`🔄 About to update upload counters for group ${groupFilename}...`);
+      
+      // Update counters (only once per group, not per file)
+      setUploadedPdfFiles(prev => {
+        const newCount = prev + convertedFiles.length;
+        console.log(`📊 Counter update for group ${groupFilename}: ${prev} + ${convertedFiles.length} = ${newCount} uploaded files`);
+        return newCount;
+      });
+      
+      console.log(`✅ Upload counters updated for group ${groupFilename} (job counter updates now handled by S3 triggers)`);
       
     } catch (error) {
       console.error(`❌ Failed to upload file group ${groupFilename}:`, error);
@@ -602,8 +616,11 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
       }
       
       // Update counters (only once per group, not per file)
-      setFailedPdfFiles(prev => prev + convertedFiles.length);
-      console.log(`📊 Updated counters: +${convertedFiles.length} failed files`);
+      setFailedPdfFiles(prev => {
+        const newCount = prev + convertedFiles.length;
+        console.log(`📊 Counter update for group ${groupFilename}: ${prev} + ${convertedFiles.length} = ${newCount} failed files`);
+        return newCount;
+      });
       
       // Update job's original_files_failed_count in real-time
       if (jobData?.job_id && setJobData) {
@@ -650,8 +667,238 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
       }
       
       throw error;
+    } finally {
+      // Always ensure files are removed from uploadingFiles set, regardless of success/failure
+      console.log(`🧹 Cleanup: Ensuring all files from group ${groupFilename} are removed from uploadingFiles set`);
+      filesToCleanup.forEach((filename) => {
+        console.log(`🗑️ Final cleanup: Removing ${filename} from uploadingFiles set`);
+        setUploadingFiles(prev => {
+          const newSet = new Set(prev);
+          const wasRemoved = newSet.delete(filename);
+          if (wasRemoved) {
+            console.log(`✅ Successfully removed ${filename} from uploadingFiles set in finally block`);
+          } else {
+            console.log(`ℹ️ ${filename} was already removed from uploadingFiles set`);
+          }
+          console.log(`📊 uploadingFiles count after cleanup: ${newSet.size}, remaining files:`, Array.from(newSet));
+          return newSet;
+        });
+      });
     }
-  }, [updateLocalFileStatus, setJobData, jobData]);
+  }, [updateLocalFileStatus, setJobData, jobData, fileStatusMutation]);
+
+  // Robust group upload - handles individual file failures gracefully
+  // Helper function to add timeout to any promise
+  const withTimeout = <T>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> => {
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error(`${operation} timed out after ${timeoutMs}ms`)), timeoutMs);
+    });
+    return Promise.race([promise, timeoutPromise]);
+  };
+
+  const uploadRobustFileGroup = useCallback(async (
+    groupFilename: string,
+    groupFiles: Array<{filename: string, file: File, fileInfo: any}>
+  ): Promise<void> => {
+    console.log(`🚀 Robust upload for group ${groupFilename} with ${groupFiles.length} files`);
+    
+    // Add all files to uploading state
+    const filesToCleanup = groupFiles.map(f => f.filename);
+    groupFiles.forEach(({ filename }) => {
+      console.log(`📤 Adding ${filename} to uploadingFiles set`);
+      setUploadingFiles(prev => new Set(prev).add(filename));
+      updateLocalFileStatus(groupFilename, filename, 'uploading');
+    });
+    
+    let successfulFiles: string[] = [];
+    let failedFiles: string[] = [];
+    
+    try {
+      // Convert files to base64 first with timeout
+      console.log(`🔄 Converting ${groupFiles.length} files to base64...`);
+      const convertedFiles = await withTimeout(
+        Promise.all(
+          groupFiles.map(async (fileData) => ({
+            ...fileData,
+            base64Content: await fileToBase64(fileData.file)
+          }))
+        ),
+        30000, // 30 second timeout for base64 conversion
+        `Base64 conversion for group ${groupFilename}`
+      );
+      console.log(`✅ Base64 conversion completed for group ${groupFilename}`);
+      
+      // Get upload instructions with timeout
+      console.log(`📋 Getting upload instructions for group ${groupFilename}...`);
+      
+      // Debug: Log the structure of convertedFiles
+      console.log(`🔍 Debug - convertedFiles structure:`, convertedFiles.map((cf, i) => ({
+        index: i,
+        filename: cf.filename,
+        hasFileInfo: !!cf.fileInfo,
+        fileInfoPath: cf.fileInfo?.file_path,
+        fileSize: cf.file?.size,
+        fileType: cf.file?.type
+      })));
+      
+      const fileInstructions = convertedFiles.map(({ file, fileInfo, filename }) => {
+        // Use the file_path from fileInfo which has the proper S3 path format
+        const s3FilePath = fileInfo.file_path || filename;
+        const instruction = {
+          filename: s3FilePath, // Use file_path which includes app_name/PDFs/filename
+          size: file.size,
+          content_type: file.type || 'application/pdf'
+        };
+        console.log(`📄 Creating instruction for ${filename}:`, {
+          originalFilename: filename,
+          s3FilePath: s3FilePath,
+          instruction: instruction
+        });
+        return instruction;
+      });
+      
+      console.log(`📋 Final fileInstructions being sent to S3 API:`, fileInstructions);
+      
+      // Use base folder path since file_path now contains the relative path
+      const baseFolderPath = 'asset_generator/dev/uploads';
+      
+      console.log(`📁 Job app_name: "${jobData.app_name}", Using base S3 folder: "${baseFolderPath}"`);
+      
+      const requestBody = {
+        folder: baseFolderPath,
+        files: fileInstructions
+      };
+      
+      // Verify the final S3 keys that will be generated
+      console.log(`🗂️ Expected S3 keys:`, fileInstructions.map(f => `${baseFolderPath}/${f.filename}`));
+      
+      console.log(`🌐 Sending S3 upload request:`, {
+        operation: 's3_upload_files',
+        body: requestBody
+      });
+      
+      const instructionsResponse = await withTimeout(
+        fetch('/api/content-pipeline-proxy?operation=s3_upload_files', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody),
+        }),
+        15000, // 15 second timeout for upload instructions
+        `Upload instructions fetch for group ${groupFilename}`
+      );
+
+      if (!instructionsResponse.ok) {
+        const errorText = await instructionsResponse.text();
+        console.error(`❌ S3 upload instructions failed:`, {
+          status: instructionsResponse.status,
+          statusText: instructionsResponse.statusText,
+          errorResponse: errorText,
+          requestFolder: requestBody.folder,
+          requestFiles: requestBody.files.map(f => ({ filename: f.filename, size: f.size }))
+        });
+        
+        // Try to parse the error response to get more details
+        try {
+          const errorData = JSON.parse(errorText);
+          if (errorData.data?.failed_requests) {
+            console.error(`❌ S3 upload failures breakdown:`, errorData.data.failed_requests);
+            errorData.data.failed_requests.forEach((req: any) => {
+              console.error(`  - File: ${req.filename}, Error: ${req.error}`);
+            });
+          }
+        } catch (parseError) {
+          console.error(`❌ Could not parse S3 error response:`, parseError);
+        }
+        
+        throw new Error(`Failed to get upload instructions: ${instructionsResponse.status} - ${errorText}`);
+      }
+
+      const instructionsResult = await instructionsResponse.json();
+      console.log(`✅ Upload instructions received for group ${groupFilename}:`, {
+        success: instructionsResult.success,
+        instructionsCount: instructionsResult.data?.upload_instructions?.length || 0,
+        failedCount: instructionsResult.data?.failed_requests?.length || 0,
+        failedRequests: instructionsResult.data?.failed_requests
+      });
+      
+      // Upload each file individually with error handling and timeout
+      console.log(`🚀 Starting individual file uploads for group ${groupFilename}...`);
+      const uploadResults = await withTimeout(
+        Promise.allSettled(
+          convertedFiles.map(async ({ file, fileInfo, filename }, index) => {
+            try {
+              const s3FilePath = fileInfo.file_path || filename;
+              console.log(`🔼 Starting upload for ${filename} -> S3 path: ${s3FilePath}...`);
+              const uploadInstruction = instructionsResult.data.upload_instructions[index];
+              await uploadLargeFileToS3(file, s3FilePath, uploadInstruction);
+              successfulFiles.push(filename);
+              console.log(`✅ Successfully uploaded ${filename}`);
+              return { success: true, filename };
+            } catch (error) {
+              console.error(`❌ File ${filename} upload failed:`, error);
+              failedFiles.push(filename);
+              return { success: false, filename, error };
+            }
+          })
+        ),
+        60000, // 60 second timeout for all individual uploads
+        `Individual file uploads for group ${groupFilename}`
+      );
+      
+      console.log(`📊 Group ${groupFilename} upload results: ${successfulFiles.length} PDF files successful, ${failedFiles.length} PDF files failed`);
+      
+      // Track successful uploads for local counters
+      if (successfulFiles.length > 0) {
+        const pdfFileCount = successfulFiles.length;
+        setUploadedPdfFiles(prev => prev + pdfFileCount);
+        console.log(`✅ Tracked ${pdfFileCount} successful uploads (status updates now handled by S3 triggers)`);
+      }
+      
+      // Update status for failed files with timeout
+      if (failedFiles.length > 0) {
+        const failedPdfFileCount = failedFiles.length;
+        console.log(`🔄 Updating status for ${failedPdfFileCount} failed PDF files...`);
+        console.log(`📊 Failed PDF files:`, failedFiles);
+        
+        const failedUpdates = failedFiles.map(filename => ({
+          pdf_filename: filename,
+          status: 'upload-failed' as const
+        }));
+        
+        await withTimeout(
+          fileStatusMutation({
+            type: 'batchUpdatePdfFileStatus',
+            jobId: jobData.job_id,
+            fileId: groupFilename,
+            data: { pdfUpdates: failedUpdates }
+          }),
+          10000, // 10 second timeout for status mutation
+          `Failed status mutation for group ${groupFilename}`
+        );
+        
+        setFailedPdfFiles(prev => prev + failedPdfFileCount);
+        console.log(`❌ Updated ${failedPdfFileCount} PDF files to failed status`);
+      }
+      
+    } catch (error) {
+      console.error(`❌ Group ${groupFilename} completely failed:`, error);
+      failedFiles = filesToCleanup;
+      const failedPdfFileCount = failedFiles.length;
+      setFailedPdfFiles(prev => prev + failedPdfFileCount);
+      console.log(`❌ Marked ${failedPdfFileCount} PDF files as failed due to group failure`);
+      throw error;
+    } finally {
+      // Always clean up uploadingFiles set
+      console.log(`🧹 Cleaning up uploadingFiles for group ${groupFilename}`);
+      filesToCleanup.forEach(filename => {
+        setUploadingFiles(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(filename);
+          return newSet;
+        });
+      });
+    }
+  }, [fileToBase64, uploadLargeFileToS3, updateLocalFileStatus, fileStatusMutation, jobData, setUploadedPdfFiles, setFailedPdfFiles]);
 
   // Start the upload process with pipeline optimization
   const startUploadProcess = useCallback(async (files: File[]): Promise<void> => {
@@ -664,7 +911,12 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
     
     // Create file mapping
     const fileMap = new Map<string, File>();
-    files.forEach(file => fileMap.set(file.name, file));
+    console.log(`📁 Creating file mapping for ${files.length} File objects:`);
+    files.forEach((file, index) => {
+      console.log(`  📄 File ${index + 1}: "${file.name}" (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
+      fileMap.set(file.name, file);
+    });
+    console.log(`📊 File map created with ${fileMap.size} entries`);
     
     // Group files by their logical file group
     const fileGroups = new Map<string, Array<{filename: string, file: File, fileInfo: any}>>();
@@ -674,13 +926,22 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
       if (fileObj.original_files) {
         const groupFiles: Array<{filename: string, file: File, fileInfo: any}> = [];
         
-        Object.entries(fileObj.original_files).forEach(([filename, fileInfo]: [string, any]) => {
+        console.log(`📁 Processing file group "${fileObj.filename}" with ${Object.keys(fileObj.original_files).length} original files:`);
+        
+        Object.entries(fileObj.original_files).forEach(([filename, fileInfo]: [string, any], index) => {
           const file = fileMap.get(filename);
+          console.log(`  📄 File ${index + 1}/${Object.keys(fileObj.original_files).length}: "${filename}" - File object ${file ? 'found' : 'NOT FOUND'}`);
+          
           if (file) {
             groupFiles.push({ filename, file, fileInfo });
             totalPdfFiles++;
+            console.log(`    ✅ Added to group (fileInfo.file_path: ${fileInfo.file_path})`);
+          } else {
+            console.log(`    ❌ Skipped - no File object available`);
           }
         });
+        
+        console.log(`📊 Group "${fileObj.filename}" final count: ${groupFiles.length} files ready for upload`);
         
         if (groupFiles.length > 0) {
           fileGroups.set(fileObj.filename, groupFiles);
@@ -688,59 +949,82 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
       }
     });
     
-    // Set totals and reset counters
+    // Update totals only if different, preserve existing uploaded/failed counts
     console.log(`📊 Total: ${fileGroups.size} file groups, ${totalPdfFiles} PDF files`);
-    setTotalPdfFiles(totalPdfFiles);
-    setUploadedPdfFiles(0);
-    setFailedPdfFiles(0);
+    setTotalPdfFiles(prev => {
+      if (prev !== totalPdfFiles) {
+        console.log(`📊 Updating total PDF files from ${prev} to ${totalPdfFiles}`);
+        return totalPdfFiles;
+      }
+      return prev;
+    });
+    // Don't reset uploaded/failed counters - preserve existing state from job data
+    console.log('📊 Preserving existing uploaded/failed counts (not resetting to 0)');
     
-    // Pipelined upload: Convert next batch while uploading current batch
+    // Robust group processing: Keep groups but make them independent
+    console.log(`🔄 ROBUST GROUP PROCESSING:`);
+    console.log(`📊 Total file groups: ${fileGroups.size}`);
+    
     const groupEntries = Array.from(fileGroups.entries());
-    const batchSize = 6; // Increased to 6 for maximum throughput
+    const batchSize = 2; // Process 2 groups at a time
+    console.log(`📊 Batch size: ${batchSize} groups`);
+    console.log(`📊 Expected batches: ${Math.ceil(groupEntries.length / batchSize)}`);
+    console.log(`📁 All file groups:`, groupEntries.map(([name, files]) => `${name} (${files.length} files)`));
     
-    let nextBatchConverted: Array<[string, Array<{filename: string, file: File, fileInfo: any, base64Content: string}>]> = [];
-    
+    // Process groups in simple batches
     for (let i = 0; i < groupEntries.length; i += batchSize) {
-      const currentBatch = groupEntries.slice(i, i + batchSize);
-      const nextBatch = groupEntries.slice(i + batchSize, i + batchSize * 2);
+      const currentGroupBatch = groupEntries.slice(i, i + batchSize);
+      const batchNumber = Math.floor(i / batchSize) + 1;
+      const totalBatches = Math.ceil(groupEntries.length / batchSize);
       
-      console.log(`📦 Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(groupEntries.length / batchSize)}:`, currentBatch.map(([groupName]) => groupName));
+      console.log(`📦 STARTING BATCH ${batchNumber}/${totalBatches}:`);
+      console.log(`  📁 Groups in this batch:`, currentGroupBatch.map(([name]) => name));
       
-      // Get converted files for current batch (either pre-converted or convert now)
-      const currentConverted = nextBatchConverted.length > 0 
-        ? nextBatchConverted 
-        : await preConvertBatch(currentBatch);
+      // Process each group independently with Promise.allSettled
+      const groupResults = await Promise.allSettled(
+        currentGroupBatch.map(async ([groupFilename, groupFiles]) => {
+          try {
+            await uploadRobustFileGroup(groupFilename, groupFiles);
+            return { success: true, groupFilename };
+          } catch (error) {
+            console.error(`❌ Group ${groupFilename} failed:`, error);
+            return { success: false, groupFilename, error: error.message };
+          }
+        })
+      );
       
-      // Start uploading current batch AND converting next batch in parallel
-      const uploadPromise = Promise.all(currentConverted.map(async ([groupFilename, convertedFiles]) => {
-        try {
-          await uploadPreConvertedFileGroup(groupFilename, convertedFiles);
-          return { success: true, groupFilename };
-        } catch (error) {
-          console.error(`Failed to upload file group ${groupFilename}:`, error);
-          return { success: false, groupFilename };
-        }
-      }));
+      // Log batch results
+      const successCount = groupResults.filter(r => r.status === 'fulfilled' && r.value.success).length;
+      const failedCount = groupResults.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success)).length;
       
-      // Convert next batch in parallel if it exists
-      const convertPromise = nextBatch.length > 0 ? preConvertBatch(nextBatch) : Promise.resolve([]);
+      console.log(`✅ BATCH ${batchNumber} COMPLETED:`);
+      console.log(`  📊 Results: ${successCount} successful, ${failedCount} failed`);
       
-      const [uploadResults, nextConverted] = await Promise.all([uploadPromise, convertPromise]);
-      
-      // Store converted next batch for next iteration
-      nextBatchConverted = nextConverted;
-      
-      // Log batch completion
-      const successCount = uploadResults.filter(r => r.success).length;
-      console.log(`✅ Batch completed: ${successCount}/${currentBatch.length} file groups uploaded successfully`);
-      
-      // Shorter delay between batches for better throughput
+      // Small delay between batches
       if (i + batchSize < groupEntries.length) {
-        await wait(200);
+        console.log(`⏳ Waiting 500ms before next batch...`);
+        await wait(500);
       }
     }
     
+    console.log(`🏁 BATCH PROCESSING COMPLETE:`);
+    console.log(`📊 Processed ${groupEntries.length} file groups across ${Math.ceil(groupEntries.length / batchSize)} batches`);
+    console.log(`📊 Expected ${totalPdfFiles} total files`);
+    
     console.log('🎉 Pipelined upload process completed!');
+    
+    // Final summary
+    console.log('📊 Upload Process Summary:');
+    console.log(`  📁 Total file groups processed: ${fileGroups.size}`);
+    console.log(`  📄 Total PDF files expected: ${totalPdfFiles}`);
+    console.log(`  🗂️ File groups breakdown:`);
+    fileGroups.forEach((groupFiles, groupName) => {
+      console.log(`    📁 Group "${groupName}": ${groupFiles.length} files`);
+      groupFiles.forEach((file, index) => {
+        console.log(`      📄 ${index + 1}. ${file.filename}`);
+      });
+    });
+    
   }, [jobData, preConvertBatch, uploadPreConvertedFileGroup]);
 
   // Check for files that need uploading and start process
@@ -750,14 +1034,27 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
     }
 
     console.log('✅ Files loaded, checking for uploads...');
+    console.log('📊 Job content_pipeline_files:', jobData.content_pipeline_files?.length || 0, 'file groups');
     
-    // Collect files with "uploading" status
+    // Collect files that need uploading (pending or uploading status)
     const filesToUpload: { filename: string; filePath: string }[] = [];
+    
+    // Debug: log all file statuses
+    const allFileStatuses: Record<string, string> = {};
+    jobData.content_pipeline_files.forEach((fileGroup: any) => {
+      if (fileGroup.original_files) {
+        Object.entries(fileGroup.original_files).forEach(([filename, fileInfo]: [string, any]) => {
+          allFileStatuses[filename] = fileInfo.status || 'unknown';
+        });
+      }
+    });
+    console.log('📋 All file statuses:', allFileStatuses);
     
     jobData.content_pipeline_files.forEach((fileGroup: any) => {
       if (fileGroup.original_files) {
         Object.entries(fileGroup.original_files).forEach(([filename, fileInfo]: [string, any]) => {
-          if (fileInfo.status === 'uploading') {
+          if (fileInfo.status === 'pending' || fileInfo.status === 'uploading') {
+            console.log(`📤 Adding file to upload queue: ${filename} (status: ${fileInfo.status})`);
             filesToUpload.push({
               filename: filename,
               filePath: fileInfo.file_path
@@ -774,18 +1071,51 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
 
     console.log(`📁 Found ${filesToUpload.length} files that need uploading:`, filesToUpload.map(f => f.filename));
 
-    // Clean architecture: No global state dependencies
-    // For newly created files, we rely on S3 presigned URLs from the backend
-    console.log('🚀 Starting upload process without File objects dependency...');
-    console.log('⚠️ TODO: Implement File object collection for new job uploads');
-    console.log('ℹ️ Current approach: Files are created with "uploading" status, ready for S3 upload');
+    // Get File objects from sessionStorage (where new-job page stored them)
+    // NOTE: This approach relies on File objects being stored in browser memory,
+    // which is fragile and doesn't work if the page is refreshed. A more robust
+    // approach would be to upload files immediately and store S3 paths.
+    const uploadSession = sessionStorage.getItem(`upload_${jobData.job_id}`);
+    let actualFiles: File[] = [];
     
-    // For now, log that files are ready but skip actual upload since we need File objects
-    if (filesToUpload.length > 0) {
-      console.log('📋 Files are created and ready for upload, but File object collection needs implementation');
-      console.log('🎯 Expected: User will need to manually select files or we implement file object persistence');
+    if (uploadSession) {
+      try {
+        const session = JSON.parse(uploadSession);
+        // Get File objects from global state (they can't be stored in sessionStorage)
+        const pendingFiles = (window as any).pendingUploadFiles;
+        if (pendingFiles && pendingFiles.jobId === jobData.job_id && pendingFiles.files) {
+          actualFiles = pendingFiles.files.filter((file: File) =>
+            filesToUpload.some(needed => needed.filename === file.name)
+          );
+          console.log(`🚀 Found ${actualFiles.length} File objects for upload:`, actualFiles.map(f => f.name));
+        }
+      } catch (error) {
+        console.error('Failed to get upload session or File objects:', error);
+      }
+    }
+    
+    if (actualFiles.length > 0) {
+      console.log('🚀 Starting upload with File objects from new job creation...');
+      setUploadStarted(true);
+      await startUploadProcess(actualFiles);
+    } else {
+      console.error('❌ Files need uploading but no File objects available:', {
+        filesNeeded: filesToUpload.length,
+        hasUploadSession: !!uploadSession,
+        hasPendingFiles: !!(window as any).pendingUploadFiles,
+        pendingFilesJobId: (window as any).pendingUploadFiles?.jobId,
+        currentJobId: jobData.job_id,
+        availableFileNames: (window as any).pendingUploadFiles?.files?.map((f: File) => f.name) || [],
+        neededFileNames: filesToUpload.map(f => f.filename)
+      });
+      
+      // Throw error to notify the calling component
+      throw new Error(`Upload cannot start: ${filesToUpload.length} files need uploading but File objects are not available. This usually happens when the page is refreshed or the files are no longer in memory.`);
     }
   }, [jobData, uploadStarted, startUploadProcess]);
+
+  // Track when upload monitoring started for timeout detection
+  const uploadMonitoringStartTime = useRef<number | null>(null);
 
   // Monitor upload completion
   useEffect(() => {
@@ -793,24 +1123,63 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
       return;
     }
 
+    // Initialize monitoring start time
+    if (!uploadMonitoringStartTime.current) {
+      uploadMonitoringStartTime.current = Date.now();
+      console.log('🕐 Starting upload completion monitoring');
+    }
+
+    // Track last logged state to avoid repetitive logs
+    let lastLoggedState = '';
+    let logCount = 0;
+    const maxLogs = 10; // Stop excessive logging after 10 iterations
+    
     const checkUploadStatus = () => {
       const allFilesProcessed = totalPdfFiles > 0 && (uploadedPdfFiles + failedPdfFiles) === totalPdfFiles;
       const noActiveUploads = uploadingFiles.size === 0;
       const hasUploads = uploadedPdfFiles > 0;
       const isComplete = allFilesProcessed && noActiveUploads && hasUploads;
       
-      console.log('📊 Upload status check:', {
-        totalPdfFiles,
-        uploadedPdfFiles,
-        failedPdfFiles,
-        uploadingFilesCount: uploadingFiles.size,
-        allFilesProcessed,
-        noActiveUploads,
-        hasUploads,
-        isComplete,
-        allFilesUploaded,
-        onUploadCompleteExists: !!onUploadComplete
-      });
+      // Create state signature to avoid repetitive logging
+      const currentState = `${uploadedPdfFiles}/${totalPdfFiles}-${failedPdfFiles}-${uploadingFiles.size}`;
+      const shouldLog = currentState !== lastLoggedState || logCount < 3;
+      
+      if (shouldLog && logCount < maxLogs) {
+        console.log(`📊 Upload status: ${currentState} (uploaded/total-failed-uploading)`, isComplete ? '✅ Complete' : '⏳ In progress');
+        
+        if (!isComplete) {
+          const processedCount = uploadedPdfFiles + failedPdfFiles;
+          const missingCount = totalPdfFiles - processedCount;
+          
+          if (missingCount > 0 && uploadingFiles.size === 0) {
+            console.warn(`⚠️ ${missingCount} files missing from tracking (uploaded=${uploadedPdfFiles}, failed=${failedPdfFiles}, uploading=${uploadingFiles.size})`);
+          } else if (uploadingFiles.size > 0) {
+            console.log(`⏳ ${uploadingFiles.size} files still uploading`);
+          }
+        }
+        
+        lastLoggedState = currentState;
+        logCount++;
+      } else if (logCount >= maxLogs && shouldLog) {
+        console.log(`🔇 Upload monitoring continuing silently... (${currentState})`);
+        logCount++; // Only log this once
+      }
+      
+      // Timeout safety mechanism: force completion if stuck for too long
+      const now = Date.now();
+      const timeElapsed = uploadMonitoringStartTime.current ? now - uploadMonitoringStartTime.current : 0;
+      const timeoutThreshold = 2 * 60 * 1000; // Reduced to 2 minutes for faster recovery
+      
+      if (timeElapsed > timeoutThreshold && !isComplete && hasUploads && uploadingFiles.size > 0) {
+        console.warn(`⚠️ Upload timeout detected! ${timeElapsed}ms elapsed, forcing completion despite ${uploadingFiles.size} files in uploadingFiles set:`, Array.from(uploadingFiles));
+        console.warn('🧹 Clearing stuck files from uploadingFiles set to allow completion');
+        
+        // Force clear uploadingFiles set
+        setUploadingFiles(new Set());
+        
+        // This will trigger completion on the next check
+        return;
+      }
       
       if (isComplete && !allFilesUploaded) {
         console.log('✅ Upload completed! Calling completion handler...');
@@ -831,7 +1200,7 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
     };
 
     checkUploadStatus();
-    const interval = setInterval(checkUploadStatus, 500);
+    const interval = setInterval(checkUploadStatus, 2000); // Reduced frequency: every 2 seconds instead of 500ms
     return () => clearInterval(interval);
   }, [jobData, uploadingFiles, allFilesUploaded, totalPdfFiles, uploadedPdfFiles, failedPdfFiles, onUploadComplete, router]);
 
