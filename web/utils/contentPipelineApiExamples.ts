@@ -175,7 +175,7 @@ export async function createFileObjects(jobData: {
 export async function updatePdfFileStatus(
   filename: string, // The grouped filename (e.g., "25TCBB_3800")
   pdfFilename: string, // The actual PDF filename (e.g., "25TCBB_3800_FR.pdf")
-  status: 'uploading' | 'uploaded' | 'upload-failed'
+  status: 'uploading' | 'processing' | 'uploaded' | 'upload-failed'
 ) {
   try {
     // Use the dedicated PDF status update method
@@ -258,7 +258,7 @@ export function useJobWithFileCreation(jobId: string, pollInterval: number = 500
 export async function updateMultiplePdfStatuses(updates: Array<{
   filename: string; // Grouped filename
   pdfFilename: string; // Actual PDF filename
-  status: 'uploading' | 'uploaded' | 'upload-failed';
+  status: 'uploading' | 'processing' | 'uploaded' | 'upload-failed';
 }>) {
   try {
     const promises = updates.map(update => 
