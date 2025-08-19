@@ -242,15 +242,17 @@ export const AssetsTable = ({
       if (response.success) {
         console.log(`✅ Successfully ${action}d chrome ${shouldRemoveChrome ? 'from' : 'to'} ${assetsToUpdate.length} assets`);
         
-        // Extract updated assets from normalized response - API proxy now ensures consistent format
-        const extractedAssets = response.assets;
+        // Extract updated assets from normalized response - handle nested structure
+        const extractedAssets = response.assets?.assets || response.assets;
         
-        // Update job data with the extracted assets
-        if (extractedAssets && typeof extractedAssets === 'object' && Object.keys(extractedAssets).length > 0 && onJobDataUpdate) {
+        // Update job data with the extracted assets (handle empty object case)
+        if (extractedAssets && typeof extractedAssets === 'object' && onJobDataUpdate) {
           console.log('🔄 Chrome: Using bulk_update_assets response assets directly (no redundant list_assets call):', {
             assetsCount: Object.keys(extractedAssets).length,
+            isEmpty: Object.keys(extractedAssets).length === 0,
             assetIds: Object.keys(extractedAssets),
             jobId: jobData.job_id,
+            hasNestedStructure: !!response.assets?.assets,
             isNormalized: response._normalized,
             assetsSource: response._assets_source
           });

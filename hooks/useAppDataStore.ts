@@ -633,13 +633,19 @@ export function useAppDataStore<T = any>(
         case 'deleteAsset':
         case 'bulkUpdateAssets':
           // For asset operations, use response data to update cache instead of invalidating
-          if (variables.jobId && data?.assets) {
-            console.log(`✅ [DataStore] Updating asset cache with response data instead of invalidating`);
+          // Handle nested assets structure: response.assets.assets
+          const assetsData = data?.assets?.assets || data?.assets;
+          if (variables.jobId && assetsData && typeof assetsData === 'object') {
+            console.log(`✅ [DataStore] Updating asset cache with response data instead of invalidating`, {
+              assetCount: Object.keys(assetsData).length,
+              isEmpty: Object.keys(assetsData).length === 0,
+              hasNestedStructure: !!data?.assets?.assets
+            });
             
-            // Update assets cache with response data
+            // Update assets cache with response data (handle empty object for deleted assets)
             queryClient.setQueryData(
               dataStoreKeys.assets.byJob(variables.jobId),
-              data.assets
+              assetsData
             );
             
             // Update job details cache assets field with response data
@@ -649,7 +655,7 @@ export function useAppDataStore<T = any>(
                 if (!prevJob) return prevJob;
                 return {
                   ...prevJob,
-                  assets: data.assets
+                  assets: assetsData
                 };
               }
             );
