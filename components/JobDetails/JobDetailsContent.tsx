@@ -131,8 +131,8 @@ export const JobDetailsContent = ({
                 return shouldShow;
               })()}
               onJobDataUpdate={(updatedJobData) => {
-                console.log('🔄 DownloadSection triggered job data update - refreshing via useAppDataStore');
-                updateJobDataForUpload(); // Just refresh, no manual state updates
+                console.log('🔄 DownloadSection provided updated job data - using response data directly');
+                onJobDataUpdate(updatedJobData); // Use provided data instead of refetching
               }}
             />
 
