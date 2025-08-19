@@ -247,7 +247,7 @@ export const AssetsTable = ({
         
         // Update job data with the extracted assets
         if (extractedAssets && typeof extractedAssets === 'object' && Object.keys(extractedAssets).length > 0 && onJobDataUpdate) {
-          console.log('🔄 Chrome: Updating job data from normalized bulk response:', {
+          console.log('🔄 Chrome: Using bulk_update_assets response assets directly (no redundant list_assets call):', {
             assetsCount: Object.keys(extractedAssets).length,
             assetIds: Object.keys(extractedAssets),
             jobId: jobData.job_id,
@@ -262,7 +262,7 @@ export const AssetsTable = ({
             _cacheTimestamp: Date.now() // Force UI refresh
           });
         } else if (onJobDataUpdate) {
-          console.log('🔄 Chrome: No valid assets found in normalized response, triggering refetch');
+          console.log('⚠️ Unexpected response format from bulk_update_assets, using fallback refetch');
           console.log('🔄 Chrome: Response structure:', {
             hasAssets: !!response.assets,
             assetsType: typeof response.assets,
