@@ -8,6 +8,7 @@ import { useAppDataStore } from './useAppDataStore';
 
 interface UseUploadEngineProps {
   jobData: any;
+  createdFiles?: any[]; // Optional - if provided, use these instead of jobData.content_pipeline_files
   setJobData?: (updater: (prev: any) => any) => void;
   onUploadComplete?: () => void;
 }
@@ -34,6 +35,7 @@ interface UseUploadEngineReturn {
 
 export const useUploadEngine = ({ 
   jobData, 
+  createdFiles, 
   setJobData, 
   onUploadComplete 
 }: UseUploadEngineProps): UseUploadEngineReturn => {
@@ -57,10 +59,28 @@ export const useUploadEngine = ({
   const [uploadedPdfFiles, setUploadedPdfFiles] = useState(0);
   const [failedPdfFiles, setFailedPdfFiles] = useState(0);
 
-  // Initialize counters from job data when available
+  // Debug uploadStarted state changes (after state declarations)
   useEffect(() => {
-    if (!jobData?.content_pipeline_files) {
-      console.log('📊 No job data available for counter initialization');
+    console.log('🔄 uploadStarted state changed:', uploadStarted);
+    if (uploadStarted) {
+      console.log('📍 uploadStarted set to true - current context:', {
+        totalPdfFiles,
+        uploadedPdfFiles,
+        uploadingFilesCount: uploadingFiles.size,
+        hasJobData: !!jobData,
+        hasCreatedFiles: createdFiles?.length || 0
+      });
+      console.trace('📍 Stack trace for uploadStarted = true');
+    }
+  }, [uploadStarted, totalPdfFiles, uploadedPdfFiles, uploadingFiles.size]);
+
+  // Initialize counters from files when available
+  useEffect(() => {
+    // Use createdFiles if provided, otherwise fall back to jobData.content_pipeline_files
+    const filesToCheck = createdFiles && createdFiles.length > 0 ? createdFiles : jobData?.content_pipeline_files;
+    
+    if (!filesToCheck) {
+      console.log('📊 No files available for counter initialization');
       return;
     }
 
@@ -68,7 +88,7 @@ export const useUploadEngine = ({
     let uploadedFiles = 0;
     let failedFiles = 0;
 
-    jobData.content_pipeline_files.forEach((fileGroup: any) => {
+    filesToCheck.forEach((fileGroup: any) => {
       if (fileGroup.original_files) {
         Object.entries(fileGroup.original_files).forEach(([filename, fileInfo]: [string, any]) => {
           totalFiles++;
@@ -81,17 +101,21 @@ export const useUploadEngine = ({
       }
     });
 
-    console.log('📊 Initializing upload counters from job data:', {
+    console.log('📊 Initializing upload counters:', {
       totalFiles,
       uploadedFiles,
       failedFiles,
-      jobId: jobData.job_id
+      jobId: jobData?.job_id,
+      usingCreatedFiles: !!(createdFiles && createdFiles.length > 0),
+      currentUploadStarted: uploadStarted
     });
+
+    // Note: uploadStarted is now only used for progress display, not flow control
 
     setTotalPdfFiles(totalFiles);
     setUploadedPdfFiles(uploadedFiles);
     setFailedPdfFiles(failedFiles);
-  }, [jobData?.content_pipeline_files, jobData?.job_id]);
+  }, [createdFiles, jobData?.content_pipeline_files, jobData?.job_id, uploadStarted, totalPdfFiles]);
 
   // Reset upload state
   const resetUploadState = useCallback(() => {
@@ -898,14 +922,20 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
         });
       });
     }
-  }, [fileToBase64, uploadLargeFileToS3, updateLocalFileStatus, fileStatusMutation, jobData, setUploadedPdfFiles, setFailedPdfFiles]);
+  }, [fileToBase64, uploadLargeFileToS3, updateLocalFileStatus, fileStatusMutation, jobData, createdFiles, setUploadedPdfFiles, setFailedPdfFiles]);
 
   // Start the upload process with pipeline optimization
   const startUploadProcess = useCallback(async (files: File[]): Promise<void> => {
-    if (!jobData?.content_pipeline_files) {
-      console.log('startUploadProcess: No content_pipeline_files found');
+    // Use createdFiles if provided, otherwise fall back to jobData.content_pipeline_files
+    const filesToCheck = createdFiles && createdFiles.length > 0 ? createdFiles : jobData?.content_pipeline_files;
+    
+    if (!filesToCheck) {
+      console.log('startUploadProcess: No files found (neither createdFiles nor content_pipeline_files)');
       return;
     }
+    
+    console.log('📋 startUploadProcess using:', createdFiles && createdFiles.length > 0 ? 'createdFiles' : 'jobData.content_pipeline_files');
+    console.log('📊 Files to check:', filesToCheck?.length || 0, 'file groups');
     
     console.log('🚀 Starting pipelined upload process for files:', files.map(f => f.name));
     
@@ -922,7 +952,7 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
     const fileGroups = new Map<string, Array<{filename: string, file: File, fileInfo: any}>>();
     let totalPdfFiles = 0;
     
-    jobData.content_pipeline_files.forEach((fileObj: any) => {
+    filesToCheck.forEach((fileObj: any) => {
       if (fileObj.original_files) {
         const groupFiles: Array<{filename: string, file: File, fileInfo: any}> = [];
         
@@ -1029,19 +1059,45 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
 
   // Check for files that need uploading and start process
   const checkAndStartUpload = useCallback(async (filesLoaded: boolean): Promise<void> => {
-    if (!filesLoaded || !jobData?.content_pipeline_files || uploadStarted) {
+    console.log('🚀 checkAndStartUpload called with filesLoaded:', filesLoaded);
+    
+    // Use createdFiles if provided, otherwise fall back to jobData.content_pipeline_files
+    const filesToCheck = createdFiles && createdFiles.length > 0 ? createdFiles : jobData?.content_pipeline_files;
+    
+    console.log('🔍 Upload preconditions check:', {
+      filesLoaded,
+      hasFilesToCheck: !!filesToCheck,
+      filesCount: filesToCheck?.length || 0,
+      uploadStarted,
+      usingCreatedFiles: !!(createdFiles && createdFiles.length > 0),
+      hasJobData: !!jobData,
+      jobId: jobData?.job_id
+    });
+    
+    // Check basic preconditions
+    if (!filesLoaded || !filesToCheck) {
+      console.log('⚠️ Skipping upload check - preconditions not met:', {
+        filesLoaded,
+        hasFilesToCheck: !!filesToCheck,
+        filesCount: filesToCheck?.length || 0,
+        usingCreatedFiles: !!(createdFiles && createdFiles.length > 0)
+      });
       return;
     }
+    
+    // Don't check uploadStarted here - let it be idempotent
+    // If upload is already running, the file status checks below will handle it
 
     console.log('✅ Files loaded, checking for uploads...');
-    console.log('📊 Job content_pipeline_files:', jobData.content_pipeline_files?.length || 0, 'file groups');
+    console.log('📊 Files to check:', filesToCheck?.length || 0, 'file groups');
+    console.log('🔍 Using created files:', !!(createdFiles && createdFiles.length > 0));
     
     // Collect files that need uploading (pending or uploading status)
     const filesToUpload: { filename: string; filePath: string }[] = [];
     
     // Debug: log all file statuses
     const allFileStatuses: Record<string, string> = {};
-    jobData.content_pipeline_files.forEach((fileGroup: any) => {
+    filesToCheck.forEach((fileGroup: any) => {
       if (fileGroup.original_files) {
         Object.entries(fileGroup.original_files).forEach(([filename, fileInfo]: [string, any]) => {
           allFileStatuses[filename] = fileInfo.status || 'unknown';
@@ -1050,15 +1106,23 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
     });
     console.log('📋 All file statuses:', allFileStatuses);
     
-    jobData.content_pipeline_files.forEach((fileGroup: any) => {
+    filesToCheck.forEach((fileGroup: any) => {
       if (fileGroup.original_files) {
         Object.entries(fileGroup.original_files).forEach(([filename, fileInfo]: [string, any]) => {
-          if (fileInfo.status === 'pending' || fileInfo.status === 'uploading') {
+          // Only process files that are truly ready to upload
+          // Skip files that are already being processed or completed
+          const isInUploadingSet = uploadingFiles.has(filename);
+          
+          if ((fileInfo.status === 'pending' || fileInfo.status === 'uploading') && !isInUploadingSet) {
             console.log(`📤 Adding file to upload queue: ${filename} (status: ${fileInfo.status})`);
             filesToUpload.push({
               filename: filename,
               filePath: fileInfo.file_path
             });
+          } else if (isInUploadingSet) {
+            console.log(`⏭️ Skipping ${filename} - already being processed`);
+          } else {
+            console.log(`✅ Skipping ${filename} - status: ${fileInfo.status}`);
           }
         });
       }
@@ -1066,6 +1130,15 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
 
     if (filesToUpload.length === 0) {
       console.log('ℹ️ No files need uploading');
+      console.log('🔍 Debug why no files need uploading:', {
+        filesToCheckLength: filesToCheck?.length || 0,
+        allFileStatuses: filesToCheck?.map(fg => ({
+          filename: fg.filename,
+          originalFiles: Object.fromEntries(
+            Object.entries(fg.original_files || {}).map(([name, info]: [string, any]) => [name, info.status])
+          )
+        })) || []
+      });
       return;
     }
 
@@ -1096,8 +1169,21 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
     
     if (actualFiles.length > 0) {
       console.log('🚀 Starting upload with File objects from new job creation...');
+      console.log('📁 About to set uploadStarted to true and call startUploadProcess');
+      console.log('📋 Files to upload:', actualFiles.map(f => f.name));
+      
       setUploadStarted(true);
-      await startUploadProcess(actualFiles);
+      
+      try {
+        console.log('🎯 Calling startUploadProcess with', actualFiles.length, 'files');
+        await startUploadProcess(actualFiles);
+        console.log('✅ startUploadProcess completed successfully');
+      } catch (error) {
+        console.error('❌ startUploadProcess failed:', error);
+        // Reset upload started on failure
+        setUploadStarted(false);
+        throw error;
+      }
     } else {
       console.error('❌ Files need uploading but no File objects available:', {
         filesNeeded: filesToUpload.length,
@@ -1112,14 +1198,31 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
       // Throw error to notify the calling component
       throw new Error(`Upload cannot start: ${filesToUpload.length} files need uploading but File objects are not available. This usually happens when the page is refreshed or the files are no longer in memory.`);
     }
-  }, [jobData, uploadStarted, startUploadProcess]);
+  }, [jobData, createdFiles, startUploadProcess]);
+
+  // Add debugging for the dependency changes
+  useEffect(() => {
+    const changeId = Date.now();
+    console.log(`📋 checkAndStartUpload dependencies changed #${changeId}:`, {
+      hasJobData: !!jobData,
+      jobId: jobData?.job_id,
+      createdFilesLength: createdFiles?.length || 0,
+      hasStartUploadProcess: !!startUploadProcess
+    });
+    
+    // Track frequency of recreations
+    console.log('⚠️ If you see this message repeatedly, there is a dependency loop');
+  }, [jobData, createdFiles, startUploadProcess]);
 
   // Track when upload monitoring started for timeout detection
   const uploadMonitoringStartTime = useRef<number | null>(null);
 
   // Monitor upload completion
   useEffect(() => {
-    if (!jobData?.content_pipeline_files || allFilesUploaded || !uploadStarted) {
+    // Use createdFiles if provided, otherwise fall back to jobData.content_pipeline_files
+    const filesToCheck = createdFiles && createdFiles.length > 0 ? createdFiles : jobData?.content_pipeline_files;
+    
+    if (!filesToCheck || allFilesUploaded || !uploadStarted) {
       return;
     }
 
@@ -1202,7 +1305,7 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
     checkUploadStatus();
     const interval = setInterval(checkUploadStatus, 2000); // Reduced frequency: every 2 seconds instead of 500ms
     return () => clearInterval(interval);
-  }, [jobData, uploadingFiles, allFilesUploaded, totalPdfFiles, uploadedPdfFiles, failedPdfFiles, onUploadComplete, router]);
+  }, [createdFiles, jobData, uploadingFiles, allFilesUploaded, totalPdfFiles, uploadedPdfFiles, failedPdfFiles, onUploadComplete, router]);
 
   return {
     // State

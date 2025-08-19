@@ -136,14 +136,19 @@ export default function JobsPage() {
       const individualUpdate = individualJobsMap[job.job_id];
       if (individualUpdate) {
         // Use individual job data for more up-to-date status
-        return {
+        const enhanced = {
           ...job,
           ...individualUpdate,
           // Preserve original created_at and other stable fields from jobs list
           created_at: job.created_at,
           user_name: job.user_name,
+          // Preserve original files array - batch polling doesn't include file lists
+          files: job.files,
         };
+        
+        return enhanced;
       }
+      
       return job;
     });
   }, [jobs, individualJobsMap]);
@@ -699,7 +704,7 @@ export default function JobsPage() {
                           )}
                         </span>
                         <span style={{ color: '#9ca3af', fontSize: 12 }}>
-                          📁 {job.files?.length || 0}
+                          📁 {job.files?.length || 0} files
                         </span>
                       </div>
                       {job.description && (
