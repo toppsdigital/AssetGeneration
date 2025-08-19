@@ -60,19 +60,23 @@ function JobDetailsPageContent() {
     }
 
     // Handle specific update types that require job data refresh
-    if (updatedJobData.download_url || updatedJobData.job_status || updatedJobData.assets) {
-      console.log('✅ Received updated job data with meaningful changes:', {
+    // Only refetch for download_url or job_status changes
+    // Assets-only updates should use response data directly (no refetch needed)
+    if (updatedJobData.download_url || updatedJobData.job_status) {
+      console.log('✅ Received job data requiring full refresh:', {
         hasDownloadUrl: !!updatedJobData.download_url,
-        hasJobStatus: !!updatedJobData.job_status,
-        hasAssets: !!updatedJobData.assets,
-        hasFiles: !!updatedJobData.content_pipeline_files
+        hasJobStatus: !!updatedJobData.job_status
       });
       
-      // For operations that provide significant job data updates (download URLs, job status, etc.),
-      // we need to refetch to ensure the UI is fully synchronized
-      // This is more targeted than the previous "always refetch" approach
-      console.log('🔄 Refetching job data to sync UI with server response');
+      console.log('🔄 Refetching job data to sync download URL or status changes');
       refetchJobData();
+      return;
+    }
+
+    // For assets-only updates, components should handle response data locally
+    if (updatedJobData.assets && !updatedJobData.download_url && !updatedJobData.job_status) {
+      console.log('✅ Assets-only update detected - using response data directly (no refetch)');
+      console.log('💡 Asset operations provide fresh data in response - no additional API calls needed');
       return;
     }
 
