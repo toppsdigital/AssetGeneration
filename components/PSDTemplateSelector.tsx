@@ -634,17 +634,22 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       if (response.success) {
         console.log('✅ Asset saved successfully:', response);
         
-        // Handle create_asset response format: { assets: Record<string, any>; job_id: string }
+        // Handle create_asset response format: nested assets structure
         if (onJobDataUpdate) {
           if (response.job) {
             console.log('🔄 Using legacy job object from response to update UI');
             onJobDataUpdate(response.job);
-          } else if (response.assets && typeof response.assets === 'object') {
+          } else if (response.assets?.assets && typeof response.assets.assets === 'object') {
             console.log('🔄 Using create_asset response assets directly (no redundant list_assets call)');
-            onJobDataUpdate({ job_id: jobData.job_id, assets: response.assets });
+            console.log('📊 Assets in response:', {
+              assetCount: Object.keys(response.assets.assets).length,
+              isEmpty: Object.keys(response.assets.assets).length === 0
+            });
+            onJobDataUpdate({ job_id: jobData.job_id, assets: response.assets.assets });
           } else {
             console.log('⚠️ Unexpected response format from create_asset, using fallback refetch');
             console.log('Response structure:', Object.keys(response));
+            console.log('Assets structure:', response.assets ? Object.keys(response.assets) : 'no assets');
             onJobDataUpdate({ _forceRefetch: true, job_id: jobData.job_id });
           }
         }
@@ -698,12 +703,17 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
           if (onJobDataUpdate) {
             if (response.job) {
               onJobDataUpdate(response.job);
-            } else if (response.assets && typeof response.assets === 'object') {
+            } else if (response.assets?.assets && typeof response.assets.assets === 'object') {
               console.log('🔄 Using delete_asset response assets directly (no redundant list_assets call)');
-              onJobDataUpdate({ job_id: jobData.job_id, assets: response.assets });
+              console.log('📊 Assets in response:', {
+                assetCount: Object.keys(response.assets.assets).length,
+                isEmpty: Object.keys(response.assets.assets).length === 0
+              });
+              onJobDataUpdate({ job_id: jobData.job_id, assets: response.assets.assets });
             } else {
               console.log('⚠️ Unexpected response format from delete_asset, using fallback local removal');
               console.log('Response structure:', Object.keys(response));
+              console.log('Assets structure:', response.assets ? Object.keys(response.assets) : 'no assets');
               // Fallback: remove locally
               const existingAssets = (mergedJobData?.assets || {}) as Record<string, any>;
               const updatedAssets: Record<string, any> = { ...existingAssets };
@@ -916,15 +926,20 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     console.log('✅ PDF Extract API Response:', response);
     setUploadProgress(95);
 
-    // Update job data - now uses consistent normalized response structure (same as get assets)
-    if (onJobDataUpdate && (response as any)?.assets && typeof (response as any).assets === 'object') {
-      console.log('🔄 EDR: Using normalized assets mapping (consistent with get assets format)');
-      const assets = (response as any).assets as Record<string, any>;
-      console.log('🔄 EDR: Updating job with', Object.keys(assets).length, 'assets');
-      onJobDataUpdate({ job_id: jobData?.job_id, assets });
+    // Update job data - handle nested assets structure
+    const edrAssets = (response as any)?.assets?.assets || (response as any)?.assets;
+    if (onJobDataUpdate && edrAssets && typeof edrAssets === 'object') {
+      console.log('🔄 EDR: Using response assets directly (no redundant list_assets call)');
+      console.log('📊 EDR Assets in response:', {
+        assetCount: Object.keys(edrAssets).length,
+        isEmpty: Object.keys(edrAssets).length === 0,
+        hasNestedStructure: !!(response as any)?.assets?.assets
+      });
+      onJobDataUpdate({ job_id: jobData?.job_id, assets: edrAssets });
     } else {
-      console.warn('⚠️ EDR: No assets found in normalized response - this should not happen with the new consistent format');
+      console.warn('⚠️ EDR: No assets found in response - unexpected format');
       console.log('🔍 EDR: Response structure:', Object.keys(response as any));
+      console.log('🔍 EDR: Assets structure:', (response as any)?.assets ? Object.keys((response as any).assets) : 'no assets');
     }
   };
 
