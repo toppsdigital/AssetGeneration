@@ -634,18 +634,18 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       if (response.success) {
         console.log('✅ Asset saved successfully:', response);
         
-        // New API shape: { success, message, assets: { assets: [...] } }
+        // Handle create_asset response format: { assets: Record<string, any>; job_id: string }
         if (onJobDataUpdate) {
           if (response.job) {
             console.log('🔄 Using legacy job object from response to update UI');
-          onJobDataUpdate(response.job);
-          } else if ((response as any)?.assets && typeof (response as any).assets === 'object') {
-            console.log('🔄 Replacing UI assets with server-provided normalized assets mapping');
-            const mapping = (response as any).assets as Record<string, any>;
-            onJobDataUpdate({ job_id: jobData.job_id, assets: mapping });
+            onJobDataUpdate(response.job);
+          } else if (response.assets && typeof response.assets === 'object') {
+            console.log('🔄 Using create_asset response assets directly (no redundant list_assets call)');
+            onJobDataUpdate({ job_id: jobData.job_id, assets: response.assets });
           } else {
-            console.log('ℹ️ No assets or job in response; forcing refetch');
-          onJobDataUpdate({ _forceRefetch: true, job_id: jobData.job_id });
+            console.log('⚠️ Unexpected response format from create_asset, using fallback refetch');
+            console.log('Response structure:', Object.keys(response));
+            onJobDataUpdate({ _forceRefetch: true, job_id: jobData.job_id });
           }
         }
       } else {
@@ -696,13 +696,14 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
         {
           console.log('✅ Asset removed successfully:', response);
           if (onJobDataUpdate) {
-            if ((response as any)?.job) {
-              onJobDataUpdate((response as any).job);
-            } else if ((response as any)?.assets && typeof (response as any).assets === 'object') {
-              // Replace with authoritative normalized mapping from server after deletion
-              const mapping = (response as any).assets as Record<string, any>;
-              onJobDataUpdate({ job_id: jobData.job_id, assets: mapping });
-      } else {
+            if (response.job) {
+              onJobDataUpdate(response.job);
+            } else if (response.assets && typeof response.assets === 'object') {
+              console.log('🔄 Using delete_asset response assets directly (no redundant list_assets call)');
+              onJobDataUpdate({ job_id: jobData.job_id, assets: response.assets });
+            } else {
+              console.log('⚠️ Unexpected response format from delete_asset, using fallback local removal');
+              console.log('Response structure:', Object.keys(response));
               // Fallback: remove locally
               const existingAssets = (mergedJobData?.assets || {}) as Record<string, any>;
               const updatedAssets: Record<string, any> = { ...existingAssets };
