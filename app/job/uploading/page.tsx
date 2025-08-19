@@ -27,6 +27,17 @@ function JobUploadingContent() {
   const [uploadSession, setUploadSession] = useState<UploadSession | null>(null);
   const [currentStep, setCurrentStep] = useState<'validating' | 'creating-files' | 'uploading' | 'completed' | 'error'>('validating');
   const [error, setError] = useState<string | null>(null);
+  const [createdFiles, setCreatedFiles] = useState<any[]>([]);
+  const [uploadAttempted, setUploadAttempted] = useState(false);
+
+  // Debug createdFiles state changes
+  useEffect(() => {
+    console.log('📋 createdFiles state updated:', {
+      length: createdFiles.length,
+      fileGroups: createdFiles.map(fg => fg.filename),
+      totalPdfs: createdFiles.reduce((total, fg) => total + Object.keys(fg.original_files || {}).length, 0)
+    });
+  }, [createdFiles]);
 
   // Fetch job data (likely cached from just created job) 
   const { 
@@ -37,13 +48,14 @@ function JobUploadingContent() {
     refresh: refreshJobData
   } = useAppDataStore('jobDetails', { 
     jobId: jobId || '', 
-    includeFiles: true, // Need files for upload - will only fetch after they're created
+    includeFiles: false, // No need to fetch files - we'll use created files directly
     autoRefresh: false // Disabled to prevent unnecessary calls
   });
 
   // Upload engine for processing and uploading files  
   const uploadEngine = useUploadEngine({ 
     jobData, 
+    createdFiles, // Pass created files to remove dependency on window.pendingUploadFiles
     setJobData: () => {
       // No job data updates needed - S3 triggers handle everything
     },
@@ -59,6 +71,17 @@ function JobUploadingContent() {
       setTimeout(() => router.push('/jobs'), 1000);
     }
   });
+
+  // Debug upload engine state
+  useEffect(() => {
+    console.log('🔧 Upload engine state:', {
+      uploadStarted: uploadEngine.uploadStarted,
+      totalPdfFiles: uploadEngine.totalPdfFiles,
+      uploadedPdfFiles: uploadEngine.uploadedPdfFiles,
+      uploadingFilesCount: uploadEngine.uploadingFiles.size,
+      uploadingFilesList: Array.from(uploadEngine.uploadingFiles)
+    });
+  }, [uploadEngine.uploadStarted, uploadEngine.totalPdfFiles, uploadEngine.uploadedPdfFiles, uploadEngine.uploadingFiles]);
 
   // Validate session and redirect if invalid
   useEffect(() => {
@@ -102,19 +125,30 @@ function JobUploadingContent() {
     }
   }, [currentStep, jobData, uploadSession]);
 
-  // Start upload when we transition to uploading step and have job data with files
+  // Start upload when we transition to uploading step and have created files
   useEffect(() => {
-    console.log('🔍 Upload effect triggered:', {
+    const effectId = Date.now();
+    console.log(`🔍 Upload effect triggered #${effectId}:`, {
       currentStep,
-      hasJobData: !!jobData,
-      hasFiles: !!jobData?.content_pipeline_files,
-      filesCount: jobData?.content_pipeline_files?.length || 0,
-      uploadStarted: uploadEngine.uploadStarted,
-      jobId: jobData?.job_id,
-      hasPendingFiles: !!(window as any).pendingUploadFiles,
-      pendingFilesJobId: (window as any).pendingUploadFiles?.jobId,
-      pendingFilesCount: (window as any).pendingUploadFiles?.files?.length || 0
+      createdFilesCount: createdFiles.length,
+      uploadAttempted,
+      jobId,
+      dependencies: {
+        currentStep_changed: (window as any).lastCurrentStep !== currentStep,
+        createdFilesLength_changed: (window as any).lastCreatedFilesLength !== createdFiles.length,
+        jobId_changed: (window as any).lastJobId !== jobId
+      }
     });
+
+    // Track previous values to identify what's changing
+    (window as any).lastCurrentStep = currentStep;
+    (window as any).lastCreatedFilesLength = createdFiles.length;
+    (window as any).lastJobId = jobId;
+
+    // Add a timeout to prevent immediate re-triggering
+    const timeoutId = setTimeout(() => {
+      console.log(`⏰ Effect #${effectId} timeout reached, proceeding...`);
+    }, 100);
 
     // Check if we have the File objects needed for upload
     const pendingFiles = (window as any).pendingUploadFiles;
@@ -133,33 +167,75 @@ function JobUploadingContent() {
       }
     }
 
-    if (currentStep === 'uploading' && jobData?.content_pipeline_files && jobData.content_pipeline_files.length > 0) {
-      console.log('🚀 Attempting to start upload with files:', jobData.content_pipeline_files.length);
-      console.log('📂 File groups:', jobData.content_pipeline_files.map(fg => ({
+    if (currentStep === 'uploading' && createdFiles.length > 0 && !uploadAttempted) {
+      console.log('🚀 Attempting to start upload with created files:', createdFiles.length);
+      console.log('📂 Created file groups:', createdFiles.map(fg => ({
         filename: fg.filename,
-        originalFilesCount: Object.keys(fg.original_files || {}).length
+        originalFilesCount: Object.keys(fg.original_files || {}).length,
+        originalFiles: Object.keys(fg.original_files || {}),
+        statuses: Object.fromEntries(Object.entries(fg.original_files || {}).map(([name, info]: [string, any]) => [name, info.status]))
       })));
       
-      // Check if upload engine is ready
-      if (!uploadEngine.uploadStarted) {
-        console.log('🎯 Calling uploadEngine.checkAndStartUpload(true)');
-        uploadEngine.checkAndStartUpload(true).catch(uploadError => {
-          console.error('❌ Upload failed to start:', uploadError);
-          setError(uploadError instanceof Error ? uploadError.message : 'Failed to start upload');
-          setCurrentStep('error');
-        });
-      } else {
-        console.log('⚠️ Upload already started, skipping');
+      // Count total PDFs for verification
+      const totalPdfs = createdFiles.reduce((total, fg) => total + Object.keys(fg.original_files || {}).length, 0);
+      console.log(`📊 Total PDFs to upload: ${totalPdfs}`);
+      
+      // Mark upload as attempted to prevent loops
+      setUploadAttempted(true);
+      
+      // Start upload process - now idempotent, can be called multiple times safely
+      console.log('🎯 Calling uploadEngine.checkAndStartUpload(true)');
+      console.log('🔍 Pre-upload state check:', {
+        createdFiles: createdFiles.length,
+        filesWithUploadingStatus: createdFiles.reduce((count, fg) => {
+          return count + Object.values(fg.original_files || {}).filter((file: any) => file.status === 'uploading').length;
+        }, 0),
+        pendingFiles: (window as any).pendingUploadFiles ? Object.keys((window as any).pendingUploadFiles).length : 0,
+        pendingFilesJobId: (window as any).pendingUploadFiles?.jobId,
+        currentJobId: jobId,
+        uploadEngineStarted: uploadEngine.uploadStarted
+      });
+      
+      // Call checkAndStartUpload - it's now safe to call multiple times
+      try {
+        console.log('📋 Calling checkAndStartUpload with true...');
+        const result = uploadEngine.checkAndStartUpload(true);
+        console.log('📋 checkAndStartUpload returned:', result);
+        
+        if (result && typeof result.catch === 'function') {
+          result.catch(uploadError => {
+            console.error('❌ Upload failed to start:', uploadError);
+            setError(uploadError instanceof Error ? uploadError.message : 'Failed to start upload');
+            setCurrentStep('error');
+            setUploadAttempted(false); // Reset on error so user can retry
+          });
+        }
+      } catch (syncError) {
+        console.error('❌ Synchronous error calling checkAndStartUpload:', syncError);
+        setError('Failed to start upload process');
+        setCurrentStep('error');
+        setUploadAttempted(false); // Reset on error so user can retry
       }
+    } else if (currentStep === 'uploading' && uploadAttempted) {
+      console.log('⏭️ Upload already attempted, skipping to prevent loop');
+    } else if (currentStep === 'uploading' && createdFiles.length === 0) {
+      console.log('⏳ Waiting for created files...');
     } else {
       console.log('⏸️ Upload not ready:', {
         wrongStep: currentStep !== 'uploading',
         noJobData: !jobData,
-        noFiles: !jobData?.content_pipeline_files,
-        filesEmpty: jobData?.content_pipeline_files?.length === 0
+        noCreatedFiles: createdFiles.length === 0,
+        createdFilesEmpty: createdFiles.length === 0
       });
     }
-  }, [currentStep, jobData?.content_pipeline_files, uploadEngine, jobId]);
+
+    // Cleanup timeout
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [currentStep, createdFiles.length, jobId]); // Simplified dependencies to prevent loop
 
   const createFiles = useCallback(async () => {
     if (!jobData || !uploadSession) return;
@@ -190,8 +266,8 @@ function JobUploadingContent() {
         }
       });
 
-      // Create files using useAppDataStore mutation
-      await mutateJob({
+      // Create files using useAppDataStore mutation and store response
+      const createFilesResponse = await mutateJob({
         type: 'createFiles',
         jobId: jobData.job_id,
         data: Array.from(fileGroups.entries()).map(([baseName, pdfs]) => {
@@ -226,15 +302,33 @@ function JobUploadingContent() {
       });
 
       console.log('✅ Files created successfully');
+      console.log('🔍 Full createFilesResponse:', JSON.stringify(createFilesResponse, null, 2));
       
-      // Small delay for backend to process
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Store created files from response - no need for extra refreshJobData() call
+      if (createFilesResponse && createFilesResponse.created_files) {
+        console.log('📦 Storing created files from batch_create_files response:', createFilesResponse.created_files);
+        setCreatedFiles(createFilesResponse.created_files);
+      } else if (createFilesResponse && createFilesResponse.files) {
+        console.log('📦 Storing created files from response.files:', createFilesResponse.files);
+        setCreatedFiles(createFilesResponse.files);
+      } else if (createFilesResponse && createFilesResponse.data && createFilesResponse.data.created_files) {
+        console.log('📦 Storing created files from response.data.created_files:', createFilesResponse.data.created_files);
+        setCreatedFiles(createFilesResponse.data.created_files);
+      } else if (createFilesResponse && Array.isArray(createFilesResponse)) {
+        console.log('📦 Response is array, using directly:', createFilesResponse);
+        setCreatedFiles(createFilesResponse);
+      } else {
+        console.warn('⚠️ No files found in batch_create_files response. Response structure:', {
+          hasCreatedFiles: !!createFilesResponse?.created_files,
+          hasFiles: !!createFilesResponse?.files,
+          hasDataCreatedFiles: !!createFilesResponse?.data?.created_files,
+          isArray: Array.isArray(createFilesResponse),
+          keys: createFilesResponse ? Object.keys(createFilesResponse) : 'no response'
+        });
+        console.warn('⚠️ Full response for debugging:', createFilesResponse);
+      }
       
-      // Single refresh to get created files for upload engine (no choice here)
-      console.log('🔄 Refreshing job data once to get created files for upload engine');
-      await refreshJobData();
-      
-      // Start uploading
+      // Start uploading immediately - no delay or refresh needed
       console.log('📤 Transitioning to uploading step');
       setCurrentStep('uploading');
       
@@ -373,11 +467,19 @@ function JobUploadingContent() {
     );
   }
 
-  // Calculate actual file counts from job data for accuracy
-  const totalFiles = (jobData?.content_pipeline_files || []).reduce((total: number, fileGroup: any) => 
+  // Calculate actual file counts from created files for accuracy
+  const totalFiles = createdFiles.reduce((total: number, fileGroup: any) => 
     total + Object.keys(fileGroup.original_files || {}).length, 0
   );
   const uploadedFiles = uploadEngine.uploadedPdfFiles || 0;
+  
+  console.log('📊 Progress calculation:', {
+    createdFilesLength: createdFiles.length,
+    totalFiles,
+    uploadedFiles,
+    uploadEngineTotal: uploadEngine.totalPdfFiles,
+    uploadEngineUploaded: uploadEngine.uploadedPdfFiles
+  });
 
   return (
     <div style={{ 
@@ -467,7 +569,7 @@ function JobUploadingContent() {
         </div>
 
         {/* PDF File Status List */}
-        {(jobData?.content_pipeline_files || currentStep === 'creating-files') && (
+        {(createdFiles.length > 0 || currentStep === 'creating-files') && (
           <div style={{ 
             background: 'rgba(255, 255, 255, 0.08)',
             backdropFilter: 'blur(20px)',
@@ -482,12 +584,12 @@ function JobUploadingContent() {
               fontSize: '1.1rem',
               fontWeight: '600'
             }}>
-              PDF Files ({(jobData?.content_pipeline_files || []).reduce((total: number, fileGroup: any) => 
+              PDF Files ({createdFiles.reduce((total: number, fileGroup: any) => 
                 total + Object.keys(fileGroup.original_files || {}).length, 0
               )})
             </h4>
           <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-            {(jobData.content_pipeline_files || []).flatMap((fileGroup: any, groupIndex: number) => 
+            {createdFiles.flatMap((fileGroup: any, groupIndex: number) => 
               Object.entries(fileGroup.original_files || {}).map(([filename, fileInfo]: [string, any]) => {
                 // Determine current status
                 let status = 'pending';
@@ -588,7 +690,7 @@ function JobUploadingContent() {
               })
             )}
             
-            {(!jobData?.content_pipeline_files || jobData.content_pipeline_files.length === 0) && (
+            {(createdFiles.length === 0) && (
               <div style={{ 
                 textAlign: 'center', 
                 padding: '2rem', 
