@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, Suspense } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { 
   JobDetailsLoadingState,
   JobDetailsErrorState,
@@ -41,6 +41,9 @@ function JobDetailsPageContent() {
   
   // Simple loading state
   const isLoading = isLoadingJob;
+
+  // Asset creation loading state for modal
+  const [creatingAssets, setCreatingAssets] = useState(false);
 
   // Optimized job data update handler - uses response data when possible
   const handleJobDataUpdate = (updatedJobData: any) => {
@@ -116,8 +119,8 @@ function JobDetailsPageContent() {
         uploadingFiles: new Set()
       }}
       uploadsInProgress={false}
-      creatingAssets={false}
-      setCreatingAssets={() => {}}
+      creatingAssets={creatingAssets}
+      setCreatingAssets={setCreatingAssets}
       loadingFiles={false}
       filesLoaded={fileData.length > 0}
       loadingStep={1}
