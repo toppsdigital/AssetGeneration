@@ -661,11 +661,12 @@ export function useAppDataStore<T = any>(
             );
             
             console.log(`✅ [DataStore] Asset caches updated with response data - no additional API calls needed`);
+            console.log(`🚫 [DataStore] Skipping job details invalidation - using response data instead`);
           } else if (variables.jobId) {
             // Fallback to invalidation only if no response data available
-            console.log(`⚠️ [DataStore] No assets in response data, falling back to cache invalidation`);
+            console.log(`⚠️ [DataStore] No assets in response data, falling back to assets cache invalidation only`);
             queryClient.invalidateQueries({ queryKey: dataStoreKeys.assets.byJob(variables.jobId) });
-            queryClient.invalidateQueries({ queryKey: dataStoreKeys.jobs.detail(variables.jobId) });
+            // Don't invalidate job details cache to avoid triggering get_job + batch_get_files + list_assets
           }
           break;
           

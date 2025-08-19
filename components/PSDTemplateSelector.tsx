@@ -44,13 +44,11 @@ interface AssetConfig {
 export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatingAssets, setCreatingAssets, onJobDataUpdate }: PSDTemplateSelectorProps) => {
   const router = useRouter();
   
-  // Use centralized data store for asset operations
+  // Use centralized data store for asset operations only (no data fetching)
   const { 
-    mutate: assetMutation,
-    data: jobAssets,
-    refresh: refreshAssets
+    mutate: assetMutation
   } = useAppDataStore('jobAssets', { 
-    jobId: jobData?.job_id || '', 
+    jobId: '', // Don't auto-fetch assets - we'll use mergedJobData.assets from props
     autoRefresh: false 
   });
   
@@ -109,29 +107,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     
     if (isVisible) {
       fetchPhysicalJsonFiles();
-      
-      // Fetch assets when component becomes visible (status should be 'extracted' or 'generation-failed')
-      (async () => {
-        try {
-          if (!mergedJobData?.job_id) {
-            console.log('❌ No job ID available for asset fetch, skipping');
-            return;
-          }
-          console.log('🔄 PSDTemplateSelector became visible - refreshing assets for job:', mergedJobData.job_id, 'status:', mergedJobData.job_status);
-          // Use centralized data store to refresh assets
-          await refreshAssets();
-          
-          // Update parent component with cached assets from centralized store
-          if (jobAssets && typeof jobAssets === 'object' && Object.keys(jobAssets).length > 0) {
-            console.log('✅ Calling onJobDataUpdate with cached assets:', Object.keys(jobAssets));
-            onJobDataUpdate?.({ job_id: mergedJobData.job_id, assets: jobAssets });
-          } else {
-            console.warn('⚠️ No assets found in centralized store');
-          }
-        } catch (e) {
-          console.warn('⚠️ Failed to fetch assets on load:', e);
-        }
-      })();
+      console.log('✅ PSDTemplateSelector visible - using assets from props (no additional API calls)');
     } else {
       console.log(`ℹ️ PSDTemplateSelector not visible for job ${mergedJobData?.job_id} - status '${mergedJobData?.job_status}'`);
     }
