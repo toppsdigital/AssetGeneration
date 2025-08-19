@@ -632,8 +632,40 @@ export function useAppDataStore<T = any>(
         case 'updateAsset':
         case 'deleteAsset':
         case 'bulkUpdateAssets':
+          // For asset operations, use response data to update cache instead of invalidating
+          if (variables.jobId && data?.assets) {
+            console.log(`✅ [DataStore] Updating asset cache with response data instead of invalidating`);
+            
+            // Update assets cache with response data
+            queryClient.setQueryData(
+              dataStoreKeys.assets.byJob(variables.jobId),
+              data.assets
+            );
+            
+            // Update job details cache assets field with response data
+            queryClient.setQueryData(
+              dataStoreKeys.jobs.detail(variables.jobId),
+              (prevJob: any) => {
+                if (!prevJob) return prevJob;
+                return {
+                  ...prevJob,
+                  assets: data.assets
+                };
+              }
+            );
+            
+            console.log(`✅ [DataStore] Asset caches updated with response data - no additional API calls needed`);
+          } else if (variables.jobId) {
+            // Fallback to invalidation only if no response data available
+            console.log(`⚠️ [DataStore] No assets in response data, falling back to cache invalidation`);
+            queryClient.invalidateQueries({ queryKey: dataStoreKeys.assets.byJob(variables.jobId) });
+            queryClient.invalidateQueries({ queryKey: dataStoreKeys.jobs.detail(variables.jobId) });
+          }
+          break;
+          
         case 'generateAssets':
         case 'regenerateAssets':
+          // These operations typically change job status, so invalidate to get fresh data
           if (variables.jobId) {
             queryClient.invalidateQueries({ queryKey: dataStoreKeys.assets.byJob(variables.jobId) });
             queryClient.invalidateQueries({ queryKey: dataStoreKeys.jobs.detail(variables.jobId) });
