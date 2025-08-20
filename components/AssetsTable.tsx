@@ -1,6 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import { useAppDataStore } from '../hooks/useAppDataStore';
+import { AssetAdvancedOptions } from './AssetAdvancedOptions';
 
 // For multiple spot/color selections in parallel mode
 interface SpotColorPair {
@@ -20,6 +22,7 @@ interface AssetConfig {
   chrome: string | boolean;
   oneOfOneWp?: boolean; // For BASE assets with superfractor chrome
   wp_inv_layer?: string; // For VFX and chrome effects
+  foil?: boolean; // For foil effect control
 }
 
 interface AssetsTableProps {
@@ -76,6 +79,9 @@ export const AssetsTable = ({
   onEDRPdfUpload,
   onAddAsset
 }: AssetsTableProps) => {
+  // Advanced options state
+  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
+  
   // Use centralized data store for asset mutations
   const { mutate: bulkUpdateAssetsMutation } = useAppDataStore('jobAssets', { 
     jobId: jobData?.job_id || '', 
@@ -115,185 +121,7 @@ export const AssetsTable = ({
     return color?.name || rgbValue;
   };
 
-  const handleBulkChromeToggle = async () => {
-    if (savingAsset || !jobData?.job_id) return;
-    
-    // Find all eligible assets (only base, parallel, multi-parallel types, and requires wp_inv layers)
-    const eligibleAssets = configuredAssets.filter(asset => 
-      (asset.type === 'base' || asset.type === 'parallel' || asset.type === 'multi-parallel') &&
-      getWpInvLayers().length > 0
-    );
-    
-    if (eligibleAssets.length === 0) {
-      console.log('📋 No eligible assets for chrome operations (only base, parallel, multi-parallel types)');
-      return;
-    }
-    
-    // Check current chrome state - if any have silver chrome, remove it; otherwise add silver
-    // Only consider silver chrome for toggle (ignore superfractor and other chrome values)
-    const assetsWithSilverChrome = eligibleAssets.filter(asset => asset.chrome === 'silver');
-    const assetsWithNoChrome = eligibleAssets.filter(asset => !asset.chrome || asset.chrome === '');
-    const shouldRemoveChrome = assetsWithSilverChrome.length > 0;
-    
-    const assetsToUpdate = shouldRemoveChrome 
-      ? assetsWithSilverChrome  // Only update assets with silver chrome
-      : assetsWithNoChrome; // Only update assets with no chrome (don't touch superfractor, etc.)
-    
-    if (assetsToUpdate.length === 0) {
-      console.log('📋 No assets need chrome update', {
-        eligibleAssets: eligibleAssets.length,
-        withSilverChrome: assetsWithSilverChrome.length,
-        withNoChrome: assetsWithNoChrome.length,
-        shouldRemove: shouldRemoveChrome
-      });
-      return;
-    }
-    
-    const action = shouldRemoveChrome ? 'remove' : 'apply';
-    console.log(`🔧 ${shouldRemoveChrome ? 'Removing silver' : 'Applying silver'} chrome ${shouldRemoveChrome ? 'from' : 'to'} ${assetsToUpdate.length} assets (base/parallel/multi-parallel only)`);
-    
-    try {
-      // Create a complete assets array: unchanged assets + chrome-updated assets
-      const assetsToUpdateIds = new Set(assetsToUpdate.map(a => a.id));
-      
-      // Helper function to create clean asset object with only essential properties
-      const createCleanAsset = (asset: AssetConfig) => {
-        const cleanAsset: any = {
-          name: asset.name,
-          type: asset.type,
-          layer: asset.layer
-        };
-        
-        // Only include properties that have values (no redundant id since asset_id already exists)
-        if (asset.spot) cleanAsset.spot = asset.spot;
-        if (asset.color) cleanAsset.color = asset.color;
-        
-        if (asset.spot_color_pairs && asset.spot_color_pairs.length > 0) {
-          cleanAsset.spot_color_pairs = asset.spot_color_pairs;
-        }
-        
-        if (asset.vfx) cleanAsset.vfx = asset.vfx;
-        if (asset.chrome) cleanAsset.chrome = asset.chrome;
-        if (asset.wp_inv_layer) cleanAsset.wp_inv_layer = asset.wp_inv_layer;
-        
-        return cleanAsset;
-      };
-      
-      // Start with all assets that are NOT being updated (wp, wp-1of1, superfractor, etc.)
-      // Clean them to remove redundant properties like oneOfOneWp boolean
-      const unchangedAssets = configuredAssets
-        .filter(asset => !assetsToUpdateIds.has(asset.id))
-        .map(asset => createCleanAsset(asset));
-      
-      // Create updated versions of the assets we're changing
-      const chromeUpdatedAssets = assetsToUpdate.map(asset => {
-        // Start with exact copy of asset to preserve all existing properties and field names
-        const { oneOfOneWp, ...assetWithoutUIProps } = asset; // Remove only UI-specific properties
-        const updatedAsset = { ...assetWithoutUIProps };
-        
-        if (shouldRemoveChrome) {
-          // Remove chrome entirely
-          delete updatedAsset.chrome;
-          
-          // Only remove wp_inv_layer if asset doesn't have VFX (since VFX also needs it)
-          if (!asset.vfx) {
-            delete updatedAsset.wp_inv_layer;
-          } else {
-            // Keep existing wp_inv_layer for VFX, or set it if missing
-            const wpInvLayers = getWpInvLayers();
-            const firstWpInvLayer = wpInvLayers.length > 0 ? wpInvLayers[0] : asset.wp_inv_layer;
-            if (firstWpInvLayer) {
-              updatedAsset.wp_inv_layer = firstWpInvLayer;
-            }
-          }
-        } else {
-          // Add chrome and wp_inv_layer, preserve everything else exactly as is
-          const wpInvLayers = getWpInvLayers();
-          const firstWpInvLayer = wpInvLayers.length > 0 ? wpInvLayers[0] : undefined;
-          
-          if (!firstWpInvLayer) {
-            console.warn(`⚠️ No wp_inv_layer available for asset ${asset.name}, chrome may not work properly`);
-          }
-          
-          updatedAsset.chrome = 'silver';
-          if (firstWpInvLayer) {
-            updatedAsset.wp_inv_layer = firstWpInvLayer;
-          }
-        }
-        
-        return updatedAsset;
-      });
-      
-      // Combine unchanged + updated assets for complete bulk update
-      const allAssets = [...unchangedAssets, ...chromeUpdatedAssets];
-      
-      console.log(`📦 Bulk updating all ${allAssets.length} assets (${unchangedAssets.length} unchanged + ${chromeUpdatedAssets.length} chrome-updated):`, {
-        unchanged: unchangedAssets.map(a => `${a.name} (${a.type})`),
-        chromeUpdated: chromeUpdatedAssets.map(a => `${a.name} (${a.type})`)
-      });
-      
-      // Make single bulk update API call with ALL assets via centralized data store
-      const response = await bulkUpdateAssetsMutation({
-        type: 'bulkUpdateAssets',
-        jobId: jobData.job_id,
-        data: allAssets
-      });
-      
-      if (response.success) {
-        console.log(`✅ Successfully ${action}d chrome ${shouldRemoveChrome ? 'from' : 'to'} ${assetsToUpdate.length} assets`);
-        
-        // Extract updated assets from normalized response - handle nested structure
-        const extractedAssets = response.assets?.assets || response.assets;
-        
-        // Update assets with the extracted assets (handle empty object and error cases)
-        const responseError = response.error;
-        
-        // Handle explicit "No assets found" error response
-        if (responseError && responseError.includes('No assets found') && onAssetsUpdate) {
-          console.log('ℹ️ bulk_update_assets returned "No assets found" - treating as empty assets');
-          onAssetsUpdate({ 
-            job_id: jobData.job_id, 
-            assets: {},
-            _cacheTimestamp: Date.now()
-          });
-        } else if (extractedAssets && typeof extractedAssets === 'object' && onAssetsUpdate) {
-          console.log('🔄 Chrome: Using bulk_update_assets response assets directly (no redundant list_assets call):', {
-            assetsCount: Object.keys(extractedAssets).length,
-            isEmpty: Object.keys(extractedAssets).length === 0,
-            assetIds: Object.keys(extractedAssets),
-            jobId: jobData.job_id,
-            hasNestedStructure: !!response.assets?.assets,
-            isNormalized: response._normalized,
-            assetsSource: response._assets_source,
-            hasError: !!responseError
-          });
-          
-          // Create assets update with the new assets
-          onAssetsUpdate({ 
-            job_id: jobData.job_id, 
-            assets: extractedAssets,
-            _cacheTimestamp: Date.now() // Force UI refresh
-          });
-        } else if (onAssetsUpdate) {
-          console.log('⚠️ Unexpected response format from bulk_update_assets, using fallback refetch');
-          console.log('🔄 Chrome: Response structure:', {
-            hasAssets: !!response.assets,
-            assetsType: typeof response.assets,
-            assetsCount: response.assets ? Object.keys(response.assets).length : 0,
-            isNormalized: response._normalized,
-            operation: response._operation,
-            error: responseError
-          });
-          onAssetsUpdate({ _forceRefetch: true, job_id: jobData.job_id });
-        }
-      } else {
-        console.error('❌ Bulk chrome update failed:', response);
-      }
-      
-    } catch (error) {
-      console.error('❌ Error in bulk chrome update:', error);
-    }
-  };
+
 
   const canCreateAssets = configuredAssets.length > 0;
 
@@ -312,14 +140,58 @@ export const AssetsTable = ({
         alignItems: 'flex-start',
         marginBottom: 16
       }}>
-        <h3 style={{
-          fontSize: 20,
-          fontWeight: 600,
-          color: '#f8f8f8',
-          margin: 0
-        }}>
-          Assets to Generate ({configuredAssets.length})
-        </h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <h3 style={{
+            fontSize: 20,
+            fontWeight: 600,
+            color: '#f8f8f8',
+            margin: 0
+          }}>
+            Assets to Generate ({configuredAssets.length})
+          </h3>
+          <button
+            onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
+            disabled={savingAsset || creatingAssets || processingPdf}
+            style={{
+              width: 32,
+              height: 32,
+              background: showAdvancedOptions 
+                ? 'rgba(59, 130, 246, 0.2)' 
+                : 'rgba(255, 255, 255, 0.05)',
+              border: '1px solid ' + (showAdvancedOptions 
+                ? 'rgba(59, 130, 246, 0.4)' 
+                : 'rgba(255, 255, 255, 0.1)'),
+              borderRadius: 8,
+              color: showAdvancedOptions ? '#60a5fa' : '#9ca3af',
+              fontSize: 16,
+              cursor: (savingAsset || creatingAssets || processingPdf) ? 'not-allowed' : 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.2s',
+              opacity: (savingAsset || creatingAssets || processingPdf) ? 0.5 : 1
+            }}
+            onMouseEnter={(e) => {
+              if (!savingAsset && !creatingAssets && !processingPdf) {
+                if (!showAdvancedOptions) {
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                  e.currentTarget.style.color = '#d1d5db';
+                }
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!savingAsset && !creatingAssets && !processingPdf) {
+                if (!showAdvancedOptions) {
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                  e.currentTarget.style.color = '#9ca3af';
+                }
+              }
+            }}
+            title="Advanced Options"
+          >
+            ⚙️
+          </button>
+        </div>
         <div style={{ display: 'flex', gap: 10 }}>
           {onAddAsset && (
             <button
@@ -419,6 +291,18 @@ export const AssetsTable = ({
         </div>
       </div>
 
+      {/* Advanced Options Panel */}
+      <AssetAdvancedOptions
+        configuredAssets={configuredAssets}
+        savingAsset={savingAsset}
+        creatingAssets={creatingAssets}
+        processingPdf={processingPdf}
+        jobData={jobData}
+        getWpInvLayers={getWpInvLayers}
+        onAssetsUpdate={onAssetsUpdate}
+        isVisible={showAdvancedOptions}
+      />
+
       {/* Upload Progress Indicator moved below header */}
       {processingPdf && uploadProgress > 0 && (
         <div style={{
@@ -468,31 +352,14 @@ export const AssetsTable = ({
                 <th style={{ padding: '12px 14px', textAlign: 'left', color: '#f8f8f8', fontSize: 14, fontWeight: 600, letterSpacing: '0.05em', maxWidth: '300px', width: '300px' }}>NAME</th>
                 <th style={{ padding: '12px 14px', textAlign: 'left', color: '#f8f8f8', fontSize: 14, fontWeight: 600, letterSpacing: '0.05em' }}>LAYERS</th>
                 <th style={{ padding: '12px 14px', textAlign: 'left', color: '#f8f8f8', fontSize: 14, fontWeight: 600, letterSpacing: '0.05em' }}>VFX</th>
-                <th 
-                  style={{ 
-                    padding: '12px 14px', 
-                    textAlign: 'center', 
-                    color: '#f8f8f8', 
-                    fontSize: 14, 
-                    fontWeight: 600, 
-                    letterSpacing: '0.05em',
-                    cursor: 'pointer',
-                    userSelect: 'none',
-                    transition: 'color 0.2s'
-                  }}
-                  onClick={handleBulkChromeToggle}
-                  onMouseEnter={(e) => {
-                    if (!savingAsset) {
-                      e.currentTarget.style.color = '#c084fc';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!savingAsset) {
-                      e.currentTarget.style.color = '#f8f8f8';
-                    }
-                  }}
-                  title="Click to toggle silver chrome on/off for base, parallel, and multi-parallel assets only"
-                >
+                <th style={{ 
+                  padding: '12px 14px', 
+                  textAlign: 'center', 
+                  color: '#f8f8f8', 
+                  fontSize: 14, 
+                  fontWeight: 600, 
+                  letterSpacing: '0.05em'
+                }}>
                   CHROME
                 </th>
                 <th style={{ padding: '10px 12px', textAlign: 'center', color: '#f8f8f8', fontSize: 13, fontWeight: 600, letterSpacing: '0.05em' }}>ACTIONS</th>

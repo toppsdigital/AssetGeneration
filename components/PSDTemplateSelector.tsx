@@ -39,6 +39,7 @@ interface AssetConfig {
   chrome: string | boolean;
   oneOfOneWp?: boolean; // For BASE assets with superfractor chrome
   wp_inv_layer?: string; // For VFX and chrome effects
+  foil?: boolean; // For foil effect control
 }
 
 export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatingAssets, setCreatingAssets, onAssetsUpdate }: PSDTemplateSelectorProps) => {
@@ -368,14 +369,16 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       vfx: assetData.vfx,
       chrome: assetData.chrome || false,
       oneOfOneWp: assetData.oneOfOneWp || false,
-      wp_inv_layer: assetData.wp_inv_layer || ''
+      wp_inv_layer: assetData.wp_inv_layer || '',
+      foil: assetData.foil // Include foil property for advanced options
     }));
     
     console.log('✅ Parsed assets from mergedJobData.assets:', {
       count: assets.length,
       assetIds: assets.map(a => a.id),
       assetNames: assets.map(a => a.name),
-      assetTypes: assets.map(a => a.type)
+      assetTypes: assets.map(a => a.type),
+      assetsWithFoil: assets.filter(a => 'foil' in a).map(a => ({ id: a.id, name: a.name, foil: a.foil }))
     });
     return assets;
   };

@@ -21,6 +21,7 @@ interface AssetConfig {
   chrome: string | boolean;
   oneOfOneWp?: boolean; // For BASE assets with superfractor chrome
   wp_inv_layer?: string; // For VFX and chrome effects
+  foil?: boolean; // For foil effect control
 }
 
 interface AssetCreationFormProps {
