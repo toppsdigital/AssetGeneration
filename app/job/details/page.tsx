@@ -45,43 +45,29 @@ function JobDetailsPageContent() {
   // Asset creation loading state for modal
   const [creatingAssets, setCreatingAssets] = useState(false);
 
-  // Optimized job data update handler - uses response data when possible
+  // Simplified job data update handler for details page (assets + download URL only)
   const handleJobDataUpdate = (updatedJobData: any) => {
     if (!updatedJobData) {
       console.warn('⚠️ handleJobDataUpdate called with no data');
       return;
     }
 
-    // Only refetch in specific cases where it's actually needed
+    // Force refetch if explicitly requested
     if (updatedJobData._forceRefetch) {
       console.log('🔄 Force refetch requested, fetching latest data from server');
       refetchJobData();
       return;
     }
 
-    // Handle specific update types that require job data refresh
-    // Only refetch for download_url or job_status changes
-    // Assets-only updates should use response data directly (no refetch needed)
-    if (updatedJobData.download_url || updatedJobData.job_status) {
-      console.log('✅ Received job data requiring full refresh:', {
-        hasDownloadUrl: !!updatedJobData.download_url,
-        hasJobStatus: !!updatedJobData.job_status
-      });
-      
-      console.log('🔄 Refetching job data to sync download URL or status changes');
+    // Refetch for download URL changes (needed for download section)
+    if (updatedJobData.download_url) {
+      console.log('🔄 Download URL updated, refetching job data');
       refetchJobData();
       return;
     }
 
-    // For assets-only updates, components should handle response data locally
-    if (updatedJobData.assets && !updatedJobData.download_url && !updatedJobData.job_status) {
-      console.log('✅ Assets-only update detected - using response data directly (no refetch)');
-      console.log('💡 Asset operations provide fresh data in response - no additional API calls needed');
-      return;
-    }
-
-    // For asset-only operations or minor updates, components can handle locally
-    console.log('💡 Minor update detected - components can handle response data locally');
+    // For asset-only operations, components handle response data locally (no refetch needed)
+    console.log('✅ Asset update - components using response data directly');
   };
 
 
@@ -115,27 +101,10 @@ function JobDetailsPageContent() {
     <JobDetailsContent
       mergedJobData={jobData}
       jobData={jobData}
-      uploadEngine={{
-        uploadStarted: false,
-        allFilesUploaded: true,
-        totalPdfFiles: 0,
-        uploadedPdfFiles: 0,
-        uploadingFiles: new Set()
-      }}
-      uploadsInProgress={false}
       creatingAssets={creatingAssets}
       setCreatingAssets={setCreatingAssets}
-      loadingFiles={false}
-      filesLoaded={fileData.length > 0}
-      loadingStep={1}
-      loadingMessage="Ready"
-      loadingDetail=""
       loading={isLoading}
       onJobDataUpdate={handleJobDataUpdate}
-      updateJobDataForUpload={() => {
-        console.log('🔄 updateJobDataForUpload called - refetching job data');
-        refetchJobData();
-      }}
       refetchJobData={refetchJobData}
     />
   );
