@@ -10,22 +10,16 @@ interface JobDetailsContentProps {
   mergedJobData: UIJobData;
   jobData: UIJobData | null;
   
-  // Core props for details page only
+  // Core props for details page only (read-only, no job data updates)
   creatingAssets: boolean;
   setCreatingAssets: (creating: boolean) => void;
   loading: boolean;
-  onJobDataUpdate: (updatedJobData: any) => void;
-  refetchJobData: () => Promise<any>;
 }
 
 export const JobDetailsContent = ({
   mergedJobData,
   jobData,
-  creatingAssets,
-  setCreatingAssets,
-  loading,
-  onJobDataUpdate,
-  refetchJobData
+  loading
 }: JobDetailsContentProps) => {
   const router = useRouter();
 
@@ -83,7 +77,6 @@ export const JobDetailsContent = ({
               })()}
               creatingAssets={creatingAssets}
               setCreatingAssets={setCreatingAssets}
-              onJobDataUpdate={onJobDataUpdate}
             />
 
             {/* Download Section */}
@@ -98,10 +91,6 @@ export const JobDetailsContent = ({
                 });
                 return shouldShow;
               })()}
-              onJobDataUpdate={(updatedJobData) => {
-                console.log('🔄 DownloadSection provided updated job data - using response data directly');
-                onJobDataUpdate(updatedJobData); // Use provided data instead of refetching
-              }}
             />
 
             {/* Files Section */}

@@ -1,15 +1,13 @@
 'use client';
 
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { useState, Suspense } from 'react';
 import { 
   JobDetailsLoadingState,
   JobDetailsErrorState,
   JobDetailsContent
 } from '../../../components';
 import { useAppDataStore } from '../../../hooks/useAppDataStore';
-
-
 
 function JobDetailsPageContent() {
   const searchParams = useSearchParams();
@@ -20,13 +18,11 @@ function JobDetailsPageContent() {
   // Skip data fetching if no jobId is provided
   const hasJobId = Boolean(jobId);
   
-  // Fetch job data, files, and assets - only once on load
+  // Fetch job data, files, and assets - read-only, no updates needed
   const { 
     data: jobData, 
     isLoading: isLoadingJob, 
-    error: jobError,
-    refresh: refetchJobData,
-    mutate: updateJobData
+    error: jobError
   } = useAppDataStore('jobDetails', { 
     jobId: jobId || '', 
     autoRefresh: false,
@@ -34,47 +30,10 @@ function JobDetailsPageContent() {
     includeAssets: true
   });
 
-  // Clean data extraction
-  const fileData = jobData?.content_pipeline_files || [];
-  const jobAssets = jobData?.assets || {};
-  const error = jobError;
-  
-  // Simple loading state
-  const isLoading = isLoadingJob;
-
   // Asset creation loading state for modal
   const [creatingAssets, setCreatingAssets] = useState(false);
 
-  // Simplified job data update handler for details page (assets + download URL only)
-  const handleJobDataUpdate = (updatedJobData: any) => {
-    if (!updatedJobData) {
-      console.warn('⚠️ handleJobDataUpdate called with no data');
-      return;
-    }
-
-    // Force refetch if explicitly requested
-    if (updatedJobData._forceRefetch) {
-      console.log('🔄 Force refetch requested, fetching latest data from server');
-      refetchJobData();
-      return;
-    }
-
-    // Refetch for download URL changes (needed for download section)
-    if (updatedJobData.download_url) {
-      console.log('🔄 Download URL updated, refetching job data');
-      refetchJobData();
-      return;
-    }
-
-    // For asset-only operations, components handle response data locally (no refetch needed)
-    console.log('✅ Asset update - components using response data directly');
-  };
-
-
-
-
-
-  if (isLoading) {
+  if (isLoadingJob) {
     return (
       <JobDetailsLoadingState
         loadingStep={1}
@@ -89,11 +48,11 @@ function JobDetailsPageContent() {
     return <JobDetailsErrorState error={null} message="No Job ID provided" />;
   }
 
-  if (error) {
-    return <JobDetailsErrorState error={error} />;
+  if (jobError) {
+    return <JobDetailsErrorState error={jobError} />;
   }
 
-  if (!jobData && !isLoading) {
+  if (!jobData && !isLoadingJob) {
     return <JobDetailsErrorState error={null} message="No Job Data Found" />;
   }
 
@@ -103,9 +62,7 @@ function JobDetailsPageContent() {
       jobData={jobData}
       creatingAssets={creatingAssets}
       setCreatingAssets={setCreatingAssets}
-      loading={isLoading}
-      onJobDataUpdate={handleJobDataUpdate}
-      refetchJobData={refetchJobData}
+      loading={isLoadingJob}
     />
   );
 }
