@@ -11,6 +11,7 @@ interface UseUploadEngineProps {
   createdFiles?: any[]; // Optional - if provided, use these instead of jobData.content_pipeline_files
   setJobData?: (updater: (prev: any) => any) => void;
   onUploadComplete?: () => void;
+  onFileStatusChange?: (filename: string, status: string) => void; // Callback for real-time status updates
 }
 
 interface UseUploadEngineReturn {
@@ -37,7 +38,8 @@ export const useUploadEngine = ({
   jobData, 
   createdFiles, 
   setJobData, 
-  onUploadComplete 
+  onUploadComplete,
+  onFileStatusChange 
 }: UseUploadEngineProps): UseUploadEngineReturn => {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -483,11 +485,26 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
   ): Promise<void> => {
     console.log(`🚀 Uploading file group ${groupFilename} with ${convertedFiles.length} PDFs using streaming approach`);
     
-    // Set processing status for all files in group AND add to uploadingFiles set
+    // Set processing status for all files in group (UI feedback during base64 conversion)
     convertedFiles.forEach(({ filename }) => {
-      console.log(`📤 Adding ${filename} to uploadingFiles set for UI tracking`);
+      console.log(`🔄 Setting ${filename} to processing status for UI`);
+      // Notify UI of processing status (local UI only)
+      if (onFileStatusChange) {
+        onFileStatusChange(filename, 'processing');
+      }
+    });
+    
+    // Add small delay to make processing state visible
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Now transition to uploading status and add to uploadingFiles set
+    convertedFiles.forEach(({ filename }) => {
+      console.log(`📤 Adding ${filename} to uploadingFiles set and setting uploading status`);
       setUploadingFiles(prev => new Set(prev).add(filename));
-      updateLocalFileStatus(groupFilename, filename, 'processing');
+      // Notify UI of uploading status (local UI only)
+      if (onFileStatusChange) {
+        onFileStatusChange(filename, 'uploading');
+      }
     });
     
     // Update backend status to processing for all files in this group
@@ -579,6 +596,10 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
           newSet.delete(filename);
           return newSet;
         });
+        // Notify UI of upload completion
+        if (onFileStatusChange) {
+          onFileStatusChange(filename, 'uploaded');
+        }
       });
       
       console.log(`🔄 About to update upload counters for group ${groupFilename}...`);
@@ -624,6 +645,10 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
             newSet.delete(filename);
             return newSet;
           });
+          // Notify UI of upload failure
+          if (onFileStatusChange) {
+            onFileStatusChange(filename, 'upload-failed');
+          }
         });
         
       } catch (batchError) {
@@ -726,12 +751,14 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
   ): Promise<void> => {
     console.log(`🚀 Robust upload for group ${groupFilename} with ${groupFiles.length} files`);
     
-    // Add all files to uploading state
+    // Start with processing state for UI feedback (local UI only)
     const filesToCleanup = groupFiles.map(f => f.filename);
     groupFiles.forEach(({ filename }) => {
-      console.log(`📤 Adding ${filename} to uploadingFiles set`);
-      setUploadingFiles(prev => new Set(prev).add(filename));
-      updateLocalFileStatus(groupFilename, filename, 'uploading');
+      console.log(`🔄 Setting ${filename} to processing status for UI (base64 conversion)`);
+      // Notify UI of processing status (local UI only)
+      if (onFileStatusChange) {
+        onFileStatusChange(filename, 'processing');
+      }
     });
     
     let successfulFiles: string[] = [];
@@ -752,6 +779,19 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
       );
       console.log(`✅ Base64 conversion completed for group ${groupFilename}`);
       
+      // Transition to uploading state after base64 conversion (local UI only)
+      groupFiles.forEach(({ filename }) => {
+        console.log(`📤 Adding ${filename} to uploadingFiles set and setting uploading status`);
+        setUploadingFiles(prev => new Set(prev).add(filename));
+        // Notify UI of uploading status (local UI only)
+        if (onFileStatusChange) {
+          onFileStatusChange(filename, 'uploading');
+        }
+      });
+      
+      // Small delay to make uploading state visible before actual uploads
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       // Get upload instructions with timeout
       console.log(`📋 Getting upload instructions for group ${groupFilename}...`);
       
@@ -766,8 +806,31 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
       })));
       
       const fileInstructions = convertedFiles.map(({ file, fileInfo, filename }) => {
+        // DEBUGGING PATH DUPLICATION ISSUE: Log detailed file_path info
+        console.log(`🔍 DEBUGGING file_path for ${filename}:`, {
+          'fileInfo.file_path': fileInfo.file_path,
+          'filename': filename,
+          'fileInfo': fileInfo,
+          'file_path_includes_asset_generator': fileInfo.file_path?.includes('asset_generator'),
+          'file_path_starts_with_asset_generator': fileInfo.file_path?.startsWith('asset_generator')
+        });
+        
         // Use the file_path from fileInfo which has the proper S3 path format
-        const s3FilePath = fileInfo.file_path || filename;
+        let s3FilePath = fileInfo.file_path || filename;
+        
+        // FIX FOR PATH DUPLICATION: Check if s3FilePath already contains the full path
+        if (s3FilePath.includes('asset_generator/dev/uploads')) {
+          console.warn(`⚠️ WARNING: s3FilePath already contains base path! Fixing duplication by removing prefix:`, {
+            original: s3FilePath,
+          });
+          // Remove the duplicate base path prefix
+          s3FilePath = s3FilePath.replace(/^asset_generator\/dev\/uploads\//, '');
+          console.log(`✅ Fixed s3FilePath:`, {
+            fixed: s3FilePath,
+            'will_result_in': `asset_generator/dev/uploads/${s3FilePath}`
+          });
+        }
+        
         const instruction = {
           filename: s3FilePath, // Use file_path which includes app_name/PDFs/filename
           size: file.size,
@@ -795,6 +858,20 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
       
       // Verify the final S3 keys that will be generated
       console.log(`🗂️ Expected S3 keys:`, fileInstructions.map(f => `${baseFolderPath}/${f.filename}`));
+      
+      // ADDITIONAL DEBUGGING: Log each final S3 key individually for clarity
+      fileInstructions.forEach((instruction, index) => {
+        const finalS3Key = `${baseFolderPath}/${instruction.filename}`;
+        console.log(`🔑 S3 Key ${index + 1}: "${finalS3Key}"`);
+        
+        // Check for any obvious duplication patterns
+        const duplicateCount = (finalS3Key.match(/asset_generator\/dev\/uploads/g) || []).length;
+        if (duplicateCount > 1) {
+          console.error(`❌ DUPLICATION DETECTED in S3 key ${index + 1}: Found ${duplicateCount} instances of 'asset_generator/dev/uploads'`);
+        } else {
+          console.log(`✅ S3 key ${index + 1} looks correct (1 instance of base path)`);
+        }
+      });
       
       console.log(`🌐 Sending S3 upload request:`, {
         operation: 's3_upload_files',
@@ -857,10 +934,18 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
               await uploadLargeFileToS3(file, s3FilePath, uploadInstruction);
               successfulFiles.push(filename);
               console.log(`✅ Successfully uploaded ${filename}`);
+              // Notify UI of successful upload (local UI only - backend will be updated via S3 triggers)
+              if (onFileStatusChange) {
+                onFileStatusChange(filename, 'uploaded');
+              }
               return { success: true, filename };
             } catch (error) {
               console.error(`❌ File ${filename} upload failed:`, error);
               failedFiles.push(filename);
+              // Notify UI of upload failure
+              if (onFileStatusChange) {
+                onFileStatusChange(filename, 'upload-failed');
+              }
               return { success: false, filename, error };
             }
           })
