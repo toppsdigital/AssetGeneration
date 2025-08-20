@@ -2,11 +2,12 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, Suspense, useRef, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import Head from 'next/head';
 import ImagePreview from '../../../components/ImagePreview';
 import ExpandedImageModal from '../../../components/ExpandedImageModal';
 import { PageTitle } from '../../../components';
-import { useAppDataStore } from '../../../hooks/useAppDataStore';
+import { dataStoreKeys } from '../../../hooks/useAppDataStore';
 import styles from '../../../styles/Edit.module.css';
 
 interface AssetItem {
@@ -48,22 +49,28 @@ function JobPreviewPageContent() {
   // Cache for presigned URLs - maps filename to { presignedUrl, isTiff }
   const presignedUrlCache = useRef<Map<string, { presignedUrl: string; isTiff: boolean }>>(new Map());
 
-  // Get cached file data from centralized store
-  const { 
-    data: jobFiles, 
-    isLoading, 
-    error: filesError 
-  } = useAppDataStore('jobFiles', { 
-    jobId: jobId || '', 
-    autoRefresh: false 
-  });
+  // Read cached job details (no API calls - should be cached from job details page)
+  const queryClient = useQueryClient();
+  const cachedJobData = queryClient.getQueryData(dataStoreKeys.jobs.detail(jobId || '')) as any;
+  
+  // Extract files from cached job details
+  const jobFiles = cachedJobData?.content_pipeline_files || [];
+  const isLoading = false; // We're only reading from cache
+  const filesError = !cachedJobData ? new Error('Job data not found in cache - please navigate from job details page') : null;
 
-  // Debug current URL parameters
+  // Debug current URL parameters and cache status
   console.log(`🔍 [Preview] Current URL parameters:`, {
     jobId,
     fileId,
     mode,
     allParams: Object.fromEntries(searchParams.entries())
+  });
+  
+  console.log(`🗂️ [Preview] Cache status:`, {
+    hasCachedJobData: !!cachedJobData,
+    filesCount: jobFiles.length,
+    jobStatus: cachedJobData?.job_status,
+    cacheKey: dataStoreKeys.jobs.detail(jobId || '')
   });
 
   // Find the specific file and extract assets based on mode
@@ -98,15 +105,20 @@ function JobPreviewPageContent() {
     }
 
     if (!jobFiles || jobFiles.length === 0) {
-      if (!isLoading) {
+      if (!cachedJobData) {
         return {
           fileData: null,
           assets: [],
           displayName: '',
-          error: 'No files found for this job'
+          error: 'Job data not found in cache. Please navigate to this page from the job details page to ensure data is loaded.'
         };
       }
-      return { fileData: null, assets: [], displayName: '', error: null };
+      return {
+        fileData: null,
+        assets: [],
+        displayName: '',
+        error: 'No files found for this job'
+      };
     }
 
     // Find the specific file by filename (fileId)
@@ -234,7 +246,7 @@ function JobPreviewPageContent() {
       displayName: `${targetFile.filename} • ${imageAssets.length} ${modeDisplayName}`,
       error: imageAssets.length === 0 ? `No image files found in ${modeDisplayName.toLowerCase()}` : null
     };
-  }, [jobId, fileId, mode, jobFiles, isLoading, filesError]);
+  }, [jobId, fileId, mode, jobFiles, filesError, cachedJobData]);
 
   // Modal navigation functions
   const handleImageExpand = (imageData: { src: string; alt: string; isTiff: boolean }) => {
