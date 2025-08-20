@@ -1,6 +1,9 @@
 // Types and interfaces for the centralized app data store
 import { JobData, FileData } from '../web/utils/contentPipelineApi';
 
+// Re-export imported types for use in other files
+export type { FileData };
+
 // Extended job data for UI needs
 export interface UIJobData extends JobData {
   psd_file?: string;
