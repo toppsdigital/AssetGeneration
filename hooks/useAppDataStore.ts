@@ -456,7 +456,22 @@ export function useAppDataStore<T = any>(
   } = useQuery({
     queryKey,
     queryFn: async () => {
+      console.log(`🌐 [DataStore] Making API call for ${selector}:`, {
+        jobId: options.jobId,
+        includeFiles: options.includeFiles,
+        includeAssets: options.includeAssets,
+        staleTime: cacheSettings.staleTime,
+        isBackgroundFetch: cacheSettings.staleTime === 0
+      });
+      
       const result = await queryFn();
+      
+      console.log(`✅ [DataStore] API call completed for ${selector}:`, {
+        resultType: Array.isArray(result) ? 'array' : typeof result,
+        resultSize: Array.isArray(result) ? result.length : 'single',
+        hasAssets: (result as any)?.assets ? Object.keys((result as any).assets).length : 0,
+        jobStatus: (result as any)?.job_status
+      });
       
       // Auto-sync caches when jobs list is fetched
       if (selector === 'jobs' && Array.isArray(result)) {
@@ -473,7 +488,19 @@ export function useAppDataStore<T = any>(
     enabled: queryKey.length > 0,
     staleTime: cacheSettings.staleTime,
     gcTime: cacheSettings.gcTime,
-    refetchOnMount: selector === 'jobs' ? true : false, // Show cached data immediately, then fetch fresh data in background
+    refetchOnMount: (() => {
+      // Always refetch for jobs list
+      if (selector === 'jobs') return true;
+      
+      // For jobDetails, refetch if staleTime is 0 (indicating we want always-fresh data)
+      if (selector === 'jobDetails' && cacheSettings.staleTime === 0) {
+        console.log(`🔄 [DataStore] Background fetch enabled for ${selector} with staleTime: 0`);
+        return true;
+      }
+      
+      // For other selectors, use cached data without refetching
+      return false;
+    })(), // Show cached data immediately, then fetch fresh data in background when configured
     refetchOnWindowFocus: false, // Disable refetching on window focus to reduce unnecessary API calls
     retry: (failureCount, error) => {
       // Don't retry if we know assets don't exist (reduces 404 spam)

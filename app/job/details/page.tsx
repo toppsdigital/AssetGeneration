@@ -1,7 +1,7 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { useState, Suspense } from 'react';
+import { useState, Suspense, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { 
   JobDetailsLoadingState,
@@ -20,10 +20,11 @@ function JobDetailsPageContent() {
   // Skip data fetching if no jobId is provided
   const hasJobId = Boolean(jobId);
   
-  // Fetch job data, files, and assets - read-only, no updates needed
+  // Fetch job data, files, and assets - show cached data immediately, fetch fresh in background
   const { 
     data: jobData, 
     isLoading: isLoadingJob, 
+    isRefreshing: isRefreshingJob,
     error: jobError,
     refresh: refreshJobData,
     invalidate: invalidateJobData
@@ -32,10 +33,78 @@ function JobDetailsPageContent() {
     autoRefresh: false,
     includeFiles: true,
     includeAssets: true
+  }, {
+    // Always show cached data immediately while fetching fresh data
+    cache: {
+      staleTime: {
+        jobs: 0, // Always fetch fresh job data in background
+        files: 0, // Always fetch fresh file data
+        assets: 0, // Always fetch fresh asset data
+        jobsList: 0, // Always fetch fresh jobs list data
+      },
+      gcTime: {
+        jobs: 10 * 60 * 1000, // Keep job data in cache for 10 minutes
+        files: 10 * 60 * 1000, // Keep file data in cache for 10 minutes
+        assets: 10 * 60 * 1000, // Keep asset data in cache for 10 minutes
+        jobsList: 10 * 60 * 1000, // Keep jobs list data in cache for 10 minutes
+      }
+    }
   });
 
   // Asset creation loading state for modal
   const [creatingAssets, setCreatingAssets] = useState(false);
+  
+  // Track when fresh data has been loaded
+  const [freshDataLoaded, setFreshDataLoaded] = useState(false);
+  const previousJobDataRef = useRef(jobData);
+
+  // Check if we have cached data available to show immediately
+  const cacheKey = dataStoreKeys.jobs.detail(jobId || '');
+  const cachedJobData = hasJobId ? queryClient.getQueryData(cacheKey) : null;
+  const hasAnyCachedData = Boolean(cachedJobData);
+
+  // Track when fresh data arrives to provide visual feedback
+  useEffect(() => {
+    const previousJobData = previousJobDataRef.current;
+    
+    // If we now have jobData and we didn't before, fresh data has arrived
+    if (!previousJobData && jobData) {
+      console.log('✨ [JobDetails] Fresh data loaded from server!', {
+        jobStatus: jobData.job_status,
+        assetsCount: jobData.assets ? Object.keys(jobData.assets).length : 0,
+        filesCount: jobData.content_pipeline_files?.length || 0
+      });
+      setFreshDataLoaded(true);
+      
+      // Hide the "fresh data loaded" indicator after 3 seconds
+      setTimeout(() => setFreshDataLoaded(false), 3000);
+    }
+    
+    // If jobData changed (e.g., status update), log it
+    if (previousJobData && jobData && previousJobData.job_status !== jobData.job_status) {
+      console.log('🔄 [JobDetails] Job status updated!', {
+        from: previousJobData.job_status,
+        to: jobData.job_status
+      });
+      setFreshDataLoaded(true);
+      setTimeout(() => setFreshDataLoaded(false), 2000);
+    }
+    
+    previousJobDataRef.current = jobData;
+  }, [jobData]);
+
+  console.log('📊 [JobDetails] Data availability:', {
+    hasJobId,
+    jobId,
+    hasJobData: !!jobData,
+    hasCachedData: hasAnyCachedData,
+    isLoadingJob,
+    isRefreshingJob,
+    jobStatus: (jobData || cachedJobData)?.job_status,
+    usingCachedData: !jobData && hasAnyCachedData,
+    usingFreshData: !!jobData,
+    freshDataLoaded
+  });
 
   // Handle asset updates from PSDTemplateSelector (pdf-extract, create, update, delete)
   const handleAssetsUpdate = async (updatedAssets: { job_id: string; assets: any; _cacheTimestamp?: number } | { _forceRefetch: true; job_id: string }) => {
@@ -76,7 +145,8 @@ function JobDetailsPageContent() {
     }
   };
 
-  if (isLoadingJob) {
+  // Only show loading state if we have no cached data AND we're loading for the first time
+  if (isLoadingJob && !hasAnyCachedData) {
     return (
       <JobDetailsLoadingState
         loadingStep={1}
@@ -91,21 +161,38 @@ function JobDetailsPageContent() {
     return <JobDetailsErrorState error={null} message="No Job ID provided" />;
   }
 
-  if (jobError) {
+  if (jobError && !hasAnyCachedData) {
     return <JobDetailsErrorState error={jobError} />;
   }
 
-  if (!jobData && !isLoadingJob) {
+  // If we have neither fresh data nor cached data, show error
+  if (!jobData && !cachedJobData && !isLoadingJob) {
     return <JobDetailsErrorState error={null} message="No Job Data Found" />;
   }
 
+  // Use fresh data if available, otherwise fall back to cached data
+  const displayJobData = jobData || cachedJobData;
+  const isActuallyLoading = isLoadingJob && !hasAnyCachedData;
+  
+  console.log('🎯 [JobDetails] Rendering with data:', {
+    usingFreshData: !!jobData,
+    usingCachedData: !jobData && !!cachedJobData,
+    dataSource: jobData ? 'fresh' : cachedJobData ? 'cached' : 'none',
+    isRefreshing: isRefreshingJob,
+    freshDataLoaded,
+    jobStatus: displayJobData?.job_status,
+    assetsCount: displayJobData?.assets ? Object.keys(displayJobData.assets).length : 0
+  });
+
   return (
     <JobDetailsContent
-      mergedJobData={jobData}
-      jobData={jobData}
+      mergedJobData={displayJobData}
+      jobData={displayJobData}
       creatingAssets={creatingAssets}
       setCreatingAssets={setCreatingAssets}
-      loading={isLoadingJob}
+      loading={isActuallyLoading}
+      isRefreshing={isRefreshingJob}
+      freshDataLoaded={freshDataLoaded}
       onAssetsUpdate={handleAssetsUpdate}
     />
   );
