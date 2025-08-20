@@ -529,9 +529,13 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
         
         assetConfig = {
           ...assetConfig,
-          layer: config.layer,
-          vfx: config.vfx
+          layer: config.layer
         };
+
+        // Only include VFX if it has a valid non-empty value
+        if (config.vfx && config.vfx.trim() !== '') {
+          assetConfig.vfx = config.vfx;
+        }
 
         // Only add spot_color_pairs if there are valid pairs
         if (validPairs.length > 0) {
@@ -541,9 +545,12 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
           }));
         }
 
-        // Include wp_inv_layer if VFX or chrome is enabled
-        if ((config.vfx || config.chrome) && config.wp_inv_layer) {
-          assetConfig.wp_inv_layer = config.wp_inv_layer;
+        // Include wp_inv_layer if VFX is enabled OR chrome is present
+        if ((config.vfx && config.vfx.trim() !== '') || config.chrome) {
+          const wpInvLayer = config.wp_inv_layer || getWpInvLayers()[0];
+          if (wpInvLayer) {
+            assetConfig.wp_inv_layer = wpInvLayer;
+          }
         }
       } else {
         // Handle other card types
@@ -553,13 +560,20 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
           ...assetConfig,
           layer: config.layer,
           spot: config.spot,
-          color: config.color ? getColorRgbByName(config.color) : undefined,
-          vfx: config.vfx
+          color: config.color ? getColorRgbByName(config.color) : undefined
         };
 
-        // Include wp_inv_layer if VFX or chrome is enabled
-        if ((config.vfx || config.chrome) && config.wp_inv_layer) {
-          assetConfig.wp_inv_layer = config.wp_inv_layer;
+        // Only include VFX if it has a valid non-empty value
+        if (config.vfx && config.vfx.trim() !== '') {
+          assetConfig.vfx = config.vfx;
+        }
+
+        // Include wp_inv_layer if VFX is enabled OR chrome is present
+        if ((config.vfx && config.vfx.trim() !== '') || config.chrome) {
+          const wpInvLayer = config.wp_inv_layer || getWpInvLayers()[0];
+          if (wpInvLayer) {
+            assetConfig.wp_inv_layer = wpInvLayer;
+          }
         }
       }
 
