@@ -288,6 +288,14 @@ export const useUploadEngine = ({
     try {
       console.log(`📤 Starting streaming upload for large file: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
       
+      // DEBUGGING: Log the uploadInstruction.s3_key that will be sent to S3 proxy
+      console.log(`🔍 uploadLargeFileToS3 called with:`, {
+        fileName: file.name,
+        filePath: filePath,
+        's3_key_from_instruction': uploadInstruction.s3_key,
+        'instruction_contains_duplication': uploadInstruction.s3_key?.includes('asset_generator/dev/uploads/asset_generator/dev/uploads')
+      });
+      
       let uploadResponse;
       
       if (uploadInstruction.upload_type === 'single') {
@@ -313,6 +321,7 @@ export const useUploadEngine = ({
           console.log('📤 Getting simple presigned PUT URL instead of POST');
           
           // Request a simple PUT URL that works with our existing proxy
+          console.log(`🔍 Sending to S3 proxy with s3_key: "${uploadInstruction.s3_key}"`);
           const putUrlResponse = await fetch('/api/s3-proxy', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -878,6 +887,16 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
         body: requestBody
       });
       
+      // ADDITIONAL DEBUGGING: Log exactly what we're sending to the backend
+      console.log(`🔍 DETAILED REQUEST TO BACKEND:`, {
+        folder: requestBody.folder,
+        files: requestBody.files.map(f => ({
+          filename: f.filename,
+          expectedS3Key: `${requestBody.folder}/${f.filename}`,
+          size: f.size
+        }))
+      });
+      
       const instructionsResponse = await withTimeout(
         fetch('/api/content-pipeline-proxy?operation=s3_upload_files', {
           method: 'POST',
@@ -922,6 +941,23 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
         failedRequests: instructionsResult.data?.failed_requests
       });
       
+      // DETAILED DEBUGGING: Log each s3_key returned by the backend
+      if (instructionsResult.data?.upload_instructions) {
+        console.log(`🔍 BACKEND RETURNED S3 KEYS:`);
+        instructionsResult.data.upload_instructions.forEach((instruction, index) => {
+          console.log(`  ${index + 1}. s3_key: "${instruction.s3_key}"`);
+          console.log(`     filename: "${instruction.filename}"`);
+          
+          // Check for duplication in the returned s3_key
+          const duplicateCount = (instruction.s3_key?.match(/asset_generator\/dev\/uploads/g) || []).length;
+          if (duplicateCount > 1) {
+            console.error(`❌ BACKEND RETURNED DUPLICATED S3 KEY: Found ${duplicateCount} instances of 'asset_generator/dev/uploads' in "${instruction.s3_key}"`);
+          } else {
+            console.log(`     ✅ Backend s3_key looks correct (${duplicateCount} instance of base path)`);
+          }
+        });
+      }
+      
       // Upload each file individually with error handling and timeout
       console.log(`🚀 Starting individual file uploads for group ${groupFilename}...`);
       const uploadResults = await withTimeout(
@@ -931,6 +967,14 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
               const s3FilePath = fileInfo.file_path || filename;
               console.log(`🔼 Starting upload for ${filename} -> S3 path: ${s3FilePath}...`);
               const uploadInstruction = instructionsResult.data.upload_instructions[index];
+              
+              // DEBUGGING: Log the uploadInstruction s3_key that we're about to use
+              console.log(`🔑 Using upload instruction for ${filename}:`, {
+                s3_key: uploadInstruction.s3_key,
+                upload_type: uploadInstruction.upload_type,
+                'contains_duplication': uploadInstruction.s3_key?.includes('asset_generator/dev/uploads/asset_generator/dev/uploads')
+              });
+              
               await uploadLargeFileToS3(file, s3FilePath, uploadInstruction);
               successfulFiles.push(filename);
               console.log(`✅ Successfully uploaded ${filename}`);
