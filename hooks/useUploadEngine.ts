@@ -219,8 +219,9 @@ export const useUploadEngine = ({
       for (const { file, filePath } of files) {
         console.log(`📤 Uploading file via S3 proxy: ${filePath} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
         
-        // Step 1: Get presigned PUT URL for our S3 bucket
-        const s3Key = `asset_generator/dev/uploads/${filePath}`;
+        // Step 1: Get presigned PUT URL for our S3 bucket (direct upload without base prefix)
+        const s3Key = filePath; // Use filePath directly (e.g., "BUNT/PDFs/25BWBB_3501_BK.pdf")
+        console.log(`🔑 Direct S3 upload - using s3Key: "${s3Key}"`);
         const presignedResponse = await fetch('/api/s3-proxy', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -293,7 +294,7 @@ export const useUploadEngine = ({
         fileName: file.name,
         filePath: filePath,
         's3_key_from_instruction': uploadInstruction.s3_key,
-        'instruction_contains_duplication': uploadInstruction.s3_key?.includes('asset_generator/dev/uploads/asset_generator/dev/uploads')
+        'instruction_has_unwanted_prefix': uploadInstruction.s3_key?.includes('asset_generator/dev/uploads')
       });
       
       let uploadResponse;
@@ -801,8 +802,8 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
       // Small delay to make uploading state visible before actual uploads
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Get upload instructions with timeout
-      console.log(`📋 Getting upload instructions for group ${groupFilename}...`);
+      // Upload files directly via S3 proxy without using s3_upload_files operation
+      console.log(`📤 Uploading files directly via S3 proxy for group ${groupFilename}...`);
       
       // Debug: Log the structure of convertedFiles
       console.log(`🔍 Debug - convertedFiles structure:`, convertedFiles.map((cf, i) => ({
@@ -814,7 +815,8 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
         fileType: cf.file?.type
       })));
       
-      const fileInstructions = convertedFiles.map(({ file, fileInfo, filename }) => {
+      // Prepare files for direct S3 proxy upload
+      const filesToUpload = convertedFiles.map(({ file, fileInfo, filename }) => {
         // DEBUGGING PATH DUPLICATION ISSUE: Log detailed file_path info
         console.log(`🔍 DEBUGGING file_path for ${filename}:`, {
           'fileInfo.file_path': fileInfo.file_path,
@@ -824,173 +826,57 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
           'file_path_starts_with_asset_generator': fileInfo.file_path?.startsWith('asset_generator')
         });
         
-        // Use the file_path from fileInfo which has the proper S3 path format
+        // Use the file_path from fileInfo which should be app_name/PDFs/filename format
         let s3FilePath = fileInfo.file_path || filename;
         
-        // FIX FOR PATH DUPLICATION: Check if s3FilePath already contains the full path
+        // REMOVE ANY BASE PATH PREFIX: We want direct upload to app structure only
         if (s3FilePath.includes('asset_generator/dev/uploads')) {
-          console.warn(`⚠️ WARNING: s3FilePath already contains base path! Fixing duplication by removing prefix:`, {
+          console.warn(`⚠️ WARNING: s3FilePath contains unwanted base path! Removing prefix:`, {
             original: s3FilePath,
           });
-          // Remove the duplicate base path prefix
+          // Remove any asset_generator base path prefix
           s3FilePath = s3FilePath.replace(/^asset_generator\/dev\/uploads\//, '');
-          console.log(`✅ Fixed s3FilePath:`, {
-            fixed: s3FilePath,
-            'will_result_in': `asset_generator/dev/uploads/${s3FilePath}`
+          console.log(`✅ Cleaned s3FilePath:`, {
+            cleaned: s3FilePath,
+            'will_upload_to': s3FilePath
           });
         }
         
-        const instruction = {
-          filename: s3FilePath, // Use file_path which includes app_name/PDFs/filename
-          size: file.size,
-          content_type: file.type || 'application/pdf'
+        console.log(`📄 Preparing file for direct upload: ${filename} -> ${s3FilePath}`);
+        return {
+          file: file,
+          filePath: s3FilePath
         };
-        console.log(`📄 Creating instruction for ${filename}:`, {
-          originalFilename: filename,
-          s3FilePath: s3FilePath,
-          instruction: instruction
-        });
-        return instruction;
       });
       
-      console.log(`📋 Final fileInstructions being sent to S3 API:`, fileInstructions);
+      console.log(`🗂️ Final S3 keys for direct upload:`, filesToUpload.map(f => f.filePath));
       
-      // Use base folder path since file_path now contains the relative path
-      const baseFolderPath = 'asset_generator/dev/uploads';
-      
-      console.log(`📁 Job app_name: "${jobData.app_name}", Using base S3 folder: "${baseFolderPath}"`);
-      
-      const requestBody = {
-        folder: baseFolderPath,
-        files: fileInstructions
-      };
-      
-      // Verify the final S3 keys that will be generated
-      console.log(`🗂️ Expected S3 keys:`, fileInstructions.map(f => `${baseFolderPath}/${f.filename}`));
-      
-      // ADDITIONAL DEBUGGING: Log each final S3 key individually for clarity
-      fileInstructions.forEach((instruction, index) => {
-        const finalS3Key = `${baseFolderPath}/${instruction.filename}`;
-        console.log(`🔑 S3 Key ${index + 1}: "${finalS3Key}"`);
-        
-        // Check for any obvious duplication patterns
-        const duplicateCount = (finalS3Key.match(/asset_generator\/dev\/uploads/g) || []).length;
-        if (duplicateCount > 1) {
-          console.error(`❌ DUPLICATION DETECTED in S3 key ${index + 1}: Found ${duplicateCount} instances of 'asset_generator/dev/uploads'`);
-        } else {
-          console.log(`✅ S3 key ${index + 1} looks correct (1 instance of base path)`);
-        }
-      });
-      
-      console.log(`🌐 Sending S3 upload request:`, {
-        operation: 's3_upload_files',
-        body: requestBody
-      });
-      
-      // ADDITIONAL DEBUGGING: Log exactly what we're sending to the backend
-      console.log(`🔍 DETAILED REQUEST TO BACKEND:`, {
-        folder: requestBody.folder,
-        files: requestBody.files.map(f => ({
-          filename: f.filename,
-          expectedS3Key: `${requestBody.folder}/${f.filename}`,
-          size: f.size
-        }))
-      });
-      
-      const instructionsResponse = await withTimeout(
-        fetch('/api/content-pipeline-proxy?operation=s3_upload_files', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestBody),
-        }),
-        15000, // 15 second timeout for upload instructions
-        `Upload instructions fetch for group ${groupFilename}`
-      );
-
-      if (!instructionsResponse.ok) {
-        const errorText = await instructionsResponse.text();
-        console.error(`❌ S3 upload instructions failed:`, {
-          status: instructionsResponse.status,
-          statusText: instructionsResponse.statusText,
-          errorResponse: errorText,
-          requestFolder: requestBody.folder,
-          requestFiles: requestBody.files.map(f => ({ filename: f.filename, size: f.size }))
-        });
-        
-        // Try to parse the error response to get more details
-        try {
-          const errorData = JSON.parse(errorText);
-          if (errorData.data?.failed_requests) {
-            console.error(`❌ S3 upload failures breakdown:`, errorData.data.failed_requests);
-            errorData.data.failed_requests.forEach((req: any) => {
-              console.error(`  - File: ${req.filename}, Error: ${req.error}`);
-            });
-          }
-        } catch (parseError) {
-          console.error(`❌ Could not parse S3 error response:`, parseError);
-        }
-        
-        throw new Error(`Failed to get upload instructions: ${instructionsResponse.status} - ${errorText}`);
-      }
-
-      const instructionsResult = await instructionsResponse.json();
-      console.log(`✅ Upload instructions received for group ${groupFilename}:`, {
-        success: instructionsResult.success,
-        instructionsCount: instructionsResult.data?.upload_instructions?.length || 0,
-        failedCount: instructionsResult.data?.failed_requests?.length || 0,
-        failedRequests: instructionsResult.data?.failed_requests
-      });
-      
-      // DETAILED DEBUGGING: Log each s3_key returned by the backend
-      if (instructionsResult.data?.upload_instructions) {
-        console.log(`🔍 BACKEND RETURNED S3 KEYS:`);
-        instructionsResult.data.upload_instructions.forEach((instruction, index) => {
-          console.log(`  ${index + 1}. s3_key: "${instruction.s3_key}"`);
-          console.log(`     filename: "${instruction.filename}"`);
-          
-          // Check for duplication in the returned s3_key
-          const duplicateCount = (instruction.s3_key?.match(/asset_generator\/dev\/uploads/g) || []).length;
-          if (duplicateCount > 1) {
-            console.error(`❌ BACKEND RETURNED DUPLICATED S3 KEY: Found ${duplicateCount} instances of 'asset_generator/dev/uploads' in "${instruction.s3_key}"`);
-          } else {
-            console.log(`     ✅ Backend s3_key looks correct (${duplicateCount} instance of base path)`);
-          }
-        });
-      }
-      
-      // Upload each file individually with error handling and timeout
+      // Upload each file directly via S3 proxy
       console.log(`🚀 Starting individual file uploads for group ${groupFilename}...`);
       const uploadResults = await withTimeout(
         Promise.allSettled(
-          convertedFiles.map(async ({ file, fileInfo, filename }, index) => {
+          filesToUpload.map(async ({ file, filePath }, index) => {
             try {
-              const s3FilePath = fileInfo.file_path || filename;
-              console.log(`🔼 Starting upload for ${filename} -> S3 path: ${s3FilePath}...`);
-              const uploadInstruction = instructionsResult.data.upload_instructions[index];
+              console.log(`🔼 Starting direct upload for ${file.name} -> S3 path: ${filePath}...`);
               
-              // DEBUGGING: Log the uploadInstruction s3_key that we're about to use
-              console.log(`🔑 Using upload instruction for ${filename}:`, {
-                s3_key: uploadInstruction.s3_key,
-                upload_type: uploadInstruction.upload_type,
-                'contains_duplication': uploadInstruction.s3_key?.includes('asset_generator/dev/uploads/asset_generator/dev/uploads')
-              });
+              // Upload directly via our uploadFilesToContentPipeline function
+              await uploadFilesToContentPipeline([{ file, filePath }]);
               
-              await uploadLargeFileToS3(file, s3FilePath, uploadInstruction);
-              successfulFiles.push(filename);
-              console.log(`✅ Successfully uploaded ${filename}`);
+              successfulFiles.push(file.name);
+              console.log(`✅ Successfully uploaded ${file.name}`);
               // Notify UI of successful upload (local UI only - backend will be updated via S3 triggers)
               if (onFileStatusChange) {
-                onFileStatusChange(filename, 'uploaded');
+                onFileStatusChange(file.name, 'uploaded');
               }
-              return { success: true, filename };
+              return { success: true, filename: file.name };
             } catch (error) {
-              console.error(`❌ File ${filename} upload failed:`, error);
-              failedFiles.push(filename);
+              console.error(`❌ File ${file.name} upload failed:`, error);
+              failedFiles.push(file.name);
               // Notify UI of upload failure
               if (onFileStatusChange) {
-                onFileStatusChange(filename, 'upload-failed');
+                onFileStatusChange(file.name, 'upload-failed');
               }
-              return { success: false, filename, error };
+              return { success: false, filename: file.name, error };
             }
           })
         ),
