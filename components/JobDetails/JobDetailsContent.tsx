@@ -19,6 +19,8 @@ interface JobDetailsContentProps {
 export const JobDetailsContent = ({
   mergedJobData,
   jobData,
+  creatingAssets,
+  setCreatingAssets,
   loading
 }: JobDetailsContentProps) => {
   const router = useRouter();
