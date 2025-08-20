@@ -29,6 +29,11 @@ function JobUploadingContent() {
   const [error, setError] = useState<string | null>(null);
   const [createdFiles, setCreatedFiles] = useState<any[]>([]);
   const [uploadAttempted, setUploadAttempted] = useState(false);
+  
+  // Local file status tracking for real-time UI feedback (UI-only states)
+  // These states provide immediate visual feedback: pending -> processing -> uploading -> uploaded/failed
+  // They are independent of backend states and focus on user experience
+  const [localFileStatuses, setLocalFileStatuses] = useState<Record<string, string>>({});
 
   // Debug createdFiles state changes
   useEffect(() => {
@@ -38,6 +43,20 @@ function JobUploadingContent() {
       totalPdfs: createdFiles.reduce((total, fg) => total + Object.keys(fg.original_files || {}).length, 0)
     });
   }, [createdFiles]);
+
+  // Debug local file statuses changes
+  useEffect(() => {
+    if (Object.keys(localFileStatuses).length > 0) {
+      console.log('📊 Local file statuses updated:', localFileStatuses);
+      
+      // Show status distribution
+      const statusCounts = Object.values(localFileStatuses).reduce((acc, status) => {
+        acc[status] = (acc[status] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      console.log('📈 Status distribution:', statusCounts);
+    }
+  }, [localFileStatuses]);
 
   // Fetch job data (likely cached from just created job) 
   const { 
@@ -69,19 +88,71 @@ function JobUploadingContent() {
       }
       // Navigate to jobs list
       setTimeout(() => router.push('/jobs'), 1000);
+    },
+    // Add callback for real-time status updates
+    onFileStatusChange: (filename: string, status: string) => {
+      console.log(`🔄 Upload engine reports: ${filename} -> ${status}`);
+      updateLocalFileStatus(filename, status);
     }
   });
 
-  // Debug upload engine state
+  // Function to update local file status for real-time UI feedback
+  const updateLocalFileStatus = useCallback((filename: string, status: string) => {
+    console.log(`🔄 Updating local status for ${filename}: ${status}`);
+    setLocalFileStatuses(prev => ({
+      ...prev,
+      [filename]: status
+    }));
+  }, []);
+
+  // Helper function to get backend file status
+  const getBackendFileStatus = useCallback((filename: string): string | null => {
+    for (const fileGroup of createdFiles) {
+      if (fileGroup.original_files && fileGroup.original_files[filename]) {
+        return fileGroup.original_files[filename].status;
+      }
+    }
+    return null;
+  }, [createdFiles]);
+
+  // Monitor upload engine state for final sync only (let onFileStatusChange handle real-time updates)
   useEffect(() => {
     console.log('🔧 Upload engine state:', {
       uploadStarted: uploadEngine.uploadStarted,
       totalPdfFiles: uploadEngine.totalPdfFiles,
       uploadedPdfFiles: uploadEngine.uploadedPdfFiles,
+      failedPdfFiles: uploadEngine.failedPdfFiles,
       uploadingFilesCount: uploadEngine.uploadingFiles.size,
       uploadingFilesList: Array.from(uploadEngine.uploadingFiles)
     });
-  }, [uploadEngine.uploadStarted, uploadEngine.totalPdfFiles, uploadEngine.uploadedPdfFiles, uploadEngine.uploadingFiles]);
+
+    // Minimal interference - only sync final states when upload engine counters change significantly
+    if (uploadEngine.uploadStarted && createdFiles.length > 0) {
+      // Only sync if there's a significant discrepancy in completed files
+      const localUploadedCount = Object.values(localFileStatuses).filter(status => status === 'uploaded').length;
+      const engineUploadedCount = uploadEngine.uploadedPdfFiles || 0;
+      
+      // More conservative sync - only when engine count is significantly higher
+      if (engineUploadedCount > localUploadedCount + 2) {
+        console.log(`📊 Major sync needed: Upload engine reports ${engineUploadedCount} uploaded, local has ${localUploadedCount}. Syncing...`);
+        
+        // Find files that should be completed but aren't marked as such locally
+        Object.keys(localFileStatuses).forEach(filename => {
+          const isStillUploading = uploadEngine.uploadingFiles.has(filename);
+          const localStatus = localFileStatuses[filename];
+          
+          // Only update if file is no longer actively uploading and has a clear final backend status
+          if (!isStillUploading && (localStatus === 'uploading' || localStatus === 'processing')) {
+            const backendStatus = getBackendFileStatus(filename);
+            if (backendStatus === 'uploaded' || backendStatus === 'upload-failed') {
+              console.log(`🔄 Final sync: ${filename} ${localStatus} -> ${backendStatus}`);
+              updateLocalFileStatus(filename, backendStatus);
+            }
+          }
+        });
+      }
+    }
+  }, [uploadEngine.uploadStarted, uploadEngine.uploadedPdfFiles, uploadEngine.failedPdfFiles, createdFiles, localFileStatuses, updateLocalFileStatus, getBackendFileStatus]);
 
   // Validate session and redirect if invalid
   useEffect(() => {
@@ -120,10 +191,116 @@ function JobUploadingContent() {
 
   // Create files when ready
   useEffect(() => {
+    console.log('🔄 Create files effect triggered:', {
+      currentStep,
+      hasJobData: !!jobData,
+      hasUploadSession: !!uploadSession,
+      jobId: jobData?.job_id,
+      sessionFiles: uploadSession?.files?.length || 0
+    });
+    
     if (currentStep === 'creating-files' && jobData && uploadSession) {
+      console.log('✅ Conditions met, calling createFiles()');
       createFiles();
+    } else {
+      console.log('⏸️ Create files not ready:', {
+        currentStep,
+        hasJobData: !!jobData,
+        hasUploadSession: !!uploadSession
+      });
     }
   }, [currentStep, jobData, uploadSession]);
+
+  // Periodic sync with backend data to catch S3 trigger updates
+  useEffect(() => {
+    if (currentStep !== 'uploading' || !uploadEngine.uploadStarted) {
+      return;
+    }
+
+    const syncInterval = setInterval(() => {
+      console.log('🔄 Syncing local file statuses with backend data...');
+      
+      // Update local statuses with any backend changes (like from S3 triggers)
+      createdFiles.forEach((fileGroup: any) => {
+        if (fileGroup.original_files) {
+          Object.entries(fileGroup.original_files).forEach(([filename, fileInfo]: [string, any]) => {
+            const backendStatus = fileInfo.status;
+            const currentLocalStatus = localFileStatuses[filename];
+            
+            // Only update local status if backend has a "final" status (uploaded/failed)
+            // and we don't already have that status locally
+            if ((backendStatus === 'uploaded' || backendStatus === 'upload-failed') && 
+                currentLocalStatus !== backendStatus) {
+              console.log(`📡 Backend sync: ${filename} ${currentLocalStatus} -> ${backendStatus}`);
+              updateLocalFileStatus(filename, backendStatus);
+            }
+          });
+        }
+      });
+    }, 3000); // Sync every 3 seconds
+
+    return () => clearInterval(syncInterval);
+  }, [currentStep, uploadEngine.uploadStarted, createdFiles, localFileStatuses, updateLocalFileStatus]);
+
+  // Browser-level warning for navigation during upload (browser close/refresh)
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      // Only show warning if actively uploading
+      if (currentStep === 'uploading' && uploadEngine.uploadStarted) {
+        const message = 'Files are still uploading. Are you sure you want to leave? This may interrupt the upload process.';
+        event.preventDefault();
+        event.returnValue = message; // For older browsers
+        return message;
+      }
+    };
+
+    // Add browser warning during upload
+    if (currentStep === 'uploading' && uploadEngine.uploadStarted) {
+      console.log('🚨 Adding browser navigation warning during upload');
+      window.addEventListener('beforeunload', handleBeforeUnload);
+    }
+
+    return () => {
+      console.log('🔄 Removing browser navigation warning');
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [currentStep, uploadEngine.uploadStarted]);
+
+  // Browser back button warning (only when upload is actually running)
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      // Only show warning if actively uploading and files are still being processed
+      if (currentStep === 'uploading' && uploadEngine.uploadStarted && uploadEngine.uploadingFiles.size > 0) {
+        event.preventDefault();
+        const confirmed = window.confirm(
+          'Files are still uploading. Are you sure you want to leave? This may interrupt the upload process.'
+        );
+        
+        if (!confirmed) {
+          console.log('🚫 Back navigation cancelled by user during upload');
+          // Push the current state back to prevent navigation
+          window.history.pushState(null, '', window.location.href);
+          return;
+        }
+        
+        console.log('✅ User confirmed navigation during upload');
+      }
+    };
+
+    // Only add listener when upload is actively running (not just started)
+    if (currentStep === 'uploading' && uploadEngine.uploadStarted && uploadEngine.uploadingFiles.size > 0) {
+      console.log('🚨 Adding back button navigation warning during active upload');
+      window.addEventListener('popstate', handlePopState);
+      
+      // Add a history state only when uploads are actively running
+      window.history.pushState({ uploadProtection: true }, '', window.location.href);
+    }
+
+    return () => {
+      console.log('🔄 Removing back button navigation warning');
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [currentStep, uploadEngine.uploadStarted, uploadEngine.uploadingFiles.size]);
 
   // Start upload when we transition to uploading step and have created files
   useEffect(() => {
@@ -222,10 +399,14 @@ function JobUploadingContent() {
       console.log('⏳ Waiting for created files...');
     } else {
       console.log('⏸️ Upload not ready:', {
+        currentStep,
         wrongStep: currentStep !== 'uploading',
-        noJobData: !jobData,
-        noCreatedFiles: createdFiles.length === 0,
-        createdFilesEmpty: createdFiles.length === 0
+        createdFilesLength: createdFiles.length,
+        uploadAttempted,
+        hasJobData: !!jobData,
+        hasPendingFiles: !!(window as any).pendingUploadFiles,
+        pendingFilesJobId: (window as any).pendingUploadFiles?.jobId,
+        currentJobId: jobId
       });
     }
 
@@ -279,13 +460,13 @@ function JobUploadingContent() {
             const filePath = `${appName}/PDFs/${pdf.name}`;
             
             originalFiles[pdf.name] = {
-              status: 'uploading', // Start with uploading status
+              status: 'pending', // Start with pending status - upload will begin later
               card_type: pdf.type,
               file_path: filePath, // Proper S3 path format
               last_updated: new Date().toISOString()
             };
             
-            console.log(`📄 Created file with path: ${filePath} (status: uploading)`);
+            console.log(`📄 Created file with path: ${filePath} (status: pending)`);
           });
 
           const fileGroup = {
@@ -305,18 +486,19 @@ function JobUploadingContent() {
       console.log('🔍 Full createFilesResponse:', JSON.stringify(createFilesResponse, null, 2));
       
       // Store created files from response - no need for extra refreshJobData() call
+      let filesToStore: any[] = [];
       if (createFilesResponse && createFilesResponse.created_files) {
         console.log('📦 Storing created files from batch_create_files response:', createFilesResponse.created_files);
-        setCreatedFiles(createFilesResponse.created_files);
+        filesToStore = createFilesResponse.created_files;
       } else if (createFilesResponse && createFilesResponse.files) {
         console.log('📦 Storing created files from response.files:', createFilesResponse.files);
-        setCreatedFiles(createFilesResponse.files);
+        filesToStore = createFilesResponse.files;
       } else if (createFilesResponse && createFilesResponse.data && createFilesResponse.data.created_files) {
         console.log('📦 Storing created files from response.data.created_files:', createFilesResponse.data.created_files);
-        setCreatedFiles(createFilesResponse.data.created_files);
+        filesToStore = createFilesResponse.data.created_files;
       } else if (createFilesResponse && Array.isArray(createFilesResponse)) {
         console.log('📦 Response is array, using directly:', createFilesResponse);
-        setCreatedFiles(createFilesResponse);
+        filesToStore = createFilesResponse;
       } else {
         console.warn('⚠️ No files found in batch_create_files response. Response structure:', {
           hasCreatedFiles: !!createFilesResponse?.created_files,
@@ -327,9 +509,29 @@ function JobUploadingContent() {
         });
         console.warn('⚠️ Full response for debugging:', createFilesResponse);
       }
+
+      if (filesToStore.length > 0) {
+        setCreatedFiles(filesToStore);
+        
+        // Initialize local file statuses with 'pending' status for all new files
+        const initialStatuses: Record<string, string> = {};
+        filesToStore.forEach((fileGroup: any) => {
+          if (fileGroup.original_files) {
+            Object.entries(fileGroup.original_files).forEach(([filename, fileInfo]: [string, any]) => {
+              // Always start with 'pending' for new files to ensure proper state transitions
+              initialStatuses[filename] = 'pending';
+              console.log(`📝 Initializing local status for ${filename}: pending`);
+            });
+          }
+        });
+        setLocalFileStatuses(initialStatuses);
+        console.log('✅ Local file statuses initialized with pending state:', initialStatuses);
+      }
       
       // Start uploading immediately - no delay or refresh needed
       console.log('📤 Transitioning to uploading step');
+      // Reset upload attempted flag to ensure upload can start
+      setUploadAttempted(false);
       setCurrentStep('uploading');
       
     } catch (error) {
@@ -467,19 +669,112 @@ function JobUploadingContent() {
     );
   }
 
-  // Calculate actual file counts from created files for accuracy
+  // Calculate actual file counts using both upload engine and local file statuses
   const totalFiles = createdFiles.reduce((total: number, fileGroup: any) => 
     total + Object.keys(fileGroup.original_files || {}).length, 0
   );
-  const uploadedFiles = uploadEngine.uploadedPdfFiles || 0;
   
-  console.log('📊 Progress calculation:', {
+  // Count files by status using local file statuses
+  const fileStatusCounts = Object.values(localFileStatuses).reduce((counts, status) => {
+    counts[status] = (counts[status] || 0) + 1;
+    return counts;
+  }, {} as Record<string, number>);
+  
+  // Use upload engine as source of truth for completed files, local statuses for real-time feedback
+  const uploadedFiles = Math.max(uploadEngine.uploadedPdfFiles || 0, fileStatusCounts.uploaded || 0);
+  const failedFiles = Math.max(uploadEngine.failedPdfFiles || 0, fileStatusCounts['upload-failed'] || 0);
+  const processingFiles = (fileStatusCounts.processing || 0);
+  const uploadingFiles = Math.max(uploadEngine.uploadingFiles.size, fileStatusCounts.uploading || 0);
+  const pendingFiles = Math.max(0, totalFiles - uploadedFiles - failedFiles - processingFiles - uploadingFiles);
+  
+  // Use upload engine's uploaded count for progress (more reliable)
+  const progressPercentage = totalFiles > 0 ? (uploadedFiles / totalFiles) * 100 : 0;
+  
+  console.log('📊 Progress calculation (using local file statuses):', {
     createdFilesLength: createdFiles.length,
     totalFiles,
+    fileStatusCounts,
     uploadedFiles,
+    processingFiles,
+    uploadingFiles,
+    failedFiles,
+    pendingFiles,
+    progressPercentage,
+    // For comparison with upload engine
     uploadEngineTotal: uploadEngine.totalPdfFiles,
-    uploadEngineUploaded: uploadEngine.uploadedPdfFiles
+    uploadEngineUploaded: uploadEngine.uploadedPdfFiles,
+    uploadEngineUploading: uploadEngine.uploadingFiles.size
   });
+
+  // Enhanced status determination function with local state priority
+  const getFileStatus = (filename: string, fileInfo: any) => {
+    const isInUploadingSet = uploadEngine.uploadingFiles.has(filename);
+    const backendStatus = fileInfo.status;
+    const localStatus = localFileStatuses[filename];
+    
+    // Priority: Local status > Upload engine state > Backend status
+    // This ensures immediate UI feedback for status changes
+    let currentStatus = backendStatus;
+    
+    // If we have a local status, use it (most up-to-date)
+    if (localStatus) {
+      currentStatus = localStatus;
+    }
+    // If file is in uploading set but no local status, mark as uploading
+    else if (isInUploadingSet && (!currentStatus || currentStatus === 'pending')) {
+      currentStatus = 'uploading';
+    }
+    
+    console.log(`📊 Status for ${filename}: local="${localStatus}", backend="${backendStatus}", uploading=${isInUploadingSet}, final="${currentStatus}"`);
+    
+    // Enhanced status determination with better colors and icons
+    if (currentStatus === 'uploaded') {
+      return {
+        status: 'uploaded',
+        icon: '✅',
+        color: '#10b981', // emerald-500
+        bgColor: 'rgba(16, 185, 129, 0.1)',
+        borderColor: 'rgba(16, 185, 129, 0.3)',
+        label: 'Completed'
+      };
+    } else if (currentStatus === 'upload-failed') {
+      return {
+        status: 'failed',
+        icon: '❌',
+        color: '#ef4444', // red-500
+        bgColor: 'rgba(239, 68, 68, 0.1)',
+        borderColor: 'rgba(239, 68, 68, 0.3)',
+        label: 'Failed'
+      };
+    } else if (currentStatus === 'processing') {
+      return {
+        status: 'processing',
+        icon: '⚙️',
+        color: '#f59e0b', // amber-500
+        bgColor: 'rgba(245, 158, 11, 0.1)',
+        borderColor: 'rgba(245, 158, 11, 0.3)',
+        label: 'Processing'
+      };
+    } else if (currentStatus === 'uploading') {
+      return {
+        status: 'uploading',
+        icon: '📤',
+        color: '#3b82f6', // blue-500
+        bgColor: 'rgba(59, 130, 246, 0.1)',
+        borderColor: 'rgba(59, 130, 246, 0.3)',
+        label: 'Uploading'
+      };
+    } else {
+      return {
+        status: 'pending',
+        icon: '⏳',
+        color: '#6b7280', // gray-500
+        bgColor: 'rgba(107, 114, 128, 0.1)',
+        borderColor: 'rgba(107, 114, 128, 0.3)',
+        label: 'Pending'
+      };
+    }
+  };
 
   return (
     <div style={{ 
@@ -497,213 +792,340 @@ function JobUploadingContent() {
           <JobHeader jobData={jobData} />
         </div>
 
-        {/* Upload Progress */}
+        {/* Enhanced Upload Progress Card */}
         <div style={{ 
           background: 'rgba(255, 255, 255, 0.08)',
           backdropFilter: 'blur(20px)',
           border: '1px solid rgba(255, 255, 255, 0.15)',
-          padding: '1.5rem', 
-          borderRadius: '16px', 
+          padding: '2rem', 
+          borderRadius: '20px', 
           boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
-          marginBottom: '1.5rem'
+          marginBottom: '2rem'
         }}>
-          <h3 style={{ 
-            margin: '0 0 1rem 0', 
-            color: '#ffffff',
-            fontSize: '1.25rem',
-            fontWeight: '600'
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '1.5rem'
           }}>
-            File Upload Progress
-          </h3>
+            <h3 style={{ 
+              margin: '0', 
+              color: '#ffffff',
+              fontSize: '1.5rem',
+              fontWeight: '700',
+              background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text'
+            }}>
+              File Upload Progress
+            </h3>
+            
+            <div style={{
+              background: progressPercentage === 100 ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+              color: 'white',
+              padding: '0.5rem 1rem',
+              borderRadius: '12px',
+              fontSize: '0.9rem',
+              fontWeight: '600',
+              boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)'
+            }}>
+              {Math.round(progressPercentage)}%
+            </div>
+          </div>
           
-          {/* Progress Bar */}
+          {/* Enhanced Progress Bar */}
           <div style={{ 
             width: '100%', 
             background: 'rgba(255, 255, 255, 0.1)', 
-            borderRadius: '12px', 
+            borderRadius: '16px', 
             overflow: 'hidden',
-            marginBottom: '1rem',
-            border: '1px solid rgba(255, 255, 255, 0.15)'
+            marginBottom: '1.5rem',
+            border: '1px solid rgba(255, 255, 255, 0.15)',
+            position: 'relative'
           }}>
             <div 
               style={{ 
-                width: `${totalFiles > 0 ? (uploadedFiles / totalFiles) * 100 : 0}%`,
-                height: '28px',
-                background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-                transition: 'width 0.3s ease',
+                width: `${progressPercentage}%`,
+                height: '32px',
+                background: progressPercentage === 100 
+                  ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+                  : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                transition: 'width 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 color: 'white',
                 fontSize: '14px',
-                fontWeight: 'bold',
-                borderRadius: '11px'
+                fontWeight: '700',
+                borderRadius: '15px',
+                position: 'relative',
+                overflow: 'hidden'
               }}
             >
-              {totalFiles > 0 && `${uploadedFiles}/${totalFiles}`}
+              {/* Animated shimmer effect for active uploads */}
+              {currentStep === 'uploading' && progressPercentage < 100 && (
+                <div style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: '-100%',
+                  width: '100%',
+                  height: '100%',
+                  background: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent)',
+                  animation: 'shimmer 2s infinite'
+                }} />
+              )}
+              {/* Removed uploaded/total text from progress bar for cleaner look */}
             </div>
           </div>
 
-          {/* Status Text */}
+          {/* Enhanced Status Text */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ color: '#e2e8f0', fontSize: '0.95rem' }}>
+            <div style={{ color: '#e2e8f0', fontSize: '1rem', fontWeight: '500' }}>
               {currentStep === 'creating-files' && (
-                <span>📝 Creating files...</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span>📝</span>
+                  <span>Creating files...</span>
+                </span>
               )}
               {currentStep === 'uploading' && (
-                <span>📤 Uploading files... ({uploadedFiles}/{totalFiles})</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span>📤</span>
+                  <span>Uploading files... ({uploadedFiles}/{totalFiles})</span>
+                </span>
               )}
               {currentStep === 'completed' && (
-                <span>✅ Upload completed! Redirecting to jobs list...</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#10b981' }}>
+                  <span>✅</span>
+                  <span>Upload completed! Redirecting to jobs list...</span>
+                </span>
               )}
             </div>
-            
-            {currentStep === 'uploading' && (
-              <div style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.7)' }}>
-                {uploadEngine.uploadingFiles.size > 0 && (
-                  <span>Processing: {uploadEngine.uploadingFiles.size} files</span>
-                )}
-              </div>
-            )}
           </div>
+          
+          {/* Upload Warning - positioned below status text as separate block */}
+          {currentStep === 'uploading' && (
+            <div style={{
+              background: 'rgba(245, 158, 11, 0.1)',
+              border: '1px solid rgba(245, 158, 11, 0.3)',
+              borderRadius: '12px',
+              padding: '1rem',
+              marginTop: '1.5rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem'
+            }}>
+              <div style={{
+                fontSize: '1.25rem',
+                color: '#f59e0b'
+              }}>
+                ⚠️
+              </div>
+              <div>
+                <div style={{ 
+                  color: '#f59e0b', 
+                  fontWeight: '600', 
+                  marginBottom: '0.25rem',
+                  fontSize: '0.9rem'
+                }}>
+                  Do not navigate away
+                </div>
+                <div style={{ 
+                  color: 'rgba(245, 158, 11, 0.8)', 
+                  fontSize: '0.85rem',
+                  lineHeight: '1.4'
+                }}>
+                  Please keep this page open while files are uploading. Navigating away or closing the browser may interrupt the upload process.
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* PDF File Status List */}
+        {/* Enhanced PDF File Status List */}
         {(createdFiles.length > 0 || currentStep === 'creating-files') && (
           <div style={{ 
             background: 'rgba(255, 255, 255, 0.08)',
             backdropFilter: 'blur(20px)',
             border: '1px solid rgba(255, 255, 255, 0.15)',
-            padding: '1.5rem', 
-            borderRadius: '16px', 
+            padding: '2rem', 
+            borderRadius: '20px', 
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)'
           }}>
-            <h4 style={{ 
-              margin: '0 0 1rem 0',
-              color: '#ffffff',
-              fontSize: '1.1rem',
-              fontWeight: '600'
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '1.5rem'
             }}>
-              PDF Files ({createdFiles.reduce((total: number, fileGroup: any) => 
-                total + Object.keys(fileGroup.original_files || {}).length, 0
-              )})
-            </h4>
-          <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-            {createdFiles.flatMap((fileGroup: any, groupIndex: number) => 
-              Object.entries(fileGroup.original_files || {}).map(([filename, fileInfo]: [string, any]) => {
-                // Determine current status
-                let status = 'pending';
-                let statusIcon = '⏳';
-                let statusColor = '#666';
-                
-                const isInUploadingSet = uploadEngine.uploadingFiles.has(filename);
-                const backendStatus = fileInfo.status;
-                
-                // Priority: uploadingFiles set > backend status for real-time UI
-                if (backendStatus === 'uploaded') {
-                  status = 'uploaded';
-                  statusIcon = '✅';
-                  statusColor = '#28a745';
-                } else if (backendStatus === 'upload-failed') {
-                  status = 'failed';
-                  statusIcon = '❌';
-                  statusColor = '#dc3545';
-                } else if (isInUploadingSet) {
-                  // File is actively being processed
-                  if (backendStatus === 'processing') {
-                    status = 'processing';
-                    statusIcon = '⚙️';
-                    statusColor = '#ffc107';
-                  } else {
-                    status = 'uploading';
-                    statusIcon = '📤';
-                    statusColor = '#007bff';
-                  }
-                } else if (backendStatus === 'processing') {
-                  status = 'processing';
-                  statusIcon = '⚙️';
-                  statusColor = '#ffc107';
-                } else if (backendStatus === 'uploading') {
-                  status = 'uploading';
-                  statusIcon = '📤';
-                  statusColor = '#007bff';
-                } else {
-                  // Default to pending
-                  status = 'pending';
-                  statusIcon = '⏳';
-                  statusColor = '#666';
-                }
-                
-                return (
-                  <div 
-                    key={`${groupIndex}-${filename}`}
-                    style={{ 
-                      display: 'flex', 
-                      justifyContent: 'space-between', 
-                      alignItems: 'center',
-                      padding: '0.75rem 1rem',
-                      borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-                      background: 'rgba(255, 255, 255, 0.03)',
-                      borderRadius: '8px',
-                      marginBottom: '0.5rem',
-                      transition: 'all 0.2s ease'
-                    }}
-                  >
-                    <div style={{ flex: 1 }}>
-                      <div style={{ 
-                        fontSize: '14px', 
-                        fontWeight: '500',
-                        color: '#e2e8f0'
-                      }}>
-                        {filename}
-                      </div>
-                      <div style={{ 
-                        fontSize: '12px', 
-                        color: 'rgba(255, 255, 255, 0.6)', 
-                        marginTop: '2px' 
-                      }}>
-                        {fileInfo.card_type ? `${fileInfo.card_type} side` : 'PDF file'}
-                        {fileGroup.filename && ` • Group: ${fileGroup.filename}`}
-                      </div>
-                    </div>
+              <h4 style={{ 
+                margin: '0',
+                color: '#ffffff',
+                fontSize: '1.25rem',
+                fontWeight: '700'
+              }}>
+                PDF Files
+              </h4>
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.1)',
+                color: '#e2e8f0',
+                padding: '0.5rem 1rem',
+                borderRadius: '12px',
+                fontSize: '0.9rem',
+                fontWeight: '600'
+              }}>
+                {createdFiles.reduce((total: number, fileGroup: any) => 
+                  total + Object.keys(fileGroup.original_files || {}).length, 0
+                )} files
+              </div>
+            </div>
+
+            <div style={{ maxHeight: '500px', overflowY: 'auto', paddingRight: '0.5rem' }}>
+              <div style={{ display: 'grid', gap: '1rem' }}>
+                {createdFiles.flatMap((fileGroup: any, groupIndex: number) => 
+                  Object.entries(fileGroup.original_files || {}).map(([filename, fileInfo]: [string, any]) => {
+                    const statusInfo = getFileStatus(filename, fileInfo);
                     
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span 
+                    return (
+                      <div 
+                        key={`${groupIndex}-${filename}`}
                         style={{ 
-                          fontSize: '12px', 
-                          fontWeight: '500',
-                          color: statusColor,
-                          minWidth: '100px', 
-                          textAlign: 'right',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'flex-end',
-                          gap: '4px'
+                          background: 'rgba(255, 255, 255, 0.05)',
+                          border: `1px solid ${statusInfo.borderColor}`,
+                          borderRadius: '16px',
+                          padding: '1.25rem',
+                          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                          position: 'relative',
+                          overflow: 'hidden'
                         }}
                       >
-                        <span>{statusIcon}</span>
-                        <span style={{ textTransform: 'capitalize' }}>{status}</span>
-                      </span>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-            
-            {(createdFiles.length === 0) && (
-              <div style={{ 
-                textAlign: 'center', 
-                padding: '2rem', 
-                color: 'rgba(255, 255, 255, 0.6)',
-                fontSize: '0.95rem'
-              }}>
-                {currentStep === 'creating-files' ? 'Creating files...' : 'No files found'}
+                        {/* Background gradient based on status */}
+                        <div style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          background: statusInfo.bgColor,
+                          opacity: 0.5
+                        }} />
+                        
+                        <div style={{ 
+                          position: 'relative',
+                          display: 'flex', 
+                          justifyContent: 'space-between', 
+                          alignItems: 'center'
+                        }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ 
+                              fontSize: '1rem', 
+                              fontWeight: '600',
+                              color: '#ffffff',
+                              marginBottom: '0.5rem'
+                            }}>
+                              {filename}
+                            </div>
+                            <div style={{ 
+                              fontSize: '0.85rem', 
+                              color: 'rgba(255, 255, 255, 0.7)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.5rem'
+                            }}>
+                              <span>{fileInfo.card_type ? `${fileInfo.card_type} side` : 'PDF file'}</span>
+                              {fileGroup.filename && (
+                                <>
+                                  <span>•</span>
+                                  <span>Group: {fileGroup.filename}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          
+                          <div style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '0.75rem' 
+                          }}>
+                            {/* Status Badge */}
+                            <div style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.5rem',
+                              background: statusInfo.bgColor,
+                              border: `1px solid ${statusInfo.borderColor}`,
+                              color: statusInfo.color,
+                              padding: '0.5rem 1rem',
+                              borderRadius: '12px',
+                              fontSize: '0.875rem',
+                              fontWeight: '600',
+                              minWidth: '120px',
+                              justifyContent: 'center'
+                            }}>
+                              <span style={{ fontSize: '1rem' }}>{statusInfo.icon}</span>
+                              <span>{statusInfo.label}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
-            )}
+              
+              {(createdFiles.length === 0) && (
+                <div style={{ 
+                  textAlign: 'center', 
+                  padding: '3rem', 
+                  color: 'rgba(255, 255, 255, 0.6)',
+                  fontSize: '1rem'
+                }}>
+                  {currentStep === 'creating-files' ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+                      <Spinner />
+                      <span>Creating files...</span>
+                    </div>
+                  ) : (
+                    'No files found'
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
       </div>
+      
+      {/* Add CSS animations */}
+      <style jsx>{`
+        @keyframes shimmer {
+          0% { left: -100%; }
+          100% { left: 100%; }
+        }
+        
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+        
+        /* Custom scrollbar */
+        div::-webkit-scrollbar {
+          width: 8px;
+        }
+        
+        div::-webkit-scrollbar-track {
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 4px;
+        }
+        
+        div::-webkit-scrollbar-thumb {
+          background: rgba(255, 255, 255, 0.3);
+          border-radius: 4px;
+        }
+        
+        div::-webkit-scrollbar-thumb:hover {
+          background: rgba(255, 255, 255, 0.5);
+        }
+      `}</style>
     </div>
   );
 }
