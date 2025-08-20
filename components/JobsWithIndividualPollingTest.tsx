@@ -78,7 +78,7 @@ export default function JobsWithIndividualPollingTest() {
         };
       },
       enabled: autoRefreshIndividual && isAutoRefreshAllowedOnPage,
-      refetchInterval: (data, query) => {
+      refetchInterval: (query) => {
         if (!autoRefreshIndividual || !isAutoRefreshAllowedOnPage) {
           if (!isAutoRefreshAllowedOnPage) {
             console.log(`⏸️ [ReactQuery] Auto-refresh disabled for job ${jobId} - page ${pathname} not allowed`);
@@ -95,6 +95,7 @@ export default function JobsWithIndividualPollingTest() {
           return 5000; // Continue polling on error
         }
         
+        const data = query.state.data;
         if (!data) {
           console.log(`🔄 [ReactQuery] No data for job ${jobId}, polling every 5000ms`);
           return 5000; // If no data yet, poll every 5 seconds
