@@ -358,20 +358,28 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       return [];
     }
     
-    const assets = Object.entries(mergedJobData.assets).map(([assetId, assetData]: [string, any]) => ({
-      id: assetId,
-      name: assetData.name || assetData.type?.toUpperCase() || 'UNNAMED',
-      type: assetData.type || 'wp',
-      layer: assetData.layer || '',
-      spot: assetData.spot,
-      color: assetData.color,
-      spot_color_pairs: assetData.spot_color_pairs || [],
-      vfx: assetData.vfx,
-      chrome: assetData.chrome || false,
-      oneOfOneWp: assetData.oneOfOneWp || false,
-      wp_inv_layer: assetData.wp_inv_layer || '',
-      foil: assetData.foil // Include foil property for advanced options
-    }));
+    const assets = Object.entries(mergedJobData.assets).map(([assetId, assetData]: [string, any]) => {
+      const asset: any = {
+        id: assetId,
+        name: assetData.name || assetData.type?.toUpperCase() || 'UNNAMED',
+        type: assetData.type || 'wp',
+        layer: assetData.layer || '',
+        spot: assetData.spot,
+        color: assetData.color,
+        spot_color_pairs: assetData.spot_color_pairs || [],
+        vfx: assetData.vfx,
+        chrome: assetData.chrome || false,
+        oneOfOneWp: assetData.oneOfOneWp || false,
+        wp_inv_layer: assetData.wp_inv_layer || ''
+      };
+      
+      // Only include foil property if it has a defined value
+      if (assetData.foil !== undefined) {
+        asset.foil = assetData.foil;
+      }
+      
+      return asset;
+    });
     
     console.log('✅ Parsed assets from mergedJobData.assets:', {
       count: assets.length,
