@@ -610,15 +610,34 @@ class ContentPipelineAPI {
 
   // Asset management operations
   // New assets API contract
-  async getAssets(jobId: string): Promise<{ assets: Record<string, any>; job_id: string }> {
+  async getAssets(jobId: string): Promise<{ assets: Record<string, any>; job_id: string; error?: string }> {
     const response = await fetch(`${this.baseUrl}?operation=list_assets&id=${encodeURIComponent(jobId)}`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
     });
+    
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || `Failed to fetch assets: ${response.status}`);
+      try {
+        const errorData = await response.json();
+        
+        // Handle 404 "No assets found" as a successful response with empty assets
+        if (response.status === 404 && errorData.error && errorData.error.includes('No assets found')) {
+          console.log(`ℹ️ [ContentPipelineAPI] Job ${jobId} has no assets - returning empty assets object`);
+          return {
+            assets: {},
+            job_id: jobId,
+            error: errorData.error
+          };
+        }
+        
+        // For other errors, still throw
+        throw new Error(errorData.error || `Failed to fetch assets: ${response.status}`);
+      } catch (parseError) {
+        // If we can't parse the error response, throw a generic error
+        throw new Error(`Failed to fetch assets: ${response.status}`);
+      }
     }
+    
     return await response.json();
   }
 

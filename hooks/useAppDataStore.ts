@@ -192,10 +192,18 @@ export function useAppDataStore<T = any>(
           if (shouldFetchAssets) {
             try {
               const assetsResponse = await contentPipelineApi.getAssets(options.jobId);
-              mappedData.assets = assetsResponse.assets;
-              console.log(`✅ [DataStore] Fetched assets for job ${options.jobId} (status: ${mappedData.job_status})`);
+              
+              // Handle "No assets found" as a successful case (not an error)
+              if (assetsResponse.error && assetsResponse.error.includes('No assets found')) {
+                console.log(`ℹ️ [DataStore] No assets found for job ${options.jobId} - setting empty assets object`);
+                mappedData.assets = {};
+              } else {
+                mappedData.assets = assetsResponse.assets;
+                console.log(`✅ [DataStore] Fetched ${Object.keys(assetsResponse.assets).length} assets for job ${options.jobId} (status: ${mappedData.job_status})`);
+              }
             } catch (error) {
               console.warn(`⚠️ [DataStore] Failed to fetch assets for job ${options.jobId}:`, error);
+              mappedData.assets = {}; // Set empty assets object on error
             }
           } else {
             console.log(`ℹ️ [DataStore] Skipping assets fetch for job ${options.jobId} - status '${mappedData.job_status}' not ready for assets`);
@@ -465,11 +473,24 @@ export function useAppDataStore<T = any>(
     enabled: queryKey.length > 0,
     staleTime: cacheSettings.staleTime,
     gcTime: cacheSettings.gcTime,
-    refetchOnWindowFocus: false,
     refetchOnMount: selector === 'jobs' ? true : false, // Show cached data immediately, then fetch fresh data in background
+    refetchOnWindowFocus: false, // Disable refetching on window focus to reduce unnecessary API calls
+    retry: (failureCount, error) => {
+      // Don't retry if we know assets don't exist (reduces 404 spam)
+      if (selector === 'jobDetails' && options.includeAssets) {
+        const errorMessage = error?.message || '';
+        if (errorMessage.includes('No assets found') || errorMessage.includes('404')) {
+          console.log(`ℹ️ [DataStore] Not retrying asset fetch for job ${options.jobId} - no assets available`);
+          return false;
+        }
+      }
+      // Default retry logic: 3 retries with exponential backoff
+      return failureCount < 3;
+    },
     // This combination ensures: cached data shown instantly + fresh data fetched in background
     // Use React Query's built-in polling instead of manual timers
-    refetchInterval: (data) => {
+    refetchInterval: (query) => {
+      const data = query.state.data;
       if (!options.autoRefresh || !finalConfig.autoRefresh.enabled || !isAutoRefreshAllowedOnPage) {
         if (!isAutoRefreshAllowedOnPage && DEBUG_CONFIG.ENABLE_AUTO_REFRESH_LOGGING) {
           console.log(`⏸️ [DataStore] Auto-refresh disabled - page ${pathname} not in allowed list:`, AppDataStoreConfig.ALLOWED_AUTO_REFRESH_PAGES);
@@ -508,6 +529,14 @@ export function useAppDataStore<T = any>(
           return false; // Stop polling completely
         }
         
+        // If we're including assets and we've confirmed there are no assets, reduce polling frequency
+        if (options.includeAssets && job?.assets && typeof job.assets === 'object' && Object.keys(job.assets).length === 0) {
+          // Job has no assets - poll less frequently to avoid spam
+          const reducedInterval = finalConfig.autoRefresh.intervals.activeJobs * 3; // 3x longer interval (15 seconds)
+          console.log(`🔄 [DataStore] Job ${options.jobId} has no assets - reducing polling to ${reducedInterval}ms to avoid 404 spam`);
+          return reducedInterval;
+        }
+        
         // For all non-completed jobs, poll every 5 seconds
         const interval = finalConfig.autoRefresh.intervals.activeJobs; // 5000ms = 5 seconds
         console.log(`🔄 [DataStore] Polling non-completed job ${options.jobId} (${jobStatus}) every ${interval}ms`);
@@ -540,12 +569,6 @@ export function useAppDataStore<T = any>(
       
       // Default: no polling for other selectors unless specifically configured
       return false;
-    },
-    retry: (failureCount, error) => {
-      if (error instanceof Error && error.message.includes('404')) {
-        return false;
-      }
-      return failureCount < finalConfig.retry.attempts;
     },
     retryDelay: (attemptIndex) => 
       Math.min(1000 * Math.pow(finalConfig.retry.backoffMultiplier, attemptIndex), 30000),

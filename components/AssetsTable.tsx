@@ -33,7 +33,7 @@ interface AssetsTableProps {
   onEditAsset: (asset: AssetConfig) => void;
   onRemoveAsset: (id: string) => Promise<void>;
   onCreateAssets: () => Promise<void>;
-  onJobDataUpdate?: (updatedJobData: any) => void;
+  onAssetsUpdate?: (updatedAssets: { job_id: string; assets: any; _cacheTimestamp?: number } | { _forceRefetch: true; job_id: string }) => void;
   onEDRPdfUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onAddAsset?: () => void;
 }
@@ -72,7 +72,7 @@ export const AssetsTable = ({
   onEditAsset,
   onRemoveAsset,
   onCreateAssets,
-  onJobDataUpdate,
+  onAssetsUpdate,
   onEDRPdfUpload,
   onAddAsset
 }: AssetsTableProps) => {
@@ -245,8 +245,18 @@ export const AssetsTable = ({
         // Extract updated assets from normalized response - handle nested structure
         const extractedAssets = response.assets?.assets || response.assets;
         
-        // Update job data with the extracted assets (handle empty object case)
-        if (extractedAssets && typeof extractedAssets === 'object' && onJobDataUpdate) {
+        // Update assets with the extracted assets (handle empty object and error cases)
+        const responseError = response.error;
+        
+        // Handle explicit "No assets found" error response
+        if (responseError && responseError.includes('No assets found') && onAssetsUpdate) {
+          console.log('ℹ️ bulk_update_assets returned "No assets found" - treating as empty assets');
+          onAssetsUpdate({ 
+            job_id: jobData.job_id, 
+            assets: {},
+            _cacheTimestamp: Date.now()
+          });
+        } else if (extractedAssets && typeof extractedAssets === 'object' && onAssetsUpdate) {
           console.log('🔄 Chrome: Using bulk_update_assets response assets directly (no redundant list_assets call):', {
             assetsCount: Object.keys(extractedAssets).length,
             isEmpty: Object.keys(extractedAssets).length === 0,
@@ -254,25 +264,27 @@ export const AssetsTable = ({
             jobId: jobData.job_id,
             hasNestedStructure: !!response.assets?.assets,
             isNormalized: response._normalized,
-            assetsSource: response._assets_source
+            assetsSource: response._assets_source,
+            hasError: !!responseError
           });
           
-          // Create job data update with the new assets
-          onJobDataUpdate({ 
+          // Create assets update with the new assets
+          onAssetsUpdate({ 
             job_id: jobData.job_id, 
             assets: extractedAssets,
             _cacheTimestamp: Date.now() // Force UI refresh
           });
-        } else if (onJobDataUpdate) {
+        } else if (onAssetsUpdate) {
           console.log('⚠️ Unexpected response format from bulk_update_assets, using fallback refetch');
           console.log('🔄 Chrome: Response structure:', {
             hasAssets: !!response.assets,
             assetsType: typeof response.assets,
             assetsCount: response.assets ? Object.keys(response.assets).length : 0,
             isNormalized: response._normalized,
-            operation: response._operation
+            operation: response._operation,
+            error: responseError
           });
-          onJobDataUpdate({ _forceRefetch: true, job_id: jobData.job_id });
+          onAssetsUpdate({ _forceRefetch: true, job_id: jobData.job_id });
         }
       } else {
         console.error('❌ Bulk chrome update failed:', response);
