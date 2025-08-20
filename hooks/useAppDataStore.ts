@@ -348,6 +348,96 @@ export function useAppDataStore<T = any>(
     }
   }, [selector, finalConfig.cache]);
 
+  // Cache synchronization: Update individual job details when jobs list changes
+  const syncJobCaches = useCallback((freshJobsData: any[]) => {
+    if (!Array.isArray(freshJobsData)) return;
+    
+    console.log(`🔄 [DataStore] Syncing ${freshJobsData.length} jobs with individual job caches`);
+    
+    freshJobsData.forEach((freshJob: any) => {
+      if (!freshJob.job_id) return;
+      
+      // Check if we have cached individual job details for this job
+      const cachedJobDetails = queryClient.getQueryData(dataStoreKeys.jobs.detail(freshJob.job_id));
+      
+      if (cachedJobDetails) {
+        const cachedJob = cachedJobDetails as any;
+        
+        // Check if the job status has changed
+        if (cachedJob.job_status !== freshJob.job_status) {
+          console.log(`🔄 [DataStore] Syncing job ${freshJob.job_id} status: ${cachedJob.job_status} → ${freshJob.job_status}`);
+          
+          // Update the cached job details with the fresh status and any other updated fields
+          const updatedJobDetails = {
+            ...cachedJob,
+            job_status: freshJob.job_status,
+            last_updated: freshJob.last_updated || new Date().toISOString(),
+            // Sync other fields that might have changed
+            source_folder: freshJob.source_folder,
+            description: freshJob.description,
+            created_at: freshJob.created_at,
+            download_url: freshJob.download_url,
+            download_url_expires: freshJob.download_url_expires,
+            download_url_created: freshJob.download_url_created,
+          };
+          
+          // Update the individual job details cache
+          queryClient.setQueryData(
+            dataStoreKeys.jobs.detail(freshJob.job_id),
+            updatedJobDetails
+          );
+          
+          console.log(`✅ [DataStore] Job ${freshJob.job_id} details cache synchronized with jobs list`);
+        }
+      }
+    });
+  }, [queryClient]);
+
+  // Reverse sync: Update jobs list when individual job details change
+  const syncJobsListCache = useCallback((freshJobDetails: any) => {
+    if (!freshJobDetails?.job_id) return;
+    
+    // Find and update all jobs list caches that might contain this job
+    const allJobsListQueries = queryClient.getQueriesData({ queryKey: dataStoreKeys.jobs.all });
+    
+    allJobsListQueries.forEach(([queryKey, cachedData]) => {
+      if (Array.isArray(cachedData)) {
+        const jobIndex = cachedData.findIndex((job: any) => job.job_id === freshJobDetails.job_id);
+        
+        if (jobIndex !== -1) {
+          const currentJob = cachedData[jobIndex];
+          
+          // Check if status or other important fields have changed
+          if (currentJob.job_status !== freshJobDetails.job_status || 
+              currentJob.last_updated !== freshJobDetails.last_updated) {
+            
+            console.log(`🔄 [DataStore] Syncing jobs list cache with updated job ${freshJobDetails.job_id} (${currentJob.job_status} → ${freshJobDetails.job_status})`);
+            
+            // Create updated job for jobs list (only sync essential fields)
+            const updatedJobForList = {
+              ...currentJob,
+              job_status: freshJobDetails.job_status,
+              last_updated: freshJobDetails.last_updated,
+              source_folder: freshJobDetails.source_folder || currentJob.source_folder,
+              description: freshJobDetails.description || currentJob.description,
+              download_url: freshJobDetails.download_url,
+              download_url_expires: freshJobDetails.download_url_expires,
+              download_url_created: freshJobDetails.download_url_created,
+            };
+            
+            // Update the jobs list cache
+            const updatedJobsList = [...cachedData];
+            updatedJobsList[jobIndex] = updatedJobForList;
+            
+            queryClient.setQueryData(queryKey, updatedJobsList);
+            
+            console.log(`✅ [DataStore] Jobs list cache synchronized with job ${freshJobDetails.job_id} details`);
+          }
+        }
+      }
+    });
+  }, [queryClient]);
+
   // Main React Query hook
   const {
     data,
@@ -357,7 +447,21 @@ export function useAppDataStore<T = any>(
     refetch,
   } = useQuery({
     queryKey,
-    queryFn,
+    queryFn: async () => {
+      const result = await queryFn();
+      
+      // Auto-sync caches when jobs list is fetched
+      if (selector === 'jobs' && Array.isArray(result)) {
+        syncJobCaches(result);
+      }
+      
+      // Auto-sync jobs list cache when individual job details are fetched
+      if (selector === 'jobDetails' && result && typeof result === 'object') {
+        syncJobsListCache(result);
+      }
+      
+      return result;
+    },
     enabled: queryKey.length > 0,
     staleTime: cacheSettings.staleTime,
     gcTime: cacheSettings.gcTime,
