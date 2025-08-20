@@ -14,6 +14,7 @@ interface JobDetailsContentProps {
   creatingAssets: boolean;
   setCreatingAssets: (creating: boolean) => void;
   loading: boolean;
+  onAssetsUpdate?: (updatedAssets: { job_id: string; assets: any; _cacheTimestamp?: number } | { _forceRefetch: true; job_id: string }) => void;
 }
 
 export const JobDetailsContent = ({
@@ -21,7 +22,8 @@ export const JobDetailsContent = ({
   jobData,
   creatingAssets,
   setCreatingAssets,
-  loading
+  loading,
+  onAssetsUpdate
 }: JobDetailsContentProps) => {
   const router = useRouter();
 
@@ -79,6 +81,7 @@ export const JobDetailsContent = ({
               })()}
               creatingAssets={creatingAssets}
               setCreatingAssets={setCreatingAssets}
+              onAssetsUpdate={onAssetsUpdate}
             />
 
             {/* Download Section */}

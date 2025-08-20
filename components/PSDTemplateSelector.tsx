@@ -18,7 +18,7 @@ interface PSDTemplateSelectorProps {
   isVisible: boolean;
   creatingAssets: boolean;
   setCreatingAssets: React.Dispatch<React.SetStateAction<boolean>>;
-  onJobDataUpdate?: (updatedJobData: any) => void; // Callback to update parent component's job data
+  onAssetsUpdate?: (updatedAssets: { job_id: string; assets: any; _cacheTimestamp?: number } | { _forceRefetch: true; job_id: string }) => void; // Optional callback for asset updates (pdf-extract, create, update, delete, list)
 }
 
 // For multiple spot/color selections in parallel mode
@@ -41,7 +41,7 @@ interface AssetConfig {
   wp_inv_layer?: string; // For VFX and chrome effects
 }
 
-export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatingAssets, setCreatingAssets, onJobDataUpdate }: PSDTemplateSelectorProps) => {
+export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatingAssets, setCreatingAssets, onAssetsUpdate }: PSDTemplateSelectorProps) => {
   const router = useRouter();
   
   // Use centralized data store for asset operations only (no data fetching)
@@ -341,11 +341,19 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       assetsKeys: mergedJobData?.assets ? Object.keys(mergedJobData.assets) : [],
       assetsCount: mergedJobData?.assets ? Object.keys(mergedJobData.assets).length : 0,
       mergedJobDataKeys: mergedJobData ? Object.keys(mergedJobData) : [],
-      jobId: mergedJobData?.job_id
+      jobId: mergedJobData?.job_id,
+      hasError: !!mergedJobData?.error
     });
     
-    if (!mergedJobData?.assets) {
-      console.log('❌ No assets found in mergedJobData, returning empty array');
+    // Handle explicit "No assets found" error response
+    if (mergedJobData?.error && mergedJobData?.error.includes('No assets found')) {
+      console.log('ℹ️ API returned "No assets found" error - treating as empty assets');
+      return [];
+    }
+    
+    // Handle missing or empty assets object
+    if (!mergedJobData?.assets || (typeof mergedJobData.assets === 'object' && Object.keys(mergedJobData.assets).length === 0)) {
+      console.log('ℹ️ No assets or empty assets object in mergedJobData, returning empty array');
       return [];
     }
     
@@ -611,29 +619,36 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
         console.log('✅ Asset saved successfully:', response);
         
         // Handle create_asset response format: nested assets structure
-        if (onJobDataUpdate) {
-          if (response.job) {
+        if (onAssetsUpdate) {
+          const responseError = response.error;
+          
+          // Handle explicit "No assets found" error response
+          if (responseError && responseError.includes('No assets found')) {
+            console.log('ℹ️ create_asset returned "No assets found" - treating as empty assets');
+            onAssetsUpdate({ job_id: jobData.job_id, assets: {} });
+          } else if (response.job) {
             console.log('🔄 Using legacy job object from response to update UI');
-            onJobDataUpdate(response.job);
+            onAssetsUpdate(response.job);
           } else if (response.assets?.assets && typeof response.assets.assets === 'object') {
             console.log('🔄 Using create_asset response assets directly (no redundant list_assets call)');
             console.log('📊 Assets in response:', {
               assetCount: Object.keys(response.assets.assets).length,
               isEmpty: Object.keys(response.assets.assets).length === 0
             });
-            onJobDataUpdate({ job_id: jobData.job_id, assets: response.assets.assets });
+            onAssetsUpdate({ job_id: jobData.job_id, assets: response.assets.assets });
           } else {
             console.log('⚠️ Unexpected response format from create_asset, using fallback refetch');
             console.log('Response structure:', Object.keys(response));
             console.log('Assets structure:', response.assets ? Object.keys(response.assets) : 'no assets');
-            onJobDataUpdate({ _forceRefetch: true, job_id: jobData.job_id });
+            console.log('Error in response:', responseError);
+            onAssetsUpdate({ _forceRefetch: true, job_id: jobData.job_id });
           }
         }
       } else {
         console.log('❌ Asset creation failed:', {
           success: response.success,
           hasJob: !!response.job,
-          hasCallback: !!onJobDataUpdate,
+          hasCallback: !!onAssetsUpdate,
           response: response
         });
         throw new Error('Asset creation failed');
@@ -676,25 +691,32 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       
         {
           console.log('✅ Asset removed successfully:', response);
-          if (onJobDataUpdate) {
-            if (response.job) {
-              onJobDataUpdate(response.job);
+          if (onAssetsUpdate) {
+            const responseError = response.error;
+            
+            // Handle explicit "No assets found" error response (may happen after deleting the last asset)
+            if (responseError && responseError.includes('No assets found')) {
+              console.log('ℹ️ delete_asset returned "No assets found" - treating as empty assets (last asset deleted)');
+              onAssetsUpdate({ job_id: jobData.job_id, assets: {} });
+            } else if (response.job) {
+              onAssetsUpdate(response.job);
             } else if (response.assets?.assets && typeof response.assets.assets === 'object') {
               console.log('🔄 Using delete_asset response assets directly (no redundant list_assets call)');
               console.log('📊 Assets in response:', {
                 assetCount: Object.keys(response.assets.assets).length,
                 isEmpty: Object.keys(response.assets.assets).length === 0
               });
-              onJobDataUpdate({ job_id: jobData.job_id, assets: response.assets.assets });
+              onAssetsUpdate({ job_id: jobData.job_id, assets: response.assets.assets });
             } else {
               console.log('⚠️ Unexpected response format from delete_asset, using fallback local removal');
               console.log('Response structure:', Object.keys(response));
               console.log('Assets structure:', response.assets ? Object.keys(response.assets) : 'no assets');
+              console.log('Error in response:', responseError);
               // Fallback: remove locally
               const existingAssets = (mergedJobData?.assets || {}) as Record<string, any>;
               const updatedAssets: Record<string, any> = { ...existingAssets };
               delete updatedAssets[id];
-              onJobDataUpdate({ job_id: jobData.job_id, assets: updatedAssets });
+              onAssetsUpdate({ job_id: jobData.job_id, assets: updatedAssets });
             }
           }
       }
@@ -902,20 +924,38 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     console.log('✅ PDF Extract API Response:', response);
     setUploadProgress(95);
 
-    // Update job data - handle nested assets structure
-    const edrAssets = (response as any)?.assets?.assets || (response as any)?.assets;
-    if (onJobDataUpdate && edrAssets && typeof edrAssets === 'object') {
-      console.log('🔄 EDR: Using response assets directly (no redundant list_assets call)');
-      console.log('📊 EDR Assets in response:', {
+    // Update job data via centralized cache - handle the assets structure from pdf-extract response
+    const edrAssets = (response as any)?.assets; // pdf-extract returns assets directly under 'assets' key
+    const responseError = (response as any)?.error;
+    
+    // Handle explicit "No assets found" error response
+    if (responseError && responseError.includes('No assets found')) {
+      console.log('ℹ️ EDR: pdf-extract returned "No assets found" - treating as empty assets');
+      if (onAssetsUpdate) {
+        onAssetsUpdate({ job_id: jobData?.job_id, assets: {} });
+      }
+    } else if (edrAssets && typeof edrAssets === 'object') {
+      console.log('🔄 EDR: Updating cache with pdf-extract response assets');
+      console.log('📊 EDR Assets from pdf-extract:', {
+        operation: (response as any)?._operation,
         assetCount: Object.keys(edrAssets).length,
+        assetsSource: (response as any)?._assets_source,
+        assetKeys: Object.keys(edrAssets).slice(0, 5), // Show first 5 keys for debugging
         isEmpty: Object.keys(edrAssets).length === 0,
-        hasNestedStructure: !!(response as any)?.assets?.assets
+        hasError: !!responseError
       });
-      onJobDataUpdate({ job_id: jobData?.job_id, assets: edrAssets });
+      
+      // Use the callback if available, otherwise the cache sync will handle it
+      if (onAssetsUpdate) {
+        onAssetsUpdate({ job_id: jobData?.job_id, assets: edrAssets });
+      } else {
+        console.log('ℹ️ EDR: No onAssetsUpdate callback - relying on cache synchronization');
+      }
     } else {
-      console.warn('⚠️ EDR: No assets found in response - unexpected format');
+      console.warn('⚠️ EDR: Unexpected pdf-extract response format');
       console.log('🔍 EDR: Response structure:', Object.keys(response as any));
-      console.log('🔍 EDR: Assets structure:', (response as any)?.assets ? Object.keys((response as any).assets) : 'no assets');
+      console.log('🔍 EDR: Assets in response:', edrAssets);
+      console.log('🔍 EDR: Error in response:', responseError);
     }
   };
 
@@ -1145,7 +1185,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                 onEditAsset={editAsset}
                 onRemoveAsset={removeAsset}
                 onCreateAssets={createAssets}
-                onJobDataUpdate={onJobDataUpdate}
+                onAssetsUpdate={onAssetsUpdate}
                 onEDRPdfUpload={handleEDRPdfUpload}
                 onAddAsset={selectedPhysicalFile && jsonData && !loadingJsonData ? openAssetModal : undefined}
               />
