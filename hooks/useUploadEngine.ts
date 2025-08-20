@@ -257,23 +257,9 @@ export const useUploadEngine = ({
         console.log(`✅ Successfully uploaded via proxy: ${filePath}`);
       }
       
-      // Step 3: Notify Content Pipeline about the uploaded files
-      console.log('📤 Notifying Content Pipeline about uploaded files...');
-      const notifyResponse = await fetch('/api/content-pipeline-proxy?operation=register_uploaded_files', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          job_id: jobData?.job_id,
-          uploaded_files: uploadedFiles
-        }),
-      });
-
-      if (!notifyResponse.ok) {
-        console.warn('⚠️ Failed to notify Content Pipeline about uploads, but files are uploaded');
-        // Don't throw here - files are uploaded successfully
-      }
-      
       console.log('✅ All files uploaded successfully via S3 proxy');
+      // Note: File status updates are handled via useAppDataStore mutations, 
+      // no need to manually notify Content Pipeline
     } catch (error) {
       console.error('❌ S3 proxy upload failed:', error);
       throw error;
