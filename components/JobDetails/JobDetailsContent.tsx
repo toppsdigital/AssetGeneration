@@ -2,7 +2,6 @@
 
 import { useRouter } from 'next/navigation';
 import { JobHeader, PSDTemplateSelector, DownloadSection, FilesSection } from '../';
-import { UploadWarningBanner } from './UploadWarningBanner';
 import { AssetCreationOverlay } from './AssetCreationOverlay';
 import styles from '../../styles/Edit.module.css';
 import { UIJobData } from '../../types';
@@ -10,56 +9,29 @@ import { UIJobData } from '../../types';
 interface JobDetailsContentProps {
   mergedJobData: UIJobData;
   jobData: UIJobData | null;
-  uploadEngine: {
-    uploadStarted: boolean;
-    allFilesUploaded: boolean;
-    totalPdfFiles: number;
-    uploadedPdfFiles: number;
-    uploadingFiles: Set<string>;
-  };
-  uploadsInProgress: boolean;
+  
+  // Core props for details page only
   creatingAssets: boolean;
   setCreatingAssets: (creating: boolean) => void;
-  loadingFiles: boolean;
-  filesLoaded: boolean;
-  loadingStep: number;
-  loadingMessage: string;
-  loadingDetail?: string;
   loading: boolean;
   onJobDataUpdate: (updatedJobData: any) => void;
-  updateJobDataForUpload: () => void; // Simplified to just refresh function
   refetchJobData: () => Promise<any>;
 }
 
 export const JobDetailsContent = ({
   mergedJobData,
   jobData,
-  uploadEngine,
-  uploadsInProgress,
   creatingAssets,
   setCreatingAssets,
-  loadingFiles,
-  filesLoaded,
-  loadingStep,
-  loadingMessage,
-  loadingDetail,
   loading,
   onJobDataUpdate,
-  updateJobDataForUpload,
   refetchJobData
 }: JobDetailsContentProps) => {
   const router = useRouter();
 
   return (
     <div className={styles.pageContainer}>
-      {/* Upload Warning Banner */}
-      <UploadWarningBanner
-        uploadedFiles={uploadEngine.uploadedPdfFiles}
-        totalFiles={uploadEngine.totalPdfFiles}
-        isVisible={uploadsInProgress}
-      />
-      
-      <div className={styles.editContainer} style={uploadsInProgress ? { paddingTop: '60px' } : {}}>
+      <div className={styles.editContainer}>
         <main className={styles.mainContent}>
           <div style={{
             maxWidth: 1200,
@@ -75,9 +47,7 @@ export const JobDetailsContent = ({
             {/* Job Header */}
             <JobHeader 
               jobData={mergedJobData}
-              totalPdfFiles={uploadEngine.totalPdfFiles}
-              uploadedPdfFiles={uploadEngine.uploadedPdfFiles}
-              onRerunJob={mergedJobData && !uploadsInProgress ? () => {
+              onRerunJob={mergedJobData ? () => {
                 console.log('🔄 Rerun Job - Pre-filling form with job data:', {
                   job_id: mergedJobData.job_id,
                   app_name: mergedJobData.app_name,
@@ -103,11 +73,10 @@ export const JobDetailsContent = ({
               jobData={jobData}
               mergedJobData={mergedJobData}
               isVisible={(() => {
-                const shouldShow = (mergedJobData?.job_status?.toLowerCase() === 'extracted' || mergedJobData?.job_status?.toLowerCase() === 'generation-failed') && !loading && !loadingFiles;
+                const shouldShow = (mergedJobData?.job_status?.toLowerCase() === 'extracted' || mergedJobData?.job_status?.toLowerCase() === 'generation-failed') && !loading;
                 console.log('🔍 PSDTemplateSelector visibility check:', {
                   jobStatus: mergedJobData?.job_status,
                   loading,
-                  loadingFiles,
                   shouldShow
                 });
                 return shouldShow;
@@ -121,11 +90,10 @@ export const JobDetailsContent = ({
             <DownloadSection
               jobData={mergedJobData}
               isVisible={(() => {
-                const shouldShow = ['complete', 'completed'].includes(mergedJobData?.job_status?.toLowerCase() || '') && !loading && !loadingFiles;
+                const shouldShow = ['complete', 'completed'].includes(mergedJobData?.job_status?.toLowerCase() || '') && !loading;
                 console.log('🔍 DownloadSection visibility check:', {
                   jobStatus: mergedJobData?.job_status,
                   loading,
-                  loadingFiles,
                   shouldShow
                 });
                 return shouldShow;
@@ -140,12 +108,13 @@ export const JobDetailsContent = ({
             <FilesSection
               mergedJobData={mergedJobData}
               jobData={jobData}
-              uploadingFiles={uploadEngine.uploadingFiles}
-              loadingFiles={loadingFiles}
-              filesLoaded={filesLoaded}
-              loadingStep={loadingStep}
-              loadingMessage={loadingMessage}
-              loadingDetail={loadingDetail}
+              // Details page: files are always loaded and no uploads in progress
+              uploadingFiles={new Set()}
+              loadingFiles={false}
+              filesLoaded={true}
+              loadingStep={1}
+              loadingMessage="Ready"
+              loadingDetail=""
             />
 
           </div>
