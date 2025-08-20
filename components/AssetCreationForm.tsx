@@ -1176,7 +1176,10 @@ export const AssetCreationForm = ({
                   </button>
                   {editingAssetId && (
                     <button
-                      onClick={onResetConfig}
+                      onClick={() => {
+                        onResetConfig(); // Reset the form state
+                        onClose(); // Close the modal
+                      }}
                       style={{
                         padding: '12px 24px',
                         background: 'rgba(156, 163, 175, 0.3)',
