@@ -407,7 +407,10 @@ export default function GeneratingPage() {
 
   return (
     <div className={styles.pageContainer}>
-      <PageTitle title={currentStep >= 6 ? "Generated" : "Generating"} />
+      <PageTitle 
+        title={currentStep >= 6 ? "Generated" : "Generating"} 
+        leftButton={currentStep >= 6 ? 'home' : 'none'}
+      />
       <div className={styles.reviewContainer} style={{ justifyContent: 'flex-start' }}>
         {/* Show generated asset image between title and steps only when ready, with larger size and tighter spacing */}
         {currentStep >= 6 && outputImageUrl && (

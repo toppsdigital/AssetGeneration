@@ -5,11 +5,11 @@ import { useRouter } from 'next/navigation';
 interface PageTitleProps {
   title: string | React.ReactNode;
   subtitle?: string;
-  showNavigation?: boolean; // Controls visibility of Home and Jobs buttons
   edgeToEdge?: boolean; // Controls if the component should be edge to edge
+  leftButton?: 'back' | 'home' | 'none'; // Controls which button to show on the left
 }
 
-const PageTitle: React.FC<PageTitleProps> = ({ title, subtitle, showNavigation = true, edgeToEdge = false }) => {
+const PageTitle: React.FC<PageTitleProps> = ({ title, subtitle, edgeToEdge = false, leftButton = 'back' }) => {
   const router = useRouter();
 
   return (
@@ -23,77 +23,73 @@ const PageTitle: React.FC<PageTitleProps> = ({ title, subtitle, showNavigation =
       justifyContent: 'space-between',
       position: 'relative',
       width: '100%',
-      boxSizing: 'border-box'
+      boxSizing: 'border-box',
+      minHeight: '72px' // Lock in height to prevent shrinking when button is hidden
     }}>
-      {/* Navigation buttons on the left */}
-      <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-        <button
-          onClick={() => router.back()}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '8px 12px',
-            background: 'rgba(255, 255, 255, 0.08)',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            borderRadius: '6px',
-            color: '#e5e7eb',
-            fontSize: '14px',
-            fontWeight: '500',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
-            e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
-            e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-          }}
-        >
-          <span style={{ fontSize: '16px' }}>←</span>
-          Back
-        </button>
-        {showNavigation && (
-          <>
-            <Link
-              href="/"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                padding: '8px',
-                color: '#e5e7eb',
-                textDecoration: 'none',
-                transition: 'all 0.2s ease',
-                cursor: 'pointer'
-              }}
-            >
-              <span style={{ fontSize: '20px' }}>🏠</span>
-            </Link>
-            
-            <Link
-              href="/jobs"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '8px 12px',
-                background: 'rgba(255, 255, 255, 0.1)',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                borderRadius: '6px',
-                color: '#e5e7eb',
-                textDecoration: 'none',
-                fontSize: '14px',
-                fontWeight: '500',
-                transition: 'all 0.2s ease',
-                cursor: 'pointer'
-              }}
-            >
-              Jobs
-            </Link>
-          </>
+      {/* Navigation button area - maintains width for layout stability */}
+      <div style={{ display: 'flex', gap: '12px', alignItems: 'center', minWidth: '80px' }}>
+        {leftButton === 'back' && (
+          <button
+            onClick={() => router.back()}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 12px',
+              background: 'rgba(255, 255, 255, 0.08)',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              borderRadius: '6px',
+              color: '#e5e7eb',
+              fontSize: '14px',
+              fontWeight: '500',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+            }}
+          >
+            <span style={{ fontSize: '16px' }}>←</span>
+            Back
+          </button>
         )}
+        {leftButton === 'home' && (
+          <Link
+            href="/"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 12px',
+              background: 'rgba(255, 255, 255, 0.08)',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              borderRadius: '6px',
+              color: '#e5e7eb',
+              textDecoration: 'none',
+              fontSize: '14px',
+              fontWeight: '500',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+            }}
+          >
+            <span style={{ fontSize: '16px' }}>🏠</span>
+            Home
+          </Link>
+        )}
+        {/* leftButton === 'none' renders nothing */}
       </div>
 
       {/* Centered title */}
@@ -126,7 +122,7 @@ const PageTitle: React.FC<PageTitleProps> = ({ title, subtitle, showNavigation =
       </div>
 
       {/* Empty space on the right for balance */}
-      <div style={{ width: '160px' }}></div>
+      <div style={{ minWidth: '80px' }}></div>
     </div>
   );
 };

@@ -413,7 +413,7 @@ function JobPreviewPageContent() {
           fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
         }}>
           {/* PageTitle edge to edge */}
-          <PageTitle title={getPageTitle()} showNavigation={false} edgeToEdge={true} />
+          <PageTitle title={getPageTitle()} edgeToEdge={true} />
           
           {/* Main content edge to edge */}
           <main style={{
