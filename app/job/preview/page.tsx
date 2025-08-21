@@ -8,7 +8,6 @@ import ImagePreview from '../../../components/ImagePreview';
 import ExpandedImageModal from '../../../components/ExpandedImageModal';
 import { PageTitle } from '../../../components';
 import { dataStoreKeys } from '../../../hooks/useAppDataStore';
-import styles from '../../../styles/Edit.module.css';
 
 interface AssetItem {
   filePath: string;
@@ -306,13 +305,40 @@ function JobPreviewPageContent() {
     };
   }, []);
 
+
+
   if (isLoading) {
     return (
-      <div className={styles.pageContainer}>
-        <div className={styles.loading}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>🔄</div>
-          <h2>Loading Assets...</h2>
-          <p>Please wait while we fetch your file data from cache.</p>
+      <div style={{ 
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #000000 0%, #1a1a1a 30%, #2d2d2d 70%, #000000 100%)',
+        padding: '2rem 1rem'
+      }}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          minHeight: '50vh',
+          width: '100%',
+          padding: '2rem 1rem'
+        }}>
+          <div style={{
+            color: '#fff',
+            fontSize: '1.2rem',
+            padding: '2rem',
+            textAlign: 'center',
+            background: 'rgba(255, 255, 255, 0.05)',
+            backdropFilter: 'blur(20px)',
+            borderRadius: 12,
+            margin: '2rem',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+            maxWidth: 600,
+            width: '100%'
+          }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>🔄</div>
+            <h2>Loading Assets...</h2>
+            <p>Please wait while we fetch your file data from cache.</p>
+          </div>
         </div>
       </div>
     );
@@ -320,63 +346,51 @@ function JobPreviewPageContent() {
 
   if (error) {
     return (
-      <div className={styles.pageContainer}>
-        <div className={styles.loading}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>❌</div>
-          <h2>Error Loading Assets</h2>
-          <p style={{ marginBottom: 16 }}>{error}</p>
-          
-          {!jobId && !fileId && !mode && (
-            <div style={{ 
-              background: 'rgba(255, 255, 255, 0.05)', 
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: 8,
-              padding: 16,
-              marginBottom: 16,
-              fontSize: 14,
-              color: '#9ca3af'
-            }}>
-              <p><strong>How to access this page:</strong></p>
-              <p>• Navigate from Job Details → File Card → "Preview" button</p>
-              <p>• URL format: <code>/job/preview?jobId=...&fileId=...&mode=...</code></p>
-            </div>
-          )}
-          
-          <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-            {jobId && (
-              <button 
-                onClick={() => {
-                  sessionStorage.setItem('navigationSource', 'preview');
-                  router.push(`/job/details?jobId=${encodeURIComponent(jobId)}`);
-                }}
-                style={{
-                  padding: '8px 16px',
-                  background: '#3b82f6',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: 8,
-                  cursor: 'pointer'
-                }}
-              >
-                Back to Job Details
-              </button>
-            )}
+      <div style={{ 
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #000000 0%, #1a1a1a 30%, #2d2d2d 70%, #000000 100%)',
+        padding: '2rem 1rem'
+      }}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          minHeight: '50vh',
+          width: '100%',
+          padding: '2rem 1rem'
+        }}>
+          <div style={{
+            color: '#fff',
+            fontSize: '1.2rem',
+            padding: '2rem',
+            textAlign: 'center',
+            background: 'rgba(255, 255, 255, 0.05)',
+            backdropFilter: 'blur(20px)',
+            borderRadius: 12,
+            margin: '2rem',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+            maxWidth: 600,
+            width: '100%'
+          }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>❌</div>
+            <h2>Error Loading Assets</h2>
+            <p style={{ marginBottom: 16 }}>{error}</p>
             
-            <button 
-              onClick={() => {
-                router.push('/jobs');
-              }}
-              style={{
-                padding: '8px 16px',
-                background: '#6b7280',
-                color: 'white',
-                border: 'none',
+            {!jobId && !fileId && !mode && (
+              <div style={{ 
+                background: 'rgba(255, 255, 255, 0.05)', 
+                border: '1px solid rgba(255, 255, 255, 0.1)',
                 borderRadius: 8,
-                cursor: 'pointer'
-              }}
-            >
-              Go to Jobs List
-            </button>
+                padding: 16,
+                marginBottom: 16,
+                fontSize: 14,
+                color: '#9ca3af'
+              }}>
+                <p><strong>How to access this page:</strong></p>
+                <p>• Navigate from Job Details → File Card → "Preview" button</p>
+                <p>• URL format: <code>/job/preview?jobId=...&fileId=...&mode=...</code></p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -388,11 +402,26 @@ function JobPreviewPageContent() {
       <Head>
         <title>Preview {mode === 'extracted-assets' ? 'Extracted Layers' : 'Digital Collectibles'}</title>
       </Head>
-      <div className={styles.pageContainer}>
-        <PageTitle title={getPageTitle()} />
-      
-        <div className={styles.editContainer}>
-          <main className={styles.mainContent}>
+      <div style={{ 
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #000000 0%, #1a1a1a 30%, #2d2d2d 70%, #000000 100%)',
+        padding: '0'
+      }}>
+        <div style={{
+          width: '100%',
+          color: '#fff',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+        }}>
+          {/* PageTitle edge to edge */}
+          <PageTitle title={getPageTitle()} showNavigation={false} edgeToEdge={true} />
+          
+          {/* Main content edge to edge */}
+          <main style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            width: '100%'
+          }}>
             {/* Image Grid - Google Photos Style */}
             {assets.length > 0 && (
               <div style={{

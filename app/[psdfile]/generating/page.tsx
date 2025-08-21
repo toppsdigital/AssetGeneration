@@ -6,6 +6,7 @@ import styles from '../../../styles/Review.module.css';
 import { usePsdStore } from '../../../web/store/psdStore';
 import { getPresignedUrl, uploadFileToPresignedUrl } from '../../../web/utils/s3Presigned';
 import { getFireflyToken, createFireflyAsset, collectLayerParameters, buildFireflyLayersPayload } from '../../../web/utils/firefly';
+import { contentPipelineApi } from '../../../web/utils/contentPipelineApi';
 import PageTitle from '../../../components/PageTitle';
 
 const baseSteps = [
@@ -93,28 +94,40 @@ export default function GeneratingPage() {
     }
   };
 
-  // Helper to upload file with progress tracking via proxy to avoid CORS
+  // Helper to upload file with progress tracking via content pipeline
   const uploadFileWithProgress = async (file: File, filename: string): Promise<void> => {
-    return new Promise<void>((resolve, reject) => {
-      // First get the upload URL from our proxy
-      fetch('/api/s3-proxy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          client_method: 'put', 
-          filename,
-          upload: true 
-        }),
-      })
-      .then(res => res.json())
-      .then(({ uploadUrl, presignedUrl }) => {
-        // Now upload via our proxy endpoint
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('presignedUrl', presignedUrl);
+    return new Promise<void>(async (resolve, reject) => {
+      try {
+        // Get presigned upload instructions via content pipeline
+        console.log(`🔗 Getting presigned URL for smart object: ${filename}`);
+        const presignedData = await contentPipelineApi.getPresignedUrl({
+          client_method: 'put',
+          filename: filename,
+          expires_in: 3600,
+          size: file.size,
+          content_type: file.type || 'image/jpeg'
+        });
 
+        const uploadUrl = presignedData.url;
+        
+        // Prepare upload request based on response type
         const xhr = new XMLHttpRequest();
-        xhr.open('POST', uploadUrl, true);
+        
+        if (presignedData.fields && presignedData.method === 'POST') {
+          // Use form POST upload
+          console.log(`📤 Using presigned POST form upload for ${file.name}`);
+          xhr.open('POST', '/api/s3-upload', true);
+          xhr.setRequestHeader('x-upload-url', uploadUrl);
+          xhr.setRequestHeader('x-upload-fields', JSON.stringify(presignedData.fields));
+          xhr.setRequestHeader('x-upload-method', presignedData.method);
+          xhr.setRequestHeader('Content-Type', file.type || 'image/jpeg');
+        } else {
+          // Use simple PUT upload (fallback)
+          console.log(`📤 Using presigned PUT upload for ${file.name}`);
+          xhr.open('PUT', '/api/s3-upload', true);
+          xhr.setRequestHeader('x-presigned-url', uploadUrl);
+          xhr.setRequestHeader('Content-Type', file.type || 'image/jpeg');
+        }
         
         xhr.upload.onprogress = (event) => {
           if (event.lengthComputable) {
@@ -132,16 +145,28 @@ export default function GeneratingPage() {
               ...prev,
               [file.name]: 100
             }));
+            console.log(`✅ Successfully uploaded smart object: ${file.name}`);
             resolve();
           } else {
-            reject(new Error(`Upload failed: ${xhr.status} ${xhr.statusText}`));
+            const error = `Upload failed: ${xhr.status} ${xhr.statusText}`;
+            console.error(`❌ ${error}`);
+            reject(new Error(error));
           }
         };
         
-        xhr.onerror = () => reject(new Error('Upload failed: Network error'));
-        xhr.send(formData);
-      })
-      .catch(reject);
+        xhr.onerror = () => {
+          const error = 'Upload failed: Network error';
+          console.error(`❌ ${error}`);
+          reject(new Error(error));
+        };
+        
+        // Send the file
+        xhr.send(file);
+        
+      } catch (error) {
+        console.error(`❌ Failed to get presigned URL for ${file.name}:`, error);
+        reject(error);
+      }
     });
   };
 
@@ -166,7 +191,7 @@ export default function GeneratingPage() {
           }
         });
 
-        // 1. Upload smart objects
+        // 1. Upload smart objects (using same content pipeline API as PDF uploads)
         setCurrentStep(0);
         setStepStatus(s => { const arr = [...s]; arr[0] = null; return arr; });
         try {

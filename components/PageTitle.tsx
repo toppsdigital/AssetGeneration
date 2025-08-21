@@ -1,18 +1,23 @@
 import React from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 interface PageTitleProps {
   title: string | React.ReactNode;
   subtitle?: string;
+  showNavigation?: boolean; // Controls visibility of Home and Jobs buttons
+  edgeToEdge?: boolean; // Controls if the component should be edge to edge
 }
 
-const PageTitle: React.FC<PageTitleProps> = ({ title, subtitle }) => {
+const PageTitle: React.FC<PageTitleProps> = ({ title, subtitle, showNavigation = true, edgeToEdge = false }) => {
+  const router = useRouter();
+
   return (
     <div style={{
-      padding: '24px 24px 16px 24px',
+      padding: edgeToEdge ? '16px 24px 16px 24px' : '24px 24px 16px 24px',
       borderBottom: '1px solid rgba(244, 114, 182, 0.2)',
       background: 'linear-gradient(135deg, rgba(45, 27, 105, 0.05) 0%, rgba(17, 9, 43, 0.05) 100%)',
-      marginBottom: '16px',
+      marginBottom: edgeToEdge ? '0' : '16px',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
@@ -22,41 +27,73 @@ const PageTitle: React.FC<PageTitleProps> = ({ title, subtitle }) => {
     }}>
       {/* Navigation buttons on the left */}
       <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-        <Link
-          href="/"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            padding: '8px',
-            color: '#e5e7eb',
-            textDecoration: 'none',
-            transition: 'all 0.2s ease',
-            cursor: 'pointer'
-          }}
-        >
-          <span style={{ fontSize: '20px' }}>🏠</span>
-        </Link>
-        
-        <Link
-          href="/jobs"
+        <button
+          onClick={() => router.back()}
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: '6px',
             padding: '8px 12px',
-            background: 'rgba(255, 255, 255, 0.1)',
+            background: 'rgba(255, 255, 255, 0.08)',
             border: '1px solid rgba(255, 255, 255, 0.2)',
             borderRadius: '6px',
             color: '#e5e7eb',
-            textDecoration: 'none',
             fontSize: '14px',
             fontWeight: '500',
-            transition: 'all 0.2s ease',
-            cursor: 'pointer'
+            cursor: 'pointer',
+            transition: 'all 0.2s ease'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+            e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+            e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
           }}
         >
-          Jobs
-        </Link>
+          <span style={{ fontSize: '16px' }}>←</span>
+          Back
+        </button>
+        {showNavigation && (
+          <>
+            <Link
+              href="/"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                padding: '8px',
+                color: '#e5e7eb',
+                textDecoration: 'none',
+                transition: 'all 0.2s ease',
+                cursor: 'pointer'
+              }}
+            >
+              <span style={{ fontSize: '20px' }}>🏠</span>
+            </Link>
+            
+            <Link
+              href="/jobs"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px 12px',
+                background: 'rgba(255, 255, 255, 0.1)',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                borderRadius: '6px',
+                color: '#e5e7eb',
+                textDecoration: 'none',
+                fontSize: '14px',
+                fontWeight: '500',
+                transition: 'all 0.2s ease',
+                cursor: 'pointer'
+              }}
+            >
+              Jobs
+            </Link>
+          </>
+        )}
       </div>
 
       {/* Centered title */}

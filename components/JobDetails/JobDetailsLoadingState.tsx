@@ -1,7 +1,6 @@
 'use client';
 
 import { JobHeaderSkeleton, LoadingProgress, FileCardSkeleton } from '../';
-import styles from '../../styles/Edit.module.css';
 
 interface JobDetailsLoadingStateProps {
   loadingStep: number;
@@ -17,19 +16,27 @@ export const JobDetailsLoadingState = ({
   loadingDetail
 }: JobDetailsLoadingStateProps) => {
   return (
-    <div className={styles.pageContainer}>
-      <div className={styles.editContainer}>
-        <main className={styles.mainContent}>
-          <div style={{
-            maxWidth: 1200,
-            width: '100%',
-            background: 'rgba(255, 255, 255, 0.06)',
-            backdropFilter: 'blur(20px)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            borderRadius: 16,
-            padding: 32,
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
-          }}>
+    <div style={{
+      width: '100%',
+      color: '#fff',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+    }}>
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        width: '100%'
+      }}>
+        <div style={{
+          maxWidth: 1200,
+          width: '100%',
+          background: 'rgba(255, 255, 255, 0.06)',
+          backdropFilter: 'blur(20px)',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          borderRadius: 16,
+          padding: 32,
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
+        }}>
             {/* Job Header Skeleton */}
             <JobHeaderSkeleton />
             
@@ -60,8 +67,7 @@ export const JobDetailsLoadingState = ({
               </div>
             </div>
           </div>
-        </main>
-      </div>
+        </div>
     </div>
   );
 };

@@ -3,7 +3,6 @@
 import { useRouter } from 'next/navigation';
 import { JobHeader, PSDTemplateSelector, DownloadSection, FilesSection } from '../';
 import { AssetCreationOverlay } from './AssetCreationOverlay';
-import styles from '../../styles/Edit.module.css';
 import { UIJobData } from '../../types';
 
 interface JobDetailsContentProps {
@@ -32,9 +31,17 @@ export const JobDetailsContent = ({
   const router = useRouter();
 
   return (
-    <div className={styles.pageContainer}>
-      <div className={styles.editContainer}>
-        <main className={styles.mainContent}>
+    <div style={{
+      width: '100%',
+      color: '#fff',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+    }}>
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        width: '100%'
+      }}>
           <div style={{
             maxWidth: 1200,
             width: '100%',
@@ -171,8 +178,7 @@ export const JobDetailsContent = ({
             />
 
           </div>
-        </main>
-      </div>
+        </div>
 
       {/* Asset Creation Overlay */}
       <AssetCreationOverlay isVisible={creatingAssets} />

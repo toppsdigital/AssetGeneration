@@ -1,6 +1,6 @@
 'use client';
 
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useState, Suspense, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { 
@@ -13,6 +13,8 @@ import { useAppDataStore, dataStoreKeys } from '../../../hooks/useAppDataStore';
 function JobDetailsPageContent() {
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
+  const router = useRouter();
+
   
   // Extract job ID from query parameters
   const jobId = searchParams.get('jobId');
@@ -145,29 +147,69 @@ function JobDetailsPageContent() {
     }
   };
 
+
+
   // Only show loading state if we have no cached data AND we're loading for the first time
   if (isLoadingJob && !hasAnyCachedData) {
     return (
-      <JobDetailsLoadingState
-        loadingStep={1}
-        totalSteps={3}
-        loadingMessage="Loading job details..."
-        loadingDetail={`Fetching job ${jobId}`}
-      />
+      <div style={{ 
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #000000 0%, #1a1a1a 30%, #2d2d2d 70%, #000000 100%)',
+        padding: '2rem 1rem'
+      }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+          <JobDetailsLoadingState
+            loadingStep={1}
+            totalSteps={3}
+            loadingMessage="Loading job details..."
+            loadingDetail={`Fetching job ${jobId}`}
+          />
+        </div>
+      </div>
     );
   }
 
   if (!hasJobId) {
-    return <JobDetailsErrorState error={null} message="No Job ID provided" />;
+    return (
+      <div style={{ 
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #000000 0%, #1a1a1a 30%, #2d2d2d 70%, #000000 100%)',
+        padding: '2rem 1rem'
+      }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+          <JobDetailsErrorState error={null} message="No Job ID provided" />
+        </div>
+      </div>
+    );
   }
 
   if (jobError && !hasAnyCachedData) {
-    return <JobDetailsErrorState error={jobError} />;
+    return (
+      <div style={{ 
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #000000 0%, #1a1a1a 30%, #2d2d2d 70%, #000000 100%)',
+        padding: '2rem 1rem'
+      }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+          <JobDetailsErrorState error={jobError} />
+        </div>
+      </div>
+    );
   }
 
   // If we have neither fresh data nor cached data, show error
   if (!jobData && !cachedJobData && !isLoadingJob) {
-    return <JobDetailsErrorState error={null} message="No Job Data Found" />;
+    return (
+      <div style={{ 
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #000000 0%, #1a1a1a 30%, #2d2d2d 70%, #000000 100%)',
+        padding: '2rem 1rem'
+      }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+          <JobDetailsErrorState error={null} message="No Job Data Found" />
+        </div>
+      </div>
+    );
   }
 
   // Use fresh data if available, otherwise fall back to cached data
@@ -185,16 +227,24 @@ function JobDetailsPageContent() {
   });
 
   return (
-    <JobDetailsContent
-      mergedJobData={displayJobData}
-      jobData={displayJobData}
-      creatingAssets={creatingAssets}
-      setCreatingAssets={setCreatingAssets}
-      loading={isActuallyLoading}
-      isRefreshing={isRefreshingJob}
-      freshDataLoaded={freshDataLoaded}
-      onAssetsUpdate={handleAssetsUpdate}
-    />
+    <div style={{ 
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #000000 0%, #1a1a1a 30%, #2d2d2d 70%, #000000 100%)',
+      padding: '2rem 1rem'
+    }}>
+      <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+        <JobDetailsContent
+          mergedJobData={displayJobData}
+          jobData={displayJobData}
+          creatingAssets={creatingAssets}
+          setCreatingAssets={setCreatingAssets}
+          loading={isActuallyLoading}
+          isRefreshing={isRefreshingJob}
+          freshDataLoaded={freshDataLoaded}
+          onAssetsUpdate={handleAssetsUpdate}
+        />
+      </div>
+    </div>
   );
 }
 
