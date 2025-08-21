@@ -621,7 +621,15 @@ function JobUploadingContent() {
             borderRadius: '16px',
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)'
           }}>
-            <Spinner />
+            <div style={{
+              width: '48px',
+              height: '48px',
+              border: '4px solid rgba(255, 255, 255, 0.1)',
+              borderTop: '4px solid #3b82f6',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite',
+              margin: '0 auto'
+            }} />
             <p style={{ marginTop: '1rem', color: '#e2e8f0' }}>Loading job data...</p>
           </div>
         </div>
@@ -669,10 +677,11 @@ function JobUploadingContent() {
     );
   }
 
-  // Calculate actual file counts using both upload engine and local file statuses
-  const totalFiles = createdFiles.reduce((total: number, fileGroup: any) => 
-    total + Object.keys(fileGroup.original_files || {}).length, 0
-  );
+  // Calculate actual file counts using job data first, then fallback to created files
+  const totalFiles = jobData?.original_files_total_count || 
+    createdFiles.reduce((total: number, fileGroup: any) => 
+      total + Object.keys(fileGroup.original_files || {}).length, 0
+    );
   
   // Count files by status using local file statuses
   const fileStatusCounts = Object.values(localFileStatuses).reduce((counts, status) => {
@@ -872,7 +881,8 @@ function JobUploadingContent() {
                   width: '100%',
                   height: '100%',
                   background: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent)',
-                  animation: 'shimmer 2s infinite'
+                  animation: 'shimmer 2s infinite linear',
+                  zIndex: 1
                 }} />
               )}
               {/* Removed uploaded/total text from progress bar for cleaner look */}
@@ -974,9 +984,7 @@ function JobUploadingContent() {
                 fontSize: '0.9rem',
                 fontWeight: '600'
               }}>
-                {createdFiles.reduce((total: number, fileGroup: any) => 
-                  total + Object.keys(fileGroup.original_files || {}).length, 0
-                )} files
+                {totalFiles} files
               </div>
             </div>
 
@@ -1082,7 +1090,14 @@ function JobUploadingContent() {
                 }}>
                   {currentStep === 'creating-files' ? (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
-                      <Spinner />
+                      <div style={{
+                        width: '48px',
+                        height: '48px',
+                        border: '4px solid rgba(255, 255, 255, 0.1)',
+                        borderTop: '4px solid #3b82f6',
+                        borderRadius: '50%',
+                        animation: 'spin 1s linear infinite'
+                      }} />
                       <span>Creating files...</span>
                     </div>
                   ) : (
@@ -1096,15 +1111,26 @@ function JobUploadingContent() {
       </div>
       
       {/* Add CSS animations */}
-      <style jsx>{`
+      <style jsx global>{`
         @keyframes shimmer {
-          0% { left: -100%; }
-          100% { left: 100%; }
+          0% { 
+            transform: translateX(-100%);
+            left: -100%; 
+          }
+          100% { 
+            transform: translateX(100%);
+            left: 100%; 
+          }
         }
         
         @keyframes pulse {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.5; }
+        }
+        
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
         }
         
         /* Custom scrollbar */
@@ -1134,7 +1160,14 @@ export default function JobUploadingPage() {
   return (
     <Suspense fallback={
       <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}>
-        <Spinner />
+        <div style={{
+          width: '48px',
+          height: '48px',
+          border: '4px solid rgba(255, 255, 255, 0.1)',
+          borderTop: '4px solid #3b82f6',
+          borderRadius: '50%',
+          animation: 'spin 1s linear infinite'
+        }} />
       </div>
     }>
       <JobUploadingContent />

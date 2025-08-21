@@ -14,6 +14,8 @@ interface JobHeaderProps {
     source_folder?: string;
     job_status?: string;
     created_at?: string;
+    files?: string[];
+    original_files_total_count?: number;
     content_pipeline_files?: any[];
     extracted_files_total_count?: string;
     extracted_files_completed_count?: string;
@@ -121,7 +123,7 @@ export const JobHeader = ({
         }}>
           <span>
             Files: <span style={{ color: '#9ca3af' }}>
-              {jobData.content_pipeline_files?.length || 0}
+              {jobData.original_files_total_count || jobData.files?.length || jobData.content_pipeline_files?.length || 0}
             </span>
           </span>
           {jobData.created_at && (
