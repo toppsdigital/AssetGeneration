@@ -41,57 +41,61 @@ export const useFileUpload = (): UseFileUploadReturn => {
   const [uploadedPdfFiles, setUploadedPdfFiles] = useState(0);
   const [failedPdfFiles, setFailedPdfFiles] = useState(0);
 
-  // Get pre-signed URL for uploading files
+  // Get pre-signed URL for uploading files via content pipeline
   const getPresignedUrl = useCallback(async (filePath: string): Promise<string> => {
     try {
-      console.log('🔗 Getting presigned URL for:', filePath);
+      console.log('🔗 Getting presigned URL via content pipeline for:', filePath);
       
-      const requestBody = { 
-        filename: filePath,
+      const presignedData = await contentPipelineApi.getPresignedUrl({
         client_method: 'put',
-        expires_in: 720
-      };
-      
-      console.log('📤 Request body:', requestBody);
-      
-      const response = await fetch('/api/s3-proxy', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
+        filename: filePath,
+        expires_in: 720,
+        size: 1048576, // Default size since we don't have file object here
+        content_type: 'application/pdf'
       });
       
-      console.log('📥 Response status:', response.status);
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('❌ Error response:', errorData);
-        throw new Error(`Failed to get pre-signed URL: ${response.statusText} - ${JSON.stringify(errorData)}`);
-      }
-      
-      const data = await response.json();
-      console.log('✅ Got presigned URL response:', data);
-      return data.url;
+      console.log('✅ Got presigned URL via content pipeline:', { 
+        filename: filePath,
+        url_length: presignedData.url?.length || 0
+      });
+      return presignedData.url;
     } catch (error) {
-      console.error('❌ Error getting pre-signed URL:', error);
+      console.error('❌ Error getting pre-signed URL via content pipeline:', error);
       throw error;
     }
   }, []);
 
   // Upload file using pre-signed URL by proxying through our backend
-  const uploadFileToS3 = useCallback(async (file: File, uploadUrl: string, onProgress?: (progress: number) => void): Promise<void> => {
+  const uploadFileToS3 = useCallback(async (file: File, uploadUrl: string, onProgress?: (progress: number) => void, uploadFields?: Record<string, string>, uploadMethod?: string): Promise<void> => {
     try {
       console.log('📤 Starting proxied upload for:', file.name, 'to /api/s3-upload');
 
-      const response = await fetch('/api/s3-upload', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': file.type || 'application/pdf',
-          'x-presigned-url': uploadUrl,
-        },
-        body: file,
-      });
+      let response;
+      if (uploadFields && uploadMethod === 'POST') {
+        // Use form POST upload
+        console.log(`📤 Using presigned POST form upload with ${Object.keys(uploadFields).length} fields`);
+        response = await fetch('/api/s3-upload', {
+          method: 'POST',
+          headers: {
+            'Content-Type': file.type || 'application/pdf',
+            'x-upload-url': uploadUrl,
+            'x-upload-fields': JSON.stringify(uploadFields),
+            'x-upload-method': uploadMethod,
+          },
+          body: file,
+        });
+      } else {
+        // Use simple PUT upload (legacy/fallback)
+        console.log(`📤 Using presigned PUT upload`);
+        response = await fetch('/api/s3-upload', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': file.type || 'application/pdf',
+            'x-presigned-url': uploadUrl,
+          },
+          body: file,
+        });
+      }
 
       if (!response.ok) {
         const errorText = await response.text();

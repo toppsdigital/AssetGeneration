@@ -6,6 +6,7 @@ import { useAppDataStore } from '../hooks/useAppDataStore';
 import { AssetCreationForm } from './AssetCreationForm';
 import { AssetsTable } from './AssetsTable';
 import { buildS3PublicUrl } from '../utils/environment';
+import { contentPipelineApi } from '../web/utils/contentPipelineApi';
 
 interface PSDFile {
   name: string;
@@ -860,44 +861,54 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     
     setUploadProgress(10);
 
-    // Step 1: Get presigned PUT URL from our S3 proxy
-    console.log('📋 Step 1: Getting presigned PUT URL...');
+    // Step 1: Get presigned PUT URL via content pipeline
+    console.log('📋 Step 1: Getting presigned PUT URL via content pipeline...');
     
-    const putUrlResponse = await fetch('/api/s3-proxy', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        client_method: 'put',
-        filename: presignedPath,
-        expires_in: 3600
-      }),
+    const presignedData = await contentPipelineApi.getPresignedUrl({
+      client_method: 'put',
+      filename: presignedPath,
+      expires_in: 3600,
+      size: file.size,
+      content_type: file.type || 'application/pdf'
     });
 
-    if (!putUrlResponse.ok) {
-      throw new Error('Failed to get PUT presigned URL for EDR upload');
-    }
-
-    const { url: putUrl } = await putUrlResponse.json();
+    const putUrl = presignedData.url;
     
-    // Extract S3 key from the presigned URL for the extract API
-    const urlObj = new URL(putUrl);
-    const s3PathFromUrl = urlObj.pathname.substring(1); // Remove leading slash and query params are automatically excluded
-    const extractApiS3Key = s3PathFromUrl; // Clean S3 key without query parameters
+    // For EDR uploads, we need the S3 key for the extract API
+    // Use the original path we sent since the response structure may vary
+    const extractApiS3Key = presignedPath; // Use the original path we constructed
     
-    console.log('📋 Extracted S3 key from presigned URL:', extractApiS3Key);
+    console.log('📋 Using S3 key for extract API:', extractApiS3Key);
     setUploadProgress(30);
 
-    // Step 2: Upload file via our S3 proxy (bypasses Vercel payload limits and CORS)
-    console.log('📋 Step 2: Uploading file via S3 proxy...');
-    
-    const uploadResponse = await fetch('/api/s3-upload', {
-      method: 'PUT',
-      headers: {
-        'Content-Type': file.type || 'application/pdf',
-        'x-presigned-url': putUrl,
-      },
-      body: file,
-    });
+    // Step 2: Upload file to S3 via our proxy - handle both POST form and PUT uploads
+    console.log('📋 Step 2: Uploading file to S3...');
+    let uploadResponse;
+    if (presignedData.fields && presignedData.method === 'POST') {
+      // Use form POST upload
+      console.log(`📋 Using presigned POST form upload with ${Object.keys(presignedData.fields).length} fields`);
+      uploadResponse = await fetch('/api/s3-upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': file.type || 'application/pdf',
+          'x-upload-url': putUrl,
+          'x-upload-fields': JSON.stringify(presignedData.fields),
+          'x-upload-method': presignedData.method,
+        },
+        body: file,
+      });
+    } else {
+      // Use simple PUT upload (legacy/fallback)
+      console.log(`📋 Using presigned PUT upload`);
+      uploadResponse = await fetch('/api/s3-upload', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': file.type || 'application/pdf',
+          'x-presigned-url': putUrl,
+        },
+        body: file,
+      });
+    }
 
     if (!uploadResponse.ok) {
       const errorText = await uploadResponse.text();

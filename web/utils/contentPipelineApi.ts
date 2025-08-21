@@ -836,6 +836,79 @@ class ContentPipelineAPI {
     console.log(`✅ PDF data extracted:`, result);
     return result;
   }
+
+  async getPresignedUrl(urlData: { 
+    client_method: 'put' | 'get'; 
+    filename: string; 
+    expires_in?: number;
+    size?: number;
+    content_type?: string;
+  }): Promise<{ url: string; fields?: Record<string, string>; method?: string }> {
+    
+    console.log(`🔗 Getting presigned URL via /s3-files for: ${urlData.filename} (${urlData.client_method})`);
+    
+    // Extract folder from filename (e.g., "BUNT/PDFs/file.pdf" -> "BUNT") 
+    const pathParts = urlData.filename.split('/');
+    const folder = pathParts[0]; // First part is the folder
+    const filename = pathParts[pathParts.length - 1]; // Last part is the filename
+    
+    const response = await fetch(`${this.baseUrl}?operation=s3_upload_files`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        mode: 'upload',
+        folder: folder,
+        files: [{
+          filename: filename,
+          size: urlData.size || 1048576, // Default size if not provided
+          content_type: urlData.content_type || 'application/pdf'
+        }]
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || `Failed to get presigned URL: ${response.status}`);
+    }
+
+    const result = await response.json();
+    
+    // Check for success
+    if (!result.success) {
+      throw new Error(result.message || 'Upload instructions request failed');
+    }
+    
+    // Extract the upload instructions
+    const uploadInstructions = result.data?.upload_instructions;
+    if (!uploadInstructions || uploadInstructions.length === 0) {
+      throw new Error('No upload instructions received from /s3-files endpoint');
+    }
+    
+    const instruction = uploadInstructions[0];
+    const uploadData = instruction.upload_data;
+    
+    if (!uploadData?.url) {
+      throw new Error('No upload URL found in upload instructions');
+    }
+    
+    console.log(`✅ Presigned upload instructions generated via /s3-files:`, { 
+      filename: urlData.filename,
+      folder: folder,
+      upload_type: instruction.upload_type,
+      method: uploadData.method,
+      url_length: uploadData.url.length,
+      fields_count: uploadData.fields ? Object.keys(uploadData.fields).length : 0
+    });
+    
+    // Return URL and additional data for form uploads
+    return { 
+      url: uploadData.url,
+      fields: uploadData.fields,
+      method: uploadData.method
+    };
+  }
 }
 
 // Export a singleton instance

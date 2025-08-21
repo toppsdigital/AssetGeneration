@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { JobData, FileData } from '../web/utils/contentPipelineApi';
+import { JobData, FileData, contentPipelineApi } from '../web/utils/contentPipelineApi';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAppDataStore } from './useAppDataStore';
 import { buildS3UploadsPath, isInUploadsDirectory } from '../utils/environment';
@@ -220,34 +220,47 @@ export const useUploadEngine = ({
       for (const { file, filePath } of files) {
         console.log(`📤 Uploading file via S3 proxy: ${filePath} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
         
-        // Step 1: Get presigned PUT URL for our S3 bucket (direct upload without base prefix)
+        // Step 1: Get presigned PUT URL via content pipeline
         const s3Key = filePath; // Use filePath directly (e.g., "BUNT/PDFs/25BWBB_3501_BK.pdf")
-        console.log(`🔑 Direct S3 upload - using s3Key: "${s3Key}"`);
-        const presignedResponse = await fetch('/api/s3-proxy', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            client_method: 'put',
-            filename: s3Key,
-            expires_in: 3600
-          }),
-        });
-
-        if (!presignedResponse.ok) {
-          throw new Error(`Failed to get presigned URL for ${filePath}: ${presignedResponse.status}`);
-        }
-
-        const { url: presignedUrl } = await presignedResponse.json();
+        console.log(`🔑 Content Pipeline S3 upload - using s3Key: "${s3Key}"`);
         
-        // Step 2: Upload file directly to S3 via our proxy (bypasses Vercel limits)
-        const uploadResponse = await fetch('/api/s3-upload', {
-          method: 'PUT',
-          headers: {
-            'Content-Type': file.type || 'application/pdf',
-            'x-presigned-url': presignedUrl,
-          },
-          body: file,
+        const presignedData = await contentPipelineApi.getPresignedUrl({
+          client_method: 'put',
+          filename: s3Key,
+          expires_in: 3600,
+          size: file.size,
+          content_type: file.type || 'application/pdf'
         });
+
+        const presignedUrl = presignedData.url;
+        
+        // Step 2: Upload file to S3 via our proxy - use POST for form uploads, PUT for simple URLs
+        let uploadResponse;
+        if (presignedData.fields && presignedData.method === 'POST') {
+          // Use form POST upload
+          console.log(`📤 Using presigned POST form upload with ${Object.keys(presignedData.fields).length} fields`);
+          uploadResponse = await fetch('/api/s3-upload', {
+            method: 'POST',
+            headers: {
+              'Content-Type': file.type || 'application/pdf',
+              'x-upload-url': presignedUrl,
+              'x-upload-fields': JSON.stringify(presignedData.fields),
+              'x-upload-method': presignedData.method,
+            },
+            body: file,
+          });
+        } else {
+          // Use simple PUT upload (legacy/fallback)
+          console.log(`📤 Using presigned PUT upload`);
+          uploadResponse = await fetch('/api/s3-upload', {
+            method: 'PUT',
+            headers: {
+              'Content-Type': file.type || 'application/pdf',
+              'x-presigned-url': presignedUrl,
+            },
+            body: file,
+          });
+        }
 
         if (!uploadResponse.ok) {
           const errorText = await uploadResponse.text();
@@ -305,36 +318,46 @@ export const useUploadEngine = ({
         console.log('📤 FormData prepared, uploading to S3...');
         
         try {
-          // For now, let's create a simple presigned PUT URL instead of complex POST
-          console.log('📤 Getting simple presigned PUT URL instead of POST');
+          // Use content pipeline for presigned URL generation instead of old s3-proxy
+          console.log('📤 Getting presigned URL via content pipeline');
           
-          // Request a simple PUT URL that works with our existing proxy
-          console.log(`🔍 Sending to S3 proxy with s3_key: "${uploadInstruction.s3_key}"`);
-          const putUrlResponse = await fetch('/api/s3-proxy', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              client_method: 'put',
-              filename: uploadInstruction.s3_key,
-              expires_in: 3600
-            }),
+          console.log(`🔍 Getting content pipeline presigned URL for s3_key: "${uploadInstruction.s3_key}"`);
+          const presignedData = await contentPipelineApi.getPresignedUrl({
+            client_method: 'put',
+            filename: uploadInstruction.s3_key,
+            expires_in: 3600,
+            size: file.size,
+            content_type: file.type || 'application/pdf'
           });
 
-          if (!putUrlResponse.ok) {
-            throw new Error('Failed to get PUT presigned URL');
+          const presignedUrl = presignedData.url;
+          
+          // Use the appropriate upload method based on response
+          if (presignedData.fields && presignedData.method === 'POST') {
+            // Use form POST upload
+            console.log(`📤 Using presigned POST form upload with ${Object.keys(presignedData.fields).length} fields`);
+            uploadResponse = await fetch('/api/s3-upload', {
+              method: 'POST',
+              headers: {
+                'Content-Type': file.type || 'application/pdf',
+                'x-upload-url': presignedUrl,
+                'x-upload-fields': JSON.stringify(presignedData.fields),
+                'x-upload-method': presignedData.method,
+              },
+              body: file,
+            });
+          } else {
+            // Use simple PUT upload (fallback)
+            console.log(`📤 Using presigned PUT upload`);
+            uploadResponse = await fetch('/api/s3-upload', {
+              method: 'PUT',
+              headers: {
+                'Content-Type': file.type || 'application/pdf',
+                'x-presigned-url': presignedUrl,
+              },
+              body: file,
+            });
           }
-
-          const { url: putUrl } = await putUrlResponse.json();
-          
-          // Use our S3 proxy with the PUT URL
-          uploadResponse = await fetch('/api/s3-upload', {
-            method: 'PUT',
-            headers: {
-              'Content-Type': file.type || 'application/pdf',
-              'x-presigned-url': putUrl,
-            },
-            body: file,
-          });
           
           console.log('📤 S3 response status:', uploadResponse.status);
           console.log('📤 S3 response headers:', Object.fromEntries(uploadResponse.headers.entries()));

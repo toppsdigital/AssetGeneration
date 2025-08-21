@@ -979,6 +979,8 @@ async function handleRequest(request: NextRequest, method: string) {
         apiUrl += '/pdf-extract';
         apiMethod = 'POST';
         break;
+
+
         
       default:
         return NextResponse.json({ 
