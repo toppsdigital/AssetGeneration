@@ -111,6 +111,7 @@ export type MutationType =
   | 'createAsset'
   | 'updateAsset'
   | 'deleteAsset'
+  | 'deleteAllAssets'
   | 'bulkUpdateAssets'
   | 'generateAssets'
   | 'regenerateAssets'

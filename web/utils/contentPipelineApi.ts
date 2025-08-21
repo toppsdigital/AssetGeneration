@@ -710,6 +710,45 @@ class ContentPipelineAPI {
     }
   }
 
+  async deleteAllAssets(jobId: string): Promise<{
+    success: boolean;
+    message: string;
+    assets?: Record<string, any>;
+    [key: string]: any;
+  }> {
+    console.log(`🗑️ Deleting all assets for job: ${jobId}`);
+    
+    try {
+      const response = await fetch(`${this.baseUrl}?operation=delete_all_assets&id=${encodeURIComponent(jobId)}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.error(`❌ DELETE all assets failed:`, {
+          status: response.status,
+          statusText: response.statusText,
+          error: error
+        });
+        
+        if (response.status === 404) {
+          throw new Error(`Job ${jobId} not found`);
+        }
+        throw new Error(error.error || error.message || `Failed to delete all assets: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log(`✅ All assets deleted:`, result);
+      return result;
+    } catch (fetchError) {
+      console.error(`❌ DELETE all assets request failed:`, fetchError);
+      throw fetchError;
+    }
+  }
+
   async bulkUpdateAssets(jobId: string, assets: any[]): Promise<{
     success: boolean;
     message: string;

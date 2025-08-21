@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAppDataStore } from '../hooks/useAppDataStore';
+import { ConfirmationModal } from './ConfirmationModal';
 
 // For multiple spot/color selections in parallel mode
 interface SpotColorPair {
@@ -74,6 +75,10 @@ export const AssetAdvancedOptions = ({
   };
 
   const [foilToggleState, setFoilToggleState] = useState(getInitialFoilToggleState);
+  
+  // State for delete confirmation modal
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [isDeletingAssets, setIsDeletingAssets] = useState(false);
   
   // Update foil toggle state when assets change (for navigation between pages)
   useEffect(() => {
@@ -433,6 +438,44 @@ export const AssetAdvancedOptions = ({
     }
   };
 
+  const handleDeleteAllAssets = async () => {
+    if (!jobData?.job_id || isDeletingAssets) return;
+    
+    setIsDeletingAssets(true);
+    
+    try {
+      console.log(`🗑️ Deleting all ${configuredAssets.length} assets for job ${jobData.job_id}`);
+      
+      // Use dedicated delete all assets operation
+      const response = await bulkUpdateAssetsMutation({
+        type: 'deleteAllAssets',
+        jobId: jobData.job_id,
+        data: {} // No data needed for delete all
+      });
+      
+      if (response.success) {
+        console.log(`✅ Successfully deleted all assets`);
+        
+        // Update assets with empty object
+        if (onAssetsUpdate) {
+          onAssetsUpdate({ 
+            job_id: jobData.job_id, 
+            assets: {},
+            _cacheTimestamp: Date.now()
+          });
+        }
+      } else {
+        console.error('❌ Bulk delete failed:', response);
+      }
+      
+    } catch (error) {
+      console.error('❌ Error in bulk delete:', error);
+    } finally {
+      setIsDeletingAssets(false);
+      setShowDeleteConfirmation(false);
+    }
+  };
+
   if (!isVisible) return null;
 
   return (
@@ -458,8 +501,8 @@ export const AssetAdvancedOptions = ({
       
       <div style={{
         display: 'grid',
-        gridTemplateColumns: '1fr 1fr',
-        gap: 24,
+        gridTemplateColumns: '1fr 1fr auto',
+        gap: 20,
         alignItems: 'center'
       }}>
         {/* Chrome Toggle */}
@@ -476,16 +519,9 @@ export const AssetAdvancedOptions = ({
             <div style={{
               color: '#f8f8f8',
               fontSize: 14,
-              fontWeight: 500,
-              marginBottom: 2
+              fontWeight: 500
             }}>
-              Apply Chrome to All
-            </div>
-            <div style={{
-              color: '#9ca3af',
-              fontSize: 12
-            }}>
-              Toggle silver chrome for base/parallel assets only
+              Apply Chrome
             </div>
           </div>
           <button
@@ -534,16 +570,9 @@ export const AssetAdvancedOptions = ({
             <div style={{
               color: '#f8f8f8',
               fontSize: 14,
-              fontWeight: 500,
-              marginBottom: 2
+              fontWeight: 500
             }}>
-              Apply Foil to All
-            </div>
-            <div style={{
-              color: '#9ca3af',
-              fontSize: 12
-            }}>
-              Front cards only. ON: foil enabled (default), OFF: adds foil: false
+              Apply Foil (Enabled by default)
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -587,7 +616,54 @@ export const AssetAdvancedOptions = ({
             </button>
           </div>
         </div>
+
+        {/* Delete All Assets */}
+        <button
+          onClick={() => setShowDeleteConfirmation(true)}
+          disabled={savingAsset || creatingAssets || processingPdf || configuredAssets.length === 0}
+          style={{
+            padding: '8px 16px',
+            background: (savingAsset || creatingAssets || processingPdf || configuredAssets.length === 0)
+              ? 'rgba(156, 163, 175, 0.3)'
+              : 'linear-gradient(135deg, #ef4444, #dc2626)',
+            border: 'none',
+            borderRadius: 6,
+            color: (savingAsset || creatingAssets || processingPdf || configuredAssets.length === 0) ? '#6b7280' : 'white',
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: (savingAsset || creatingAssets || processingPdf || configuredAssets.length === 0) ? 'not-allowed' : 'pointer',
+            transition: 'all 0.2s',
+            opacity: (savingAsset || creatingAssets || processingPdf || configuredAssets.length === 0) ? 0.6 : 1,
+            boxShadow: (savingAsset || creatingAssets || processingPdf || configuredAssets.length === 0) ? 'none' : '0 4px 12px rgba(239, 68, 68, 0.3)',
+            justifySelf: 'end'
+          }}
+          onMouseEnter={(e) => {
+            if (!savingAsset && !creatingAssets && !processingPdf && configuredAssets.length > 0) {
+              e.currentTarget.style.background = 'linear-gradient(135deg, #dc2626, #b91c1c)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!savingAsset && !creatingAssets && !processingPdf && configuredAssets.length > 0) {
+              e.currentTarget.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
+            }
+          }}
+        >
+          🗑️ Delete All
+        </button>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteConfirmation}
+        onClose={() => setShowDeleteConfirmation(false)}
+        onConfirm={handleDeleteAllAssets}
+        title="Delete All Assets"
+        message={`Are you sure you want to delete all ${configuredAssets.length} assets? This action cannot be undone.`}
+        confirmText="Delete All"
+        cancelText="Cancel"
+        confirmButtonStyle="danger"
+        isLoading={isDeletingAssets}
+      />
     </div>
   );
 };

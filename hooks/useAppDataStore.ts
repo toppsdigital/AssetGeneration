@@ -662,6 +662,10 @@ export function useAppDataStore<T = any>(
           if (!payload.jobId || !payload.assetId) throw new Error('Job ID and asset ID required');
           return await contentPipelineApi.deleteAsset(payload.jobId, payload.assetId);
           
+        case 'deleteAllAssets':
+          if (!payload.jobId) throw new Error('Job ID required');
+          return await contentPipelineApi.deleteAllAssets(payload.jobId);
+          
         case 'bulkUpdateAssets':
           if (!payload.jobId || !payload.data) throw new Error('Job ID and assets data required');
           return await contentPipelineApi.bulkUpdateAssets(payload.jobId, payload.data);
@@ -785,6 +789,7 @@ export function useAppDataStore<T = any>(
         case 'createAsset':
         case 'updateAsset':
         case 'deleteAsset':
+        case 'deleteAllAssets':
         case 'bulkUpdateAssets':
           // For asset operations, use response data to update cache instead of invalidating
           // Handle nested assets structure: response.assets.assets
