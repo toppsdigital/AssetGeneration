@@ -5,7 +5,13 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { SessionProvider } from 'next-auth/react';
 import { useState } from 'react';
 
-export default function QueryProvider({ children }: { children: React.ReactNode }) {
+export default function QueryProvider({ 
+  children, 
+  session 
+}: { 
+  children: React.ReactNode;
+  session?: any;
+}) {
   const [queryClient] = useState(() => new QueryClient({
     defaultOptions: {
       queries: {
@@ -26,7 +32,7 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
   }));
 
   return (
-    <SessionProvider>
+    <SessionProvider session={session}>
       <QueryClientProvider client={queryClient}>
         {children}
         {/* Only show devtools in development and make it less intrusive */}

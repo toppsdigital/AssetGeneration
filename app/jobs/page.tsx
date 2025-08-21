@@ -7,6 +7,7 @@ import { useSession } from 'next-auth/react';
 import styles from '../../styles/Home.module.css';
 import PageTitle from '../../components/PageTitle';
 import Spinner from '../../components/Spinner';
+import { ConfirmationModal } from '../../components/ConfirmationModal';
 import { JobData } from '../../web/utils/contentPipelineApi';
 import { getAppIcon } from '../../utils/fileOperations';
 import { useAppDataStore, dataStoreKeys } from '../../hooks/useAppDataStore';
@@ -20,6 +21,10 @@ export default function JobsPage() {
   // Filter states
   const [userFilter, setUserFilter] = useState<'all' | 'my'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'in-progress' | 'completed'>('all');
+  
+  // Delete confirmation state
+  const [jobToDelete, setJobToDelete] = useState<JobData | null>(null);
+  const [isDeletingJob, setIsDeletingJob] = useState(false);
   
   // Timestamp tracking
   const [jobsListLastUpdate, setJobsListLastUpdate] = useState<string | null>(null);
@@ -43,7 +48,8 @@ export default function JobsPage() {
     refresh: refetch,
     isRefreshing,
     isAutoRefreshActive,
-    forceRefreshJobsList
+    forceRefreshJobsList,
+    mutate: performMutation
   } = useAppDataStore('jobs', dataStoreOptions);
 
   // Debug logging to track cached vs fresh data usage
@@ -259,6 +265,67 @@ export default function JobsPage() {
   // Handle manual refresh using centralized data store
   const handleRefresh = () => {
     refetch();
+  };
+
+  // Handle job deletion
+  const handleDeleteJob = (job: JobData) => {
+    setJobToDelete(job);
+  };
+
+  const confirmDeleteJob = async () => {
+    if (!jobToDelete?.job_id) return;
+    
+    setIsDeletingJob(true);
+    try {
+      await performMutation({
+        type: 'deleteJob',
+        jobId: jobToDelete.job_id
+      });
+      
+      console.log(`✅ Job ${jobToDelete.job_id} deleted successfully`);
+      setJobToDelete(null);
+    } catch (error) {
+      console.error('Failed to delete job:', error);
+      // You could add toast notification here
+    } finally {
+      setIsDeletingJob(false);
+    }
+  };
+
+  const cancelDeleteJob = () => {
+    setJobToDelete(null);
+  };
+
+  // Check if current user can delete a job (must be the creator)
+  const canDeleteJob = (job: JobData) => {
+    // Wait for session to load - don't show buttons while loading
+    if (sessionStatus === 'loading') {
+      return false;
+    }
+    
+    // If no session after loading, definitely can't delete
+    if (sessionStatus === 'unauthenticated' || !session?.user) {
+      return false;
+    }
+    
+    if (!job.user_id && !job.user_name) {
+      return false;
+    }
+    
+    // Try multiple fields from session that might contain user identifier
+    const currentUserEmail = session.user.email;
+    const currentUserName = session.user.name;
+    const currentUserId = (session.user as any)?.id;
+    
+    // Check against all possible user fields in job
+    const isOwner = currentUserEmail === job.user_id || 
+                   currentUserEmail === job.user_name ||
+                   currentUserName === job.user_id ||
+                   currentUserName === job.user_name ||
+                   currentUserId === job.user_id ||
+                   currentUserId === job.user_name;
+    
+    return isOwner;
   };
 
   if (isLoading) {
@@ -737,31 +804,66 @@ export default function JobsPage() {
                         </div>
                       )}
                       
-                      {/* Only show View Details button when not actively processing */}
-                      {!['uploading', 'extracting', 'generating'].includes(job.job_status?.toLowerCase() || '') && (
-                        <button
-                          onClick={() => viewJobDetails(job)}
-                          style={{
-                            padding: '8px 16px',
-                            background: 'rgba(255, 255, 255, 0.1)',
-                            border: '1px solid rgba(255, 255, 255, 0.2)',
-                            borderRadius: 6,
-                            color: '#e5e7eb',
-                            cursor: 'pointer',
-                            fontSize: 14,
-                            fontWeight: 500,
-                            transition: 'all 0.2s'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
-                          }}
-                        >
-                          📋 View Details
-                        </button>
-                      )}
+                      {/* Action buttons container */}
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        {/* Only show View Details button when not actively processing */}
+                        {!['uploading', 'extracting', 'generating'].includes(job.job_status?.toLowerCase() || '') && (
+                          <button
+                            onClick={() => viewJobDetails(job)}
+                            style={{
+                              padding: '8px 16px',
+                              background: 'rgba(255, 255, 255, 0.1)',
+                              border: '1px solid rgba(255, 255, 255, 0.2)',
+                              borderRadius: 6,
+                              color: '#e5e7eb',
+                              cursor: 'pointer',
+                              fontSize: 14,
+                              fontWeight: 500,
+                              transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                            }}
+                          >
+                            📋 View Details
+                          </button>
+                        )}
+                        
+                        {/* Delete button - only show if user is the job creator */}
+                        {canDeleteJob(job) && (
+                          <button
+                            onClick={() => handleDeleteJob(job)}
+                            style={{
+                              padding: '8px 12px',
+                              background: 'rgba(239, 68, 68, 0.1)',
+                              border: '1px solid rgba(239, 68, 68, 0.3)',
+                              borderRadius: 6,
+                              color: '#ef4444',
+                              cursor: 'pointer',
+                              fontSize: 14,
+                              fontWeight: 500,
+                              transition: 'all 0.2s',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
+                              e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.5)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+                              e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+                            }}
+                            title="Delete job"
+                          >
+                            🗑️
+                          </button>
+                        )}
+                      </div>
                       
                       {/* Show processing indicator when actively processing */}
                       {['uploading', 'extracting', 'generating'].includes(job.job_status?.toLowerCase() || '') && (
@@ -801,6 +903,19 @@ export default function JobsPage() {
           )}
         </div>
       </div>
+      
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={!!jobToDelete}
+        onClose={cancelDeleteJob}
+        onConfirm={confirmDeleteJob}
+        title="Delete Job"
+        message={`Are you sure you want to delete "${jobToDelete ? getJobDisplayName(jobToDelete) : ''}"? This action cannot be undone and will permanently remove the job and all associated files.`}
+        confirmText="Yes, Delete Job"
+        cancelText="Cancel"
+        confirmButtonStyle="danger"
+        isLoading={isDeletingJob}
+      />
       
       {/* Add CSS animation for spinner */}
       <style jsx>{`

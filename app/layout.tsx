@@ -23,7 +23,7 @@ export default async function RootLayout({
   return (
     <html lang="en">
       <body>
-        <QueryProvider>
+        <QueryProvider session={session}>
           <UserSessionHeader session={session} />
           {!isAuthenticated ? <SignInPage /> : children}
         </QueryProvider>
