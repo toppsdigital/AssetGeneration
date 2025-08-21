@@ -4,9 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import styles from '../../../styles/Review.module.css';
 import { usePsdStore } from '../../../web/store/psdStore';
-import { getPresignedUrl, uploadFileToPresignedUrl } from '../../../web/utils/s3Presigned';
 import { getFireflyToken, createFireflyAsset, collectLayerParameters, buildFireflyLayersPayload } from '../../../web/utils/firefly';
-import { contentPipelineApi } from '../../../web/utils/contentPipelineApi';
 import PageTitle from '../../../components/PageTitle';
 
 const baseSteps = [
@@ -60,6 +58,7 @@ export default function GeneratingPage() {
   const [smartObjectUploadProgress, setSmartObjectUploadProgress] = useState<Record<string, number>>({});
   const [outputFilename, setOutputFilename] = useState<string>('');
   const [imageSize, setImageSize] = useState<{ width: number; height: number } | null>(null);
+  const [uploadedS3Keys, setUploadedS3Keys] = useState<Record<string, string>>({});  // Store actual S3 keys from uploads
 
   // Helper to get all replaced smart object files
   const getReplacedSmartObjects = () => {
@@ -94,40 +93,35 @@ export default function GeneratingPage() {
     }
   };
 
-  // Helper to upload file with progress tracking via content pipeline
-  const uploadFileWithProgress = async (file: File, filename: string): Promise<void> => {
-    return new Promise<void>(async (resolve, reject) => {
+  // Helper to upload file with progress tracking via s3-proxy
+  const uploadFileWithProgress = async (file: File, filename: string): Promise<string> => {
+    return new Promise<string>(async (resolve, reject) => {
       try {
-        // Get presigned upload instructions via content pipeline
-        console.log(`🔗 Getting presigned URL for smart object: ${filename}`);
-        const presignedData = await contentPipelineApi.getPresignedUrl({
-          client_method: 'put',
-          filename: filename,
-          expires_in: 3600,
-          size: file.size,
-          content_type: file.type || 'image/jpeg'
+        // Get upload instructions via s3-proxy with upload=true to avoid CORS
+        console.log(`🔗 Getting upload instructions via s3-proxy for: ${filename}`);
+        const response = await fetch('/api/s3-proxy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            client_method: 'put',
+            filename: filename,
+            upload: true, // Use s3-upload endpoint to avoid CORS
+            expires_in: 3600
+          }),
         });
 
-        const uploadUrl = presignedData.url;
-        
-        // Prepare upload request based on response type
-        const xhr = new XMLHttpRequest();
-        
-        if (presignedData.fields && presignedData.method === 'POST') {
-          // Use form POST upload
-          console.log(`📤 Using presigned POST form upload for ${file.name}`);
-          xhr.open('POST', '/api/s3-upload', true);
-          xhr.setRequestHeader('x-upload-url', uploadUrl);
-          xhr.setRequestHeader('x-upload-fields', JSON.stringify(presignedData.fields));
-          xhr.setRequestHeader('x-upload-method', presignedData.method);
-          xhr.setRequestHeader('Content-Type', file.type || 'image/jpeg');
-        } else {
-          // Use simple PUT upload (fallback)
-          console.log(`📤 Using presigned PUT upload for ${file.name}`);
-          xhr.open('PUT', '/api/s3-upload', true);
-          xhr.setRequestHeader('x-presigned-url', uploadUrl);
-          xhr.setRequestHeader('Content-Type', file.type || 'image/jpeg');
+        if (!response.ok) {
+          throw new Error(`Failed to get upload instructions: ${response.status}`);
         }
+
+        const { uploadUrl, presignedUrl } = await response.json();
+        console.log(`📤 Using s3-upload endpoint for ${file.name}`);
+        
+        // Upload via our s3-upload endpoint to avoid CORS issues
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', uploadUrl, true);
+        xhr.setRequestHeader('Content-Type', file.type || 'image/jpeg');
+        xhr.setRequestHeader('x-presigned-url', presignedUrl);
         
         xhr.upload.onprogress = (event) => {
           if (event.lengthComputable) {
@@ -145,8 +139,8 @@ export default function GeneratingPage() {
               ...prev,
               [file.name]: 100
             }));
-            console.log(`✅ Successfully uploaded smart object: ${file.name}`);
-            resolve();
+            console.log(`✅ Successfully uploaded smart object: ${file.name} to S3 key: ${filename}`);
+            resolve(filename); // Return the filename as S3 key
           } else {
             const error = `Upload failed: ${xhr.status} ${xhr.statusText}`;
             console.error(`❌ ${error}`);
@@ -160,11 +154,11 @@ export default function GeneratingPage() {
           reject(new Error(error));
         };
         
-        // Send the file
+        // Send the file to our upload proxy
         xhr.send(file);
         
       } catch (error) {
-        console.error(`❌ Failed to get presigned URL for ${file.name}:`, error);
+        console.error(`❌ Failed to get upload instructions for ${file.name}:`, error);
         reject(error);
       }
     });
@@ -184,12 +178,7 @@ export default function GeneratingPage() {
 
         // Build smartObjectUrls map for replaced smart objects
         const smartObjectUrls: Record<number, string> = {};
-        Object.entries(edits.smartObjects).forEach(([id, file]) => {
-          if (file && file instanceof File) {
-            // We'll get the presigned URL for this below, but for now, just mark as needing upload
-            smartObjectUrls[Number(id)] = '';
-          }
-        });
+        let uploadedKeys: Record<string, string> = {}; // Declare here to use across steps
 
         // 1. Upload smart objects (using same content pipeline API as PDF uploads)
         setCurrentStep(0);
@@ -205,10 +194,16 @@ export default function GeneratingPage() {
             throw new Error('Invalid psdfile parameter');
           }
           
+          // Store S3 keys for later use in presigned URL generation
           for (const { id, file } of smartObjects) {
             const uploadPath = `${baseName}/inputs/${file.name}`;
-            await uploadFileWithProgress(file, uploadPath);
+            const actualS3Key = await uploadFileWithProgress(file, uploadPath);
+            uploadedKeys[id] = actualS3Key; // Store actual S3 key by smart object ID
+            console.log(`📝 Stored S3 key for smart object ${id}: ${actualS3Key}`);
           }
+          
+          // Update state with the actual S3 keys (for debugging/other uses)
+          setUploadedS3Keys(uploadedKeys);
           if (!isMounted) return;
           setStepStatus(s => { const arr = [...s]; arr[0] = 'done'; return arr; });
         } catch (err: any) {
@@ -235,33 +230,61 @@ export default function GeneratingPage() {
           } else {
             throw new Error('Invalid psdfile parameter');
           }
-          psdGetUrl = await getPresignedUrl({ filename: psdFilename, method: 'get' });
+          const psdResponse = await fetch('/api/s3-proxy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              client_method: 'get',
+              filename: psdFilename
+            }),
+          });
+          
+          if (!psdResponse.ok) {
+            throw new Error(`Failed to get presigned URL for PSD: ${psdResponse.status}`);
+          }
+          
+          const psdData = await psdResponse.json();
+          psdGetUrl = psdData.url;
           if (!psdGetUrl) {
             throw new Error('Failed to get presigned URL for PSD file');
           }
           console.log('PSD Get URL:', psdGetUrl);
 
-        // Fill in the smartObjectUrls with presigned GET URLs
-        // Extract base name for smart object URLs (same as used for upload)
-        let smartObjectBaseName: string;
-        if (typeof psdfile === 'string') {
-          smartObjectBaseName = psdfile.replace(/\.[^/.]+$/, '');
-        } else if (Array.isArray(psdfile) && psdfile.length > 0) {
-          smartObjectBaseName = psdfile[0].replace(/\.[^/.]+$/, '');
-        } else {
-          throw new Error('Invalid psdfile parameter');
-        }
-        
+        // Fill in the smartObjectUrls with presigned GET URLs using actual S3 keys from uploads
         const smartObjectGetUrls = await Promise.all(
           Object.entries(edits.smartObjects).map(async ([id, file]) => {
             if (!file) return null;
-              const url = await getPresignedUrl({ filename: `${smartObjectBaseName}/inputs/${file.name}`, method: 'get' });
-              if (!url) {
-                throw new Error(`Failed to get presigned URL for smart object ${file.name}`);
-              }
+            
+            // Use the actual S3 key that was used during upload (from local variable, not state)
+            const actualS3Key = uploadedKeys[id];
+            if (!actualS3Key) {
+              console.error(`Available uploaded keys:`, Object.keys(uploadedKeys));
+              console.error(`Looking for key:`, id);
+              throw new Error(`No S3 key found for smart object ${id} - upload may have failed`);
+            }
+            
+            console.log(`🔗 Getting presigned GET URL for smart object ${id} using S3 key: ${actualS3Key}`);
+            const smartObjectResponse = await fetch('/api/s3-proxy', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                client_method: 'get',
+                filename: actualS3Key
+              }),
+            });
+            
+            if (!smartObjectResponse.ok) {
+              throw new Error(`Failed to get presigned URL for smart object: ${smartObjectResponse.status}`);
+            }
+            
+            const smartObjectData = await smartObjectResponse.json();
+            const url = smartObjectData.url;
+            if (!url) {
+              throw new Error(`Failed to get presigned URL for smart object ${file.name} with S3 key: ${actualS3Key}`);
+            }
             return {
               id: Number(id),
-                url
+              url
             };
           })
         );
@@ -300,10 +323,21 @@ export default function GeneratingPage() {
         // Build output path using base name without extension
         const outputFilename = `${baseName}/output/output_${dateStr}.jpg`;
 
-        const outputPutUrl = await getPresignedUrl({ 
-          filename: outputFilename, 
-          method: 'put' 
+        const outputPutResponse = await fetch('/api/s3-proxy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            client_method: 'put',
+            filename: outputFilename
+          }),
         });
+        
+        if (!outputPutResponse.ok) {
+          throw new Error(`Failed to get presigned PUT URL for output: ${outputPutResponse.status}`);
+        }
+        
+        const outputPutData = await outputPutResponse.json();
+        const outputPutUrl = outputPutData.url;
         if (!isMounted) return;
         setStepStatus(s => { const arr = [...s]; arr[2] = 'done'; return arr; });
 
@@ -373,10 +407,21 @@ export default function GeneratingPage() {
                 setCurrentStep(6);
                 setStepStatus(s => { const arr = [...s]; arr[6] = 'done'; return arr; });
                 // Get the output image URL
-                const outputUrl = await getPresignedUrl({ 
-                  filename: outputFilename, 
-                  method: 'get' 
+                const outputGetResponse = await fetch('/api/s3-proxy', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    client_method: 'get',
+                    filename: outputFilename
+                  }),
                 });
+                
+                if (!outputGetResponse.ok) {
+                  throw new Error(`Failed to get presigned GET URL for output: ${outputGetResponse.status}`);
+                }
+                
+                const outputGetData = await outputGetResponse.json();
+                const outputUrl = outputGetData.url;
                 setOutputImageUrl(outputUrl);
                 setOutputFilename(outputFilename);
               } else {
