@@ -7,6 +7,7 @@ import { usePsdStore } from '../../../web/store/psdStore';
 import PsdCanvas from '../../../components/PsdCanvas';
 import PageTitle from '../../../components/PageTitle';
 import Spinner from '../../../components/Spinner';
+import { buildS3PublicAssetsUrl } from '../../../utils/environment';
 
 interface Layer {
   id: number;
@@ -124,7 +125,7 @@ export default function EditPage() {
           console.log('[EditPage] Downloaded JSON content:', json);
           setData(json);
           const psdFileName = templateStr?.replace(/\.json$/i, '') || 'template';
-          setTempDir(`https://topps-nexus-powertools.s3.us-east-1.amazonaws.com/asset_generator/dev/public/${psdFileName}/assets/`);
+          setTempDir(buildS3PublicAssetsUrl(psdFileName));
           if (!originals.visibility || Object.keys(originals.visibility).length === 0 || (data && data.json_file !== (json.json_file || ''))) {
             const vis: Record<number, boolean> = {};
             const texts: Record<number, string> = {};
@@ -161,7 +162,7 @@ export default function EditPage() {
     } else {
       // Even if template is already loaded, ensure tempDir is set
       const psdFileName = templateStr?.replace(/\.json$/i, '') || 'template';
-      setTempDir(`https://topps-nexus-powertools.s3.us-east-1.amazonaws.com/asset_generator/dev/public/${psdFileName}/assets/`);
+      setTempDir(buildS3PublicAssetsUrl(psdFileName));
       setLoading(false);
       setStatus(null);
       console.log('[EditPage] Already loaded template:', jsonUrl);

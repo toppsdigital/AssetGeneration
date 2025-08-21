@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { JobData, FileData } from '../web/utils/contentPipelineApi';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAppDataStore } from './useAppDataStore';
+import { buildS3UploadsPath, isInUploadsDirectory } from '../utils/environment';
 
 interface UseUploadEngineProps {
   jobData: any;
@@ -280,7 +281,7 @@ export const useUploadEngine = ({
         fileName: file.name,
         filePath: filePath,
         's3_key_from_instruction': uploadInstruction.s3_key,
-        'instruction_has_unwanted_prefix': uploadInstruction.s3_key?.includes('asset_generator/dev/uploads')
+        'instruction_has_unwanted_prefix': uploadInstruction.s3_key ? isInUploadsDirectory(uploadInstruction.s3_key) : false
       });
       
       let uploadResponse;
@@ -539,7 +540,7 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
 
-          folder: 'asset_generator/dev/uploads',
+          folder: buildS3UploadsPath(''),
           files: fileInstructions
         }),
       });
@@ -816,12 +817,13 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
         let s3FilePath = fileInfo.file_path || filename;
         
         // REMOVE ANY BASE PATH PREFIX: We want direct upload to app structure only
-        if (s3FilePath.includes('asset_generator/dev/uploads')) {
+        if (isInUploadsDirectory(s3FilePath)) {
           console.warn(`⚠️ WARNING: s3FilePath contains unwanted base path! Removing prefix:`, {
             original: s3FilePath,
           });
-          // Remove any asset_generator base path prefix
-          s3FilePath = s3FilePath.replace(/^asset_generator\/dev\/uploads\//, '');
+          // Remove any asset_generator base path prefix (environment-aware)
+          const uploadsPrefix = buildS3UploadsPath('');
+          s3FilePath = s3FilePath.replace(new RegExp(`^${uploadsPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`), '');
           console.log(`✅ Cleaned s3FilePath:`, {
             cleaned: s3FilePath,
             'will_upload_to': s3FilePath

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import styles from '../styles/Home.module.css';
 import { usePsdStore } from '../web/store/psdStore';
+import { buildS3PublicUrl } from '../utils/environment';
 
 export default function Home() {
   const [singleAssetTemplates, setSingleAssetTemplates] = useState<(string | { 
@@ -24,7 +25,7 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           client_method: 'fetch_public_files',
-          public_url: 'https://topps-nexus-powertools.s3.us-east-1.amazonaws.com/asset_generator/dev/public/one_off_psd_files.json',
+          public_url: buildS3PublicUrl('one_off_psd_files.json'),
           file_type: 'psd'
         }),
       });

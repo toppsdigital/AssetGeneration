@@ -103,14 +103,19 @@ interface S3UploadFilesResponse {
   }>;
 }
 
+import { getS3Environment, buildS3UploadsPath } from '../../../utils/environment';
+
 // Configuration - replace with your actual API Gateway URL
 const API_BASE_URL = process.env.CONTENT_PIPELINE_API_URL?.replace(/\/$/, ''); // Remove trailing slash
 const S3_BUCKET_NAME = 'topps-nexus-powertools';
+const S3_ENVIRONMENT = getS3Environment();
 
 console.log('🔧 API Configuration:', {
   raw_url: process.env.CONTENT_PIPELINE_API_URL,
   cleaned_url: API_BASE_URL,
-  has_trailing_slash: process.env.CONTENT_PIPELINE_API_URL?.endsWith('/')
+  has_trailing_slash: process.env.CONTENT_PIPELINE_API_URL?.endsWith('/'),
+  s3_environment: S3_ENVIRONMENT,
+  node_env: process.env.NODE_ENV
 });
 
 // If no API URL is configured, return mock data for development
@@ -210,7 +215,7 @@ async function generateAndSaveDownloadUrl(jobId: string): Promise<{
     console.log(`🔄 Generating download URL for job: ${jobId}`);
     
     // Generate download URL for the job's output folder
-    const folder = `asset_generator/dev/uploads/Output/${jobId}`;
+    const folder = buildS3UploadsPath(`Output/${jobId}`);
     
     // Call S3 download folder operation to get presigned URL
     const s3Response = await fetch(`${API_BASE_URL}/s3-files`, {

@@ -116,6 +116,8 @@ export interface BatchGetResponse {
   total_requested: number;
 }
 
+import { buildS3UploadsPath } from '../../utils/environment';
+
 class ContentPipelineAPI {
   private baseUrl = '/api/content-pipeline-proxy';
 
@@ -523,7 +525,7 @@ class ContentPipelineAPI {
       files_count: number;
     };
   }> {
-    const folder = `asset_generator/dev/uploads/Output/${jobId}`;
+    const folder = buildS3UploadsPath(`Output/${jobId}`);
     
     const response = await fetch(`${this.baseUrl}?operation=s3_download_folder`, {
       method: 'POST',

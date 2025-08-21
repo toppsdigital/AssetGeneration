@@ -7,6 +7,7 @@ import PsdCanvas from '../../../components/PsdCanvas';
 import { usePsdStore } from '../../../web/store/psdStore';
 import { collectLayerParameters, buildFireflyLayersPayload } from '../../../web/utils/firefly';
 import PageTitle from '../../../components/PageTitle';
+import { buildS3PublicAssetsUrl } from '../../../utils/environment';
 
 export default function ReviewPage() {
   const router = useRouter();
@@ -26,7 +27,7 @@ export default function ReviewPage() {
     templateStr = `${templateStr}.json`;
   }
   const psdFileName = templateStr ? templateStr.replace(/\.json$/i, '') : '';
-  const tempDir = `https://topps-nexus-powertools.s3.us-east-1.amazonaws.com/asset_generator/dev/public/${psdFileName}/assets/`;
+  const tempDir = buildS3PublicAssetsUrl(psdFileName);
 
   // Thumbnail sizing for review page
   const THUMBNAIL_MAX_WIDTH = 480;

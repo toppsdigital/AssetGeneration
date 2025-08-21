@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { buildS3PublicUrl } from '../utils/environment';
 
 interface PSDFile {
   name: string;
@@ -26,7 +27,7 @@ export const usePSDTemplateManager = (jobStatus?: string) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           client_method: 'fetch_public_files',
-          public_url: 'https://topps-nexus-powertools.s3.us-east-1.amazonaws.com/asset_generator/dev/public/digital_to_physical_psd_files.json',
+          public_url: buildS3PublicUrl('digital_to_physical_psd_files.json'),
           file_type: 'psd'
         }),
       });
