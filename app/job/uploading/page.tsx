@@ -786,12 +786,15 @@ function JobUploadingContent() {
   };
 
   return (
-    <div style={{ 
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #000000 0%, #1a1a1a 30%, #2d2d2d 70%, #000000 100%)',
-      color: '#e2e8f0',
-      padding: '2rem 1rem'
-    }}>
+    <div 
+      className="job-uploading-page"
+      style={{ 
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #000000 0%, #1a1a1a 30%, #2d2d2d 70%, #000000 100%)',
+        color: '#e2e8f0',
+        padding: '2rem 1rem'
+      }}
+    >
       <div style={{ 
         maxWidth: '1200px', 
         margin: '0 auto'
@@ -1112,6 +1115,11 @@ function JobUploadingContent() {
       
       {/* Add CSS animations */}
       <style jsx global>{`
+        /* Hide back button in JobHeader on uploading page */
+        .job-uploading-page div[style*="display: flex"] > div > button:first-child {
+          display: none !important;
+        }
+        
         @keyframes shimmer {
           0% { 
             transform: translateX(-100%);
