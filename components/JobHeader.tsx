@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { JobStatusBadge } from './JobStatusBadge';
 import { ConfirmationModal } from './ConfirmationModal';
 
@@ -35,6 +36,7 @@ export const JobHeader = ({
   className = '',
   onRerunJob
 }: JobHeaderProps) => {
+  const router = useRouter();
   const [showRerunModal, setShowRerunModal] = useState(false);
   const [isProcessingRerun, setIsProcessingRerun] = useState(false);
 
@@ -91,6 +93,36 @@ export const JobHeader = ({
         justifyContent: 'space-between'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          {/* Back Button */}
+          <button
+            onClick={() => router.back()}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 12px',
+              background: 'rgba(255, 255, 255, 0.08)',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              borderRadius: '6px',
+              color: '#e5e7eb',
+              fontSize: '14px',
+              fontWeight: '500',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+            }}
+          >
+            <span style={{ fontSize: '16px' }}>←</span>
+            Back
+          </button>
+          
           {/* Status Badge - Top Left */}
           <JobStatusBadge 
             status={jobData.job_status || 'Unknown'}
