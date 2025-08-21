@@ -177,6 +177,29 @@ class ContentPipelineAPI {
     return response.json();
   }
 
+  async deleteJob(jobId: string): Promise<{ success: boolean; message: string }> {
+    console.log(`🗑️ Deleting job: ${jobId}`);
+    
+    // Use query parameter format that the proxy expects
+    const response = await fetch(`${this.baseUrl}?operation=delete_job&id=${encodeURIComponent(jobId)}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      console.error(`❌ Failed to delete job ${jobId}:`, error);
+      throw new Error(error.error || `Failed to delete job: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log(`✅ Job ${jobId} deleted successfully:`, result);
+    return result;
+  }
+
   async listJobs(options: {
     limit?: number;
     recentOnly?: boolean;

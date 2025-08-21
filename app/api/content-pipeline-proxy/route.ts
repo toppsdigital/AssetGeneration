@@ -503,6 +503,16 @@ async function handleRequest(request: NextRequest, method: string) {
         console.log('🔗 Job params constructed:', jobParams.toString());
         break;
         
+      case 'delete_job':
+        if (!id) {
+          return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
+        }
+        apiUrl += `/jobs/${id}`;
+        apiMethod = 'DELETE';
+        // No body needed for DELETE
+        apiBody = {};
+        break;
+        
       // File operations
       case 'create_file':
         apiUrl += '/files';
@@ -969,7 +979,7 @@ async function handleRequest(request: NextRequest, method: string) {
         return NextResponse.json({ 
           error: 'Invalid operation',
           available_operations: [
-            'create_job', 'get_job', 'update_job', 'list_jobs', 'rerun_job',
+            'create_job', 'get_job', 'update_job', 'delete_job', 'list_jobs', 'rerun_job',
             'create_file', 'get_file', 'update_file', 'list_files',
             'batch_create_files', 'batch_get_files', 'update_pdf_status', 'batch_update_pdf_status',
             'generate_assets', 'regenerate_assets', 'update_download_url',
