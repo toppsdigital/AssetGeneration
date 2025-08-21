@@ -8,6 +8,7 @@ export { default as PsdCanvas } from './PsdCanvas';
 export { PSDTemplateSelector } from './PSDTemplateSelector';
 export { AssetCreationForm } from './AssetCreationForm';
 export { AssetsTable } from './AssetsTable';
+export { AssetAdvancedOptions } from './AssetAdvancedOptions';
 export { default as QueryProvider } from './QueryProvider';
 export { default as RegularImageViewer } from './RegularImageViewer';
 export { default as SignOutButton } from './SignOutButton';
