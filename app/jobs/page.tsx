@@ -770,9 +770,49 @@ export default function JobsPage() {
                             </span>
                           )}
                         </span>
-                        <span style={{ color: '#9ca3af', fontSize: 12 }}>
-                          📁 {job.files?.length || 0} files
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ color: '#9ca3af', fontSize: 12 }}>
+                            📁 {job.files?.length || 0} files
+                          </span>
+                          {/* Delete button - only show if user is the job creator */}
+                          {canDeleteJob(job) && (
+                            <button
+                              onClick={() => handleDeleteJob(job)}
+                              style={{
+                                padding: '4px 6px',
+                                background: 'transparent',
+                                border: 'none',
+                                borderRadius: 4,
+                                cursor: 'pointer',
+                                fontSize: 10,
+                                fontWeight: 500,
+                                transition: 'all 0.2s',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                minWidth: '20px',
+                                height: '18px',
+                                filter: 'hue-rotate(0deg) saturate(1) brightness(1)'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.transform = 'scale(1.1)';
+                                e.currentTarget.style.filter = 'hue-rotate(0deg) saturate(2) brightness(0.8)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.transform = 'scale(1)';
+                                e.currentTarget.style.filter = 'hue-rotate(0deg) saturate(1) brightness(1)';
+                              }}
+                              title="Delete job"
+                            >
+                              <span style={{ 
+                                filter: 'sepia(1) hue-rotate(320deg) saturate(6) brightness(1)',
+                                fontSize: '10px'
+                              }}>
+                                🗑️
+                              </span>
+                            </button>
+                          )}
+                        </div>
                       </div>
                       {job.description && (
                         <p style={{ 
@@ -804,66 +844,31 @@ export default function JobsPage() {
                         </div>
                       )}
                       
-                      {/* Action buttons container */}
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        {/* Only show View Details button when not actively processing */}
-                        {!['uploading', 'extracting', 'generating'].includes(job.job_status?.toLowerCase() || '') && (
-                          <button
-                            onClick={() => viewJobDetails(job)}
-                            style={{
-                              padding: '8px 16px',
-                              background: 'rgba(255, 255, 255, 0.1)',
-                              border: '1px solid rgba(255, 255, 255, 0.2)',
-                              borderRadius: 6,
-                              color: '#e5e7eb',
-                              cursor: 'pointer',
-                              fontSize: 14,
-                              fontWeight: 500,
-                              transition: 'all 0.2s'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
-                            }}
-                          >
-                            📋 View Details
-                          </button>
-                        )}
-                        
-                        {/* Delete button - only show if user is the job creator */}
-                        {canDeleteJob(job) && (
-                          <button
-                            onClick={() => handleDeleteJob(job)}
-                            style={{
-                              padding: '8px 12px',
-                              background: 'rgba(239, 68, 68, 0.1)',
-                              border: '1px solid rgba(239, 68, 68, 0.3)',
-                              borderRadius: 6,
-                              color: '#ef4444',
-                              cursor: 'pointer',
-                              fontSize: 14,
-                              fontWeight: 500,
-                              transition: 'all 0.2s',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
-                              e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.5)';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
-                              e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.3)';
-                            }}
-                            title="Delete job"
-                          >
-                            🗑️
-                          </button>
-                        )}
-                      </div>
+                      {/* Only show View Details button when not actively processing */}
+                      {!['uploading', 'extracting', 'generating'].includes(job.job_status?.toLowerCase() || '') && (
+                        <button
+                          onClick={() => viewJobDetails(job)}
+                          style={{
+                            padding: '8px 16px',
+                            background: 'rgba(255, 255, 255, 0.1)',
+                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                            borderRadius: 6,
+                            color: '#e5e7eb',
+                            cursor: 'pointer',
+                            fontSize: 14,
+                            fontWeight: 500,
+                            transition: 'all 0.2s'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                          }}
+                        >
+                          📋 View Details
+                        </button>
+                      )}
                       
                       {/* Show processing indicator when actively processing */}
                       {['uploading', 'extracting', 'generating'].includes(job.job_status?.toLowerCase() || '') && (

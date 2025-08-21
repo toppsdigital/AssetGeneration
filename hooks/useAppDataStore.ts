@@ -619,6 +619,10 @@ export function useAppDataStore<T = any>(
           if (!payload.jobId || !payload.data) throw new Error('Job ID and data required');
           return await contentPipelineApi.updateJob(payload.jobId, payload.data);
           
+        case 'deleteJob':
+          if (!payload.jobId) throw new Error('Job ID required');
+          return await contentPipelineApi.deleteJob(payload.jobId);
+          
         case 'createFiles':
           if (!payload.data) throw new Error('File data required');
           return await contentPipelineApi.batchCreateFiles(payload.data);
@@ -704,6 +708,18 @@ export function useAppDataStore<T = any>(
         case 'updateJob':
           if (variables.jobId) {
             queryClient.invalidateQueries({ queryKey: dataStoreKeys.jobs.detail(variables.jobId) });
+            queryClient.invalidateQueries({ queryKey: dataStoreKeys.jobs.all });
+          }
+          break;
+          
+        case 'deleteJob':
+          if (variables.jobId) {
+            // Remove the deleted job from all caches
+            queryClient.removeQueries({ queryKey: dataStoreKeys.jobs.detail(variables.jobId) });
+            queryClient.removeQueries({ queryKey: dataStoreKeys.files.byJob(variables.jobId) });
+            queryClient.removeQueries({ queryKey: dataStoreKeys.assets.byJob(variables.jobId) });
+            queryClient.removeQueries({ queryKey: dataStoreKeys.downloads.byJob(variables.jobId) });
+            // Invalidate jobs list to remove the deleted job
             queryClient.invalidateQueries({ queryKey: dataStoreKeys.jobs.all });
           }
           break;
