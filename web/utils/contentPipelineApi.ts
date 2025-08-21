@@ -843,7 +843,7 @@ class ContentPipelineAPI {
     expires_in?: number;
     size?: number;
     content_type?: string;
-  }): Promise<{ url: string; fields?: Record<string, string>; method?: string }> {
+  }): Promise<{ url: string; fields?: Record<string, string>; method?: string; s3_key?: string }> {
     
     console.log(`🔗 Getting presigned URL via /s3-files for: ${urlData.filename} (${urlData.client_method})`);
     
@@ -899,14 +899,16 @@ class ContentPipelineAPI {
       upload_type: instruction.upload_type,
       method: uploadData.method,
       url_length: uploadData.url.length,
-      fields_count: uploadData.fields ? Object.keys(uploadData.fields).length : 0
+      fields_count: uploadData.fields ? Object.keys(uploadData.fields).length : 0,
+      s3_key: instruction.s3_key
     });
     
-    // Return URL and additional data for form uploads
+    // Return URL and additional data for form uploads, including the actual S3 key
     return { 
       url: uploadData.url,
       fields: uploadData.fields,
-      method: uploadData.method
+      method: uploadData.method,
+      s3_key: instruction.s3_key
     };
   }
 }

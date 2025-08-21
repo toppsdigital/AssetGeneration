@@ -875,10 +875,14 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     const putUrl = presignedData.url;
     
     // For EDR uploads, we need the S3 key for the extract API
-    // Use the original path we sent since the response structure may vary
-    const extractApiS3Key = presignedPath; // Use the original path we constructed
+    // Use the actual S3 key from the presigned response, fallback to constructed path if not available
+    const extractApiS3Key = presignedData.s3_key || presignedPath;
     
-    console.log('📋 Using S3 key for extract API:', extractApiS3Key);
+    console.log('📋 Using S3 key for extract API:', {
+      s3_key: extractApiS3Key,
+      from_response: !!presignedData.s3_key,
+      fallback_to_constructed: !presignedData.s3_key
+    });
     setUploadProgress(30);
 
     // Step 2: Upload file to S3 via our proxy - handle both POST form and PUT uploads

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useRouter, usePathname } from 'next/navigation';
 import SignOutButton from './SignOutButton';
 import SignInButton from './SignInButton';
 
