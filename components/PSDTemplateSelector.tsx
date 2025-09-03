@@ -7,6 +7,7 @@ import { AssetCreationForm } from './AssetCreationForm';
 import { AssetsTable } from './AssetsTable';
 import { buildS3PublicUrl } from '../utils/environment';
 import { contentPipelineApi } from '../web/utils/contentPipelineApi';
+import { HARDCODED_COLORS, getColorRgbByName, getColorNameByRgb } from '../utils/colors';
 
 interface PSDFile {
   name: string;
@@ -303,36 +304,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     return allLayers.sort();
   };
 
-  // Hardcoded color mapping for consistent color selection
-  const HARDCODED_COLORS = [
-    { name: 'Aqua', rgb: 'R0G255B255' },
-    { name: 'Black', rgb: 'R51G51B51' },
-    { name: 'Blue', rgb: 'R0G102B204' },
-    { name: 'Gold', rgb: 'R204G153B0' },
-    { name: 'Green', rgb: 'R0G204B51' },
-    { name: 'Magenta', rgb: 'R255G0B204' },
-    { name: 'Orange', rgb: 'R255G102B0' },
-    { name: 'Pink', rgb: 'R255G102B153' },
-    { name: 'Purple', rgb: 'R153G51B255' },
-    { name: 'Red', rgb: 'R255G0B0' },
-    { name: 'Refractor', rgb: 'R153G153B153' },
-    { name: 'Rose Gold', rgb: 'R255G102B102' },
-    { name: 'Silver', rgb: 'R153G153B153' },
-    { name: 'White', rgb: 'R255G255B255' },
-    { name: 'Yellow', rgb: 'R255G255B0' }
-  ];
 
-  const getColorRgbByName = (colorName: string): string => {
-    const color = HARDCODED_COLORS.find(c => 
-      c.name.toLowerCase() === colorName.toLowerCase()
-    );
-    return color?.rgb || 'R153G153B153'; // Default gray for unknown colors
-  };
-
-  const getColorNameByRgb = (rgbValue: string): string => {
-    const color = HARDCODED_COLORS.find(c => c.rgb === rgbValue);
-    return color?.name || 'Unknown';
-  };
 
   // Helper function to get assets from job data
   const getConfiguredAssets = (): AssetConfig[] => {

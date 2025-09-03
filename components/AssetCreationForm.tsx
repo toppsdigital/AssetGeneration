@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { HARDCODED_COLORS, getColorNameByRgb } from '../utils/colors';
 
 // For multiple spot/color selections in parallel mode
 interface SpotColorPair {
@@ -38,28 +39,7 @@ interface AssetCreationFormProps {
   onResetConfig: () => void;
 }
 
-// Hardcoded color mapping for consistent color selection
-const HARDCODED_COLORS = [
-  { name: 'Aqua', rgb: 'R0G255B255' },
-  { name: 'Black', rgb: 'R51G51B51' },
-  { name: 'Blue', rgb: 'R0G102B204' },
-  { name: 'Brown', rgb: 'R102G51B51' },
-  { name: 'Gold', rgb: 'R204G153B0' },
-  { name: 'Green', rgb: 'R0G204B51' },
-  { name: 'Magenta', rgb: 'R255G0B204' },
-  { name: 'Orange', rgb: 'R255G102B0' },
-  { name: 'Papradischa', rgb: 'R255G102B153' },
-  { name: 'Peach', rgb: 'R255G204B204' },
-  { name: 'Pink', rgb: 'R255G102B153' },
-  { name: 'Purple', rgb: 'R153G51B255' },
-  { name: 'Red', rgb: 'R255G0B0' },
-  { name: 'Refractor', rgb: 'R153G153B153' },
-  { name: 'Rose Gold', rgb: 'R255G102B102' },
-  { name: 'Silver', rgb: 'R153G153B153' },
-  { name: 'Tan', rgb: 'R204G204B153' },
-  { name: 'White', rgb: 'R255G255B204' },
-  { name: 'Yellow', rgb: 'R255G255B0' }
-];
+
 
 export const AssetCreationForm = ({
   isOpen,
@@ -144,11 +124,7 @@ export const AssetCreationForm = ({
     }
   }, [editingAsset, editingAssetId]);
 
-  // Helper function to convert RGB value back to color name
-  const getColorNameByRgb = (rgbValue: string): string => {
-    const color = HARDCODED_COLORS.find(c => c.rgb === rgbValue);
-    return color?.name || 'Unknown';
-  };
+
 
   // Helper functions
   const getLayersByType = (type: 'wp' | 'back' | 'base' | 'parallel' | 'multi-parallel' | 'wp-1of1' | 'front') => {

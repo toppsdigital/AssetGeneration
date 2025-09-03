@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useAppDataStore } from '../hooks/useAppDataStore';
 import { AssetAdvancedOptions } from './AssetAdvancedOptions';
+import { HARDCODED_COLORS, getColorHexByRgb, getColorHexByName, getColorDisplayNameByRgb } from '../utils/colors';
 
 // For multiple spot/color selections in parallel mode
 interface SpotColorPair {
@@ -41,29 +42,6 @@ interface AssetsTableProps {
   onAddAsset?: () => void;
 }
 
-// Hardcoded color mapping for consistent color selection
-const HARDCODED_COLORS = [
-  { name: 'Aqua', rgb: 'R0G255B255' },
-  { name: 'Black', rgb: 'R51G51B51' },
-  { name: 'Blue', rgb: 'R0G102B204' },
-  { name: 'Brown', rgb: 'R102G51B51' },
-  { name: 'Gold', rgb: 'R204G153B0' },
-  { name: 'Green', rgb: 'R0G204B51' },
-  { name: 'Magenta', rgb: 'R255G0B204' },
-  { name: 'Orange', rgb: 'R255G102B0' },
-  { name: 'Papradischa', rgb: 'R255G102B153' },
-  { name: 'Peach', rgb: 'R255G204B204' },
-  { name: 'Pink', rgb: 'R255G102B153' },
-  { name: 'Purple', rgb: 'R153G51B255' },
-  { name: 'Red', rgb: 'R255G0B0' },
-  { name: 'Refractor', rgb: 'R153G153B153' },
-  { name: 'Rose Gold', rgb: 'R255G102B102' },
-  { name: 'Silver', rgb: 'R153G153B153' },
-  { name: 'Tan', rgb: 'R204G204B153' },
-  { name: 'White', rgb: 'R255G255B204' },
-  { name: 'Yellow', rgb: 'R255G255B0' }
-];
-
 export const AssetsTable = ({
   configuredAssets,
   savingAsset,
@@ -87,39 +65,6 @@ export const AssetsTable = ({
     jobId: jobData?.job_id || '', 
     autoRefresh: false 
   });
-  const getColorHexByRgb = (rgbValue: string): string => {
-    // Convert RGB string to hex for display
-    const rgbMatch = rgbValue.match(/R(\d+)G(\d+)B(\d+)/);
-    if (rgbMatch) {
-      const r = parseInt(rgbMatch[1]).toString(16).padStart(2, '0');
-      const g = parseInt(rgbMatch[2]).toString(16).padStart(2, '0');
-      const b = parseInt(rgbMatch[3]).toString(16).padStart(2, '0');
-      return `#${r}${g}${b}`;
-    }
-    return '#999999'; // Default gray for unknown colors
-  };
-
-  const getColorHexByName = (colorName: string): string => {
-    const color = HARDCODED_COLORS.find(c => 
-      c.name.toLowerCase() === colorName.toLowerCase()
-    );
-    // Convert RGB to hex for display
-    if (color?.rgb) {
-      const rgbMatch = color.rgb.match(/R(\d+)G(\d+)B(\d+)/);
-      if (rgbMatch) {
-        const r = parseInt(rgbMatch[1]).toString(16).padStart(2, '0');
-        const g = parseInt(rgbMatch[2]).toString(16).padStart(2, '0');
-        const b = parseInt(rgbMatch[3]).toString(16).padStart(2, '0');
-        return `#${r}${g}${b}`;
-      }
-    }
-    return '#999999'; // Default gray for unknown colors
-  };
-
-  const getColorDisplayNameByRgb = (rgbValue: string): string => {
-    const color = HARDCODED_COLORS.find(c => c.rgb === rgbValue);
-    return color?.name || rgbValue;
-  };
 
 
 
