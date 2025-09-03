@@ -185,29 +185,21 @@ export function useAppDataStore<T = any>(
         }
         
         if (options.includeAssets) {
-          // Only fetch assets if job status indicates they should exist
-          const shouldFetchAssets = mappedData.job_status && 
-            ['extracted', 'generating', 'generating-failed', 'completed'].includes(mappedData.job_status);
+          // Always fetch assets when requested - components handle display/visibility logic
+          try {
+            const assetsResponse = await contentPipelineApi.getAssets(options.jobId);
             
-          if (shouldFetchAssets) {
-            try {
-              const assetsResponse = await contentPipelineApi.getAssets(options.jobId);
-              
-              // Handle "No assets found" as a successful case (not an error)
-              if (assetsResponse.error && assetsResponse.error.includes('No assets found')) {
-                console.log(`ℹ️ [DataStore] No assets found for job ${options.jobId} - setting empty assets object`);
-                mappedData.assets = {};
-              } else {
-                mappedData.assets = assetsResponse.assets;
-                console.log(`✅ [DataStore] Fetched ${Object.keys(assetsResponse.assets).length} assets for job ${options.jobId} (status: ${mappedData.job_status})`);
-              }
-            } catch (error) {
-              console.warn(`⚠️ [DataStore] Failed to fetch assets for job ${options.jobId}:`, error);
-              mappedData.assets = {}; // Set empty assets object on error
+            // Handle "No assets found" as a successful case (not an error)
+            if (assetsResponse.error && assetsResponse.error.includes('No assets found')) {
+              console.log(`ℹ️ [DataStore] No assets found for job ${options.jobId} - setting empty assets object`);
+              mappedData.assets = {};
+            } else {
+              mappedData.assets = assetsResponse.assets;
+              console.log(`✅ [DataStore] Fetched ${Object.keys(assetsResponse.assets).length} assets for job ${options.jobId} (status: ${mappedData.job_status})`);
             }
-          } else {
-            console.log(`ℹ️ [DataStore] Skipping assets fetch for job ${options.jobId} - status '${mappedData.job_status}' not ready for assets`);
-            mappedData.assets = {}; // Set empty assets object
+          } catch (error) {
+            console.warn(`⚠️ [DataStore] Failed to fetch assets for job ${options.jobId}:`, error);
+            mappedData.assets = {}; // Set empty assets object on error
           }
         }
         
