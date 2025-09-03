@@ -117,7 +117,24 @@ const FileCard: React.FC<FileCardProps> = ({
 
       <div style={{
         display: 'grid',
-        gridTemplateColumns: '1fr 1fr 1.5fr', // Narrower for PDF/Layers, wider for Digital Collectibles
+        gridTemplateColumns: (() => {
+          // Check if firefly assets exist and have content
+          const hasFireflyAssets = file.firefly_assets && Object.keys(file.firefly_assets).length > 0;
+          // Check if extracted files exist (after filtering)
+          const allExtractedFiles = file.extracted_files || {};
+          const hasExtractedFiles = Object.keys(allExtractedFiles).filter((filename) => {
+            const lowerFilename = filename.toLowerCase();
+            return !lowerFilename.includes('_seq') && !lowerFilename.includes('_seq_bb');
+          }).length > 0;
+          
+          if (hasFireflyAssets && hasExtractedFiles) {
+            // When all three sections exist: 2 columns (left for PDF+Layers stacked, right for Firefly)
+            return '1fr 1.2fr';
+          } else {
+            // Original layout when firefly assets don't exist
+            return '1fr 1fr 1.5fr';
+          }
+        })(),
         gap: 16, // Reduced from 20
         marginBottom: 20 // Reduced from 24
       }}>
@@ -205,259 +222,510 @@ const FileCard: React.FC<FileCardProps> = ({
             </div>
           </div>
         )}
-        {/* Original PDF Files */}
-        <div>
-          <h4 style={{
-            color: '#f59e0b',
-            fontSize: 15, // Slightly smaller
-            fontWeight: 600,
-            margin: '0 0 10px 0' // Reduced margin
-          }}>
-            📄 Original PDF Files ({file.original_files ? Object.keys(file.original_files).length : 0})
-          </h4>
-          <div style={{
-            background: 'rgba(245, 158, 11, 0.1)',
-            border: '1px solid rgba(245, 158, 11, 0.3)',
-            borderRadius: 8,
-            padding: 10, // Reduced from 12
-            maxHeight: 180, // Reduced from 200
-            overflowY: 'auto'
-          }}>
-            {file.original_files && Object.keys(file.original_files).length > 0 ? (
-              Object.entries(file.original_files)
-                .sort(([a], [b]) => a.toLowerCase().localeCompare(b.toLowerCase()))
-                .map(([filename, fileInfo], origIndex) => {
-                // Show status when there are NO firefly assets (job hasn't reached generating/complete), or file is actively uploading
-                const hasFireflyAssets = file.firefly_assets && Object.keys(file.firefly_assets).length > 0;
-                const showStatus = uploadingFiles.has(filename) || !hasFireflyAssets;
-                
-                return (
-                  <div key={origIndex} style={{
-                    marginBottom: 6, // Reduced from 8
-                    fontSize: 12, // Reduced from 13
-                    color: '#fbbf24',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center'
-                  }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}> {/* Reduced gap */}
-                      <span>📋</span>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}> {/* Reduced gap */}
-                        <span>{filename}</span>
-                        {/* Show loading spinner when upload is actively happening */}
-                        {uploadingFiles.has(filename) && (
-                          <div style={{
-                            width: 10, // Reduced from 12
-                            height: 10, // Reduced from 12
-                            border: '1.5px solid rgba(245, 158, 11, 0.3)',
-                            borderTop: '1.5px solid #f59e0b',
-                            borderRadius: '50%',
-                            animation: 'spin 1s linear infinite',
-                            marginLeft: 3 // Reduced from 4
-                          }} />
-                        )}
-                      </span>
-                      {/* Show animated uploading text for files being uploaded */}
-                      {uploadingFiles.has(filename) && (
-                        <span style={{
-                          fontSize: 10, // Reduced from 11
-                          color: '#f59e0b',
-                          animation: 'pulse 2s infinite',
-                          marginLeft: 3 // Reduced from 4
-                        }}>
-                          Uploading...
-                        </span>
-                      )}
-                    </span>
-                    <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}> {/* Reduced gap, always show */}
-                      {/* Always show file type */}
-                      <span style={{
-                        fontSize: 10, // Reduced from 11
-                        padding: '1px 4px', // Reduced padding
-                        borderRadius: 3, // Reduced border radius
-                        background: 'rgba(245, 158, 11, 0.2)',
-                        color: '#f59e0b'
-                      }}>
-                        {fileInfo.card_type}
-                      </span>
-                      {/* Only show status if needed */}
-                      {showStatus && (
-                        <span style={{
-                          fontSize: 10, // Reduced from 11
-                          padding: '1px 4px', // Reduced padding
-                          borderRadius: 3, // Reduced border radius
-                          background: fileInfo.status.toLowerCase() === 'uploaded' 
-                            ? 'rgba(16, 185, 129, 0.2)' 
-                            : fileInfo.status.toLowerCase() === 'upload-failed'
-                            ? 'rgba(239, 68, 68, 0.2)'
-                            : 'rgba(249, 115, 22, 0.2)',
-                          color: fileInfo.status.toLowerCase() === 'uploaded' 
-                            ? '#34d399' 
-                            : fileInfo.status.toLowerCase() === 'upload-failed'
-                            ? '#fca5a5'
-                            : '#fdba74'
-                        }}>
-                          {capitalizeStatus(fileInfo.status)}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <p style={{ color: '#9ca3af', fontSize: 12, margin: 0 }}> {/* Reduced font size */}
-                No original PDF files found
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* Extracted Layers - Only show if there are extracted files */}
+        
+        {/* Original PDF Files and Extracted Layers Container */}
         {(() => {
-          // Use all extracted files and filter out _seq and _seq_bb layers
+          // Check if we need to stack PDF and Layers vertically
+          const hasFireflyAssets = file.firefly_assets && Object.keys(file.firefly_assets).length > 0;
           const allExtractedFiles = file.extracted_files || {};
-          const extractedFiles = Object.fromEntries(
-            Object.entries(allExtractedFiles).filter(([filename]) => {
-              const lowerFilename = filename.toLowerCase();
-              return !lowerFilename.includes('_seq') && !lowerFilename.includes('_seq_bb');
-            })
-          );
+          const hasExtractedFiles = Object.keys(allExtractedFiles).filter((filename) => {
+            const lowerFilename = filename.toLowerCase();
+            return !lowerFilename.includes('_seq') && !lowerFilename.includes('_seq_bb');
+          }).length > 0;
           
-          // Only render if there are extracted files after filtering
-          if (Object.keys(extractedFiles).length === 0) return null;
+          const shouldStack = hasFireflyAssets && hasExtractedFiles;
           
-          // Check if all extracted files (including _seq) have "uploaded" status for preview functionality
-          const allUploaded = Object.values(allExtractedFiles).every(
-            extractedFile => extractedFile.status.toLowerCase() === 'uploaded'
-          );
-          
-          return (
-            <div>
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: 10 // Reduced from 12
-              }}>
-                <h4 style={{
-                  color: '#60a5fa',
-                  fontSize: 15, // Slightly smaller
-                  fontWeight: 600,
-                  margin: 0
-                }}>
-                  🖼️ Extracted Layers ({Object.keys(extractedFiles).length})
-                </h4>
-                {allUploaded ? (
-                  <button
-                    onClick={() => {
-                      // Navigate to preview with simplified parameters
-                      const jobId = jobData?.job_id || '';
-                      const fileId = file.filename;
-                      const mode = 'extracted-assets';
-                      
-                      console.log(`🔍 [FileCard] Navigating to extracted assets preview:`, {
-                        jobId,
-                        fileId,
-                        mode
-                      });
-                      
-                      router.push(`/job/preview?jobId=${encodeURIComponent(jobId)}&fileId=${encodeURIComponent(fileId)}&mode=${mode}`);
-                    }}
-                    style={{
-                      background: 'rgba(59, 130, 246, 0.2)',
-                      border: '1px solid rgba(59, 130, 246, 0.4)',
-                      borderRadius: 4, // Reduced from 6
-                      color: '#60a5fa',
-                      cursor: 'pointer',
-                      fontSize: 11, // Reduced from 12
-                      padding: '4px 8px', // Reduced padding
-                      transition: 'all 0.2s',
-                      fontWeight: 500
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = 'rgba(59, 130, 246, 0.3)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)';
-                    }}
-                  >
-                    👁️ Preview
-                  </button>
-                ) : (
-                  <span style={{
-                    fontSize: 11, // Reduced from 12
-                    color: '#9ca3af',
-                    padding: '4px 8px', // Reduced padding
-                    border: '1px solid rgba(156, 163, 175, 0.3)',
-                    borderRadius: 4, // Reduced from 6
-                    background: 'rgba(156, 163, 175, 0.1)'
+          if (shouldStack) {
+            // Stack PDF and Layers vertically in first column
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {/* Original PDF Files */}
+                <div>
+                  <h4 style={{
+                    color: '#f59e0b',
+                    fontSize: 15,
+                    fontWeight: 600,
+                    margin: '0 0 10px 0'
                   }}>
-                    ⏳ Processing...
-                  </span>
-                )}
-              </div>
-              <div style={{
-                background: 'rgba(59, 130, 246, 0.1)',
-                border: '1px solid rgba(59, 130, 246, 0.3)',
-                borderRadius: 8,
-                padding: 10, // Reduced from 12
-                maxHeight: 180, // Reduced from 200
-                overflowY: 'auto'
-              }}>
-                {Object.entries(extractedFiles)
-                  .sort(([a], [b]) => a.toLowerCase().localeCompare(b.toLowerCase()))
-                  .map(([filename, extractedFile], extIndex) => {
-                  // Show status when there are NO firefly assets (job hasn't reached generating/complete), or file is actively uploading
-                  const hasFireflyAssets = file.firefly_assets && Object.keys(file.firefly_assets).length > 0;
-                  const showStatus = uploadingFiles.has(filename) || !hasFireflyAssets;
+                    📄 Original PDF Files ({file.original_files ? Object.keys(file.original_files).length : 0})
+                  </h4>
+                  <div style={{
+                    background: 'rgba(245, 158, 11, 0.1)',
+                    border: '1px solid rgba(245, 158, 11, 0.3)',
+                    borderRadius: 8,
+                    padding: 10,
+                    maxHeight: 140, // Reduced for stacking
+                    overflowY: 'auto'
+                  }}>
+                    {file.original_files && Object.keys(file.original_files).length > 0 ? (
+                      Object.entries(file.original_files)
+                        .sort(([a], [b]) => a.toLowerCase().localeCompare(b.toLowerCase()))
+                        .map(([filename, fileInfo], origIndex) => {
+                        const showStatus = uploadingFiles.has(filename) || !hasFireflyAssets;
+                        
+                        return (
+                          <div key={origIndex} style={{
+                            marginBottom: 6,
+                            fontSize: 12,
+                            color: '#fbbf24',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                          }}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
+                              <span>📋</span>
+                              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <span>{filename}</span>
+                                {uploadingFiles.has(filename) && (
+                                  <div style={{
+                                    width: 10,
+                                    height: 10,
+                                    border: '1.5px solid rgba(245, 158, 11, 0.3)',
+                                    borderTop: '1.5px solid #f59e0b',
+                                    borderRadius: '50%',
+                                    animation: 'spin 1s linear infinite',
+                                    marginLeft: 3
+                                  }} />
+                                )}
+                              </span>
+                              {uploadingFiles.has(filename) && (
+                                <span style={{
+                                  fontSize: 10,
+                                  color: '#f59e0b',
+                                  animation: 'pulse 2s infinite',
+                                  marginLeft: 3
+                                }}>
+                                  Uploading...
+                                </span>
+                              )}
+                            </span>
+                            <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+                              <span style={{
+                                fontSize: 10,
+                                padding: '1px 4px',
+                                borderRadius: 3,
+                                background: 'rgba(245, 158, 11, 0.2)',
+                                color: '#f59e0b'
+                              }}>
+                                {fileInfo.card_type}
+                              </span>
+                              {showStatus && (
+                                <span style={{
+                                  fontSize: 10,
+                                  padding: '1px 4px',
+                                  borderRadius: 3,
+                                  background: fileInfo.status.toLowerCase() === 'uploaded' 
+                                    ? 'rgba(16, 185, 129, 0.2)' 
+                                    : fileInfo.status.toLowerCase() === 'upload-failed'
+                                    ? 'rgba(239, 68, 68, 0.2)'
+                                    : 'rgba(249, 115, 22, 0.2)',
+                                  color: fileInfo.status.toLowerCase() === 'uploaded' 
+                                    ? '#34d399' 
+                                    : fileInfo.status.toLowerCase() === 'upload-failed'
+                                    ? '#fca5a5'
+                                    : '#fdba74'
+                                }}>
+                                  {capitalizeStatus(fileInfo.status)}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <p style={{ color: '#9ca3af', fontSize: 12, margin: 0 }}>
+                        No original PDF files found
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Extracted Layers */}
+                {(() => {
+                  const extractedFiles = Object.fromEntries(
+                    Object.entries(allExtractedFiles).filter(([filename]) => {
+                      const lowerFilename = filename.toLowerCase();
+                      return !lowerFilename.includes('_seq') && !lowerFilename.includes('_seq_bb');
+                    })
+                  );
+                  
+                  if (Object.keys(extractedFiles).length === 0) return null;
+                  
+                  const allUploaded = Object.values(allExtractedFiles).every(
+                    extractedFile => extractedFile.status.toLowerCase() === 'uploaded'
+                  );
                   
                   return (
-                    <div key={extIndex} style={{
-                      marginBottom: 6, // Reduced from 8
-                      fontSize: 12, // Reduced from 13
-                      color: '#bfdbfe',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center'
-                    }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}> {/* Reduced gap */}
-                        <span>🖼️</span>
-                        <span>{filename}</span>
-                      </span>
-                      <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}> {/* Reduced gap, always show */}
-                        {/* Always show layer type */}
-                        <span style={{ 
-                          background: 'rgba(59, 130, 246, 0.2)', 
-                          padding: '1px 4px', // Reduced padding
-                          borderRadius: 3, // Reduced border radius
+                    <div>
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        marginBottom: 10
+                      }}>
+                        <h4 style={{
                           color: '#60a5fa',
-                          fontSize: 10 // Reduced from 11
+                          fontSize: 15,
+                          fontWeight: 600,
+                          margin: 0
                         }}>
-                          {extractedFile.layer_type}
-                        </span>
-                        {/* Only show status if needed */}
-                        {showStatus && (
+                          🖼️ Extracted Layers ({Object.keys(extractedFiles).length})
+                        </h4>
+                        {allUploaded ? (
+                          <button
+                            onClick={() => {
+                              const jobId = jobData?.job_id || '';
+                              const fileId = file.filename;
+                              const mode = 'extracted-assets';
+                              
+                              console.log(`🔍 [FileCard] Navigating to extracted assets preview:`, {
+                                jobId,
+                                fileId,
+                                mode
+                              });
+                              
+                              router.push(`/job/preview?jobId=${encodeURIComponent(jobId)}&fileId=${encodeURIComponent(fileId)}&mode=${mode}`);
+                            }}
+                            style={{
+                              background: 'rgba(59, 130, 246, 0.2)',
+                              border: '1px solid rgba(59, 130, 246, 0.4)',
+                              borderRadius: 4,
+                              color: '#60a5fa',
+                              cursor: 'pointer',
+                              fontSize: 11,
+                              padding: '4px 8px',
+                              transition: 'all 0.2s',
+                              fontWeight: 500
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = 'rgba(59, 130, 246, 0.3)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)';
+                            }}
+                          >
+                            👁️ Preview
+                          </button>
+                        ) : (
                           <span style={{
-                            fontSize: 10, // Reduced from 11
-                            padding: '1px 4px', // Reduced padding
-                            borderRadius: 3, // Reduced border radius
-                            background: extractedFile.status.toLowerCase() === 'uploaded' 
-                              ? 'rgba(16, 185, 129, 0.2)' 
-                              : 'rgba(249, 115, 22, 0.2)',
-                            color: extractedFile.status.toLowerCase() === 'uploaded' 
-                              ? '#34d399' 
-                              : '#fdba74'
+                            fontSize: 11,
+                            color: '#9ca3af',
+                            padding: '4px 8px',
+                            border: '1px solid rgba(156, 163, 175, 0.3)',
+                            borderRadius: 4,
+                            background: 'rgba(156, 163, 175, 0.1)'
                           }}>
-                            {capitalizeStatus(extractedFile.status)}
+                            ⏳ Processing...
                           </span>
                         )}
                       </div>
+                      <div style={{
+                        background: 'rgba(59, 130, 246, 0.1)',
+                        border: '1px solid rgba(59, 130, 246, 0.3)',
+                        borderRadius: 8,
+                        padding: 10,
+                        // Removed maxHeight to use available space dynamically
+                        overflowY: 'visible'
+                      }}>
+                        {Object.entries(extractedFiles)
+                          .sort(([a], [b]) => a.toLowerCase().localeCompare(b.toLowerCase()))
+                          .map(([filename, extractedFile], extIndex) => {
+                          const showStatus = uploadingFiles.has(filename) || !hasFireflyAssets;
+                          
+                          return (
+                            <div key={extIndex} style={{
+                              marginBottom: 6,
+                              fontSize: 12,
+                              color: '#bfdbfe',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center'
+                            }}>
+                              <span style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
+                                <span>🖼️</span>
+                                <span>{filename}</span>
+                              </span>
+                              <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+                                <span style={{ 
+                                  background: 'rgba(59, 130, 246, 0.2)', 
+                                  padding: '1px 4px',
+                                  borderRadius: 3,
+                                  color: '#60a5fa',
+                                  fontSize: 10
+                                }}>
+                                  {extractedFile.layer_type}
+                                </span>
+                                {showStatus && (
+                                  <span style={{
+                                    fontSize: 10,
+                                    padding: '1px 4px',
+                                    borderRadius: 3,
+                                    background: extractedFile.status.toLowerCase() === 'uploaded' 
+                                      ? 'rgba(16, 185, 129, 0.2)' 
+                                      : 'rgba(249, 115, 22, 0.2)',
+                                    color: extractedFile.status.toLowerCase() === 'uploaded' 
+                                      ? '#34d399' 
+                                      : '#fdba74'
+                                  }}>
+                                    {capitalizeStatus(extractedFile.status)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   );
-                })}
+                })()}
               </div>
-            </div>
-          );
+            );
+          } else {
+            // Original layout when firefly assets don't exist
+            return (
+              <>
+                {/* Original PDF Files */}
+                <div>
+                  <h4 style={{
+                    color: '#f59e0b',
+                    fontSize: 15,
+                    fontWeight: 600,
+                    margin: '0 0 10px 0'
+                  }}>
+                    📄 Original PDF Files ({file.original_files ? Object.keys(file.original_files).length : 0})
+                  </h4>
+                  <div style={{
+                    background: 'rgba(245, 158, 11, 0.1)',
+                    border: '1px solid rgba(245, 158, 11, 0.3)',
+                    borderRadius: 8,
+                    padding: 10,
+                    maxHeight: 180,
+                    overflowY: 'auto'
+                  }}>
+                    {file.original_files && Object.keys(file.original_files).length > 0 ? (
+                      Object.entries(file.original_files)
+                        .sort(([a], [b]) => a.toLowerCase().localeCompare(b.toLowerCase()))
+                        .map(([filename, fileInfo], origIndex) => {
+                        const showStatus = uploadingFiles.has(filename) || !hasFireflyAssets;
+                        
+                        return (
+                          <div key={origIndex} style={{
+                            marginBottom: 6,
+                            fontSize: 12,
+                            color: '#fbbf24',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                          }}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
+                              <span>📋</span>
+                              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <span>{filename}</span>
+                                {uploadingFiles.has(filename) && (
+                                  <div style={{
+                                    width: 10,
+                                    height: 10,
+                                    border: '1.5px solid rgba(245, 158, 11, 0.3)',
+                                    borderTop: '1.5px solid #f59e0b',
+                                    borderRadius: '50%',
+                                    animation: 'spin 1s linear infinite',
+                                    marginLeft: 3
+                                  }} />
+                                )}
+                              </span>
+                              {uploadingFiles.has(filename) && (
+                                <span style={{
+                                  fontSize: 10,
+                                  color: '#f59e0b',
+                                  animation: 'pulse 2s infinite',
+                                  marginLeft: 3
+                                }}>
+                                  Uploading...
+                                </span>
+                              )}
+                            </span>
+                            <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+                              <span style={{
+                                fontSize: 10,
+                                padding: '1px 4px',
+                                borderRadius: 3,
+                                background: 'rgba(245, 158, 11, 0.2)',
+                                color: '#f59e0b'
+                              }}>
+                                {fileInfo.card_type}
+                              </span>
+                              {showStatus && (
+                                <span style={{
+                                  fontSize: 10,
+                                  padding: '1px 4px',
+                                  borderRadius: 3,
+                                  background: fileInfo.status.toLowerCase() === 'uploaded' 
+                                    ? 'rgba(16, 185, 129, 0.2)' 
+                                    : fileInfo.status.toLowerCase() === 'upload-failed'
+                                    ? 'rgba(239, 68, 68, 0.2)'
+                                    : 'rgba(249, 115, 22, 0.2)',
+                                  color: fileInfo.status.toLowerCase() === 'uploaded' 
+                                    ? '#34d399' 
+                                    : fileInfo.status.toLowerCase() === 'upload-failed'
+                                    ? '#fca5a5'
+                                    : '#fdba74'
+                                }}>
+                                  {capitalizeStatus(fileInfo.status)}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <p style={{ color: '#9ca3af', fontSize: 12, margin: 0 }}>
+                        No original PDF files found
+                      </p>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Extracted Layers - Only show if there are extracted files */}
+                {(() => {
+                  const extractedFiles = Object.fromEntries(
+                    Object.entries(allExtractedFiles).filter(([filename]) => {
+                      const lowerFilename = filename.toLowerCase();
+                      return !lowerFilename.includes('_seq') && !lowerFilename.includes('_seq_bb');
+                    })
+                  );
+                  
+                  if (Object.keys(extractedFiles).length === 0) return null;
+                  
+                  const allUploaded = Object.values(allExtractedFiles).every(
+                    extractedFile => extractedFile.status.toLowerCase() === 'uploaded'
+                  );
+                  
+                  return (
+                    <div>
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        marginBottom: 10
+                      }}>
+                        <h4 style={{
+                          color: '#60a5fa',
+                          fontSize: 15,
+                          fontWeight: 600,
+                          margin: 0
+                        }}>
+                          🖼️ Extracted Layers ({Object.keys(extractedFiles).length})
+                        </h4>
+                        {allUploaded ? (
+                          <button
+                            onClick={() => {
+                              const jobId = jobData?.job_id || '';
+                              const fileId = file.filename;
+                              const mode = 'extracted-assets';
+                              
+                              console.log(`🔍 [FileCard] Navigating to extracted assets preview:`, {
+                                jobId,
+                                fileId,
+                                mode
+                              });
+                              
+                              router.push(`/job/preview?jobId=${encodeURIComponent(jobId)}&fileId=${encodeURIComponent(fileId)}&mode=${mode}`);
+                            }}
+                            style={{
+                              background: 'rgba(59, 130, 246, 0.2)',
+                              border: '1px solid rgba(59, 130, 246, 0.4)',
+                              borderRadius: 4,
+                              color: '#60a5fa',
+                              cursor: 'pointer',
+                              fontSize: 11,
+                              padding: '4px 8px',
+                              transition: 'all 0.2s',
+                              fontWeight: 500
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = 'rgba(59, 130, 246, 0.3)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)';
+                            }}
+                          >
+                            👁️ Preview
+                          </button>
+                        ) : (
+                          <span style={{
+                            fontSize: 11,
+                            color: '#9ca3af',
+                            padding: '4px 8px',
+                            border: '1px solid rgba(156, 163, 175, 0.3)',
+                            borderRadius: 4,
+                            background: 'rgba(156, 163, 175, 0.1)'
+                          }}>
+                            ⏳ Processing...
+                          </span>
+                        )}
+                      </div>
+                      <div style={{
+                        background: 'rgba(59, 130, 246, 0.1)',
+                        border: '1px solid rgba(59, 130, 246, 0.3)',
+                        borderRadius: 8,
+                        padding: 10,
+                        // Removed maxHeight to use available space dynamically
+                        overflowY: 'visible'
+                      }}>
+                        {Object.entries(extractedFiles)
+                          .sort(([a], [b]) => a.toLowerCase().localeCompare(b.toLowerCase()))
+                          .map(([filename, extractedFile], extIndex) => {
+                          const showStatus = uploadingFiles.has(filename) || !hasFireflyAssets;
+                          
+                          return (
+                            <div key={extIndex} style={{
+                              marginBottom: 6,
+                              fontSize: 12,
+                              color: '#bfdbfe',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center'
+                            }}>
+                              <span style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
+                                <span>🖼️</span>
+                                <span>{filename}</span>
+                              </span>
+                              <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+                                <span style={{ 
+                                  background: 'rgba(59, 130, 246, 0.2)', 
+                                  padding: '1px 4px',
+                                  borderRadius: 3,
+                                  color: '#60a5fa',
+                                  fontSize: 10
+                                }}>
+                                  {extractedFile.layer_type}
+                                </span>
+                                {showStatus && (
+                                  <span style={{
+                                    fontSize: 10,
+                                    padding: '1px 4px',
+                                    borderRadius: 3,
+                                    background: extractedFile.status.toLowerCase() === 'uploaded' 
+                                      ? 'rgba(16, 185, 129, 0.2)' 
+                                      : 'rgba(249, 115, 22, 0.2)',
+                                    color: extractedFile.status.toLowerCase() === 'uploaded' 
+                                      ? '#34d399' 
+                                      : '#fdba74'
+                                  }}>
+                                    {capitalizeStatus(extractedFile.status)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </>
+            );
+          }
         })()}
 
         {/* Digital Collectibles - Only show if there are firefly assets */}
@@ -538,8 +806,8 @@ const FileCard: React.FC<FileCardProps> = ({
               border: '1px solid rgba(52, 211, 153, 0.3)',
               borderRadius: 8,
               padding: 10, // Reduced from 12
-              maxHeight: 180, // Reduced from 200
-              overflowY: 'auto'
+              // Removed maxHeight to show all firefly assets without scrolling
+              overflowY: 'visible'
             }}>
               {Object.entries(file.firefly_assets)
                 .sort(([a], [b]) => a.toLowerCase().localeCompare(b.toLowerCase()))
