@@ -262,6 +262,29 @@ export default function JobsPage() {
     }
   };
 
+  // Helper function to calculate job completion time
+  const getJobCompletionTime = (job: JobData) => {
+    if (!job.created_at || !job.last_updated) return null;
+    
+    const createdTime = new Date(job.created_at).getTime();
+    const completedTime = new Date(job.last_updated).getTime();
+    const diffInSeconds = Math.floor((completedTime - createdTime) / 1000);
+    
+    if (diffInSeconds <= 0) return null;
+    
+    if (diffInSeconds < 60) {
+      return `${diffInSeconds}s`;
+    } else if (diffInSeconds < 3600) {
+      const minutes = Math.floor(diffInSeconds / 60);
+      const seconds = diffInSeconds % 60;
+      return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
+    } else {
+      const hours = Math.floor(diffInSeconds / 3600);
+      const minutes = Math.floor((diffInSeconds % 3600) / 60);
+      return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+    }
+  };
+
   // Handle manual refresh using centralized data store
   const handleRefresh = () => {
     refetch();
@@ -743,6 +766,21 @@ export default function JobsPage() {
                           fontWeight: 600
                         }}>
                           {getStatusIcon(job.job_status)} {capitalizeStatus(job.job_status || 'Unknown Status')}
+                          {/* Show completion time for completed jobs */}
+                          {job.job_status?.toLowerCase() === 'completed' && (() => {
+                            const completionTime = getJobCompletionTime(job);
+                            return completionTime ? (
+                              <span style={{ 
+                                fontSize: 12, 
+                                fontWeight: 500,
+                                marginLeft: 4,
+                                opacity: 0.8,
+                                color: '#10b981'
+                              }}>
+                                (in {completionTime})
+                              </span>
+                            ) : null;
+                          })()}
                           {/* Show extraction progress when status is extracting */}
                           {job.job_status?.toLowerCase() === 'extracting' && 
                            job.extracted_files_total_count && 
