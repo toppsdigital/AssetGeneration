@@ -137,8 +137,8 @@ export const JobDetailsContent = ({
               jobData={jobData}
               mergedJobData={mergedJobData}
               isVisible={(() => {
-                // Show PSDTemplateSelector for all statuses where assets could exist or be configured
-                const allowedStatuses = ['extracted', 'extraction-failed', 'generating', 'generated', 'generation-failed', 'completed'];
+                // Show PSDTemplateSelector only when assets need to be configured or regenerated
+                const allowedStatuses = ['extracted', 'generation-failed'];
                 const currentStatus = mergedJobData?.job_status?.toLowerCase();
                 const shouldShow = allowedStatuses.includes(currentStatus) && !loading;
                 console.log('🔍 PSDTemplateSelector visibility check:', {
