@@ -574,6 +574,33 @@ class ContentPipelineAPI {
     return result;
   }
 
+  // Create download ZIP for a job
+  async createDownloadZip(jobId: string, folderPath: string): Promise<JobResponse> {
+    console.log(`🔄 Creating download ZIP for job: ${jobId}, folder: ${folderPath}`);
+    
+    const response = await fetch(`${this.baseUrl}?operation=createzip&id=${encodeURIComponent(jobId)}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        folder_path: folderPath
+      }),
+    });
+
+    console.log(`📥 Create download ZIP response status: ${response.status}`);
+
+    if (!response.ok) {
+      const error = await response.json();
+      console.error(`❌ Create download ZIP failed:`, error);
+      throw new Error(error.error || `Failed to create download ZIP: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log(`✅ Create download ZIP result:`, result);
+    return result;
+  }
+
   // Regenerate assets for a job
   async regenerateAssets(jobId: string): Promise<{
     success: boolean;

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { ConfirmationModal } from './ConfirmationModal';
 import { useAppDataStore } from '../hooks/useAppDataStore';
+import { getS3Environment } from '../utils/environment';
 
 interface DownloadSectionProps {
   jobData: any;
@@ -11,171 +12,166 @@ interface DownloadSectionProps {
 }
 
 export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: DownloadSectionProps) => {
-  // Use centralized data store for download and regeneration operations (only when actually needed)
-  const { mutate: downloadMutation } = useAppDataStore('downloadUrl', { 
-    jobId: '', // Don't auto-fetch download URL - only create when user requests download
-    autoRefresh: false 
+  // Track if we should be polling for download URL updates
+  const [shouldPoll, setShouldPoll] = useState(() => {
+    // Initialize polling if job already has pending download_url
+    return jobData?.download_url === 'pending';
   });
   
-  // Check if job object has a valid download URL that hasn't expired
+  // Use centralized data store for job polling when download_url is pending
+  // Don't include files to avoid impacting the files section
+  const { data: polledJobData, mutate } = useAppDataStore('jobDetails', { 
+    jobId: jobData?.job_id || '',
+    autoRefresh: shouldPoll,
+    includeFiles: false, // Don't fetch files to avoid affecting files display
+    includeAssets: false // Don't fetch assets to keep it lightweight
+  });
+  
+  // Use polled data if available, otherwise fall back to prop data
+  const currentJobData = polledJobData || jobData;
+  
+  // Check if job has a valid download URL (not pending and not expired)
   const hasValidDownloadUrl = () => {
-    if (!jobData?.download_url || !jobData?.download_url_expires) {
+    if (!currentJobData?.download_url || currentJobData.download_url === 'pending') {
       return false;
     }
     
-    const expiryTime = new Date(jobData.download_url_expires).getTime();
+    // If no expiry date, assume it's valid
+    if (!currentJobData.download_url_expires) {
+      return true;
+    }
+    
+    const expiryTime = new Date(currentJobData.download_url_expires).getTime();
     const now = Date.now();
     
-    // Consider valid if not expired (no buffer here, just check actual expiry)
     return expiryTime > now;
   };
-
-  // Check if download URL needs refresh (expired or expiring soon)
-  const needsRefresh = () => {
-    if (!jobData?.download_url || !jobData?.download_url_expires) {
-      return false;
-    }
-    
-    const expiryTime = new Date(jobData.download_url_expires).getTime();
-    const now = Date.now();
-    const fiveMinutesFromNow = now + (5 * 60 * 1000);
-    
-    return expiryTime <= fiveMinutesFromNow;
+  
+  // Check if download URL is pending
+  const isDownloadPending = () => {
+    return currentJobData?.download_url === 'pending';
   };
+  
+  // Update polling state based on current job data
+  useEffect(() => {
+    const isPending = currentJobData?.download_url === 'pending';
+    const hasValidUrl = hasValidDownloadUrl();
+    const shouldStopPolling = hasValidUrl || (!isPending && currentJobData?.download_url && currentJobData.download_url !== 'pending');
+    
+    console.log(`📊 Download URL status check:`, {
+      jobId: currentJobData?.job_id,
+      download_url: currentJobData?.download_url,
+      isPending,
+      hasValidUrl,
+      shouldPoll,
+      shouldStopPolling,
+      willStartPolling: isPending && !shouldPoll,
+      willStopPolling: shouldStopPolling && shouldPoll
+    });
+    
+    if (isPending && !shouldPoll) {
+      console.log(`🔄 Download polling started for job ${currentJobData?.job_id} (download_url is pending)`);
+      setShouldPoll(true);
+    } else if (shouldStopPolling && shouldPoll) {
+      console.log(`✅ Download polling stopped for job ${currentJobData?.job_id} (download_url ready: ${currentJobData?.download_url})`);
+      setShouldPoll(false);
+    }
+  }, [currentJobData?.download_url, currentJobData?.job_id, shouldPoll]);
 
   // Local state for download management
   const [downloadingArchive, setDownloadingArchive] = useState(false);
   const [regeneratingAssets, setRegeneratingAssets] = useState(false);
   const [showRegenerateModal, setShowRegenerateModal] = useState(false);
-  const [refreshingDownloadUrl, setRefreshingDownloadUrl] = useState(false);
-  const [creatingDownloadUrl, setCreatingDownloadUrl] = useState(false);
+  const [creatingDownloadLink, setCreatingDownloadLink] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
-
-  // Function to refresh download URL when expired
-  const refreshDownloadUrl = async () => {
-    if (!jobData?.job_id || refreshingDownloadUrl) return;
-    
-    console.log('🔄 Download URL expired, generating new one for job:', jobData.job_id);
-    setRefreshingDownloadUrl(true);
-    
-    try {
-      const response = await downloadMutation({
-        type: 'refreshDownloadUrl',
-        jobId: jobData.job_id
-      });
-      
-      if (response.success && response.download_url && response.download_url_expires) {
-        console.log('✅ New download URL generated and saved:', response.download_url);
-        
-        // Update the job data with new download URL
-        const updatedJobData = {
-          ...jobData,
-          download_url: response.download_url,
-          download_url_expires: response.download_url_expires,
-          download_url_created: new Date().toISOString()
-        };
-        
-        // Notify parent component to update its job data
-        if (onJobDataUpdate) {
-          onJobDataUpdate(updatedJobData);
-        }
-      } else {
-        console.error('❌ Failed to generate new download URL:', response.message);
-      }
-    } catch (error) {
-      console.error('❌ Error refreshing download URL:', error);
-    } finally {
-      setRefreshingDownloadUrl(false);
+  
+  // Update parent component when polled data changes
+  useEffect(() => {
+    if (polledJobData && onJobDataUpdate) {
+      onJobDataUpdate(polledJobData);
     }
-  };
+  }, [polledJobData, onJobDataUpdate]);
 
-  // Function to create download URL on user action
-  const createDownloadUrl = async () => {
-    if (!jobData?.job_id || creatingDownloadUrl) return null;
+  // Function to create download ZIP
+  const createDownloadZip = async () => {
+    if (!currentJobData?.job_id || creatingDownloadLink) return;
     
-    console.log('🔄 Creating and saving download URL for job:', jobData.job_id);
-    setCreatingDownloadUrl(true);
+    // Use the full path format with trailing slash
+    const folderPath = `asset_generator/${getS3Environment()}/uploads/Output/${currentJobData.job_id}/`;
+    
+    console.log('🔄 Creating download ZIP for job:', currentJobData.job_id);
+    setCreatingDownloadLink(true);
     setDownloadError(null);
     
     try {
-      // Use updateDownloadUrl which generates AND saves the URL to the job object
-      const response = await downloadMutation({
-        type: 'refreshDownloadUrl',
-        jobId: jobData.job_id
+      const response = await mutate({
+        type: 'createDownloadZip',
+        jobId: currentJobData.job_id,
+        data: { folderPath }
       });
       
-      if (response.success && response.download_url && response.download_url_expires) {
-        console.log('✅ Download URL created and saved to job object:', response.download_url);
+      console.log('✅ Download ZIP creation response:', response);
+      
+      // Immediately start polling since createzip was successful
+      console.log('🔄 Starting polling for download URL after successful createzip');
+      setShouldPoll(true);
+      
+      // Check if response contains updated job data
+      if (response?.job) {
+        console.log('📦 Updated job from createzip response:', {
+          jobId: response.job.job_id,
+          download_url: response.job.download_url,
+          download_url_expires: response.job.download_url_expires
+        });
         
-        // Update the job data with the new download URL info
-        const updatedJobData = {
-          ...jobData,
-          download_url: response.download_url,
-          download_url_expires: response.download_url_expires,
-          download_url_created: new Date().toISOString()
-        };
-        
-        // Notify parent component to update its job data
+        // Manually update parent component if response contains job data
         if (onJobDataUpdate) {
-          onJobDataUpdate(updatedJobData);
+          onJobDataUpdate(response.job);
         }
-        
-        return response.download_url;
       } else {
-        throw new Error(response.message || 'Failed to create download URL');
+        console.log('⚠️ No job data in createzip response, but polling is now active');
       }
+      
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error('❌ Error creating download URL:', errorMessage);
-      setDownloadError(errorMessage);
-      return null;
+      console.error('❌ Error creating download ZIP:', {
+        error: errorMessage,
+        fullError: error,
+        jobId: currentJobData.job_id,
+        folderPath: folderPath
+      });
+      setDownloadError(`Failed to create download ZIP: ${errorMessage}`);
     } finally {
-      setCreatingDownloadUrl(false);
+      setCreatingDownloadLink(false);
     }
   };
 
-  const handleDownloadArchive = async () => {
-    let downloadUrl: string;
-    let downloadSource: string;
-    
-    // Use download URL from job object if available and valid
+  const handleDownloadAction = async () => {
     if (hasValidDownloadUrl()) {
-      downloadUrl = jobData.download_url;
-      downloadSource = 'stored URL';
-      console.log('🔗 Using download URL from job object');
-    } else if (needsRefresh() && jobData.download_url) {
-      // URL exists but expired, refresh it
-      console.log('🔄 Download URL expired, refreshing...');
-      await refreshDownloadUrl();
-      if (hasValidDownloadUrl()) {
-        downloadUrl = jobData.download_url;
-        downloadSource = 'refreshed URL';
-      } else {
-        // Refresh failed, create new URL
-        downloadUrl = await createDownloadUrl();
-        if (!downloadUrl) return;
-        downloadSource = 'newly created URL';
-      }
+      // Download the ZIP using existing URL
+      await handleDownloadArchive();
     } else {
-      // No URL available, create one
-      downloadUrl = await createDownloadUrl();
-      if (!downloadUrl) return;
-      downloadSource = 'newly created URL';
+      // Create download ZIP (will set download_url to 'pending')
+      await createDownloadZip();
     }
+  };
+  
+  const handleDownloadArchive = async () => {
+    if (!hasValidDownloadUrl()) return;
     
     setDownloadingArchive(true);
     
     try {
       // Create a temporary link element and trigger download
       const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = `job_${jobData.job_id}_assets.zip`;
+      link.href = currentJobData.download_url;
+      link.download = `job_${currentJobData.job_id}_assets.zip`;
       link.target = '_blank';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       
-      console.log(`✅ Initiated download from ${downloadSource} for job ${jobData.job_id}`);
+      console.log(`✅ Initiated download for job ${currentJobData.job_id}`);
       
     } catch (error) {
       console.error('❌ Error downloading archive:', error);
@@ -191,44 +187,31 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
   };
 
   const handleConfirmRegenerate = async () => {
-    if (!jobData?.job_id) return;
+    if (!currentJobData?.job_id) return;
     
     setRegeneratingAssets(true);
     
     try {
-      console.log('🔄 Calling regenerate assets endpoint for job:', jobData.job_id);
+      console.log('🔄 Calling regenerate assets endpoint for job:', currentJobData.job_id);
       
       // Call the regenerate API endpoint via centralized data store
-      const response = await downloadMutation({
+      const response = await mutate({
         type: 'regenerateAssets',
-        jobId: jobData.job_id
+        jobId: currentJobData.job_id
       });
       
       console.log('✅ Assets regeneration successful:', response);
       
-      // If the response contains an updated job object, use it immediately
-      if (response.success && response.job) {
-        console.log('🔄 Updating job data with regenerated job object:', response.job);
-        
-        // Update the parent component with the new job data
-        if (onJobDataUpdate) {
-          onJobDataUpdate(response.job);
-        }
-        
-        // useAppDataStore automatically handles cache updates
-        console.log('✅ useAppDataStore automatically updated caches for regenerated assets');
-      }
-      
       setShowRegenerateModal(false);
       
-      console.log('✅ Assets regeneration completed - job data updated and caches refreshed');
+      console.log('✅ Assets regeneration completed - caches will be automatically refreshed');
     } catch (error) {
       console.error('❌ Error regenerating assets:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('❌ Full error details:', {
         message: errorMessage,
         error: error,
-        jobId: jobData.job_id
+        jobId: currentJobData.job_id
       });
       alert(`Failed to regenerate assets: ${errorMessage}`);
     } finally {
@@ -248,8 +231,8 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
 
   // Get expiration info for display
   const getExpirationInfo = () => {
-    if (hasValidDownloadUrl()) {
-      const expiryTime = new Date(jobData.download_url_expires).getTime();
+    if (hasValidDownloadUrl() && currentJobData.download_url_expires) {
+      const expiryTime = new Date(currentJobData.download_url_expires).getTime();
       const now = Date.now();
       const expiresInSeconds = Math.floor((expiryTime - now) / 1000);
       return {
@@ -260,7 +243,7 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
     return null;
   };
 
-  if (!isVisible || jobData?.job_status !== 'completed') return null;
+  if (!isVisible || currentJobData?.job_status !== 'completed') return null;
 
   return (
     <div style={{
@@ -354,11 +337,11 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
           marginTop: 8
         }}>
           <button
-            onClick={handleDownloadArchive}
-            disabled={downloadingArchive || regeneratingAssets || refreshingDownloadUrl || creatingDownloadUrl}
+            onClick={handleDownloadAction}
+            disabled={downloadingArchive || regeneratingAssets || creatingDownloadLink || isDownloadPending()}
             style={{
               padding: '20px 40px',
-              background: (downloadingArchive || regeneratingAssets || refreshingDownloadUrl || creatingDownloadUrl)
+              background: (downloadingArchive || regeneratingAssets || creatingDownloadLink || isDownloadPending())
                 ? 'rgba(156, 163, 175, 0.3)'
                 : 'linear-gradient(135deg, #10b981, #059669)',
               border: 'none',
@@ -366,9 +349,9 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
               color: 'white',
               fontSize: 18,
               fontWeight: 700,
-              cursor: (downloadingArchive || regeneratingAssets || refreshingDownloadUrl || creatingDownloadUrl) ? 'not-allowed' : 'pointer',
+              cursor: (downloadingArchive || regeneratingAssets || creatingDownloadLink || isDownloadPending()) ? 'not-allowed' : 'pointer',
               transition: 'all 0.2s',
-              boxShadow: (downloadingArchive || regeneratingAssets || refreshingDownloadUrl || creatingDownloadUrl)
+              boxShadow: (downloadingArchive || regeneratingAssets || creatingDownloadLink || isDownloadPending())
                 ? 'none' 
                 : '0 12px 32px rgba(16, 185, 129, 0.4)',
               minHeight: 70,
@@ -379,7 +362,7 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
               gap: 12
             }}
           >
-            {creatingDownloadUrl ? (
+            {creatingDownloadLink ? (
               <>
                 <div style={{
                   width: 20,
@@ -391,7 +374,7 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
                 }} />
                 Creating Download Link...
               </>
-            ) : refreshingDownloadUrl ? (
+            ) : isDownloadPending() ? (
               <>
                 <div style={{
                   width: 20,
@@ -401,7 +384,7 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
                   borderRadius: '50%',
                   animation: 'spin 1s linear infinite'
                 }} />
-                Refreshing Download Link...
+                Awaiting Download URL...
               </>
             ) : downloadingArchive ? (
               <>
@@ -418,14 +401,14 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
             ) : (
               <>
                 <span style={{ fontSize: 24 }}>📦</span>
-                {hasValidDownloadUrl() ? 'Download ZIP Archive (Ready)' : 'Create & Download ZIP Archive'}
+                {hasValidDownloadUrl() ? 'Download ZIP Archive' : 'Create Download Link'}
               </>
             )}
           </button>
         </div>
 
         {/* Re-Generate Assets Button - Always visible for completed jobs */}
-        {jobData?.job_id && (
+        {currentJobData?.job_id && (
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -434,35 +417,35 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
           }}>
             <button
               onClick={handleRegenerateClick}
-              disabled={downloadingArchive || regeneratingAssets || refreshingDownloadUrl || creatingDownloadUrl}
+              disabled={downloadingArchive || regeneratingAssets || creatingDownloadLink || isDownloadPending()}
               style={{
                 padding: '12px 24px',
                 background: 'transparent',
-                border: (regeneratingAssets || refreshingDownloadUrl || creatingDownloadUrl)
+                border: (regeneratingAssets || creatingDownloadLink || isDownloadPending())
                   ? '1px solid rgba(156, 163, 175, 0.3)'
                   : '1px solid rgba(168, 85, 247, 0.3)',
                 borderRadius: 8,
-                color: (regeneratingAssets || refreshingDownloadUrl || creatingDownloadUrl) ? '#9ca3af' : '#c4b5fd',
+                color: (regeneratingAssets || creatingDownloadLink || isDownloadPending()) ? '#9ca3af' : '#c4b5fd',
                 fontSize: 16,
                 fontWeight: 500,
-                cursor: (downloadingArchive || regeneratingAssets || refreshingDownloadUrl || creatingDownloadUrl) ? 'not-allowed' : 'pointer',
+                cursor: (downloadingArchive || regeneratingAssets || creatingDownloadLink || isDownloadPending()) ? 'not-allowed' : 'pointer',
                 transition: 'all 0.2s',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: 8,
-                opacity: (regeneratingAssets || refreshingDownloadUrl || creatingDownloadUrl) ? 0.6 : 0.9,
+                opacity: (regeneratingAssets || creatingDownloadLink || isDownloadPending()) ? 0.6 : 0.9,
                 minHeight: 50
               }}
               onMouseEnter={(e) => {
-                if (!downloadingArchive && !regeneratingAssets && !refreshingDownloadUrl && !creatingDownloadUrl) {
+                if (!downloadingArchive && !regeneratingAssets && !creatingDownloadLink && !isDownloadPending()) {
                   e.currentTarget.style.opacity = '1';
                   e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.5)';
                   e.currentTarget.style.background = 'rgba(168, 85, 247, 0.05)';
                 }
               }}
               onMouseLeave={(e) => {
-                if (!downloadingArchive && !regeneratingAssets && !refreshingDownloadUrl && !creatingDownloadUrl) {
+                if (!downloadingArchive && !regeneratingAssets && !creatingDownloadLink && !isDownloadPending()) {
                   e.currentTarget.style.opacity = '0.9';
                   e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.3)';
                   e.currentTarget.style.background = 'transparent';
@@ -499,13 +482,16 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
           marginTop: -8
         }}>
           {(() => {
+            if (isDownloadPending()) {
+              return 'Creating download archive... This may take a few minutes';
+            }
             const expirationInfo = getExpirationInfo();
             if (expirationInfo) {
               return `Download archive will contain all generated digital assets • Current link expires in ${formatExpirationTime(expirationInfo.expiresIn)}`;
             }
             return 'Download archive will contain all generated digital assets from this job';
           })()}
-          {jobData?.job_id && (
+          {currentJobData?.job_id && (
             <>
               <br />
               <span style={{ fontSize: 11, opacity: 0.8 }}>

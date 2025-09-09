@@ -562,8 +562,8 @@ function NewJobPageContent() {
                     <option value="SLAM" style={{ background: '#1f2937', color: '#f8f8f8' }}>
                       🤼 SLAM
                     </option>
-                    <option value="STAR WARS" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                      ⭐ STAR WARS
+                    <option value="STARWARS" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                      ⭐ STARWARS
                     </option>
                     <option value="NBA" style={{ background: '#1f2937', color: '#f8f8f8' }}>
                       🏀 NBA

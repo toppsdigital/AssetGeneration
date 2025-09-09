@@ -884,6 +884,32 @@ async function handleRequest(request: NextRequest, method: string) {
           }, { status: 500 });
         }
 
+      case 'createzip':
+        if (!id) {
+          return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
+        }
+        console.log('🔄 CreateZip operation:', {
+          jobId: id,
+          requestBody: body,
+          folderPath: body?.folder_path
+        });
+        apiUrl += `/jobs/${id}/createzip`;
+        apiMethod = 'POST';
+        // Get session and add user information for tracking
+        try {
+          const session = await auth();
+          if (session?.user) {
+            apiBody = {
+              ...apiBody,
+              created_by_user_id: session.user.id || session.user.email || 'unknown',
+              created_by_user_name: session.user.name || session.user.email || 'Unknown User'
+            };
+          }
+        } catch (error) {
+          console.warn('Failed to get session for createzip:', error);
+        }
+        break;
+
       case 'create_asset':
         if (!id) {
           return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
@@ -1148,6 +1174,19 @@ async function handleRequest(request: NextRequest, method: string) {
     }
     
     console.log('Parsed response data:', JSON.stringify(responseData, null, 2));
+    
+    // Special logging for createzip operation
+    if (operation === 'createzip') {
+      console.log('🔍 CreateZip operation detailed results:', {
+        apiUrl: apiUrl,
+        requestMethod: apiMethod,
+        requestBody: apiBody,
+        responseStatus: response.status,
+        responseHeaders: Object.fromEntries(response.headers.entries()),
+        responseData: responseData,
+        success: response.ok
+      });
+    }
     
     // If auth error, log more details
     if (responseData.message === "Missing Authentication Token") {

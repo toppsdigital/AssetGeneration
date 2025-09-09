@@ -682,6 +682,10 @@ export function useAppDataStore<T = any>(
           if (!payload.jobId) throw new Error('Job ID required');
           return await contentPipelineApi.updateDownloadUrl(payload.jobId);
           
+        case 'createDownloadZip':
+          if (!payload.jobId || !payload.data?.folderPath) throw new Error('Job ID and folder path required');
+          return await contentPipelineApi.createDownloadZip(payload.jobId, payload.data.folderPath);
+          
         default:
           throw new Error(`Unknown mutation type: ${payload.type}`);
       }
@@ -859,6 +863,30 @@ export function useAppDataStore<T = any>(
           if (variables.jobId) {
             queryClient.invalidateQueries({ queryKey: dataStoreKeys.downloads.byJob(variables.jobId) });
             queryClient.invalidateQueries({ queryKey: dataStoreKeys.jobs.detail(variables.jobId) });
+            queryClient.invalidateQueries({ queryKey: dataStoreKeys.jobs.all });
+          }
+          break;
+          
+        case 'createDownloadZip':
+          if (variables.jobId) {
+            // Only invalidate download-related caches, not job details that include files
+            queryClient.invalidateQueries({ queryKey: dataStoreKeys.downloads.byJob(variables.jobId) });
+            // Invalidate jobs list to show updated download status
+            queryClient.invalidateQueries({ queryKey: dataStoreKeys.jobs.all });
+            
+            // Update job details cache manually to set pending state without full invalidation
+            queryClient.setQueryData(
+              dataStoreKeys.jobs.detail(variables.jobId),
+              (prevJob: any) => {
+                if (!prevJob) return prevJob;
+                console.log(`🔄 Setting download_url to 'pending' for job ${variables.jobId}`);
+                return {
+                  ...prevJob,
+                  download_url: 'pending',
+                  last_updated: new Date().toISOString()
+                };
+              }
+            );
           }
           break;
       }
