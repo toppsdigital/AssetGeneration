@@ -20,7 +20,7 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
   
   // Use centralized data store for job polling when download_url is pending
   // Don't include files to avoid impacting the files section
-  const { data: polledJobData, mutate } = useAppDataStore('jobDetails', { 
+  const { data: polledJobData, mutate, isAutoRefreshActive } = useAppDataStore('jobDetails', { 
     jobId: jobData?.job_id || '',
     autoRefresh: shouldPoll,
     includeFiles: false, // Don't fetch files to avoid affecting files display
@@ -29,6 +29,19 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
   
   // Use polled data if available, otherwise fall back to prop data
   const currentJobData = polledJobData || jobData;
+  
+  
+  // Debug logging for polling state
+  useEffect(() => {
+    console.log(`🔍 [DownloadSection] Polling state debug:`, {
+      jobId: jobData?.job_id,
+      shouldPoll,
+      isAutoRefreshActive,
+      download_url: currentJobData?.download_url,
+      job_status: currentJobData?.job_status,
+      hasPolledData: !!polledJobData
+    });
+  }, [shouldPoll, isAutoRefreshActive, currentJobData?.download_url, currentJobData?.job_status, jobData?.job_id, polledJobData]);
   
   // Check if job has a valid download URL (not pending and not expired)
   const hasValidDownloadUrl = () => {
@@ -85,12 +98,22 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
   const [creatingDownloadLink, setCreatingDownloadLink] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   
-  // Update parent component when polled data changes
+  // Update parent component when polled data changes (preserve files data)
   useEffect(() => {
-    if (polledJobData && onJobDataUpdate) {
-      onJobDataUpdate(polledJobData);
+    if (polledJobData && onJobDataUpdate && jobData) {
+      // Merge polled data with original job data to preserve files
+      const mergedJobData = {
+        ...jobData, // Preserve original data including files
+        ...polledJobData, // Apply polled updates
+        // Explicitly preserve files data if missing in polled data
+        content_pipeline_files: polledJobData.content_pipeline_files || jobData.content_pipeline_files,
+        api_files: polledJobData.api_files || jobData.api_files,
+        files: polledJobData.files || jobData.files
+      };
+      
+      onJobDataUpdate(mergedJobData);
     }
-  }, [polledJobData, onJobDataUpdate]);
+  }, [polledJobData, onJobDataUpdate, jobData]);
 
   // Function to create download ZIP
   const createDownloadZip = async () => {
@@ -124,9 +147,21 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
           download_url_expires: response.job.download_url_expires
         });
         
-        // Manually update parent component if response contains job data
-        if (onJobDataUpdate) {
-          onJobDataUpdate(response.job);
+        // Only update specific download-related fields to preserve files data
+        if (onJobDataUpdate && currentJobData) {
+          const updatedJobData = {
+            ...currentJobData, // Preserve existing data including files
+            download_url: response.job.download_url,
+            download_url_expires: response.job.download_url_expires,
+            download_url_created: response.job.download_url_created || new Date().toISOString(),
+            last_updated: response.job.last_updated || new Date().toISOString()
+          };
+          console.log('🔄 Selectively updating job data to preserve files:', {
+            preservedFiles: !!currentJobData.content_pipeline_files,
+            filesCount: currentJobData.content_pipeline_files?.length || 0,
+            updatedFields: ['download_url', 'download_url_expires', 'download_url_created', 'last_updated']
+          });
+          onJobDataUpdate(updatedJobData);
         }
       } else {
         console.log('⚠️ No job data in createzip response, but polling is now active');

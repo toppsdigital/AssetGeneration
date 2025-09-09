@@ -155,11 +155,16 @@ export function useAppDataStore<T = any>(
         if (!options.jobId) throw new Error('Job ID is required for jobDetails selector');
         
         const response = await contentPipelineApi.getJob(options.jobId);
+        
+        // Check if we have existing cached files/assets data to preserve
+        const existingCachedJob = queryClient.getQueryData(dataStoreKeys.jobs.detail(options.jobId)) as any;
+        
         const mappedData: UIJobData = {
           ...response.job,
           api_files: response.job.files,
           files: [],
-          content_pipeline_files: [],
+          // PRESERVE existing files data if we're not specifically fetching files
+          content_pipeline_files: options.includeFiles ? [] : (existingCachedJob?.content_pipeline_files || []),
           Subset_name: response.job.source_folder
         };
         
@@ -201,6 +206,9 @@ export function useAppDataStore<T = any>(
             console.warn(`⚠️ [DataStore] Failed to fetch assets for job ${options.jobId}:`, error);
             mappedData.assets = {}; // Set empty assets object on error
           }
+        } else {
+          // Preserve existing assets if we're not specifically fetching them
+          mappedData.assets = existingCachedJob?.assets || {};
         }
         
         console.log(`✅ [DataStore] Fetched job details for ${options.jobId}`);
@@ -363,23 +371,39 @@ export function useAppDataStore<T = any>(
       if (cachedJobDetails) {
         const cachedJob = cachedJobDetails as any;
         
-        // Check if the job status has changed
-        if (cachedJob.job_status !== freshJob.job_status) {
-          console.log(`🔄 [DataStore] Syncing job ${freshJob.job_id} status: ${cachedJob.job_status} → ${freshJob.job_status}`);
+        // Check if the job status or download URL has changed
+        if (cachedJob.job_status !== freshJob.job_status || 
+            cachedJob.download_url !== freshJob.download_url ||
+            cachedJob.last_updated !== freshJob.last_updated) {
+          console.log(`🔄 [DataStore] Syncing job ${freshJob.job_id} (status: ${cachedJob.job_status} → ${freshJob.job_status}, download_url: ${cachedJob.download_url} → ${freshJob.download_url})`);
           
-          // Update the cached job details with the fresh status and any other updated fields
+          // Update the cached job details with fresh data while preserving files
           const updatedJobDetails = {
-            ...cachedJob,
+            ...cachedJob, // Preserve ALL existing cached data including files
             job_status: freshJob.job_status,
             last_updated: freshJob.last_updated || new Date().toISOString(),
-            // Sync other fields that might have changed
-            source_folder: freshJob.source_folder,
-            description: freshJob.description,
-            created_at: freshJob.created_at,
+            // Sync other non-file fields that might have changed
+            source_folder: freshJob.source_folder || cachedJob.source_folder,
+            description: freshJob.description || cachedJob.description,
+            created_at: freshJob.created_at || cachedJob.created_at,
             download_url: freshJob.download_url,
             download_url_expires: freshJob.download_url_expires,
             download_url_created: freshJob.download_url_created,
+            // Explicitly preserve files data
+            content_pipeline_files: cachedJob.content_pipeline_files,
+            api_files: cachedJob.api_files,
+            files: cachedJob.files,
+            assets: cachedJob.assets // Also preserve assets
           };
+          
+          console.log(`🔄 [DataStore] Cache sync preserving files data:`, {
+            jobId: freshJob.job_id,
+            preservedFiles: !!updatedJobDetails.content_pipeline_files,
+            filesCount: updatedJobDetails.content_pipeline_files?.length || 0,
+            preservedApiFiles: !!updatedJobDetails.api_files,
+            apiFilesCount: updatedJobDetails.api_files?.length || 0,
+            preservedAssets: !!updatedJobDetails.assets
+          });
           
           // Update the individual job details cache
           queryClient.setQueryData(
@@ -407,15 +431,16 @@ export function useAppDataStore<T = any>(
         if (jobIndex !== -1) {
           const currentJob = cachedData[jobIndex];
           
-          // Check if status or other important fields have changed
+          // Check if status, download URL, or other important fields have changed
           if (currentJob.job_status !== freshJobDetails.job_status || 
+              currentJob.download_url !== freshJobDetails.download_url ||
               currentJob.last_updated !== freshJobDetails.last_updated) {
             
             console.log(`🔄 [DataStore] Syncing jobs list cache with updated job ${freshJobDetails.job_id} (${currentJob.job_status} → ${freshJobDetails.job_status})`);
             
-            // Create updated job for jobs list (only sync essential fields)
+            // Create updated job for jobs list (only sync essential fields, preserve existing data)
             const updatedJobForList = {
-              ...currentJob,
+              ...currentJob, // Preserve all existing job list data
               job_status: freshJobDetails.job_status,
               last_updated: freshJobDetails.last_updated,
               source_folder: freshJobDetails.source_folder || currentJob.source_folder,
@@ -423,7 +448,18 @@ export function useAppDataStore<T = any>(
               download_url: freshJobDetails.download_url,
               download_url_expires: freshJobDetails.download_url_expires,
               download_url_created: freshJobDetails.download_url_created,
+              // Ensure we don't accidentally overwrite files data in jobs list
+              files: currentJob.files || freshJobDetails.files,
+              api_files: currentJob.api_files || freshJobDetails.api_files
             };
+            
+            console.log(`🔄 [DataStore] Jobs list cache sync preserving files data:`, {
+              jobId: freshJobDetails.job_id,
+              preservedFiles: !!updatedJobForList.files,
+              filesCount: updatedJobForList.files?.length || 0,
+              preservedApiFiles: !!updatedJobForList.api_files,
+              apiFilesCount: updatedJobForList.api_files?.length || 0
+            });
             
             // Update the jobs list cache
             const updatedJobsList = [...cachedData];
@@ -436,6 +472,28 @@ export function useAppDataStore<T = any>(
         }
       }
     });
+  }, [queryClient]);
+
+  // Utility function for safe job cache updates that preserve files data
+  const safeUpdateJobCache = useCallback((jobId: string, updates: any, context: string) => {
+    console.log(`🔄 [DataStore] Safe update: ${context} for job ${jobId}`);
+    
+    queryClient.setQueryData(
+      dataStoreKeys.jobs.detail(jobId),
+      (prevJob: any) => {
+        if (!prevJob) return updates;
+        
+        return {
+          ...prevJob, // Preserve ALL existing data including files
+          ...updates, // Apply updates
+          // Explicitly preserve files data
+          content_pipeline_files: prevJob.content_pipeline_files,
+          api_files: prevJob.api_files,
+          files: prevJob.files,
+          assets: prevJob.assets || updates.assets
+        };
+      }
+    );
   }, [queryClient]);
 
   // Main React Query hook
@@ -511,9 +569,14 @@ export function useAppDataStore<T = any>(
     refetchInterval: (query) => {
       const data = query.state.data;
       if (!options.autoRefresh || !finalConfig.autoRefresh.enabled || !isAutoRefreshAllowedOnPage) {
-        if (!isAutoRefreshAllowedOnPage && DEBUG_CONFIG.ENABLE_AUTO_REFRESH_LOGGING) {
-          console.log(`⏸️ [DataStore] Auto-refresh disabled - page ${pathname} not in allowed list:`, AppDataStoreConfig.ALLOWED_AUTO_REFRESH_PAGES);
-        }
+        console.log(`⏸️ [DataStore] Auto-refresh disabled for ${selector}:`, {
+          jobId: options.jobId,
+          autoRefreshRequested: !!options.autoRefresh,
+          configEnabled: finalConfig.autoRefresh.enabled,
+          pageAllowed: isAutoRefreshAllowedOnPage,
+          currentPage: pathname,
+          allowedPages: AppDataStoreConfig.ALLOWED_AUTO_REFRESH_PAGES
+        });
         return false; // Disable polling
       }
       
@@ -541,11 +604,15 @@ export function useAppDataStore<T = any>(
         const job = data as any; // Type will be validated at runtime
         const jobStatus = job?.job_status || '';
         
-        // Check if this job status should never poll (e.g., 'completed')
+        // Check if this job status should never poll, BUT continue polling if download_url is pending
         const shouldNeverPoll = ConfigHelpers.shouldJobNeverPoll(jobStatus);
-        if (shouldNeverPoll) {
-          console.log(`⏹️ [DataStore] Stopping polling - job ${options.jobId} is ${jobStatus} (completed/terminal status)`);
+        const isDownloadPending = job?.download_url === 'pending';
+        
+        if (shouldNeverPoll && !isDownloadPending) {
+          console.log(`⏹️ [DataStore] Stopping polling - job ${options.jobId} is ${jobStatus} (completed/terminal status) and download is not pending`);
           return false; // Stop polling completely
+        } else if (shouldNeverPoll && isDownloadPending) {
+          console.log(`🔄 [DataStore] Continuing polling despite completed status - job ${options.jobId} has pending download_url`);
         }
         
         // If we're including assets and we've confirmed there are no assets, reduce polling frequency
@@ -556,9 +623,15 @@ export function useAppDataStore<T = any>(
           return reducedInterval;
         }
         
-        // For all non-completed jobs, poll every 5 seconds
+        // For download URL polling or non-completed jobs, poll every 5 seconds
         const interval = finalConfig.autoRefresh.intervals.activeJobs; // 5000ms = 5 seconds
-        console.log(`🔄 [DataStore] Polling non-completed job ${options.jobId} (${jobStatus}) every ${interval}ms`);
+        
+        if (isDownloadPending) {
+          console.log(`🔄 [DataStore] Polling for pending download URL - job ${options.jobId} (${jobStatus}) every ${interval}ms`);
+        } else {
+          console.log(`🔄 [DataStore] Polling non-completed job ${options.jobId} (${jobStatus}) every ${interval}ms`);
+        }
+        
         return interval;
       }
       
@@ -691,7 +764,7 @@ export function useAppDataStore<T = any>(
       }
     },
     onSuccess: (data, variables) => {
-      console.log(`✅ [DataStore] Mutation successful:`, variables.type);
+      console.log(`✅ [DataStore] Mutation successful: ${variables.type}`);
       
       // Invalidate related queries based on mutation type
       switch (variables.type) {
@@ -703,8 +776,19 @@ export function useAppDataStore<T = any>(
           
         case 'updateJob':
           if (variables.jobId) {
-            queryClient.invalidateQueries({ queryKey: dataStoreKeys.jobs.detail(variables.jobId) });
             queryClient.invalidateQueries({ queryKey: dataStoreKeys.jobs.all });
+            
+            // Use safe update to preserve files data
+            if (data?.job) {
+              safeUpdateJobCache(variables.jobId, {
+                job_status: data.job.job_status,
+                last_updated: data.job.last_updated || new Date().toISOString(),
+                // Add other safe fields as needed, but exclude files-related fields
+                description: data.job.description,
+                download_url: data.job.download_url,
+                download_url_expires: data.job.download_url_expires
+              }, 'updateJob');
+            }
           }
           break;
           
@@ -726,7 +810,7 @@ export function useAppDataStore<T = any>(
           queryClient.invalidateQueries({ queryKey: dataStoreKeys.files.all });
           if (variables.jobId) {
             queryClient.invalidateQueries({ queryKey: dataStoreKeys.files.byJob(variables.jobId) });
-            queryClient.invalidateQueries({ queryKey: dataStoreKeys.jobs.detail(variables.jobId) });
+            // Don't invalidate job details to preserve files cache
           }
           break;
           
@@ -789,11 +873,10 @@ export function useAppDataStore<T = any>(
                 );
               } else {
                 // Fallback to invalidation if no response data
-                console.log(`⚠️ [DataStore] No file data in ${variables.type} response or no jobId available, falling back to invalidation`);
                 queryClient.invalidateQueries({ queryKey: dataStoreKeys.files.all });
                 if (jobIdForFileUpdate) {
                   queryClient.invalidateQueries({ queryKey: dataStoreKeys.files.byJob(jobIdForFileUpdate) });
-                  queryClient.invalidateQueries({ queryKey: dataStoreKeys.jobs.detail(jobIdForFileUpdate) });
+                  // Don't invalidate job details to preserve files cache
                 }
               }
               break;
@@ -843,50 +926,130 @@ export function useAppDataStore<T = any>(
           
         case 'generateAssets':
         case 'regenerateAssets':
-          // These operations typically change job status, so invalidate to get fresh data
           if (variables.jobId) {
-            queryClient.invalidateQueries({ queryKey: dataStoreKeys.assets.byJob(variables.jobId) });
-            queryClient.invalidateQueries({ queryKey: dataStoreKeys.jobs.detail(variables.jobId) });
+            console.log(`🔄 [DataStore] ${variables.type}: Refreshing files (they changed during regeneration)`);
+            
+            // Files need to be refetched since they change during regeneration
+            queryClient.invalidateQueries({ queryKey: dataStoreKeys.files.byJob(variables.jobId) });
             queryClient.invalidateQueries({ queryKey: dataStoreKeys.jobs.all });
+            queryClient.invalidateQueries({ queryKey: dataStoreKeys.jobs.detail(variables.jobId) });
+            
+            // Force immediate network request to fetch fresh files after regeneration
+            console.log(`🌐 [DataStore] Force fetching fresh job details with files for ${variables.jobId}`);
+            
+            setTimeout(async () => {
+              try {
+                // Use fetchQuery to force a network request and update the cache
+                await queryClient.fetchQuery({
+                  queryKey: dataStoreKeys.files.byJob(variables.jobId),
+                  queryFn: async () => {
+                    console.log(`📁 [DataStore] Making network request to fetch files after regeneration`);
+                    
+                    // Get job to find file list
+                    const jobResponse = await contentPipelineApi.getJob(variables.jobId);
+                    const apiFiles = jobResponse.job.files || [];
+                    
+                    if (apiFiles.length === 0) {
+                      console.log(`📁 [DataStore] No files found for job ${variables.jobId} after regeneration`);
+                      return [];
+                    }
+                    
+                    // Fetch the actual files
+                    const filesResponse = await contentPipelineApi.batchGetFiles(apiFiles);
+                    const fileObjects = filesResponse.files.map(apiFile => ({
+                      filename: apiFile.filename,
+                      job_id: apiFile.job_id,
+                      last_updated: apiFile.last_updated || new Date().toISOString(),
+                      original_files: apiFile.original_files || {},
+                      extracted_files: apiFile.extracted_files || {},
+                      firefly_assets: apiFile.firefly_assets || {}
+                    }));
+                    
+                    console.log(`✅ [DataStore] Fetched ${fileObjects.length} fresh files after regeneration`);
+                    return fileObjects;
+                  },
+                  staleTime: 0 // Force fresh data
+                });
+                
+                // Also force fetch job details with files included
+                await queryClient.fetchQuery({
+                  queryKey: dataStoreKeys.jobs.detail(variables.jobId),
+                  queryFn: async () => {
+                    console.log(`🌐 [DataStore] Making network request to fetch job details with files after regeneration`);
+                    
+                    const response = await contentPipelineApi.getJob(variables.jobId);
+                    const jobData = response.job;
+                    
+                    const mappedData = {
+                      ...jobData,
+                      api_files: jobData.files,
+                      files: [],
+                      content_pipeline_files: [],
+                      Subset_name: jobData.source_folder
+                    };
+                    
+                    // Fetch files if they exist
+                    if (mappedData.api_files?.length) {
+                      const filesResponse = await contentPipelineApi.batchGetFiles(mappedData.api_files);
+                      mappedData.content_pipeline_files = filesResponse.files.map(apiFile => ({
+                        filename: apiFile.filename,
+                        job_id: apiFile.job_id,
+                        last_updated: apiFile.last_updated || new Date().toISOString(),
+                        original_files: apiFile.original_files || {},
+                        extracted_files: apiFile.extracted_files || {},
+                        firefly_assets: apiFile.firefly_assets || {}
+                      }));
+                    }
+                    
+                    console.log(`✅ [DataStore] Fetched job details with ${mappedData.content_pipeline_files.length} files after regeneration`);
+                    return mappedData;
+                  },
+                  staleTime: 0
+                });
+                
+                console.log(`✅ [DataStore] Successfully fetched fresh job data and files after ${variables.type}`);
+              } catch (error) {
+                console.error(`❌ [DataStore] Failed to fetch fresh data after regeneration:`, error);
+              }
+            }, 500); // Longer delay to ensure regeneration completed
+            
+            console.log(`✅ [DataStore] ${variables.type}: Triggered refresh and forced refetch of files, assets, and job details`);
           }
           break;
           
         case 'extractPdfData':
-          // PDF extraction might affect files and job status
           if (variables.jobId) {
             queryClient.invalidateQueries({ queryKey: dataStoreKeys.files.byJob(variables.jobId) });
-            queryClient.invalidateQueries({ queryKey: dataStoreKeys.jobs.detail(variables.jobId) });
+            // Don't invalidate job details to preserve files cache
           }
           break;
           
         case 'refreshDownloadUrl':
           if (variables.jobId) {
             queryClient.invalidateQueries({ queryKey: dataStoreKeys.downloads.byJob(variables.jobId) });
-            queryClient.invalidateQueries({ queryKey: dataStoreKeys.jobs.detail(variables.jobId) });
             queryClient.invalidateQueries({ queryKey: dataStoreKeys.jobs.all });
+            
+            // Use safe update to preserve files data
+            if (data?.job) {
+              safeUpdateJobCache(variables.jobId, {
+                download_url: data.job.download_url,
+                download_url_expires: data.job.download_url_expires,
+                download_url_created: data.job.download_url_created,
+                last_updated: data.job.last_updated || new Date().toISOString()
+              }, 'refreshDownloadUrl');
+            }
           }
           break;
           
         case 'createDownloadZip':
           if (variables.jobId) {
-            // Only invalidate download-related caches, not job details that include files
             queryClient.invalidateQueries({ queryKey: dataStoreKeys.downloads.byJob(variables.jobId) });
-            // Invalidate jobs list to show updated download status
-            queryClient.invalidateQueries({ queryKey: dataStoreKeys.jobs.all });
             
-            // Update job details cache manually to set pending state without full invalidation
-            queryClient.setQueryData(
-              dataStoreKeys.jobs.detail(variables.jobId),
-              (prevJob: any) => {
-                if (!prevJob) return prevJob;
-                console.log(`🔄 Setting download_url to 'pending' for job ${variables.jobId}`);
-                return {
-                  ...prevJob,
-                  download_url: 'pending',
-                  last_updated: new Date().toISOString()
-                };
-              }
-            );
+            // Use safe update to set pending state while preserving files
+            safeUpdateJobCache(variables.jobId, {
+              download_url: 'pending',
+              last_updated: new Date().toISOString()
+            }, 'createDownloadZip');
           }
           break;
       }

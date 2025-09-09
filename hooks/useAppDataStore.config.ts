@@ -251,6 +251,10 @@ export type ForceRefreshEvent = typeof FORCE_REFRESH_CONFIG.JOBS_LIST_FORCE_REFR
 export const ALLOWED_AUTO_REFRESH_PAGES = [
   '/test-datastore', // Test page for useAppDataStore
   '/jobs',           // Main jobs list page
+  '/job/details',    // Job details page (for download polling)
+  '/job/preview',    // Job preview page
+  '/job/uploading',  // Job uploading page
+  // Allow polling on all job-related pages
 ] as const;
 
 export default {
