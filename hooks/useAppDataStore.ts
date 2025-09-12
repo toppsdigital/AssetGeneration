@@ -207,8 +207,20 @@ export function useAppDataStore<T = any>(
             mappedData.assets = {}; // Set empty assets object on error
           }
         } else {
-          // Preserve existing assets if we're not specifically fetching them
-          mappedData.assets = existingCachedJob?.assets || {};
+          // CRITICAL: Preserve existing assets from cache - never set to empty object unless explicitly fetching assets
+          // Check multiple cache sources to ensure we don't lose assets
+          const existingAssets = existingCachedJob?.assets || 
+                                queryClient.getQueryData(dataStoreKeys.assets.byJob(options.jobId)) as any;
+          
+          if (existingAssets && typeof existingAssets === 'object') {
+            mappedData.assets = existingAssets;
+            console.log(`✅ [DataStore] Preserved ${Object.keys(existingAssets).length} existing assets for job ${options.jobId} (not fetching assets)`);
+          } else {
+            // Only set to undefined if no existing assets found - never empty object
+            // This allows components to distinguish between "no assets fetched yet" vs "confirmed no assets"
+            console.log(`ℹ️ [DataStore] No existing assets found for job ${options.jobId} - leaving assets undefined`);
+            // Don't set mappedData.assets at all - leave it undefined
+          }
         }
         
         console.log(`✅ [DataStore] Fetched job details for ${options.jobId}`);
@@ -377,12 +389,12 @@ export function useAppDataStore<T = any>(
             cachedJob.last_updated !== freshJob.last_updated) {
           console.log(`🔄 [DataStore] Syncing job ${freshJob.job_id} (status: ${cachedJob.job_status} → ${freshJob.job_status}, download_url: ${cachedJob.download_url} → ${freshJob.download_url})`);
           
-          // Update the cached job details with fresh data while preserving files
+          // Update the cached job details with fresh data while preserving files and assets
           const updatedJobDetails = {
-            ...cachedJob, // Preserve ALL existing cached data including files
+            ...cachedJob, // Preserve ALL existing cached data including files and assets
             job_status: freshJob.job_status,
             last_updated: freshJob.last_updated || new Date().toISOString(),
-            // Sync other non-file fields that might have changed
+            // Sync other non-file/asset fields that might have changed
             source_folder: freshJob.source_folder || cachedJob.source_folder,
             description: freshJob.description || cachedJob.description,
             created_at: freshJob.created_at || cachedJob.created_at,
@@ -393,16 +405,18 @@ export function useAppDataStore<T = any>(
             content_pipeline_files: cachedJob.content_pipeline_files,
             api_files: cachedJob.api_files,
             files: cachedJob.files,
-            assets: cachedJob.assets // Also preserve assets
+            // CRITICAL: Always preserve existing assets - jobs list doesn't contain asset data
+            assets: cachedJob.assets
           };
           
-          console.log(`🔄 [DataStore] Cache sync preserving files data:`, {
+          console.log(`🔄 [DataStore] Cache sync preserving files and assets:`, {
             jobId: freshJob.job_id,
             preservedFiles: !!updatedJobDetails.content_pipeline_files,
             filesCount: updatedJobDetails.content_pipeline_files?.length || 0,
             preservedApiFiles: !!updatedJobDetails.api_files,
             apiFilesCount: updatedJobDetails.api_files?.length || 0,
-            preservedAssets: !!updatedJobDetails.assets
+            preservedAssets: !!updatedJobDetails.assets,
+            assetsCount: updatedJobDetails.assets ? Object.keys(updatedJobDetails.assets).length : 0
           });
           
           // Update the individual job details cache
@@ -439,6 +453,7 @@ export function useAppDataStore<T = any>(
             console.log(`🔄 [DataStore] Syncing jobs list cache with updated job ${freshJobDetails.job_id} (${currentJob.job_status} → ${freshJobDetails.job_status})`);
             
             // Create updated job for jobs list (only sync essential fields, preserve existing data)
+            // CRITICAL: Jobs list should never contain detailed assets - preserve whatever was there
             const updatedJobForList = {
               ...currentJob, // Preserve all existing job list data
               job_status: freshJobDetails.job_status,
@@ -450,7 +465,10 @@ export function useAppDataStore<T = any>(
               download_url_created: freshJobDetails.download_url_created,
               // Ensure we don't accidentally overwrite files data in jobs list
               files: currentJob.files || freshJobDetails.files,
-              api_files: currentJob.api_files || freshJobDetails.api_files
+              api_files: currentJob.api_files || freshJobDetails.api_files,
+              // NEVER sync assets to jobs list - they don't belong there and can cause confusion
+              // Preserve whatever assets field existed in the jobs list (should be undefined/empty)
+              assets: currentJob.assets
             };
             
             console.log(`🔄 [DataStore] Jobs list cache sync preserving files data:`, {
@@ -474,24 +492,41 @@ export function useAppDataStore<T = any>(
     });
   }, [queryClient]);
 
-  // Utility function for safe job cache updates that preserve files data
+  // Utility function for safe job cache updates that preserve files and assets data
   const safeUpdateJobCache = useCallback((jobId: string, updates: any, context: string) => {
-    console.log(`🔄 [DataStore] Safe update: ${context} for job ${jobId}`);
+    console.log(`🔄 [DataStore] Safe update: ${context} for job ${jobId}`, {
+      updatesIncludeAssets: 'assets' in updates,
+      updatesKeys: Object.keys(updates)
+    });
     
     queryClient.setQueryData(
       dataStoreKeys.jobs.detail(jobId),
       (prevJob: any) => {
-        if (!prevJob) return updates;
+        if (!prevJob) {
+          console.log(`⚠️ [DataStore] No previous job data for ${jobId} - using updates as-is`);
+          return updates;
+        }
         
-        return {
-          ...prevJob, // Preserve ALL existing data including files
+        const result = {
+          ...prevJob, // Preserve ALL existing data including files and assets
           ...updates, // Apply updates
           // Explicitly preserve files data
           content_pipeline_files: prevJob.content_pipeline_files,
           api_files: prevJob.api_files,
           files: prevJob.files,
-          assets: prevJob.assets || updates.assets
+          // CRITICAL: Only update assets if the update explicitly includes assets
+          // Otherwise, always preserve existing assets to prevent accidental loss
+          assets: 'assets' in updates ? updates.assets : prevJob.assets
         };
+        
+        console.log(`✅ [DataStore] Safe update completed for ${jobId}:`, {
+          context,
+          preservedAssets: !('assets' in updates),
+          assetsCount: result.assets ? Object.keys(result.assets).length : 'undefined',
+          preservedFiles: !!result.content_pipeline_files
+        });
+        
+        return result;
       }
     );
   }, [queryClient]);
@@ -766,6 +801,12 @@ export function useAppDataStore<T = any>(
     onSuccess: (data, variables) => {
       console.log(`✅ [DataStore] Mutation successful: ${variables.type}`);
       
+      // CRITICAL: Only these mutation types are allowed to update assets:
+      // - createAsset, updateAsset, deleteAsset, deleteAllAssets, bulkUpdateAssets
+      // - generateAssets, regenerateAssets  
+      // - extractPdfData (EDR import)
+      // All other mutations must preserve existing assets
+      
       // Invalidate related queries based on mutation type
       switch (variables.type) {
         case 'createJob':
@@ -977,6 +1018,11 @@ export function useAppDataStore<T = any>(
                   queryFn: async () => {
                     console.log(`🌐 [DataStore] Making network request to fetch job details with files after regeneration`);
                     
+                    // CRITICAL: Preserve existing assets before fetching fresh job data
+                    const existingJobData = queryClient.getQueryData(dataStoreKeys.jobs.detail(variables.jobId)) as any;
+                    const existingAssets = existingJobData?.assets || 
+                                        queryClient.getQueryData(dataStoreKeys.assets.byJob(variables.jobId)) as any;
+                    
                     const response = await contentPipelineApi.getJob(variables.jobId);
                     const jobData = response.job;
                     
@@ -985,7 +1031,10 @@ export function useAppDataStore<T = any>(
                       api_files: jobData.files,
                       files: [],
                       content_pipeline_files: [],
-                      Subset_name: jobData.source_folder
+                      Subset_name: jobData.source_folder,
+                      // CRITICAL: Preserve existing assets during file refresh after regeneration
+                      // Assets are managed separately and should not be affected by file regeneration
+                      assets: existingAssets
                     };
                     
                     // Fetch files if they exist
@@ -1001,7 +1050,7 @@ export function useAppDataStore<T = any>(
                       }));
                     }
                     
-                    console.log(`✅ [DataStore] Fetched job details with ${mappedData.content_pipeline_files.length} files after regeneration`);
+                    console.log(`✅ [DataStore] Fetched job details with ${mappedData.content_pipeline_files.length} files after regeneration (preserved ${existingAssets ? Object.keys(existingAssets).length : 0} assets)`);
                     return mappedData;
                   },
                   staleTime: 0
@@ -1018,9 +1067,40 @@ export function useAppDataStore<T = any>(
           break;
           
         case 'extractPdfData':
+          // EDR PDF import - this operation CAN update assets
           if (variables.jobId) {
             queryClient.invalidateQueries({ queryKey: dataStoreKeys.files.byJob(variables.jobId) });
-            // Don't invalidate job details to preserve files cache
+            
+            // Handle assets from EDR import if present in response
+            const edrAssets = data?.assets;
+            if (edrAssets && typeof edrAssets === 'object') {
+              console.log(`✅ [DataStore] EDR import updated assets for job ${variables.jobId}:`, {
+                assetCount: Object.keys(edrAssets).length,
+                isEmpty: Object.keys(edrAssets).length === 0
+              });
+              
+              // Update assets cache with EDR response data
+              queryClient.setQueryData(
+                dataStoreKeys.assets.byJob(variables.jobId),
+                edrAssets
+              );
+              
+              // Update job details cache assets field with EDR response data
+              queryClient.setQueryData(
+                dataStoreKeys.jobs.detail(variables.jobId),
+                (prevJob: any) => {
+                  if (!prevJob) return prevJob;
+                  return {
+                    ...prevJob,
+                    assets: edrAssets
+                  };
+                }
+              );
+              
+              console.log(`✅ [DataStore] EDR assets cache updated - no additional API calls needed`);
+            } else {
+              console.log(`ℹ️ [DataStore] EDR import did not return assets data`);
+            }
           }
           break;
           

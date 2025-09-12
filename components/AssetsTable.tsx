@@ -37,6 +37,7 @@ interface AssetsTableProps {
   onEditAsset: (asset: AssetConfig) => void;
   onRemoveAsset: (id: string) => Promise<void>;
   onCreateAssets: () => Promise<void>;
+  onRetryFailedAssets?: () => Promise<void>;
   onAssetsUpdate?: (updatedAssets: { job_id: string; assets: any; _cacheTimestamp?: number } | { _forceRefetch: true; job_id: string }) => void;
   onEDRPdfUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onAddAsset?: () => void;
@@ -53,6 +54,7 @@ export const AssetsTable = ({
   onEditAsset,
   onRemoveAsset,
   onCreateAssets,
+  onRetryFailedAssets,
   onAssetsUpdate,
   onEDRPdfUpload,
   onAddAsset
@@ -634,40 +636,90 @@ export const AssetsTable = ({
       {/* Generate All Assets Button */}
       {configuredAssets.length > 0 && (
         <div style={{ textAlign: 'center', marginTop: 16 }}>
-          <button
-            onClick={onCreateAssets}
-            disabled={creatingAssets || !canCreateAssets}
-            style={{
-              padding: '16px 36px',
-              background: creatingAssets 
-                ? 'rgba(156, 163, 175, 0.5)' 
-                : 'linear-gradient(135deg, #10b981, #059669)',
-              border: 'none',
-              borderRadius: 12,
-              color: 'white',
-              fontSize: 18,
-              fontWeight: 600,
-              cursor: creatingAssets ? 'not-allowed' : 'pointer',
-              transition: 'all 0.2s',
-              boxShadow: creatingAssets ? 'none' : '0 8px 24px rgba(16, 185, 129, 0.3)'
-            }}
-          >
-            {creatingAssets ? (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                <div style={{
-                  width: 16,
-                  height: 16,
-                  border: '2px solid rgba(255, 255, 255, 0.3)',
-                  borderTop: '2px solid white',
-                  borderRadius: '50%',
-                  animation: 'spin 1s linear infinite'
-                }} />
-                Creating Assets...
-              </div>
-            ) : (
-              `🎨 Generate All Assets (${configuredAssets.length})`
+          <div style={{ display: 'flex', gap: 16, justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' }}>
+            <button
+              onClick={onCreateAssets}
+              disabled={creatingAssets || !canCreateAssets}
+              style={{
+                padding: '16px 36px',
+                background: creatingAssets 
+                  ? 'rgba(156, 163, 175, 0.5)' 
+                  : 'linear-gradient(135deg, #10b981, #059669)',
+                border: 'none',
+                borderRadius: 12,
+                color: 'white',
+                fontSize: 18,
+                fontWeight: 600,
+                cursor: creatingAssets ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s',
+                boxShadow: creatingAssets ? 'none' : '0 8px 24px rgba(16, 185, 129, 0.3)'
+              }}
+            >
+              {creatingAssets ? (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                  <div style={{
+                    width: 16,
+                    height: 16,
+                    border: '2px solid rgba(255, 255, 255, 0.3)',
+                    borderTop: '2px solid white',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite'
+                  }} />
+                  Creating Assets...
+                </div>
+              ) : (
+                `🎨 Generate All Assets (${configuredAssets.length})`
+              )}
+            </button>
+            
+            {/* Retry Failed Assets Button - only show when status is generation-failed */}
+            {jobData?.job_status?.toLowerCase() === 'generation-failed' && onRetryFailedAssets && (
+              <button
+                onClick={onRetryFailedAssets}
+                disabled={creatingAssets || !canCreateAssets}
+                style={{
+                  padding: '16px 36px',
+                  background: creatingAssets 
+                    ? 'rgba(156, 163, 175, 0.5)' 
+                    : 'linear-gradient(135deg, #f59e0b, #d97706)',
+                  border: 'none',
+                  borderRadius: 12,
+                  color: 'white',
+                  fontSize: 18,
+                  fontWeight: 600,
+                  cursor: creatingAssets ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s',
+                  boxShadow: creatingAssets ? 'none' : '0 8px 24px rgba(245, 158, 11, 0.3)'
+                }}
+                onMouseEnter={(e) => {
+                  if (!creatingAssets) {
+                    e.currentTarget.style.background = 'linear-gradient(135deg, #d97706, #b45309)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!creatingAssets) {
+                    e.currentTarget.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
+                  }
+                }}
+              >
+                {creatingAssets ? (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                    <div style={{
+                      width: 16,
+                      height: 16,
+                      border: '2px solid rgba(255, 255, 255, 0.3)',
+                      borderTop: '2px solid white',
+                      borderRadius: '50%',
+                      animation: 'spin 1s linear infinite'
+                    }} />
+                    Retrying Assets...
+                  </div>
+                ) : (
+                  `🔄 Retry Failed Assets`
+                )}
+              </button>
             )}
-          </button>
+          </div>
         </div>
       )}
     </div>

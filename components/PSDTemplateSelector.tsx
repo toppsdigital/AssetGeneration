@@ -224,14 +224,15 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     }
   };
 
-  const createAssets = async () => {
+  const createAssets = async (retryFailedOnly: boolean = false) => {
     if (!mergedJobData?.assets || Object.keys(mergedJobData.assets).length === 0) return;
 
-    console.log('🎨 Creating digital assets with job assets:', {
+    console.log(`🎨 ${retryFailedOnly ? 'Retrying failed' : 'Creating'} digital assets with job assets:`, {
       selectedFile: selectedPhysicalFile,
       psdFile: jsonData?.psd_file,
       jobAssets: mergedJobData.assets,
       totalAssets: Object.keys(mergedJobData.assets).length,
+      retryFailedOnly
     });
 
     setCreatingAssets(true);
@@ -242,10 +243,15 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       // Convert job assets object to array format for API
       const assets = Object.values(mergedJobData.assets) as any[];
 
-      const payload = {
+      const payload: any = {
         assets,
         psd_file: psdFile
       };
+
+      // Add retry_failed_only flag when retrying failed assets
+      if (retryFailedOnly) {
+        payload.retry_failed_only = true;
+      }
 
       console.log('📋 API Payload:', {
         ...payload,
@@ -264,11 +270,13 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       router.push('/jobs');
       
     } catch (error) {
-      console.error('❌ Error creating assets:', error);
-      alert(`Failed to create assets: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error(`❌ Error ${retryFailedOnly ? 'retrying failed' : 'creating'} assets:`, error);
+      alert(`Failed to ${retryFailedOnly ? 'retry failed' : 'create'} assets: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setCreatingAssets(false);
     }
   };
+
+  const createAssetsWithRetry = () => createAssets(true);
 
   const getExtractedLayers = () => {
     const extractedLayerNames = new Set<string>();
@@ -1197,7 +1205,8 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                 getWpInvLayers={getWpInvLayers}
                 onEditAsset={editAsset}
                 onRemoveAsset={removeAsset}
-                onCreateAssets={createAssets}
+                onCreateAssets={() => createAssets(false)}
+                onRetryFailedAssets={createAssetsWithRetry}
                 onAssetsUpdate={onAssetsUpdate}
                 onEDRPdfUpload={handleEDRPdfUpload}
                 onAddAsset={selectedPhysicalFile && jsonData && !loadingJsonData ? openAssetModal : undefined}

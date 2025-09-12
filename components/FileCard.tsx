@@ -239,76 +239,76 @@ const FileCard: React.FC<FileCardProps> = ({
             // Stack PDF and Layers vertically in first column
             return (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {/* Original PDF Files */}
-                <div>
-                  <h4 style={{
-                    color: '#f59e0b',
+        {/* Original PDF Files */}
+        <div>
+          <h4 style={{
+            color: '#f59e0b',
                     fontSize: 15,
-                    fontWeight: 600,
+            fontWeight: 600,
                     margin: '0 0 10px 0'
-                  }}>
-                    📄 Original PDF Files ({file.original_files ? Object.keys(file.original_files).length : 0})
-                  </h4>
-                  <div style={{
-                    background: 'rgba(245, 158, 11, 0.1)',
-                    border: '1px solid rgba(245, 158, 11, 0.3)',
-                    borderRadius: 8,
+          }}>
+            📄 Original PDF Files ({file.original_files ? Object.keys(file.original_files).length : 0})
+          </h4>
+          <div style={{
+            background: 'rgba(245, 158, 11, 0.1)',
+            border: '1px solid rgba(245, 158, 11, 0.3)',
+            borderRadius: 8,
                     padding: 10,
                     maxHeight: 140, // Reduced for stacking
-                    overflowY: 'auto'
-                  }}>
-                    {file.original_files && Object.keys(file.original_files).length > 0 ? (
-                      Object.entries(file.original_files)
-                        .sort(([a], [b]) => a.toLowerCase().localeCompare(b.toLowerCase()))
-                        .map(([filename, fileInfo], origIndex) => {
-                        const showStatus = uploadingFiles.has(filename) || !hasFireflyAssets;
-                        
-                        return (
-                          <div key={origIndex} style={{
+            overflowY: 'auto'
+          }}>
+            {file.original_files && Object.keys(file.original_files).length > 0 ? (
+              Object.entries(file.original_files)
+                .sort(([a], [b]) => a.toLowerCase().localeCompare(b.toLowerCase()))
+                .map(([filename, fileInfo], origIndex) => {
+                const showStatus = uploadingFiles.has(filename) || !hasFireflyAssets;
+                
+                return (
+                  <div key={origIndex} style={{
                             marginBottom: 6,
                             fontSize: 12,
-                            color: '#fbbf24',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center'
-                          }}>
+                    color: '#fbbf24',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
                             <span style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
-                              <span>📋</span>
+                      <span>📋</span>
                               <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <span>{filename}</span>
-                                {uploadingFiles.has(filename) && (
-                                  <div style={{
+                        <span>{filename}</span>
+                        {uploadingFiles.has(filename) && (
+                          <div style={{
                                     width: 10,
                                     height: 10,
-                                    border: '1.5px solid rgba(245, 158, 11, 0.3)',
-                                    borderTop: '1.5px solid #f59e0b',
-                                    borderRadius: '50%',
-                                    animation: 'spin 1s linear infinite',
+                            border: '1.5px solid rgba(245, 158, 11, 0.3)',
+                            borderTop: '1.5px solid #f59e0b',
+                            borderRadius: '50%',
+                            animation: 'spin 1s linear infinite',
                                     marginLeft: 3
-                                  }} />
-                                )}
-                              </span>
-                              {uploadingFiles.has(filename) && (
-                                <span style={{
+                          }} />
+                        )}
+                      </span>
+                      {uploadingFiles.has(filename) && (
+                        <span style={{
                                   fontSize: 10,
-                                  color: '#f59e0b',
-                                  animation: 'pulse 2s infinite',
+                          color: '#f59e0b',
+                          animation: 'pulse 2s infinite',
                                   marginLeft: 3
-                                }}>
-                                  Uploading...
-                                </span>
-                              )}
-                            </span>
+                        }}>
+                          Uploading...
+                        </span>
+                      )}
+                    </span>
                             <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
-                              <span style={{
+                      <span style={{
                                 fontSize: 10,
                                 padding: '1px 4px',
                                 borderRadius: 3,
-                                background: 'rgba(245, 158, 11, 0.2)',
-                                color: '#f59e0b'
-                              }}>
-                                {fileInfo.card_type}
-                              </span>
+                        background: 'rgba(245, 158, 11, 0.2)',
+                        color: '#f59e0b'
+                      }}>
+                        {fileInfo.card_type}
+                      </span>
                               {showStatus && (
                                 <span style={{
                                   fontSize: 10,
@@ -554,174 +554,174 @@ const FileCard: React.FC<FileCardProps> = ({
                               }}>
                                 {fileInfo.card_type}
                               </span>
-                              {showStatus && (
-                                <span style={{
+                      {showStatus && (
+                        <span style={{
                                   fontSize: 10,
                                   padding: '1px 4px',
                                   borderRadius: 3,
-                                  background: fileInfo.status.toLowerCase() === 'uploaded' 
-                                    ? 'rgba(16, 185, 129, 0.2)' 
-                                    : fileInfo.status.toLowerCase() === 'upload-failed'
-                                    ? 'rgba(239, 68, 68, 0.2)'
-                                    : 'rgba(249, 115, 22, 0.2)',
-                                  color: fileInfo.status.toLowerCase() === 'uploaded' 
-                                    ? '#34d399' 
-                                    : fileInfo.status.toLowerCase() === 'upload-failed'
-                                    ? '#fca5a5'
-                                    : '#fdba74'
-                                }}>
-                                  {capitalizeStatus(fileInfo.status)}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <p style={{ color: '#9ca3af', fontSize: 12, margin: 0 }}>
-                        No original PDF files found
-                      </p>
-                    )}
-                  </div>
-                </div>
-                
-                {/* Extracted Layers - Only show if there are extracted files */}
-                {(() => {
-                  const extractedFiles = Object.fromEntries(
-                    Object.entries(allExtractedFiles).filter(([filename]) => {
-                      const lowerFilename = filename.toLowerCase();
-                      return !lowerFilename.includes('_seq') && !lowerFilename.includes('_seq_bb');
-                    })
-                  );
-                  
-                  if (Object.keys(extractedFiles).length === 0) return null;
-                  
-                  const allUploaded = Object.values(allExtractedFiles).every(
-                    extractedFile => extractedFile.status.toLowerCase() === 'uploaded'
-                  );
-                  
-                  return (
-                    <div>
-                      <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginBottom: 10
-                      }}>
-                        <h4 style={{
-                          color: '#60a5fa',
-                          fontSize: 15,
-                          fontWeight: 600,
-                          margin: 0
+                          background: fileInfo.status.toLowerCase() === 'uploaded' 
+                            ? 'rgba(16, 185, 129, 0.2)' 
+                            : fileInfo.status.toLowerCase() === 'upload-failed'
+                            ? 'rgba(239, 68, 68, 0.2)'
+                            : 'rgba(249, 115, 22, 0.2)',
+                          color: fileInfo.status.toLowerCase() === 'uploaded' 
+                            ? '#34d399' 
+                            : fileInfo.status.toLowerCase() === 'upload-failed'
+                            ? '#fca5a5'
+                            : '#fdba74'
                         }}>
-                          🖼️ Extracted Layers ({Object.keys(extractedFiles).length})
-                        </h4>
-                        {allUploaded ? (
-                          <button
-                            onClick={() => {
-                              const jobId = jobData?.job_id || '';
-                              const fileId = file.filename;
-                              const mode = 'extracted-assets';
-                              
-                              console.log(`🔍 [FileCard] Navigating to extracted assets preview:`, {
-                                jobId,
-                                fileId,
-                                mode
-                              });
-                              
-                              router.push(`/job/preview?jobId=${encodeURIComponent(jobId)}&fileId=${encodeURIComponent(fileId)}&mode=${mode}`);
-                            }}
-                            style={{
-                              background: 'rgba(59, 130, 246, 0.2)',
-                              border: '1px solid rgba(59, 130, 246, 0.4)',
+                          {capitalizeStatus(fileInfo.status)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+                      <p style={{ color: '#9ca3af', fontSize: 12, margin: 0 }}>
+                No original PDF files found
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Extracted Layers - Only show if there are extracted files */}
+        {(() => {
+          const extractedFiles = Object.fromEntries(
+            Object.entries(allExtractedFiles).filter(([filename]) => {
+              const lowerFilename = filename.toLowerCase();
+              return !lowerFilename.includes('_seq') && !lowerFilename.includes('_seq_bb');
+            })
+          );
+          
+          if (Object.keys(extractedFiles).length === 0) return null;
+          
+          const allUploaded = Object.values(allExtractedFiles).every(
+            extractedFile => extractedFile.status.toLowerCase() === 'uploaded'
+          );
+          
+          return (
+            <div>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                        marginBottom: 10
+              }}>
+                <h4 style={{
+                  color: '#60a5fa',
+                          fontSize: 15,
+                  fontWeight: 600,
+                  margin: 0
+                }}>
+                  🖼️ Extracted Layers ({Object.keys(extractedFiles).length})
+                </h4>
+                {allUploaded ? (
+                  <button
+                    onClick={() => {
+                      const jobId = jobData?.job_id || '';
+                      const fileId = file.filename;
+                      const mode = 'extracted-assets';
+                      
+                      console.log(`🔍 [FileCard] Navigating to extracted assets preview:`, {
+                        jobId,
+                        fileId,
+                        mode
+                      });
+                      
+                      router.push(`/job/preview?jobId=${encodeURIComponent(jobId)}&fileId=${encodeURIComponent(fileId)}&mode=${mode}`);
+                    }}
+                    style={{
+                      background: 'rgba(59, 130, 246, 0.2)',
+                      border: '1px solid rgba(59, 130, 246, 0.4)',
                               borderRadius: 4,
-                              color: '#60a5fa',
-                              cursor: 'pointer',
+                      color: '#60a5fa',
+                      cursor: 'pointer',
                               fontSize: 11,
                               padding: '4px 8px',
-                              transition: 'all 0.2s',
-                              fontWeight: 500
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.background = 'rgba(59, 130, 246, 0.3)';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)';
-                            }}
-                          >
-                            👁️ Preview
-                          </button>
-                        ) : (
-                          <span style={{
+                      transition: 'all 0.2s',
+                      fontWeight: 500
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(59, 130, 246, 0.3)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)';
+                    }}
+                  >
+                    👁️ Preview
+                  </button>
+                ) : (
+                  <span style={{
                             fontSize: 11,
-                            color: '#9ca3af',
+                    color: '#9ca3af',
                             padding: '4px 8px',
-                            border: '1px solid rgba(156, 163, 175, 0.3)',
+                    border: '1px solid rgba(156, 163, 175, 0.3)',
                             borderRadius: 4,
-                            background: 'rgba(156, 163, 175, 0.1)'
-                          }}>
-                            ⏳ Processing...
-                          </span>
-                        )}
-                      </div>
-                      <div style={{
-                        background: 'rgba(59, 130, 246, 0.1)',
-                        border: '1px solid rgba(59, 130, 246, 0.3)',
-                        borderRadius: 8,
+                    background: 'rgba(156, 163, 175, 0.1)'
+                  }}>
+                    ⏳ Processing...
+                  </span>
+                )}
+              </div>
+              <div style={{
+                background: 'rgba(59, 130, 246, 0.1)',
+                border: '1px solid rgba(59, 130, 246, 0.3)',
+                borderRadius: 8,
                         padding: 10,
                         // Removed maxHeight to use available space dynamically
                         overflowY: 'visible'
-                      }}>
-                        {Object.entries(extractedFiles)
-                          .sort(([a], [b]) => a.toLowerCase().localeCompare(b.toLowerCase()))
-                          .map(([filename, extractedFile], extIndex) => {
-                          const showStatus = uploadingFiles.has(filename) || !hasFireflyAssets;
-                          
-                          return (
-                            <div key={extIndex} style={{
+              }}>
+                {Object.entries(extractedFiles)
+                  .sort(([a], [b]) => a.toLowerCase().localeCompare(b.toLowerCase()))
+                  .map(([filename, extractedFile], extIndex) => {
+                  const showStatus = uploadingFiles.has(filename) || !hasFireflyAssets;
+                  
+                  return (
+                    <div key={extIndex} style={{
                               marginBottom: 6,
                               fontSize: 12,
-                              color: '#bfdbfe',
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center'
-                            }}>
+                      color: '#bfdbfe',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
+                    }}>
                               <span style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
-                                <span>🖼️</span>
-                                <span>{filename}</span>
-                              </span>
+                        <span>🖼️</span>
+                        <span>{filename}</span>
+                      </span>
                               <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
-                                <span style={{ 
-                                  background: 'rgba(59, 130, 246, 0.2)', 
+                        <span style={{ 
+                          background: 'rgba(59, 130, 246, 0.2)', 
                                   padding: '1px 4px',
                                   borderRadius: 3,
-                                  color: '#60a5fa',
+                          color: '#60a5fa',
                                   fontSize: 10
-                                }}>
-                                  {extractedFile.layer_type}
-                                </span>
-                                {showStatus && (
-                                  <span style={{
+                        }}>
+                          {extractedFile.layer_type}
+                        </span>
+                        {showStatus && (
+                          <span style={{
                                     fontSize: 10,
                                     padding: '1px 4px',
                                     borderRadius: 3,
-                                    background: extractedFile.status.toLowerCase() === 'uploaded' 
-                                      ? 'rgba(16, 185, 129, 0.2)' 
-                                      : 'rgba(249, 115, 22, 0.2)',
-                                    color: extractedFile.status.toLowerCase() === 'uploaded' 
-                                      ? '#34d399' 
-                                      : '#fdba74'
-                                  }}>
-                                    {capitalizeStatus(extractedFile.status)}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
+                            background: extractedFile.status.toLowerCase() === 'uploaded' 
+                              ? 'rgba(16, 185, 129, 0.2)' 
+                              : 'rgba(249, 115, 22, 0.2)',
+                            color: extractedFile.status.toLowerCase() === 'uploaded' 
+                              ? '#34d399' 
+                              : '#fdba74'
+                          }}>
+                            {capitalizeStatus(extractedFile.status)}
+                          </span>
+                        )}
                       </div>
                     </div>
                   );
+                })}
+              </div>
+            </div>
+          );
                 })()}
               </>
             );
