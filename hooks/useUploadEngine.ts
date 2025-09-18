@@ -321,10 +321,16 @@ export const useUploadEngine = ({
           // Use content pipeline for presigned URL generation instead of old s3-proxy
           console.log('📤 Getting presigned URL via content pipeline');
           
-          console.log(`🔍 Getting content pipeline presigned URL for s3_key: "${uploadInstruction.s3_key}"`);
+          // Prefer the clean app path for presign: {APP}/PDFs/{file}
+          let cleanKey = filePath;
+          if (isInUploadsDirectory(cleanKey)) {
+            const uploadsPrefix = buildS3UploadsPath('');
+            cleanKey = cleanKey.replace(new RegExp(`^${uploadsPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`), '');
+          }
+          console.log(`🔍 Presign using clean key: "${cleanKey}" (was: ${uploadInstruction.s3_key})`);
           const presignedData = await contentPipelineApi.getPresignedUrl({
             client_method: 'put',
-            filename: uploadInstruction.s3_key,
+            filename: cleanKey,
             expires_in: 3600,
             size: file.size,
             content_type: file.type || 'application/pdf'
