@@ -65,15 +65,21 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
     return currentJobData?.download_url === 'pending';
   };
   
+  // Check if backend is in the process of creating the ZIP (strict check)
+  const isCreating = () => {
+    return currentJobData?.zip_status === 'creating';
+  };
+  
   // Update polling state based on current job data
   useEffect(() => {
-    const isPending = currentJobData?.download_url === 'pending';
+    const isPending = currentJobData?.download_url === 'pending' || isCreating();
     const hasValidUrl = hasValidDownloadUrl();
-    const shouldStopPolling = hasValidUrl || (!isPending && currentJobData?.download_url && currentJobData.download_url !== 'pending');
+    const shouldStopPolling = hasValidUrl && currentJobData?.zip_status === 'zip_ready';
     
     console.log(`📊 Download URL status check:`, {
       jobId: currentJobData?.job_id,
       download_url: currentJobData?.download_url,
+      zip_status: currentJobData?.zip_status,
       isPending,
       hasValidUrl,
       shouldPoll,
@@ -89,7 +95,7 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
       console.log(`✅ Download polling stopped for job ${currentJobData?.job_id} (download_url ready: ${currentJobData?.download_url})`);
       setShouldPoll(false);
     }
-  }, [currentJobData?.download_url, currentJobData?.job_id, shouldPoll]);
+  }, [currentJobData?.download_url, currentJobData?.zip_status, currentJobData?.job_status, currentJobData?.job_id, shouldPoll]);
 
   // Local state for download management
   const [downloadingArchive, setDownloadingArchive] = useState(false);
@@ -373,10 +379,10 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
         }}>
           <button
             onClick={handleDownloadAction}
-            disabled={downloadingArchive || regeneratingAssets || creatingDownloadLink || isDownloadPending()}
+            disabled={downloadingArchive || regeneratingAssets || creatingDownloadLink || isDownloadPending() || isCreating()}
             style={{
               padding: '20px 40px',
-              background: (downloadingArchive || regeneratingAssets || creatingDownloadLink || isDownloadPending())
+              background: (downloadingArchive || regeneratingAssets || creatingDownloadLink || isDownloadPending() || isCreating())
                 ? 'rgba(156, 163, 175, 0.3)'
                 : 'linear-gradient(135deg, #10b981, #059669)',
               border: 'none',
@@ -384,9 +390,9 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
               color: 'white',
               fontSize: 18,
               fontWeight: 700,
-              cursor: (downloadingArchive || regeneratingAssets || creatingDownloadLink || isDownloadPending()) ? 'not-allowed' : 'pointer',
+              cursor: (downloadingArchive || regeneratingAssets || creatingDownloadLink || isDownloadPending() || isCreating()) ? 'not-allowed' : 'pointer',
               transition: 'all 0.2s',
-              boxShadow: (downloadingArchive || regeneratingAssets || creatingDownloadLink || isDownloadPending())
+              boxShadow: (downloadingArchive || regeneratingAssets || creatingDownloadLink || isDownloadPending() || isCreating())
                 ? 'none' 
                 : '0 12px 32px rgba(16, 185, 129, 0.4)',
               minHeight: 70,
@@ -398,6 +404,18 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
             }}
           >
             {creatingDownloadLink ? (
+              <>
+                <div style={{
+                  width: 20,
+                  height: 20,
+                  border: '2px solid rgba(255, 255, 255, 0.3)',
+                  borderTop: '2px solid white',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite'
+                }} />
+                Creating Download Link...
+              </>
+            ) : isCreating() ? (
               <>
                 <div style={{
                   width: 20,
@@ -517,7 +535,7 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
           marginTop: -8
         }}>
           {(() => {
-            if (isDownloadPending()) {
+            if (isCreating() || isDownloadPending()) {
               return 'Creating download archive... This may take a few minutes';
             }
             const expirationInfo = getExpirationInfo();
