@@ -124,6 +124,7 @@ function JobUploadingContent() {
 
       let uploadResponse: Response;
       if (presignedData.fields && presignedData.method === 'POST') {
+        // Use proxy to avoid CORS issues on Vercel for EDR upload
         uploadResponse = await fetch('/api/s3-upload', {
           method: 'POST',
           headers: {
@@ -135,6 +136,7 @@ function JobUploadingContent() {
           body: edrFile,
         });
       } else {
+        // Use proxy PUT for EDR upload
         uploadResponse = await fetch('/api/s3-upload', {
           method: 'PUT',
           headers: {

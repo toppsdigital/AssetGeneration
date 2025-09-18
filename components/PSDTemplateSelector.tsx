@@ -837,7 +837,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     
     const s3FileName = file.name;
     const appName = jobData?.app_name || 'default_app';
-    const presignedPath = `${appName}/EDR/${s3FileName}`;  // For presigned URL
+    const presignedPath = `${appName}/PDFs/${s3FileName}`;  // Use canonical PDFs path
     
     setUploadProgress(10);
 
@@ -865,31 +865,22 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     });
     setUploadProgress(30);
 
-    // Step 2: Upload file to S3 via our proxy - handle both POST form and PUT uploads
-    console.log('📋 Step 2: Uploading file to S3...');
+    // Step 2: Upload file directly to S3 - handle both POST form and PUT uploads
+    console.log('📋 Step 2: Uploading file directly to S3...');
     let uploadResponse;
     if (presignedData.fields && presignedData.method === 'POST') {
-      // Use form POST upload
+      // Use form POST upload directly
       console.log(`📋 Using presigned POST form upload with ${Object.keys(presignedData.fields).length} fields`);
-      uploadResponse = await fetch('/api/s3-upload', {
-        method: 'POST',
-        headers: {
-          'Content-Type': file.type || 'application/pdf',
-          'x-upload-url': putUrl,
-          'x-upload-fields': JSON.stringify(presignedData.fields),
-          'x-upload-method': presignedData.method,
-        },
-        body: file,
-      });
+      const formData = new FormData();
+      Object.entries(presignedData.fields).forEach(([k, v]) => formData.append(k, v as string));
+      formData.append('file', file);
+      uploadResponse = await fetch(putUrl, { method: 'POST', body: formData });
     } else {
-      // Use simple PUT upload (legacy/fallback)
+      // Use simple PUT upload directly
       console.log(`📋 Using presigned PUT upload`);
-      uploadResponse = await fetch('/api/s3-upload', {
+      uploadResponse = await fetch(putUrl, {
         method: 'PUT',
-        headers: {
-          'Content-Type': file.type || 'application/pdf',
-          'x-presigned-url': putUrl,
-        },
+        headers: { 'Content-Type': file.type || 'application/pdf' },
         body: file,
       });
     }
