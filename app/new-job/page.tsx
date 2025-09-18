@@ -14,6 +14,7 @@ interface NewJobFormData {
   description: string;
   uploadFolder: string;
   selectedFiles: FileList | null;
+  edrPdfFilename?: string;
 }
 
 function NewJobPageContent() {
@@ -46,7 +47,8 @@ function NewJobPageContent() {
     filenamePrefix: isRerun ? (searchParams.get('filenamePrefix') || '') : '',
     description: isRerun ? (searchParams.get('description') || '') : '',
     uploadFolder: '',
-    selectedFiles: null
+    selectedFiles: null,
+    edrPdfFilename: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Partial<NewJobFormData>>({});
@@ -94,7 +96,8 @@ function NewJobPageContent() {
       setFormData(prev => ({
         ...prev,
         uploadFolder: folderPath,
-        selectedFiles: dataTransfer.files
+        selectedFiles: dataTransfer.files,
+        edrPdfFilename: ''
       }));
 
       // Collapse file list when new files are selected
@@ -110,6 +113,28 @@ function NewJobPageContent() {
     } else {
       // If no files selected, collapse the file list
       setIsFileListExpanded(false);
+    }
+  };
+
+  // Handle EDR file selection (single PDF)
+  const handleEdrFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    const fileName = file.name;
+    const isPdf = file.type === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf');
+    if (!isPdf) {
+      setErrors(prev => ({ ...prev, edrPdfFilename: 'Please select a PDF file' }));
+      return;
+    }
+    // Clear any previous error and set value
+    setErrors(prev => ({ ...prev, edrPdfFilename: '' }));
+    setFormData(prev => ({ ...prev, edrPdfFilename: fileName }));
+    // Store the actual File object in memory for upload page
+    try {
+      (window as any).pendingEdrFile = file;
+      console.log('✅ Stored pending EDR file for upload:', fileName);
+    } catch (err) {
+      console.warn('⚠️ Failed to store pending EDR file:', err);
     }
   };
 
@@ -162,6 +187,8 @@ function NewJobPageContent() {
     filenamePrefix: string;
     sourceFolder: string;
     files: string[];
+    pdf_files?: string[];
+    edr_pdf_filename?: string;
     description?: string;
     original_files_total_count?: number;
   }) => {
@@ -171,6 +198,8 @@ function NewJobPageContent() {
         filename_prefix: jobData.filenamePrefix,
         source_folder: jobData.sourceFolder,
         files: jobData.files,
+        pdf_files: jobData.pdf_files,
+        edr_pdf_filename: jobData.edr_pdf_filename,
         description: jobData.description,
         original_files_total_count: jobData.original_files_total_count
       };
@@ -220,6 +249,7 @@ function NewJobPageContent() {
       console.log('Starting job creation process...');
       
       let filenames: string[];
+      let pdfFiles: string[] = [];
       let actualPdfCount: number;
       
       if (isRerun) {
@@ -257,6 +287,7 @@ function NewJobPageContent() {
         filenames = Array.from(fileGroups);
         // Count individual PDF files with _FR and _BK after deduplication
         actualPdfCount = validFiles.length;
+        pdfFiles = validFiles;
         
         console.log('📊 Rerun File Processing (same as new job):');
         console.log(`  Total files selected: ${formData.selectedFiles.length}`);
@@ -323,6 +354,7 @@ function NewJobPageContent() {
         // Create final filenames array and count individual PDF files
         filenames = Array.from(fileMap.keys());
         actualPdfCount = validFiles.length; // Count individual PDF files with _FR and _BK
+        pdfFiles = validFiles;
         
         console.log('📊 File Processing Summary:');
         console.log(`  Total files selected: ${formData.selectedFiles.length}`);
@@ -409,6 +441,8 @@ function NewJobPageContent() {
         filenamePrefix: formData.filenamePrefix,
         sourceFolder: generateFilePath(formData.appName),
         files: filenames,
+        pdf_files: pdfFiles,
+        edr_pdf_filename: formData.edrPdfFilename || undefined,
         description: formData.description,
         // Pass individual PDF files count for accurate total_count calculation (for both new jobs and reruns)
         original_files_total_count: actualPdfCount
@@ -438,6 +472,7 @@ function NewJobPageContent() {
         appName: formData.appName,
         filenamePrefix: formData.filenamePrefix,
         description: formData.description,
+        edrPdfFilename: formData.edrPdfFilename || undefined,
         files: Array.from(formData.selectedFiles!).map(file => ({
           name: file.name,
           size: file.size,
@@ -693,7 +728,7 @@ function NewJobPageContent() {
                     color: '#f3f4f6',
                     marginBottom: 8
                   }}>
-                    Select PDF Folder to Upload * (files must end with _FR.pdf or _BK.pdf)
+                    Select PDF Folder to Upload
                   </label>
                   
                   {/* Hidden file input for folder selection */}
@@ -786,6 +821,68 @@ function NewJobPageContent() {
                     </p>
                   )}
                 </div>
+              </div>
+
+              {/* EDR PDF selector (single PDF picker) */}
+              <div style={{ marginTop: 24 }}>
+                <label style={{
+                  display: 'block',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: '#f3f4f6',
+                  marginBottom: 8
+                }}>
+                  Select EDR File (used for asset configuration)
+                </label>
+                {/* Hidden input for single PDF selection */}
+                <input
+                  type="file"
+                  id="edr-file-input"
+                  accept=".pdf"
+                  style={{ display: 'none' }}
+                  onChange={handleEdrFileSelect}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const input = document.getElementById('edr-file-input') as HTMLInputElement;
+                    if (input) {
+                      // Clear value so selecting the same file again still triggers onChange
+                      input.value = '';
+                      input.click();
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    border: `1px solid ${errors.edrPdfFilename ? '#ef4444' : 'rgba(255, 255, 255, 0.2)'}`,
+                    borderRadius: 8,
+                    color: '#f8f8f8',
+                    fontSize: 14,
+                    outline: 'none',
+                    transition: 'all 0.2s',
+                    boxSizing: 'border-box',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    opacity: 1
+                  }}
+                >
+                  <span>
+                    {formData.edrPdfFilename ? (
+                      <span title={formData.edrPdfFilename}>📄 {formData.edrPdfFilename}</span>
+                    ) : (
+                      'Click to select EDR PDF file'
+                    )}
+                  </span>
+                  <span style={{ color: '#9ca3af' }}>📄</span>
+                </button>
+                {errors.edrPdfFilename && (
+                  <p style={{ color: '#ef4444', fontSize: 12, margin: '4px 0 0 0' }}>{errors.edrPdfFilename}</p>
+                )}
               </div>
             </div>
 

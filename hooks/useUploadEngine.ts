@@ -321,10 +321,16 @@ export const useUploadEngine = ({
           // Use content pipeline for presigned URL generation instead of old s3-proxy
           console.log('📤 Getting presigned URL via content pipeline');
           
-          console.log(`🔍 Getting content pipeline presigned URL for s3_key: "${uploadInstruction.s3_key}"`);
+          // Prefer the clean app path for presign: {APP}/PDFs/{file}
+          let cleanKey = filePath;
+          if (isInUploadsDirectory(cleanKey)) {
+            const uploadsPrefix = buildS3UploadsPath('');
+            cleanKey = cleanKey.replace(new RegExp(`^${uploadsPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`), '');
+          }
+          console.log(`🔍 Presign using clean key: "${cleanKey}" (was: ${uploadInstruction.s3_key})`);
           const presignedData = await contentPipelineApi.getPresignedUrl({
             client_method: 'put',
-            filename: uploadInstruction.s3_key,
+            filename: cleanKey,
             expires_in: 3600,
             size: file.size,
             content_type: file.type || 'application/pdf'
@@ -551,59 +557,13 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
     const filesToCleanup = convertedFiles.map(f => f.filename);
     
     try {
-      // Get upload instructions for all files (streaming approach for all)
-      const fileInstructions = convertedFiles.map(({ file, fileInfo }) => ({
-        filename: fileInfo.file_path,
-        size: file.size,
-        content_type: file.type || 'application/pdf'
+      // Prepare files for direct S3 proxy upload (consistent pathing like EDR)
+      const filesToUpload = convertedFiles.map(({ file, fileInfo }) => ({
+        file,
+        filePath: fileInfo.file_path
       }));
-      
-      const instructionsResponse = await fetch('/api/content-pipeline-proxy?operation=s3_upload_files', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-
-          folder: buildS3UploadsPath(''),
-          files: fileInstructions
-        }),
-      });
-
-      if (!instructionsResponse.ok) {
-        const errorData = await instructionsResponse.json().catch(() => ({}));
-        throw new Error(`Failed to get upload instructions for group ${groupFilename}: ${instructionsResponse.status} ${JSON.stringify(errorData)}`);
-      }
-
-      const instructionsResult = await instructionsResponse.json();
-      
-      // Verify upload instructions match file count
-      const instructionsCount = instructionsResult.data?.upload_instructions?.length || 0;
-      console.log(`📋 Upload instructions received: ${instructionsCount} instructions for ${convertedFiles.length} files`);
-      
-      if (instructionsCount !== convertedFiles.length) {
-        console.error(`❌ Mismatch: Expected ${convertedFiles.length} upload instructions, got ${instructionsCount}`);
-        console.error('Files to upload:', convertedFiles.map(f => f.filename));
-        console.error('Upload instructions:', instructionsResult.data?.upload_instructions?.map((inst: any, idx: number) => ({ index: idx, filename: inst.filename || 'unknown' })));
-        throw new Error(`Upload instructions count mismatch: expected ${convertedFiles.length}, got ${instructionsCount}`);
-      }
-      
-      // Upload each file using its specific streaming instructions
-      console.log(`📤 Starting individual file uploads for group ${groupFilename} (${convertedFiles.length} files)`);
-      for (let i = 0; i < convertedFiles.length; i++) {
-        const { file, fileInfo, filename } = convertedFiles[i];
-        const uploadInstruction = instructionsResult.data.upload_instructions[i];
-        
-        console.log(`📤 Uploading file ${i + 1}/${convertedFiles.length}: "${filename}" (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
-        console.log(`    📍 File path: ${fileInfo.file_path}`);
-        console.log(`    📋 Upload instruction type: ${uploadInstruction?.upload_type || 'undefined'}`);
-        
-        try {
-          await uploadLargeFileToS3(file, fileInfo.file_path, uploadInstruction);
-          console.log(`    ✅ Successfully uploaded file ${i + 1}/${convertedFiles.length}: "${filename}"`);
-        } catch (error) {
-          console.error(`    ❌ Failed to upload file ${i + 1}/${convertedFiles.length}: "${filename}"`, error);
-          throw error; // Re-throw to handle at group level
-        }
-      }
+      console.log(`📤 Starting direct uploads for group ${groupFilename} (${filesToUpload.length} files)`);
+      await uploadFilesToContentPipeline(filesToUpload);
       console.log(`✅ All ${convertedFiles.length} files uploaded successfully for group ${groupFilename}`);
 
       console.log(`✅ File group ${groupFilename} streaming upload completed successfully (status updates now handled by S3 triggers)`);
@@ -825,39 +785,14 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
         fileType: cf.file?.type
       })));
       
-      // Prepare files for direct S3 proxy upload
+      // Prepare files for direct S3 proxy upload using canonical key: {APP}/PDFs/{filename}
       const filesToUpload = convertedFiles.map(({ file, fileInfo, filename }) => {
-        // DEBUGGING PATH DUPLICATION ISSUE: Log detailed file_path info
-        console.log(`🔍 DEBUGGING file_path for ${filename}:`, {
-          'fileInfo.file_path': fileInfo.file_path,
-          'filename': filename,
-          'fileInfo': fileInfo,
-          'file_path_includes_asset_generator': fileInfo.file_path?.includes('asset_generator'),
-          'file_path_starts_with_asset_generator': fileInfo.file_path?.startsWith('asset_generator')
+        const appName = (jobData?.app_name || '').trim() || 'UNKNOWN_APP';
+        const canonicalKey = `${appName}/PDFs/${filename}`;
+        console.log(`📄 Preparing file for direct upload: ${filename} -> ${canonicalKey}`, {
+          original_file_path: fileInfo.file_path
         });
-        
-        // Use the file_path from fileInfo which should be app_name/PDFs/filename format
-        let s3FilePath = fileInfo.file_path || filename;
-        
-        // REMOVE ANY BASE PATH PREFIX: We want direct upload to app structure only
-        if (isInUploadsDirectory(s3FilePath)) {
-          console.warn(`⚠️ WARNING: s3FilePath contains unwanted base path! Removing prefix:`, {
-            original: s3FilePath,
-          });
-          // Remove any asset_generator base path prefix (environment-aware)
-          const uploadsPrefix = buildS3UploadsPath('');
-          s3FilePath = s3FilePath.replace(new RegExp(`^${uploadsPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`), '');
-          console.log(`✅ Cleaned s3FilePath:`, {
-            cleaned: s3FilePath,
-            'will_upload_to': s3FilePath
-          });
-        }
-        
-        console.log(`📄 Preparing file for direct upload: ${filename} -> ${s3FilePath}`);
-        return {
-          file: file,
-          filePath: s3FilePath
-        };
+        return { file, filePath: canonicalKey };
       });
       
       console.log(`🗂️ Final S3 keys for direct upload:`, filesToUpload.map(f => f.filePath));

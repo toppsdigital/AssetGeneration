@@ -11,6 +11,7 @@ interface UploadSession {
   appName: string;
   filenamePrefix: string;
   description: string;
+  edrPdfFilename?: string;
   files: Array<{
     name: string;
     size: number;
@@ -25,24 +26,18 @@ function JobUploadingContent() {
 
   // State
   const [uploadSession, setUploadSession] = useState<UploadSession | null>(null);
-  const [currentStep, setCurrentStep] = useState<'validating' | 'creating-files' | 'uploading' | 'completed' | 'error'>('validating');
+  const [currentStep, setCurrentStep] = useState<'validating' | 'uploading' | 'completed' | 'error'>('validating');
   const [error, setError] = useState<string | null>(null);
-  const [createdFiles, setCreatedFiles] = useState<any[]>([]);
   const [uploadAttempted, setUploadAttempted] = useState(false);
+  const [edrStatus, setEdrStatus] = useState<'pending' | 'uploading' | 'uploaded' | 'failed'>('pending');
+  const [edrError, setEdrError] = useState<string | null>(null);
   
   // Local file status tracking for real-time UI feedback (UI-only states)
   // These states provide immediate visual feedback: pending -> processing -> uploading -> uploaded/failed
   // They are independent of backend states and focus on user experience
   const [localFileStatuses, setLocalFileStatuses] = useState<Record<string, string>>({});
 
-  // Debug createdFiles state changes
-  useEffect(() => {
-    console.log('📋 createdFiles state updated:', {
-      length: createdFiles.length,
-      fileGroups: createdFiles.map(fg => fg.filename),
-      totalPdfs: createdFiles.reduce((total, fg) => total + Object.keys(fg.original_files || {}).length, 0)
-    });
-  }, [createdFiles]);
+  // (removed createdFiles debug - files now come from job details)
 
   // Debug local file statuses changes
   useEffect(() => {
@@ -62,19 +57,16 @@ function JobUploadingContent() {
   const { 
     data: jobData, 
     isLoading: jobLoading, 
-    error: jobError, 
-    mutate: mutateJob,
-    refresh: refreshJobData
+    error: jobError
   } = useAppDataStore('jobDetails', { 
     jobId: jobId || '', 
-    includeFiles: false, // No need to fetch files - we'll use created files directly
+    includeFiles: true, // Files are created at job creation; fetch them here
     autoRefresh: false // Disabled to prevent unnecessary calls
   });
 
   // Upload engine for processing and uploading files  
   const uploadEngine = useUploadEngine({ 
     jobData, 
-    createdFiles, // Pass created files to remove dependency on window.pendingUploadFiles
     setJobData: () => {
       // No job data updates needed - S3 triggers handle everything
     },
@@ -96,6 +88,80 @@ function JobUploadingContent() {
     }
   });
 
+  // Upload EDR file first (if available)
+  const uploadEdrFileFirst = useCallback(async (): Promise<boolean> => {
+    try {
+      if (!uploadSession?.edrPdfFilename) {
+        return true; // No EDR file to upload
+      }
+
+      // If already uploaded or in progress, skip
+      if (edrStatus === 'uploaded') return true;
+      if (edrStatus === 'uploading') return false;
+
+      const edrFile: File | undefined = (window as any).pendingEdrFile;
+      if (!edrFile || edrFile.name !== uploadSession.edrPdfFilename) {
+        console.warn('⚠️ EDR file not available in memory; continuing without uploading EDR');
+        setEdrStatus('failed');
+        setEdrError('EDR file not available for upload (likely due to page refresh).');
+        return true; // Don't block main uploads
+      }
+
+      setEdrStatus('uploading');
+      setEdrError(null);
+
+      const appName = (uploadSession.appName || (jobData as any)?.app_name || '').trim() || 'UNKNOWN_APP';
+      const s3Key = `${appName}/PDFs/${uploadSession.edrPdfFilename}`;
+
+      // Get presigned URL via content pipeline
+      const presignedData = await (await import('../../../web/utils/contentPipelineApi')).contentPipelineApi.getPresignedUrl({
+        client_method: 'put',
+        filename: s3Key,
+        expires_in: 3600,
+        size: edrFile.size,
+        content_type: edrFile.type || 'application/pdf'
+      });
+
+      let uploadResponse: Response;
+      if (presignedData.fields && presignedData.method === 'POST') {
+        uploadResponse = await fetch('/api/s3-upload', {
+          method: 'POST',
+          headers: {
+            'Content-Type': edrFile.type || 'application/pdf',
+            'x-upload-url': presignedData.url,
+            'x-upload-fields': JSON.stringify(presignedData.fields),
+            'x-upload-method': presignedData.method,
+          },
+          body: edrFile,
+        });
+      } else {
+        uploadResponse = await fetch('/api/s3-upload', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': edrFile.type || 'application/pdf',
+            'x-presigned-url': presignedData.url,
+          },
+          body: edrFile,
+        });
+      }
+
+      if (!uploadResponse.ok) {
+        const errorText = await uploadResponse.text();
+        throw new Error(`EDR upload failed: ${uploadResponse.status} - ${errorText}`);
+      }
+
+      setEdrStatus('uploaded');
+      console.log('✅ EDR file uploaded successfully to:', s3Key);
+      return true;
+    } catch (err: any) {
+      console.error('❌ Failed to upload EDR file:', err);
+      setEdrStatus('failed');
+      setEdrError(err?.message || 'Failed to upload EDR file');
+      // Do not block main uploads
+      return true;
+    }
+  }, [uploadSession, jobData, edrStatus]);
+
   // Function to update local file status for real-time UI feedback
   const updateLocalFileStatus = useCallback((filename: string, status: string) => {
     console.log(`🔄 Updating local status for ${filename}: ${status}`);
@@ -107,13 +173,13 @@ function JobUploadingContent() {
 
   // Helper function to get backend file status
   const getBackendFileStatus = useCallback((filename: string): string | null => {
-    for (const fileGroup of createdFiles) {
+    for (const fileGroup of (jobData?.content_pipeline_files || [])) {
       if (fileGroup.original_files && fileGroup.original_files[filename]) {
         return fileGroup.original_files[filename].status;
       }
     }
     return null;
-  }, [createdFiles]);
+  }, [jobData?.content_pipeline_files]);
 
   // Monitor upload engine state for final sync only (let onFileStatusChange handle real-time updates)
   useEffect(() => {
@@ -127,7 +193,7 @@ function JobUploadingContent() {
     });
 
     // Minimal interference - only sync final states when upload engine counters change significantly
-    if (uploadEngine.uploadStarted && createdFiles.length > 0) {
+    if (uploadEngine.uploadStarted && (jobData?.content_pipeline_files?.length || 0) > 0) {
       // Only sync if there's a significant discrepancy in completed files
       const localUploadedCount = Object.values(localFileStatuses).filter(status => status === 'uploaded').length;
       const engineUploadedCount = uploadEngine.uploadedPdfFiles || 0;
@@ -152,7 +218,7 @@ function JobUploadingContent() {
         });
       }
     }
-  }, [uploadEngine.uploadStarted, uploadEngine.uploadedPdfFiles, uploadEngine.failedPdfFiles, createdFiles, localFileStatuses, updateLocalFileStatus, getBackendFileStatus]);
+  }, [uploadEngine.uploadStarted, uploadEngine.uploadedPdfFiles, uploadEngine.failedPdfFiles, jobData?.content_pipeline_files, localFileStatuses, updateLocalFileStatus, getBackendFileStatus]);
 
   // Validate session and redirect if invalid
   useEffect(() => {
@@ -182,34 +248,13 @@ function JobUploadingContent() {
       const session: UploadSession = JSON.parse(uploadSessionData);
       console.log('✅ Upload session validated:', session);
       setUploadSession(session);
-      setCurrentStep('creating-files');
+      // Skip client-side file creation; files are already created on the server
+      setCurrentStep('uploading');
     } catch (error) {
       console.error('❌ Failed to parse upload session:', error);
       router.push('/jobs');
     }
   }, [jobId, router]);
-
-  // Create files when ready
-  useEffect(() => {
-    console.log('🔄 Create files effect triggered:', {
-      currentStep,
-      hasJobData: !!jobData,
-      hasUploadSession: !!uploadSession,
-      jobId: jobData?.job_id,
-      sessionFiles: uploadSession?.files?.length || 0
-    });
-    
-    if (currentStep === 'creating-files' && jobData && uploadSession) {
-      console.log('✅ Conditions met, calling createFiles()');
-      createFiles();
-    } else {
-      console.log('⏸️ Create files not ready:', {
-        currentStep,
-        hasJobData: !!jobData,
-        hasUploadSession: !!uploadSession
-      });
-    }
-  }, [currentStep, jobData, uploadSession]);
 
   // Periodic sync with backend data to catch S3 trigger updates
   useEffect(() => {
@@ -221,7 +266,7 @@ function JobUploadingContent() {
       console.log('🔄 Syncing local file statuses with backend data...');
       
       // Update local statuses with any backend changes (like from S3 triggers)
-      createdFiles.forEach((fileGroup: any) => {
+      (jobData?.content_pipeline_files || []).forEach((fileGroup: any) => {
         if (fileGroup.original_files) {
           Object.entries(fileGroup.original_files).forEach(([filename, fileInfo]: [string, any]) => {
             const backendStatus = fileInfo.status;
@@ -240,7 +285,7 @@ function JobUploadingContent() {
     }, 3000); // Sync every 3 seconds
 
     return () => clearInterval(syncInterval);
-  }, [currentStep, uploadEngine.uploadStarted, createdFiles, localFileStatuses, updateLocalFileStatus]);
+  }, [currentStep, uploadEngine.uploadStarted, jobData?.content_pipeline_files, localFileStatuses, updateLocalFileStatus]);
 
   // Browser-level warning for navigation during upload (browser close/refresh)
   useEffect(() => {
@@ -302,24 +347,24 @@ function JobUploadingContent() {
     };
   }, [currentStep, uploadEngine.uploadStarted, uploadEngine.uploadingFiles.size]);
 
-  // Start upload when we transition to uploading step and have created files
+  // Start upload when we transition to uploading step and have files from job
   useEffect(() => {
     const effectId = Date.now();
     console.log(`🔍 Upload effect triggered #${effectId}:`, {
       currentStep,
-      createdFilesCount: createdFiles.length,
+      createdFilesCount: jobData?.content_pipeline_files?.length || 0,
       uploadAttempted,
       jobId,
       dependencies: {
         currentStep_changed: (window as any).lastCurrentStep !== currentStep,
-        createdFilesLength_changed: (window as any).lastCreatedFilesLength !== createdFiles.length,
+        createdFilesLength_changed: (window as any).lastCreatedFilesLength !== (jobData?.content_pipeline_files?.length || 0),
         jobId_changed: (window as any).lastJobId !== jobId
       }
     });
 
     // Track previous values to identify what's changing
     (window as any).lastCurrentStep = currentStep;
-    (window as any).lastCreatedFilesLength = createdFiles.length;
+    (window as any).lastCreatedFilesLength = jobData?.content_pipeline_files?.length || 0;
     (window as any).lastJobId = jobId;
 
     // Add a timeout to prevent immediate re-triggering
@@ -344,9 +389,10 @@ function JobUploadingContent() {
       }
     }
 
-    if (currentStep === 'uploading' && createdFiles.length > 0 && !uploadAttempted) {
-      console.log('🚀 Attempting to start upload with created files:', createdFiles.length);
-      console.log('📂 Created file groups:', createdFiles.map(fg => ({
+    const fileGroupsSource = jobData?.content_pipeline_files || [];
+    if (currentStep === 'uploading' && fileGroupsSource.length > 0 && !uploadAttempted) {
+      console.log('🚀 Attempting to start upload with job file groups:', fileGroupsSource.length);
+      console.log('📂 Job file groups:', fileGroupsSource.map((fg: any) => ({
         filename: fg.filename,
         originalFilesCount: Object.keys(fg.original_files || {}).length,
         originalFiles: Object.keys(fg.original_files || {}),
@@ -354,54 +400,58 @@ function JobUploadingContent() {
       })));
       
       // Count total PDFs for verification
-      const totalPdfs = createdFiles.reduce((total, fg) => total + Object.keys(fg.original_files || {}).length, 0);
+      const totalPdfs = fileGroupsSource.reduce((total: number, fg: any) => total + Object.keys(fg.original_files || {}).length, 0);
       console.log(`📊 Total PDFs to upload: ${totalPdfs}`);
       
-      // Mark upload as attempted to prevent loops
-      setUploadAttempted(true);
-      
-      // Start upload process - now idempotent, can be called multiple times safely
-      console.log('🎯 Calling uploadEngine.checkAndStartUpload(true)');
-      console.log('🔍 Pre-upload state check:', {
-        createdFiles: createdFiles.length,
-        filesWithUploadingStatus: createdFiles.reduce((count, fg) => {
-          return count + Object.values(fg.original_files || {}).filter((file: any) => file.status === 'uploading').length;
-        }, 0),
-        pendingFiles: (window as any).pendingUploadFiles ? Object.keys((window as any).pendingUploadFiles).length : 0,
-        pendingFilesJobId: (window as any).pendingUploadFiles?.jobId,
-        currentJobId: jobId,
-        uploadEngineStarted: uploadEngine.uploadStarted
-      });
-      
-      // Call checkAndStartUpload - it's now safe to call multiple times
-      try {
-        console.log('📋 Calling checkAndStartUpload with true...');
-        const result = uploadEngine.checkAndStartUpload(true);
-        console.log('📋 checkAndStartUpload returned:', result);
+      // Upload EDR first (non-blocking failure)
+      (async () => {
+        const ok = await uploadEdrFileFirst();
+        // Mark upload as attempted to prevent loops
+        setUploadAttempted(true);
+
+        // Start upload process - now idempotent, can be called multiple times safely
+        console.log('🎯 Calling uploadEngine.checkAndStartUpload(true)');
+        console.log('🔍 Pre-upload state check:', {
+          createdFiles: fileGroupsSource.length,
+          filesWithUploadingStatus: fileGroupsSource.reduce((count: number, fg: any) => {
+            return count + Object.values(fg.original_files || {}).filter((file: any) => file.status === 'uploading').length;
+          }, 0),
+          pendingFiles: (window as any).pendingUploadFiles ? Object.keys((window as any).pendingUploadFiles).length : 0,
+          pendingFilesJobId: (window as any).pendingUploadFiles?.jobId,
+          currentJobId: jobId,
+          uploadEngineStarted: uploadEngine.uploadStarted
+        });
         
-        if (result && typeof result.catch === 'function') {
-          result.catch(uploadError => {
-            console.error('❌ Upload failed to start:', uploadError);
-            setError(uploadError instanceof Error ? uploadError.message : 'Failed to start upload');
-            setCurrentStep('error');
-            setUploadAttempted(false); // Reset on error so user can retry
-          });
+        // Call checkAndStartUpload - it's now safe to call multiple times
+        try {
+          console.log('📋 Calling checkAndStartUpload with true...');
+          const result = uploadEngine.checkAndStartUpload(true);
+          console.log('📋 checkAndStartUpload returned:', result);
+          
+          if (result && typeof result.catch === 'function') {
+            result.catch(uploadError => {
+              console.error('❌ Upload failed to start:', uploadError);
+              setError(uploadError instanceof Error ? uploadError.message : 'Failed to start upload');
+              setCurrentStep('error');
+              setUploadAttempted(false); // Reset on error so user can retry
+            });
+          }
+        } catch (syncError) {
+          console.error('❌ Synchronous error calling checkAndStartUpload:', syncError);
+          setError('Failed to start upload process');
+          setCurrentStep('error');
+          setUploadAttempted(false); // Reset on error so user can retry
         }
-      } catch (syncError) {
-        console.error('❌ Synchronous error calling checkAndStartUpload:', syncError);
-        setError('Failed to start upload process');
-        setCurrentStep('error');
-        setUploadAttempted(false); // Reset on error so user can retry
-      }
+      })();
     } else if (currentStep === 'uploading' && uploadAttempted) {
       console.log('⏭️ Upload already attempted, skipping to prevent loop');
-    } else if (currentStep === 'uploading' && createdFiles.length === 0) {
+    } else if (currentStep === 'uploading' && (jobData?.content_pipeline_files?.length || 0) === 0) {
       console.log('⏳ Waiting for created files...');
     } else {
       console.log('⏸️ Upload not ready:', {
         currentStep,
         wrongStep: currentStep !== 'uploading',
-        createdFilesLength: createdFiles.length,
+        createdFilesLength: jobData?.content_pipeline_files?.length || 0,
         uploadAttempted,
         hasJobData: !!jobData,
         hasPendingFiles: !!(window as any).pendingUploadFiles,
@@ -416,130 +466,7 @@ function JobUploadingContent() {
         clearTimeout(timeoutId);
       }
     };
-  }, [currentStep, createdFiles.length, jobId]); // Simplified dependencies to prevent loop
-
-  const createFiles = useCallback(async () => {
-    if (!jobData || !uploadSession) return;
-
-    try {
-      console.log('🔄 Creating files for job:', jobData.job_id);
-
-      // Get actual files
-      const pendingFiles = (window as any).pendingUploadFiles;
-      if (!pendingFiles || !pendingFiles.files) {
-        throw new Error('No files found');
-      }
-
-      // Group files by base name for card processing
-      const fileGroups = new Map<string, {name: string, type: 'front' | 'back'}[]>();
-      uploadSession.files.forEach(fileInfo => {
-        const fileName = fileInfo.name;
-        const match = fileName.match(/^(.+)_(FR|BK)\.pdf$/i);
-        if (match) {
-          const baseName = match[1];
-          const suffix = match[2].toUpperCase();
-          const cardType = suffix === 'FR' ? 'front' : 'back';
-          
-          if (!fileGroups.has(baseName)) {
-            fileGroups.set(baseName, []);
-          }
-          fileGroups.get(baseName)!.push({name: fileName, type: cardType});
-        }
-      });
-
-      // Create files using useAppDataStore mutation and store response
-      const createFilesResponse = await mutateJob({
-        type: 'createFiles',
-        jobId: jobData.job_id,
-        data: Array.from(fileGroups.entries()).map(([baseName, pdfs]) => {
-          const originalFiles: Record<string, any> = {};
-          
-          pdfs.forEach(pdf => {
-            // Construct proper file_path: {app_name}/PDFs/{filename}
-            const appName = jobData.app_name || 'unknown_app';
-            const filePath = `${appName}/PDFs/${pdf.name}`;
-            
-            originalFiles[pdf.name] = {
-              status: 'pending', // Start with pending status - upload will begin later
-              card_type: pdf.type,
-              file_path: filePath, // Proper S3 path format
-              last_updated: new Date().toISOString()
-            };
-            
-            console.log(`📄 Created file with path: ${filePath} (status: pending)`);
-          });
-
-          const fileGroup = {
-            filename: baseName,
-            job_id: jobData.job_id, // Include job_id at file group level only
-            original_files: originalFiles,
-            extracted_files: {},
-            firefly_assets: {}
-          };
-          
-          console.log(`📁 Created file group "${baseName}" for job: ${jobData.job_id} with ${pdfs.length} PDFs`);
-          return fileGroup;
-        })
-      });
-
-      console.log('✅ Files created successfully');
-      console.log('🔍 Full createFilesResponse:', JSON.stringify(createFilesResponse, null, 2));
-      
-      // Store created files from response - no need for extra refreshJobData() call
-      let filesToStore: any[] = [];
-      if (createFilesResponse && createFilesResponse.created_files) {
-        console.log('📦 Storing created files from batch_create_files response:', createFilesResponse.created_files);
-        filesToStore = createFilesResponse.created_files;
-      } else if (createFilesResponse && createFilesResponse.files) {
-        console.log('📦 Storing created files from response.files:', createFilesResponse.files);
-        filesToStore = createFilesResponse.files;
-      } else if (createFilesResponse && createFilesResponse.data && createFilesResponse.data.created_files) {
-        console.log('📦 Storing created files from response.data.created_files:', createFilesResponse.data.created_files);
-        filesToStore = createFilesResponse.data.created_files;
-      } else if (createFilesResponse && Array.isArray(createFilesResponse)) {
-        console.log('📦 Response is array, using directly:', createFilesResponse);
-        filesToStore = createFilesResponse;
-      } else {
-        console.warn('⚠️ No files found in batch_create_files response. Response structure:', {
-          hasCreatedFiles: !!createFilesResponse?.created_files,
-          hasFiles: !!createFilesResponse?.files,
-          hasDataCreatedFiles: !!createFilesResponse?.data?.created_files,
-          isArray: Array.isArray(createFilesResponse),
-          keys: createFilesResponse ? Object.keys(createFilesResponse) : 'no response'
-        });
-        console.warn('⚠️ Full response for debugging:', createFilesResponse);
-      }
-
-      if (filesToStore.length > 0) {
-        setCreatedFiles(filesToStore);
-        
-        // Initialize local file statuses with 'pending' status for all new files
-        const initialStatuses: Record<string, string> = {};
-        filesToStore.forEach((fileGroup: any) => {
-          if (fileGroup.original_files) {
-            Object.entries(fileGroup.original_files).forEach(([filename, fileInfo]: [string, any]) => {
-              // Always start with 'pending' for new files to ensure proper state transitions
-              initialStatuses[filename] = 'pending';
-              console.log(`📝 Initializing local status for ${filename}: pending`);
-            });
-          }
-        });
-        setLocalFileStatuses(initialStatuses);
-        console.log('✅ Local file statuses initialized with pending state:', initialStatuses);
-      }
-      
-      // Start uploading immediately - no delay or refresh needed
-      console.log('📤 Transitioning to uploading step');
-      // Reset upload attempted flag to ensure upload can start
-      setUploadAttempted(false);
-      setCurrentStep('uploading');
-      
-    } catch (error) {
-      console.error('❌ Failed to create files:', error);
-      setError(error instanceof Error ? error.message : 'Failed to create files');
-      setCurrentStep('error');
-    }
-  }, [jobData, uploadSession, mutateJob]);
+  }, [currentStep, jobData?.content_pipeline_files?.length, jobId]); // Simplified dependencies to prevent loop
 
   // Handle errors
   if (jobError || error) {
@@ -679,7 +606,7 @@ function JobUploadingContent() {
 
   // Calculate actual file counts using job data first, then fallback to created files
   const totalFiles = jobData?.original_files_total_count || 
-    createdFiles.reduce((total: number, fileGroup: any) => 
+    (jobData?.content_pipeline_files || []).reduce((total: number, fileGroup: any) => 
       total + Object.keys(fileGroup.original_files || {}).length, 0
     );
   
@@ -700,7 +627,7 @@ function JobUploadingContent() {
   const progressPercentage = totalFiles > 0 ? (uploadedFiles / totalFiles) * 100 : 0;
   
   console.log('📊 Progress calculation (using local file statuses):', {
-    createdFilesLength: createdFiles.length,
+    createdFilesLength: jobData?.content_pipeline_files?.length || 0,
     totalFiles,
     fileStatusCounts,
     uploadedFiles,
@@ -804,6 +731,97 @@ function JobUploadingContent() {
           <JobHeader jobData={jobData} />
         </div>
 
+        {/* EDR Upload Section (runs before main uploads) */}
+        {uploadSession?.edrPdfFilename && (
+          <div style={{ 
+            background: 'rgba(255, 255, 255, 0.08)',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255, 255, 255, 0.15)',
+            padding: '1.25rem', 
+            borderRadius: '20px', 
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+            marginBottom: '1.5rem'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '0.5rem'
+            }}>
+              <h3 style={{ 
+                margin: 0, 
+                color: '#ffffff',
+                fontSize: '1.1rem',
+                fontWeight: 700
+              }}>
+                EDR File Upload
+              </h3>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}>
+                {edrStatus === 'uploading' && (
+                  <div style={{
+                    width: 16,
+                    height: 16,
+                    border: '2px solid rgba(255,255,255,0.3)',
+                    borderTop: '2px solid #3b82f6',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite'
+                  }} />
+                )}
+                <span style={{
+                  color: edrStatus === 'uploaded' ? '#10b981' : edrStatus === 'failed' ? '#ef4444' : '#e2e8f0',
+                  fontWeight: 600,
+                  fontSize: '0.9rem'
+                }}>
+                  {edrStatus === 'pending' && 'Pending'}
+                  {edrStatus === 'uploading' && 'Uploading...'}
+                  {edrStatus === 'uploaded' && 'Uploaded'}
+                  {edrStatus === 'failed' && 'Failed'}
+                </span>
+              </div>
+            </div>
+            <div style={{
+              color: '#e2e8f0',
+              fontSize: '0.95rem',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: '1rem'
+            }}>
+              <span title={uploadSession.edrPdfFilename}>📄 {uploadSession.edrPdfFilename}</span>
+              {edrStatus === 'failed' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Retry EDR upload without blocking
+                    (async () => { await uploadEdrFileFirst(); })();
+                  }}
+                  style={{
+                    padding: '6px 12px',
+                    background: 'rgba(239, 68, 68, 0.15)',
+                    border: '1px solid rgba(239, 68, 68, 0.4)',
+                    borderRadius: 8,
+                    color: '#ef4444',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    fontWeight: 600
+                  }}
+                >
+                  Retry
+                </button>
+              )}
+            </div>
+            {edrError && (
+              <div style={{ color: '#fca5a5', fontSize: '0.85rem', marginTop: '0.5rem' }}>
+                {edrError}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Enhanced Upload Progress Card */}
         <div style={{ 
           background: 'rgba(255, 255, 255, 0.08)',
@@ -895,12 +913,6 @@ function JobUploadingContent() {
           {/* Enhanced Status Text */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ color: '#e2e8f0', fontSize: '1rem', fontWeight: '500' }}>
-              {currentStep === 'creating-files' && (
-                <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span>📝</span>
-                  <span>Creating files...</span>
-                </span>
-              )}
               {currentStep === 'uploading' && (
                 <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <span>📤</span>
@@ -956,7 +968,7 @@ function JobUploadingContent() {
         </div>
 
         {/* Enhanced PDF File Status List */}
-        {(createdFiles.length > 0 || currentStep === 'creating-files') && (
+        {(jobData?.content_pipeline_files?.length || 0) > 0 && (
           <div style={{ 
             background: 'rgba(255, 255, 255, 0.08)',
             backdropFilter: 'blur(20px)',
@@ -993,7 +1005,7 @@ function JobUploadingContent() {
 
             <div style={{ maxHeight: '500px', overflowY: 'auto', paddingRight: '0.5rem' }}>
               <div style={{ display: 'grid', gap: '1rem' }}>
-                {createdFiles.flatMap((fileGroup: any, groupIndex: number) => 
+                {(jobData?.content_pipeline_files || []).flatMap((fileGroup: any, groupIndex: number) => 
                   Object.entries(fileGroup.original_files || {}).map(([filename, fileInfo]: [string, any]) => {
                     const statusInfo = getFileStatus(filename, fileInfo);
                     
@@ -1084,28 +1096,14 @@ function JobUploadingContent() {
                 )}
               </div>
               
-              {(createdFiles.length === 0) && (
+              {((jobData?.content_pipeline_files || []).length === 0) && (
                 <div style={{ 
                   textAlign: 'center', 
                   padding: '3rem', 
                   color: 'rgba(255, 255, 255, 0.6)',
                   fontSize: '1rem'
                 }}>
-                  {currentStep === 'creating-files' ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
-                      <div style={{
-                        width: '48px',
-                        height: '48px',
-                        border: '4px solid rgba(255, 255, 255, 0.1)',
-                        borderTop: '4px solid #3b82f6',
-                        borderRadius: '50%',
-                        animation: 'spin 1s linear infinite'
-                      }} />
-                      <span>Creating files...</span>
-                    </div>
-                  ) : (
-                    'No files found'
-                  )}
+                  {'No files found'}
                 </div>
               )}
             </div>

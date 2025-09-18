@@ -638,16 +638,18 @@ export function useAppDataStore<T = any>(
         
         const job = data as any; // Type will be validated at runtime
         const jobStatus = job?.job_status || '';
+        const zipStatus = (job?.zip_status || '').toLowerCase();
         
         // Check if this job status should never poll, BUT continue polling if download_url is pending
         const shouldNeverPoll = ConfigHelpers.shouldJobNeverPoll(jobStatus);
         const isDownloadPending = job?.download_url === 'pending';
+        const isZipCreating = zipStatus === 'creating';
         
-        if (shouldNeverPoll && !isDownloadPending) {
-          console.log(`⏹️ [DataStore] Stopping polling - job ${options.jobId} is ${jobStatus} (completed/terminal status) and download is not pending`);
+        if (shouldNeverPoll && !(isDownloadPending || isZipCreating)) {
+          console.log(`⏹️ [DataStore] Stopping polling - job ${options.jobId} is ${jobStatus} (terminal) and neither download is pending nor zip is creating (zip_status=${zipStatus})`);
           return false; // Stop polling completely
-        } else if (shouldNeverPoll && isDownloadPending) {
-          console.log(`🔄 [DataStore] Continuing polling despite completed status - job ${options.jobId} has pending download_url`);
+        } else if (shouldNeverPoll && (isDownloadPending || isZipCreating)) {
+          console.log(`🔄 [DataStore] Continuing polling despite terminal status - ${isDownloadPending ? 'download_url=pending' : ''} ${isZipCreating ? 'zip_status=creating' : ''}`);
         }
         
         // If we're including assets and we've confirmed there are no assets, reduce polling frequency
