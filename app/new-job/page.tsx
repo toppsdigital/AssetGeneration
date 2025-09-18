@@ -186,22 +186,18 @@ function NewJobPageContent() {
     appName: string;
     filenamePrefix: string;
     sourceFolder: string;
-    files: string[];
     pdf_files?: string[];
     edr_pdf_filename?: string;
     description?: string;
-    original_files_total_count?: number;
   }) => {
     try {
       const jobPayload = {
         app_name: jobData.appName,
         filename_prefix: jobData.filenamePrefix,
         source_folder: jobData.sourceFolder,
-        files: jobData.files,
         pdf_files: jobData.pdf_files,
         edr_pdf_filename: jobData.edr_pdf_filename,
-        description: jobData.description,
-        original_files_total_count: jobData.original_files_total_count
+        description: jobData.description
       };
 
       let response;
@@ -247,216 +243,40 @@ function NewJobPageContent() {
 
     try {
       console.log('Starting job creation process...');
-      
-      let filenames: string[];
-      let pdfFiles: string[] = [];
-      let actualPdfCount: number;
-      
-      if (isRerun) {
-        // For rerun operations, user must select files just like a new job
-        if (!formData.selectedFiles || formData.selectedFiles.length === 0) {
-          throw new Error('Please select a folder containing PDF files');
-        }
-        
-        // Process files exactly like a new job WITH deduplication
-        const fileGroups = new Set<string>();
-        const validFiles: string[] = [];
-        const invalidFiles: string[] = [];
-        const seenFiles = new Set<string>(); // Track seen filenames to prevent duplicates
-        
-        Array.from(formData.selectedFiles).forEach(file => {
-          const fileName = file.name;
-          
-          // Skip if we've already processed this exact filename (deduplication)
-          if (seenFiles.has(fileName)) {
-            console.warn(`⚠️ Skipping duplicate file: ${fileName}`);
-            return;
-          }
-          seenFiles.add(fileName);
-          
-          if (fileName.match(/_(FR|BK)\.pdf$/i)) {
-            const baseName = fileName.replace(/_(FR|BK)\.pdf$/i, '');
-            fileGroups.add(baseName);
-            validFiles.push(fileName);
-          } else {
-            console.warn(`⚠️ Skipping file with invalid naming: ${fileName} (must end with _FR.pdf or _BK.pdf)`);
-            invalidFiles.push(fileName);
-          }
-        });
-        
-        filenames = Array.from(fileGroups);
-        // Count individual PDF files with _FR and _BK after deduplication
-        actualPdfCount = validFiles.length;
-        pdfFiles = validFiles;
-        
-        console.log('📊 Rerun File Processing (same as new job):');
-        console.log(`  Total files selected: ${formData.selectedFiles.length}`);
-        console.log(`  Unique files after deduplication: ${seenFiles.size}`);
-        console.log(`  Duplicates skipped: ${formData.selectedFiles.length - seenFiles.size}`);
-        console.log(`  Valid _FR/_BK individual PDF files: ${validFiles.length}`);
-        console.log(`  Invalid files (skipped): ${invalidFiles.length}`, invalidFiles);
-        console.log(`  Unique base names for processing: ${filenames.length}`);
-        console.log(`  Original files total count (individual PDFs): ${actualPdfCount}`);
-        
-        // Detailed breakdown for debugging the 218 vs 109 issue
-        console.log('🔍 Detailed valid files breakdown (rerun):');
-        validFiles.forEach((file, index) => {
-          console.log(`    ${index + 1}. ${file}`);
-        });
-        
-        if (filenames.length === 0) {
-          throw new Error('No valid PDF file pairs found. Please ensure files end with _FR.pdf and _BK.pdf');
-        }
-      } else {
-        // For new jobs, process selected files
-        if (!formData.selectedFiles || formData.selectedFiles.length === 0) {
-          throw new Error('No files selected for upload');
-        }
 
-        // Process files individually (allowing _FR only, _BK only, or both)
-        // Track each individual PDF file for accurate counting WITH deduplication
-        const validFiles: string[] = [];
-        const invalidFiles: string[] = [];
-        const fileMap = new Map<string, { fr: boolean; bk: boolean }>();
-        const seenFiles = new Set<string>(); // Track seen filenames to prevent duplicates
-        
-        Array.from(formData.selectedFiles).forEach(file => {
-          const fileName = file.name;
-          
-          // Skip if we've already processed this exact filename (deduplication)
-          if (seenFiles.has(fileName)) {
-            console.warn(`⚠️ Skipping duplicate file: ${fileName}`);
-            return;
-          }
-          seenFiles.add(fileName);
-          
-          // Only process files that match _FR.pdf or _BK.pdf pattern
-          if (fileName.match(/_(FR|BK)\.pdf$/i)) {
-            const baseName = fileName.replace(/_(FR|BK)\.pdf$/i, '');
-            const isFront = fileName.match(/_FR\.pdf$/i);
-            const isBack = fileName.match(/_BK\.pdf$/i);
-            
-            // Track file types for this base name
-            if (!fileMap.has(baseName)) {
-              fileMap.set(baseName, { fr: false, bk: false });
-            }
-            const fileInfo = fileMap.get(baseName)!;
-            if (isFront) fileInfo.fr = true;
-            if (isBack) fileInfo.bk = true;
-            
-            validFiles.push(fileName);
-          } else {
-            console.warn(`⚠️ Skipping file with invalid naming: ${fileName} (must end with _FR.pdf or _BK.pdf)`);
-            invalidFiles.push(fileName);
-          }
-        });
-        
-        // Create final filenames array and count individual PDF files
-        filenames = Array.from(fileMap.keys());
-        actualPdfCount = validFiles.length; // Count individual PDF files with _FR and _BK
-        pdfFiles = validFiles;
-        
-        console.log('📊 File Processing Summary:');
-        console.log(`  Total files selected: ${formData.selectedFiles.length}`);
-        console.log(`  Unique files after deduplication: ${seenFiles.size}`);
-        console.log(`  Duplicates skipped: ${formData.selectedFiles.length - seenFiles.size}`);
-        console.log(`  Valid _FR/_BK individual PDF files: ${validFiles.length}`);
-        console.log(`  Invalid files (skipped): ${invalidFiles.length}`, invalidFiles);
-        console.log(`  Unique base names for processing: ${filenames.length}`);
-        console.log(`  Original files total count (individual PDFs): ${actualPdfCount}`);
-        
-        // Show first few files for verification (not full list)
-        console.log('🔍 Sample valid files (first 5):');
-        validFiles.slice(0, 5).forEach((file, index) => {
-          console.log(`    ${index + 1}. ${file}`);
-        });
-        if (validFiles.length > 5) console.log(`    ... and ${validFiles.length - 5} more files`);
-        
-        // Show file type breakdown
-        const pairs: string[] = [];
-        const frontOnly: string[] = [];
-        const backOnly: string[] = [];
-        
-        fileMap.forEach((info, baseName) => {
-          if (info.fr && info.bk) pairs.push(baseName);
-          else if (info.fr) frontOnly.push(baseName);
-          else if (info.bk) backOnly.push(baseName);
-        });
-        
-        console.log(`  Complete pairs (_FR + _BK): ${pairs.length}`);
-        console.log(`  Front only (_FR): ${frontOnly.length}`, frontOnly);
-        console.log(`  Back only (_BK): ${backOnly.length}`, backOnly);
-        console.log(`  📊 Count verification: ${pairs.length * 2 + frontOnly.length + backOnly.length} should equal ${actualPdfCount}`);
-        
-        // Critical debugging: Show the math
-        const expectedCount = pairs.length * 2 + frontOnly.length + backOnly.length;
-        console.log(`🔍 DEBUGGING COUNT MISMATCH:`);
-        console.log(`    Pairs: ${pairs.length} × 2 = ${pairs.length * 2}`);
-        console.log(`    Front only: ${frontOnly.length}`);
-        console.log(`    Back only: ${backOnly.length}`);
-        console.log(`    Expected total: ${expectedCount}`);
-        console.log(`    Actual actualPdfCount: ${actualPdfCount}`);
-        console.log(`    Match: ${expectedCount === actualPdfCount ? '✅' : '❌'}`);
-        
-        if (expectedCount !== actualPdfCount) {
-          console.error(`🚨 COUNT MISMATCH DETECTED! Expected ${expectedCount} but got ${actualPdfCount}`);
-          console.log(`🔍 All valid files:`, validFiles);
-        }
-        
-        // Ensure we have valid files before proceeding
-        if (filenames.length === 0) {
-          throw new Error('No valid PDF files found. Please ensure files end with _FR.pdf or _BK.pdf');
-        }
+      if (!formData.selectedFiles || formData.selectedFiles.length === 0) {
+        throw new Error('Please select a folder containing PDF files');
       }
-      
-      // Calculate totals for logging (we need to access seenFiles from either path)
-      let totalSelected = formData.selectedFiles!.length;
-      let uniqueFiles = 0;
-      let duplicatesSkipped = 0;
-      
-      if (isRerun) {
-        // Use the seenFiles from rerun processing
-        const rerunSeenFiles = new Set<string>();
-        Array.from(formData.selectedFiles!).forEach(file => {
-          if (!rerunSeenFiles.has(file.name)) {
-            rerunSeenFiles.add(file.name);
-          }
-        });
-        uniqueFiles = rerunSeenFiles.size;
-        duplicatesSkipped = totalSelected - uniqueFiles;
-      } else {
-        // For new jobs, we already have the counts from the processing above
-        uniqueFiles = Array.from(formData.selectedFiles!).reduce((seen, file) => {
-          if (!seen.has(file.name)) {
-            seen.add(file.name);
-          }
-          return seen;
-        }, new Set<string>()).size;
-        duplicatesSkipped = totalSelected - uniqueFiles;
+
+      // Derive pdf_files from selected files (_FR/_BK only, deduped by name)
+      const pdfFilesSet = new Set<string>();
+      Array.from(formData.selectedFiles).forEach(file => {
+        const name = file.name;
+        if (/_FR\.pdf$/i.test(name) || /_BK\.pdf$/i.test(name)) {
+          pdfFilesSet.add(name);
+        }
+      });
+      const pdfFiles = Array.from(pdfFilesSet);
+
+      if (pdfFiles.length === 0) {
+        throw new Error('No valid _FR/_BK PDF files found in the selected folder');
       }
-      
-      // Prepare job data for API call
+
+      // Prepare minimal job data for API call
       const jobPayload = {
         appName: formData.appName,
         filenamePrefix: formData.filenamePrefix,
         sourceFolder: generateFilePath(formData.appName),
-        files: filenames,
         pdf_files: pdfFiles,
         edr_pdf_filename: formData.edrPdfFilename || undefined,
-        description: formData.description,
-        // Pass individual PDF files count for accurate total_count calculation (for both new jobs and reruns)
-        original_files_total_count: actualPdfCount
+        description: formData.description
       };
-      
+
       console.log('🚀 Creating job with payload:', {
         ...jobPayload,
         operation: isRerun ? 'rerun' : 'create',
         stats: {
-          totalFilesSelected: totalSelected,
-          uniqueFilesAfterDeduplication: uniqueFiles,
-          duplicatesSkipped: duplicatesSkipped,
-          originalFilesTotalCount: actualPdfCount,
-          explanation: 'Count of individual PDF files with _FR and _BK'
+          totalFilesSelected: formData.selectedFiles.length
         }
       });
       

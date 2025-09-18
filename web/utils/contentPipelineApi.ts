@@ -124,17 +124,11 @@ class ContentPipelineAPI {
   private baseUrl = '/api/content-pipeline-proxy';
 
   // Job operations
-  async createJob(jobData: Omit<JobData, 'job_id' | 'created_at' | 'last_updated' | 'priority' | 'metadata' | 'job_status'> & { original_files_total_count?: number }): Promise<JobResponse> {
-    // Use the exact count provided by frontend (already handles deduplication and _FR/_BK counting)
-    console.log('✅ createJob: Using original_files_total_count from frontend:', jobData.original_files_total_count);
-    
+  async createJob(jobData: Omit<JobData, 'job_id' | 'created_at' | 'last_updated' | 'priority' | 'metadata' | 'job_status'>): Promise<JobResponse> {
+    const { files: _omitFiles, original_files_total_count: _omitTotal, original_files_completed_count: _omitCompleted, original_files_failed_count: _omitFailed, ...rest } = jobData as any;
     const jobPayload = {
-      ...jobData,
-      job_status: 'uploading',
-      files: jobData.files || [],
-      original_files_total_count: jobData.original_files_total_count,
-      original_files_completed_count: 0,
-      original_files_failed_count: 0
+      ...rest,
+      job_status: 'uploading'
     };
 
     const response = await fetch(`${this.baseUrl}?operation=create_job`, {
@@ -434,19 +428,13 @@ class ContentPipelineAPI {
   // Re-run a job with new parameters - uses same payload structure as createJob
   async rerunJob(
     jobId: string, 
-    jobData: Omit<JobData, 'job_id' | 'created_at' | 'last_updated' | 'job_status'> & { original_files_total_count?: number },
+    jobData: Omit<JobData, 'job_id' | 'created_at' | 'last_updated' | 'job_status'>,
     onCacheClear?: CacheClearingCallback
   ): Promise<JobResponse> {
-    // Use the exact count provided by frontend (already handles deduplication and _FR/_BK counting)
-    console.log('✅ rerunJob: Using original_files_total_count from frontend:', jobData.original_files_total_count);
-    
+    const { files: _omitFiles, original_files_total_count: _omitTotal, original_files_completed_count: _omitCompleted, original_files_failed_count: _omitFailed, ...rest } = jobData as any;
     const jobPayload = {
-      ...jobData,
+      ...rest,
       job_status: 'uploading',
-      files: jobData.files || [],
-      original_files_total_count: jobData.original_files_total_count,
-      original_files_completed_count: 0,
-      original_files_failed_count: 0,
       // Rerun flag only (omit rerun_job_id per updated policy)
       operation: 'rerun'
     };
