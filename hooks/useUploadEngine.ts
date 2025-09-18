@@ -785,39 +785,14 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
         fileType: cf.file?.type
       })));
       
-      // Prepare files for direct S3 proxy upload
+      // Prepare files for direct S3 proxy upload using canonical key: {APP}/PDFs/{filename}
       const filesToUpload = convertedFiles.map(({ file, fileInfo, filename }) => {
-        // DEBUGGING PATH DUPLICATION ISSUE: Log detailed file_path info
-        console.log(`🔍 DEBUGGING file_path for ${filename}:`, {
-          'fileInfo.file_path': fileInfo.file_path,
-          'filename': filename,
-          'fileInfo': fileInfo,
-          'file_path_includes_asset_generator': fileInfo.file_path?.includes('asset_generator'),
-          'file_path_starts_with_asset_generator': fileInfo.file_path?.startsWith('asset_generator')
+        const appName = (jobData?.app_name || '').trim() || 'UNKNOWN_APP';
+        const canonicalKey = `${appName}/PDFs/${filename}`;
+        console.log(`📄 Preparing file for direct upload: ${filename} -> ${canonicalKey}`, {
+          original_file_path: fileInfo.file_path
         });
-        
-        // Use the file_path from fileInfo which should be app_name/PDFs/filename format
-        let s3FilePath = fileInfo.file_path || filename;
-        
-        // REMOVE ANY BASE PATH PREFIX: We want direct upload to app structure only
-        if (isInUploadsDirectory(s3FilePath)) {
-          console.warn(`⚠️ WARNING: s3FilePath contains unwanted base path! Removing prefix:`, {
-            original: s3FilePath,
-          });
-          // Remove any asset_generator base path prefix (environment-aware)
-          const uploadsPrefix = buildS3UploadsPath('');
-          s3FilePath = s3FilePath.replace(new RegExp(`^${uploadsPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`), '');
-          console.log(`✅ Cleaned s3FilePath:`, {
-            cleaned: s3FilePath,
-            'will_upload_to': s3FilePath
-          });
-        }
-        
-        console.log(`📄 Preparing file for direct upload: ${filename} -> ${s3FilePath}`);
-        return {
-          file: file,
-          filePath: s3FilePath
-        };
+        return { file, filePath: canonicalKey };
       });
       
       console.log(`🗂️ Final S3 keys for direct upload:`, filesToUpload.map(f => f.filePath));
