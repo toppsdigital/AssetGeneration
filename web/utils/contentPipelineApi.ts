@@ -14,6 +14,8 @@ export interface JobData {
   filename_prefix: string;
   source_folder: string;
   files?: string[];
+  pdf_files?: string[];
+  edr_pdf_filename?: string;
   description?: string;
   job_status?:  'uploading' | 'uploaded' | 'upload-failed' | 'extracting' | 'extracted' | 'extraction-failed' | 'generating' | 'generated' | 'generation-failed' | 'completed' ;
   created_at?: string;
@@ -874,10 +876,10 @@ class ContentPipelineAPI {
     
     console.log(`🔗 Getting presigned URL via /s3-files for: ${urlData.filename} (${urlData.client_method})`);
     
-    // Extract folder from filename (e.g., "BUNT/PDFs/file.pdf" -> "BUNT") 
+    // Extract full folder path from filename (e.g., "BUNT/PDFs/file.pdf" -> "BUNT/PDFs") 
     const pathParts = urlData.filename.split('/');
-    const folder = pathParts[0]; // First part is the folder
     const filename = pathParts[pathParts.length - 1]; // Last part is the filename
+    const folder = pathParts.slice(0, -1).join('/'); // Preserve nested subfolders
     
     const response = await fetch(`${this.baseUrl}?operation=s3_upload_files`, {
       method: 'POST',

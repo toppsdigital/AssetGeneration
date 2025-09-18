@@ -8,6 +8,8 @@ interface JobData {
   filename_prefix: string;
   source_folder: string;
   files?: string[];
+  pdf_files?: string[];
+  edr_pdf_filename?: string;
   description?: string;
   job_status?: 'uploading' | 'uploaded' | 'upload-failed' | 'extracting' | 'extracted' | 'extraction-failed' | 'generating' | 'generated' | 'generation-failed' | 'completed';
   created_at?: string;
