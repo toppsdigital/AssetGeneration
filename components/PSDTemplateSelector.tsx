@@ -872,7 +872,9 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       // Use form POST upload directly
       console.log(`📋 Using presigned POST form upload with ${Object.keys(presignedData.fields).length} fields`);
       const formData = new FormData();
-      Object.entries(presignedData.fields).forEach(([k, v]) => formData.append(k, v as string));
+      Object.entries(presignedData.fields)
+        .filter(([k]) => !k.toLowerCase().startsWith('x-amz-meta-'))
+        .forEach(([k, v]) => formData.append(k, v as string));
       formData.append('file', file);
       uploadResponse = await fetch(putUrl, { method: 'POST', body: formData });
     } else {

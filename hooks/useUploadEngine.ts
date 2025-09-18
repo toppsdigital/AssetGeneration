@@ -208,17 +208,17 @@ export const useUploadEngine = ({
     });
   }, []);
 
-  // Upload files directly via our S3 proxy to avoid Vercel payload limits
+  // Upload files directly to S3 using presigned URL (single-part)
   const uploadFilesToContentPipeline = useCallback(async (
     files: Array<{ file: File; filePath: string }>
   ): Promise<void> => {
     try {
-      console.log('📤 Starting direct S3 proxy upload for', files.length, 'files');
+      console.log('📤 Starting direct-to-S3 upload for', files.length, 'files');
       
       const uploadedFiles = [];
       
       for (const { file, filePath } of files) {
-        console.log(`📤 Uploading file via S3 proxy: ${filePath} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
+        console.log(`📤 Uploading file direct to S3: ${filePath} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
         
         // Step 1: Get presigned PUT URL via content pipeline
         const s3Key = filePath; // Use filePath directly (e.g., "BUNT/PDFs/25BWBB_3501_BK.pdf")
@@ -234,48 +234,37 @@ export const useUploadEngine = ({
 
         const presignedUrl = presignedData.url;
         
-        // Step 2: Upload file to S3 via our proxy - use POST for form uploads, PUT for simple URLs
-        let uploadResponse;
+        // Step 2: Upload file directly to S3 - use POST for form uploads, PUT for simple URLs
         if (presignedData.fields && presignedData.method === 'POST') {
-          // Use form POST upload
-          console.log(`📤 Using presigned POST form upload with ${Object.keys(presignedData.fields).length} fields`);
-          uploadResponse = await fetch('/api/s3-upload', {
-            method: 'POST',
-            headers: {
-              'Content-Type': file.type || 'application/pdf',
-              'x-upload-url': presignedUrl,
-              'x-upload-fields': JSON.stringify(presignedData.fields),
-              'x-upload-method': presignedData.method,
-            },
-            body: file,
-          });
+          console.log(`📤 Using direct presigned POST with ${Object.keys(presignedData.fields).length} fields`);
+          const formData = new FormData();
+          Object.entries(presignedData.fields)
+            .filter(([k]) => !k.toLowerCase().startsWith('x-amz-meta-'))
+            .forEach(([k, v]) => formData.append(k, v as string));
+          formData.append('file', file);
+          const resp = await fetch(presignedUrl, { method: 'POST', body: formData });
+          if (!resp.ok) {
+            const txt = await resp.text();
+            throw new Error(`S3 POST failed: ${resp.status} ${txt}`);
+          }
         } else {
-          // Use simple PUT upload (legacy/fallback)
-          console.log(`📤 Using presigned PUT upload`);
-          uploadResponse = await fetch('/api/s3-upload', {
-            method: 'PUT',
-            headers: {
-              'Content-Type': file.type || 'application/pdf',
-              'x-presigned-url': presignedUrl,
-            },
-            body: file,
-          });
-        }
-
-        if (!uploadResponse.ok) {
-          const errorText = await uploadResponse.text();
-          throw new Error(`Failed to upload ${filePath}: ${uploadResponse.status} - ${errorText}`);
+          console.log(`📤 Using direct presigned PUT`);
+          const resp = await fetch(presignedUrl, { method: 'PUT', headers: { 'Content-Type': file.type || 'application/pdf' }, body: file });
+          if (!resp.ok) {
+            const txt = await resp.text();
+            throw new Error(`S3 PUT failed: ${resp.status} ${txt}`);
+          }
         }
 
         uploadedFiles.push({ filename: filePath, s3_key: s3Key });
-        console.log(`✅ Successfully uploaded via proxy: ${filePath}`);
+        console.log(`✅ Successfully uploaded direct to S3: ${filePath}`);
       }
       
-      console.log('✅ All files uploaded successfully via S3 proxy');
+      console.log('✅ All files uploaded successfully direct to S3');
       // Note: File status updates are handled via useAppDataStore mutations, 
       // no need to manually notify Content Pipeline
     } catch (error) {
-      console.error('❌ S3 proxy upload failed:', error);
+      console.error('❌ Direct S3 upload failed:', error);
       throw error;
     }
   }, [jobData]);
