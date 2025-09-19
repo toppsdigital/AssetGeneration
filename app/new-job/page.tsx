@@ -96,8 +96,7 @@ function NewJobPageContent() {
       setFormData(prev => ({
         ...prev,
         uploadFolder: folderPath,
-        selectedFiles: dataTransfer.files,
-        edrPdfFilename: ''
+        selectedFiles: dataTransfer.files
       }));
 
       // Collapse file list when new files are selected
