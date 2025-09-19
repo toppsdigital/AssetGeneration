@@ -375,14 +375,22 @@ export const AssetsTable = ({
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
                         {/* Show asset layer first */}
                         {asset.layer && (
-                          <>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}>
                             <span style={{
                               fontSize: 14,
                               color: '#e5e7eb'
                             }}>
                               {asset.layer}
                             </span>
-                          </>
+                            {asset.wp_inv_layer && (
+                              <span style={{
+                                fontSize: 14,
+                                color: '#e5e7eb'
+                              }}>
+                                {asset.wp_inv_layer}
+                              </span>
+                            )}
+                          </div>
                         )}
                         
                         {/* Show spot values from spot_color_pairs */}
