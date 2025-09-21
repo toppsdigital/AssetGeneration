@@ -825,7 +825,8 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     
     const s3FileName = file.name;
     const appName = jobData?.app_name || 'default_app';
-    const presignedPath = `${appName}/PDFs/${s3FileName}`;  // Use canonical PDFs path
+    const jobIdValue = (jobData?.job_id || '').toString().trim() || 'UNKNOWN_JOB';
+    const presignedPath = `${appName}/${jobIdValue}/PDFs/${s3FileName}`;  // Canonical PDFs path with job_id
     
     setUploadProgress(10);
 

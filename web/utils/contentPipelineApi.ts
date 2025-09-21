@@ -851,11 +851,18 @@ class ContentPipelineAPI {
     
     console.log(`🔗 Getting presigned URL via /s3-files for: ${urlData.filename} (${urlData.client_method})`);
     
-    // Build folder and filename so final key is {APP}/{RELATIVE_PATH}
-    // Example: input "BUNT/PDFs/file.pdf" -> folder: "BUNT", filename: "PDFs/file.pdf"
+    // Build folder and filename so final key is {APP}/{job_id}/{RELATIVE_PATH}
+    // Examples:
+    //  - input "BUNT/job_123/PDFs/file.pdf" -> folder: "BUNT/job_123", filename: "PDFs/file.pdf"
+    //  - input "BUNT/PDFs/file.pdf" -> folder: "BUNT", filename: "PDFs/file.pdf" (legacy)
     const pathParts = urlData.filename.split('/');
-    const folder = pathParts[0];
-    const filename = pathParts.slice(1).join('/');
+    let folder = pathParts[0] || '';
+    let filename = pathParts.slice(1).join('/');
+    if (pathParts.length >= 3) {
+      // Treat first two segments as folder when a subfolder (e.g., job_id) is present
+      folder = `${pathParts[0]}/${pathParts[1]}`;
+      filename = pathParts.slice(2).join('/');
+    }
     
     const response = await fetch(`${this.baseUrl}?operation=s3_upload_files`, {
       method: 'POST',
