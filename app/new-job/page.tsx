@@ -713,7 +713,7 @@ function NewJobPageContent() {
             </div>
 
             {/* Action Buttons */}
-            {isDevelopment && (
+            {isDevelopment && !!formData.edrPdfFilename && (
               <div style={{ 
                 marginTop: 12,
                 marginBottom: 12,
