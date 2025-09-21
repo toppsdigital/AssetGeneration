@@ -1043,7 +1043,7 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
     console.log('📊 Files to check:', filesToCheck?.length || 0, 'file groups');
     console.log('🔍 Using created files:', !!(createdFiles && createdFiles.length > 0));
     
-    // Collect files that need uploading (pending or uploading status)
+    // Collect files that need uploading (consider available File objects during rerun)
     const filesToUpload: { filename: string; filePath: string }[] = [];
     
     // Debug: log all file statuses
@@ -1057,6 +1057,15 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
     });
     console.log('📋 All file statuses:', allFileStatuses);
     
+    // Detect available File objects for this job (set by new-job/rerun flow)
+    let availableFileNames = new Set<string>();
+    try {
+      const pending = (window as any).pendingUploadFiles;
+      if (pending && pending.jobId === jobData.job_id && Array.isArray(pending.files)) {
+        availableFileNames = new Set<string>(pending.files.map((f: File) => f.name));
+      }
+    } catch {}
+
     filesToCheck.forEach((fileGroup: any) => {
       if (fileGroup.original_files) {
         Object.entries(fileGroup.original_files).forEach(([filename, fileInfo]: [string, any]) => {
@@ -1066,7 +1075,12 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
           
           // Treat undefined/missing status as pending to support rerun-created files
           const statusValue = fileInfo.status || 'pending';
-          if ((statusValue === 'pending' || statusValue === 'uploading') && !isInUploadingSet) {
+          const haveFileObject = availableFileNames.has(filename);
+          // If we have the File object, upload unless already marked uploaded
+          const shouldUploadBecauseWeHaveFile = haveFileObject && statusValue !== 'uploaded';
+          const shouldUploadByStatusOnly = (statusValue === 'pending' || statusValue === 'uploading') && !haveFileObject;
+
+          if ((shouldUploadBecauseWeHaveFile || shouldUploadByStatusOnly) && !isInUploadingSet) {
             console.log(`📤 Adding file to upload queue: ${filename} (status: ${fileInfo.status})`);
             filesToUpload.push({
               filename: filename,
