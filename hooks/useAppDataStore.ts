@@ -777,7 +777,7 @@ export function useAppDataStore<T = any>(
           return await contentPipelineApi.bulkUpdateAssets(payload.jobId, payload.data);
           
         case 'generateAssets':
-          if (!payload.jobId || !payload.data) throw new Error('Job ID and assets data required');
+          if (!payload.jobId) throw new Error('Job ID required');
           return await contentPipelineApi.generateAssets(payload.jobId, payload.data);
           
         case 'regenerateAssets':

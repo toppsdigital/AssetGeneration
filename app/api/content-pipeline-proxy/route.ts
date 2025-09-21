@@ -826,9 +826,7 @@ async function handleRequest(request: NextRequest, method: string) {
         if (!id) {
           return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
         }
-        if (!body.assets || !body.psd_file) {
-          return NextResponse.json({ error: 'assets and psd_file are required' }, { status: 400 });
-        }
+        // No required payload fields for this operation; backend determines defaults
         // colors is optional - only required for spot layers
         apiUrl += `/jobs/${id}/generate-assets`;
         apiMethod = 'POST';

@@ -471,28 +471,14 @@ class ContentPipelineAPI {
   // Generate assets for a job
   async generateAssets(
     jobId: string,
-    payload: {
-      assets: Array<{
-        type: 'wp' | 'back' | 'base' | 'parallel' | 'multi-parallel';
-        layer: string;
-        spot?: string;
-        color?: { id: number; name: string };
-        spot_color_pairs?: Array<{
-          spot: string;
-          color?: { id: number; name: string };
-        }>;
-        vfx?: string;
-        chrome: boolean;
-      }>;
-      psd_file: string;
-    }
+    payload?: any
   ): Promise<any> {
     const response = await fetch(`${this.baseUrl}?operation=generate_assets&id=${encodeURIComponent(jobId)}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(payload || {}),
     });
 
     if (!response.ok) {
