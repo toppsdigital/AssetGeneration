@@ -17,6 +17,7 @@ export interface JobData {
   pdf_files?: string[];
   edr_pdf_filename?: string;
   description?: string;
+  skip_manual_configuration?: boolean;
   job_status?:  'uploading' | 'uploaded' | 'upload-failed' | 'extracting' | 'extracted' | 'extraction-failed' | 'generating' | 'generated' | 'generation-failed' | 'completed' ;
   created_at?: string;
   last_updated?: string;

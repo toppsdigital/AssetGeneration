@@ -7,6 +7,7 @@ import PageTitle from '../../components/PageTitle';
 import Spinner from '../../components/Spinner';
 import { useAppDataStore } from '../../hooks/useAppDataStore';
 import { getAppIcon } from '../../utils/fileOperations';
+import { getEnvironmentConfig } from '../../utils/environment';
 
 interface NewJobFormData {
   appName: string;
@@ -15,11 +16,13 @@ interface NewJobFormData {
   uploadFolder: string;
   selectedFiles: FileList | null;
   edrPdfFilename?: string;
+  skipManualConfiguration?: boolean;
 }
 
 function NewJobPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { isDevelopment } = getEnvironmentConfig();
   
   // Use centralized data store for job mutations
   const { mutate: createJobMutation, forceRefreshJobsList } = useAppDataStore('jobs');
@@ -48,7 +51,8 @@ function NewJobPageContent() {
     description: isRerun ? (searchParams.get('description') || '') : '',
     uploadFolder: '',
     selectedFiles: null,
-    edrPdfFilename: ''
+    edrPdfFilename: '',
+    skipManualConfiguration: false
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Partial<NewJobFormData>>({});
@@ -188,6 +192,7 @@ function NewJobPageContent() {
     pdf_files?: string[];
     edr_pdf_filename?: string;
     description?: string;
+    skip_manual_configuration?: boolean;
   }) => {
     try {
       const jobPayload = {
@@ -196,7 +201,8 @@ function NewJobPageContent() {
         source_folder: jobData.sourceFolder,
         pdf_files: jobData.pdf_files,
         edr_pdf_filename: jobData.edr_pdf_filename,
-        description: jobData.description
+        description: jobData.description,
+        ...(jobData.skip_manual_configuration ? { skip_manual_configuration: true } : {})
       };
 
       let response;
@@ -268,7 +274,8 @@ function NewJobPageContent() {
         sourceFolder: generateFilePath(formData.appName),
         pdf_files: pdfFiles,
         edr_pdf_filename: formData.edrPdfFilename || undefined,
-        description: formData.description
+        description: formData.description,
+        skip_manual_configuration: formData.skipManualConfiguration ? true : undefined
       };
 
       console.log('🚀 Creating job with payload:', {
@@ -704,6 +711,30 @@ function NewJobPageContent() {
                 )}
               </div>
             </div>
+
+            {/* Action Buttons */}
+            {isDevelopment && (
+              <div style={{ 
+                marginTop: 12,
+                marginBottom: 12,
+                padding: 12,
+                borderRadius: 12,
+                border: '1px dashed rgba(59, 130, 246, 0.4)',
+                background: 'rgba(59, 130, 246, 0.08)'
+              }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#c7d2fe', fontSize: 13 }}>
+                  <input 
+                    type="checkbox" 
+                    checked={!!formData.skipManualConfiguration}
+                    onChange={(e) => setFormData(prev => ({ ...prev, skipManualConfiguration: e.target.checked }))}
+                    style={{ width: 16, height: 16 }}
+                  />
+                  <span>
+                    Dev: skip manual configuration
+                  </span>
+                </label>
+              </div>
+            )}
 
             {/* Action Buttons */}
             <div style={{ 
