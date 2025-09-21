@@ -111,7 +111,8 @@ function JobUploadingContent() {
       setEdrError(null);
 
       const appName = (uploadSession.appName || (jobData as any)?.app_name || '').trim() || 'UNKNOWN_APP';
-      const s3Key = `${appName}/PDFs/${uploadSession.edrPdfFilename}`;
+      const jobIdValue = (uploadSession.jobId || (jobData as any)?.job_id || jobId || '').toString().trim() || 'UNKNOWN_JOB';
+      const s3Key = `${appName}/${jobIdValue}/PDFs/${uploadSession.edrPdfFilename}`;
 
       // Get presigned URL via content pipeline
       const presignedData = await (await import('../../../web/utils/contentPipelineApi')).contentPipelineApi.getPresignedUrl({
