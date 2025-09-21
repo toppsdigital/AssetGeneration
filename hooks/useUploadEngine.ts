@@ -1064,7 +1064,9 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
           // Skip files that are already being processed or completed
           const isInUploadingSet = uploadingFiles.has(filename);
           
-          if ((fileInfo.status === 'pending' || fileInfo.status === 'uploading') && !isInUploadingSet) {
+          // Treat undefined/missing status as pending to support rerun-created files
+          const statusValue = fileInfo.status || 'pending';
+          if ((statusValue === 'pending' || statusValue === 'uploading') && !isInUploadingSet) {
             console.log(`📤 Adding file to upload queue: ${filename} (status: ${fileInfo.status})`);
             filesToUpload.push({
               filename: filename,
