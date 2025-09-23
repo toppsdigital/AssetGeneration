@@ -383,6 +383,7 @@ async function handleRequest(request: NextRequest, method: string) {
             });
             apiBody = {
               ...apiBody,
+              source: 'frontend',
               user_id: session.user.id || session.user.email || 'unknown',
               user_name: session.user.name || session.user.email || 'Unknown User'
             };
