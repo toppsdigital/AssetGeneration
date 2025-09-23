@@ -808,6 +808,7 @@ async function handleRequest(request: NextRequest, method: string) {
           ...bodyWithoutSourceFolder,
           // Do not include rerun_job_id per updated policy
           operation: 'rerun', // Backend may need this flag
+          source: 'frontend',
           job_status: 'uploading', // Set initial status same as create_job
           original_files_total_count: body.original_files_total_count, // Use frontend calculated value directly
           original_files_completed_count: 0,
