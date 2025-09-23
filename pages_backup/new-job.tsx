@@ -321,8 +321,8 @@ export default function NewJobPage() {
                     <option value="" style={{ background: '#1f2937', color: '#f8f8f8' }}>
                       Select an app...
                     </option>
-                    <option value="BUNT" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                      BUNT
+                    <option value="BASEBALL" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                      BASEBALL
                     </option>
                     <option value="DISNEY" style={{ background: '#1f2937', color: '#f8f8f8' }}>
                       DISNEY
@@ -330,17 +330,17 @@ export default function NewJobPage() {
                     <option value="MARVEL" style={{ background: '#1f2937', color: '#f8f8f8' }}>
                       MARVEL
                     </option>
-                    <option value="SLAM" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                      SLAM
+                    <option value="WWE" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                      WWE
                     </option>
-                    <option value="STAR WARS" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                    <option value="STARWARS" style={{ background: '#1f2937', color: '#f8f8f8' }}>
                       STAR WARS
                     </option>
-                    <option value="NBA" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                      NBA
+                    <option value="BASKETBALL" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                      BASKETBALL
                     </option>
-                    <option value="NFL" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                      NFL
+                    <option value="HUDDLE" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                      HUDDLE
                     </option>
                   </select>
                   {errors.appName && (

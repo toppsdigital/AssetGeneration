@@ -44,13 +44,13 @@ export type CardType = "front" | "back";
  * All available apps in the system
  */
 export type AppName = 
-  | "BUNT" 
+  | "BASEBALL" 
   | "DISNEY" 
   | "MARVEL" 
-  | "SLAM" 
-  | "STAR WARS" 
-  | "NBA" 
-  | "NFL";
+  | "WWE" 
+  | "STARWARS" 
+  | "BASKETBALL" 
+  | "HUDDLE";
 
 // ============================================================================
 // INTERFACE DEFINITIONS

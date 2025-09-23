@@ -259,7 +259,7 @@ export const getAppIcon = (appName: string | undefined): string => {
   if (lowerAppName.includes('starwars') || lowerAppName.includes('star wars')) return '⭐';
   if (lowerAppName.includes('marvel')) return '🦸';
   if (lowerAppName.includes('nba')) return '🏀';
-  if (lowerAppName.includes('nfl')) return '🏈';
+  if (lowerAppName.includes('nfl') || lowerAppName.includes('huddle')) return '🏈';
   
   // Default app icon
   return '📱';
