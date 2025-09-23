@@ -31,15 +31,7 @@ function NewJobPageContent() {
   const isRerun = searchParams.get('rerun') === 'true';
   const sourceJobId = searchParams.get('sourceJobId');
   
-  // Helper function to generate S3 file paths based on app and optional filename
-  const generateFilePath = (appName: string, filename?: string): string => {
-    // Sanitize path components to ensure they are URL-safe and consistent
-    // Replace spaces and special characters with hyphens, keep alphanumeric, hyphens, and underscores
-    const sanitize = (str: string) => str.trim().replace(/[^a-zA-Z0-9\-_]/g, '-').replace(/-+/g, '-');
-    
-    const basePath = `${sanitize(appName)}/PDFs`;
-    return filename ? `${basePath}/${filename}` : basePath;
-  };
+  
   
   // Rerun operations work exactly like new jobs - no file extraction needed
   // User will select the same folder again, ensuring identical file processing
@@ -188,7 +180,6 @@ function NewJobPageContent() {
   const createJob = async (jobData: {
     appName: string;
     filenamePrefix: string;
-    sourceFolder: string;
     pdf_files?: string[];
     edr_pdf_filename?: string;
     description?: string;
@@ -198,7 +189,6 @@ function NewJobPageContent() {
       const jobPayload = {
         app_name: jobData.appName,
         filename_prefix: jobData.filenamePrefix,
-        source_folder: jobData.sourceFolder,
         pdf_files: jobData.pdf_files,
         edr_pdf_filename: jobData.edr_pdf_filename,
         description: jobData.description,
@@ -271,7 +261,6 @@ function NewJobPageContent() {
       const jobPayload = {
         appName: formData.appName,
         filenamePrefix: formData.filenamePrefix,
-        sourceFolder: generateFilePath(formData.appName),
         pdf_files: pdfFiles,
         edr_pdf_filename: formData.edrPdfFilename || undefined,
         description: formData.description,
