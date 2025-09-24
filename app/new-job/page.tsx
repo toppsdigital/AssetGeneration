@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, Suspense } from 'react';
+import React, { useState, Suspense, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import styles from '../../styles/Home.module.css';
 import PageTitle from '../../components/PageTitle';
@@ -50,6 +50,20 @@ function NewJobPageContent() {
   const [errors, setErrors] = useState<Partial<NewJobFormData>>({});
   const [jobCreated, setJobCreated] = useState<any>(null);
   const [isFileListExpanded, setIsFileListExpanded] = useState(false);
+
+  // Clear any stale globals from previous sessions so reruns respect new selections
+  useEffect(() => {
+    try {
+      if ((window as any).pendingUploadFiles) {
+        delete (window as any).pendingUploadFiles;
+      }
+      if ((window as any).pendingEdrFile) {
+        delete (window as any).pendingEdrFile;
+      }
+    } catch (_) {
+      // no-op
+    }
+  }, []);
 
   // Handle input changes
   const handleInputChange = (field: keyof NewJobFormData, value: string) => {
@@ -181,12 +195,15 @@ function NewJobPageContent() {
     appName: string;
     filenamePrefix: string;
     pdf_files?: string[];
+    files?: string[]; // grouped base names (without _FR/_BK)
+    original_files_total_count?: number;
     edr_pdf_filename?: string;
     description?: string;
     skip_manual_configuration?: boolean;
   }) => {
     try {
-      const jobPayload = {
+      // Use identical payload shape for create and rerun (server computes groups from pdf_files)
+      const jobPayload: any = {
         app_name: jobData.appName,
         filename_prefix: jobData.filenamePrefix,
         pdf_files: jobData.pdf_files,
@@ -257,7 +274,7 @@ function NewJobPageContent() {
         throw new Error('No valid _FR/_BK PDF files found in the selected folder');
       }
 
-      // Prepare minimal job data for API call
+      // Prepare job data for API call
       const jobPayload = {
         appName: formData.appName,
         filenamePrefix: formData.filenamePrefix,

@@ -3,8 +3,9 @@
 import { useEffect, useState, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { JobHeader, Spinner } from '../../../components';
-import { useAppDataStore } from '../../../hooks/useAppDataStore';
+import { useAppDataStore, dataStoreKeys } from '../../../hooks/useAppDataStore';
 import { useUploadEngine } from '../../../hooks/useUploadEngine';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface UploadSession {
   jobId: string;
@@ -23,6 +24,7 @@ function JobUploadingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const jobId = searchParams.get('jobId');
+  const queryClient = useQueryClient();
 
   // State
   const [uploadSession, setUploadSession] = useState<UploadSession | null>(null);
@@ -216,6 +218,26 @@ function JobUploadingContent() {
     }
   }, [uploadEngine.uploadStarted, uploadEngine.uploadedPdfFiles, uploadEngine.failedPdfFiles, jobData?.content_pipeline_files, localFileStatuses, updateLocalFileStatus, getBackendFileStatus]);
 
+  // Fallback completion detector (runs before any early returns)
+  useEffect(() => {
+    const total = (uploadEngine.totalPdfFiles || 0) || (jobData?.original_files_total_count || 0);
+    const uploaded = uploadEngine.uploadedPdfFiles || 0;
+    const active = uploadEngine.uploadingFiles.size;
+    if (currentStep === 'uploading' && total > 0 && uploaded >= total && active === 0) {
+      console.log('✅ Fallback completion detected - navigating to jobs');
+      setCurrentStep('completed');
+      try {
+        if (jobId) {
+          sessionStorage.removeItem(`upload_${jobId}`);
+        }
+        if ((window as any).pendingUploadFiles) {
+          delete (window as any).pendingUploadFiles;
+        }
+      } catch {}
+      setTimeout(() => router.push('/jobs'), 1000);
+    }
+  }, [currentStep, uploadEngine.totalPdfFiles, uploadEngine.uploadedPdfFiles, uploadEngine.uploadingFiles.size, jobData?.original_files_total_count, jobId, router]);
+
   // Validate session and redirect if invalid
   useEffect(() => {
     if (!jobId) {
@@ -232,18 +254,26 @@ function JobUploadingContent() {
       return;
     }
 
-    // Check for actual files
+    // Check for actual files (non-blocking). If missing, continue; later logic will show a UI error if needed.
     const pendingFiles = (window as any).pendingUploadFiles;
     if (!pendingFiles || pendingFiles.jobId !== jobId) {
-      console.error('❌ No pending files found, redirecting to jobs page');
-      router.push('/jobs');
-      return;
+      console.warn('⚠️ No pending File objects found in memory for this job. Continuing without redirect; upload will be skipped and UI will show a helpful error if needed.');
     }
 
     try {
       const session: UploadSession = JSON.parse(uploadSessionData);
       console.log('✅ Upload session validated:', session);
       setUploadSession(session);
+      // Invalidate any stale caches for this job id and force refetch of details/files
+      if (jobId) {
+        try {
+          queryClient.invalidateQueries({ queryKey: dataStoreKeys.jobs.detail(jobId) });
+          queryClient.invalidateQueries({ queryKey: dataStoreKeys.files.byJob(jobId) });
+          queryClient.refetchQueries({ queryKey: dataStoreKeys.jobs.detail(jobId) });
+        } catch (e) {
+          console.warn('Cache invalidation failed (non-fatal):', e);
+        }
+      }
       // Skip client-side file creation; files are already created on the server
       setCurrentStep('uploading');
     } catch (error) {
@@ -397,7 +427,7 @@ function JobUploadingContent() {
     // Check if we have the File objects needed for upload
     const pendingFiles = (window as any).pendingUploadFiles;
     if (!pendingFiles || pendingFiles.jobId !== jobId) {
-      console.error('❌ Missing File objects for upload:', {
+      console.warn('⚠️ Missing File objects for upload:', {
         hasPendingFiles: !!pendingFiles,
         pendingJobId: pendingFiles?.jobId,
         currentJobId: jobId,
@@ -626,11 +656,13 @@ function JobUploadingContent() {
     );
   }
 
-  // Calculate actual file counts using job data first, then fallback to created files
-  const totalFiles = jobData?.original_files_total_count || 
-    (jobData?.content_pipeline_files || []).reduce((total: number, fileGroup: any) => 
-      total + Object.keys(fileGroup.original_files || {}).length, 0
-    );
+  // Calculate actual file counts prioritizing the selected files from the session
+  const selectedNames = new Set((uploadSession?.files || []).map(f => f.name));
+  const backendTotal = (jobData?.content_pipeline_files || []).reduce((total: number, fileGroup: any) => 
+    total + Object.keys(fileGroup.original_files || {}).length, 0
+  );
+  // If we have a session with files, prefer that count to avoid stale backend cache
+  const totalFiles = selectedNames.size > 0 ? selectedNames.size : (jobData?.original_files_total_count || backendTotal);
   
   // Count files by status using local file statuses
   const fileStatusCounts = Object.values(localFileStatuses).reduce((counts, status) => {
@@ -663,6 +695,8 @@ function JobUploadingContent() {
     uploadEngineUploaded: uploadEngine.uploadedPdfFiles,
     uploadEngineUploading: uploadEngine.uploadingFiles.size
   });
+
+  // Removed duplicate fallback completion hook to avoid hook order changes; a unified fallback exists earlier
 
   // Enhanced status determination function with local state priority
   const getFileStatus = (filename: string, fileInfo: any) => {
@@ -1028,7 +1062,10 @@ function JobUploadingContent() {
             <div style={{ maxHeight: '500px', overflowY: 'auto', paddingRight: '0.5rem' }}>
               <div style={{ display: 'grid', gap: '1rem' }}>
                 {(jobData?.content_pipeline_files || []).flatMap((fileGroup: any, groupIndex: number) => 
-                  Object.entries(fileGroup.original_files || {}).map(([filename, fileInfo]: [string, any]) => {
+                  Object.entries(fileGroup.original_files || {})
+                    // If a rerun provided an explicit file set, show only those filenames
+                    .filter(([filename]) => selectedNames.size === 0 || selectedNames.has(filename))
+                    .map(([filename, fileInfo]: [string, any]) => {
                     const statusInfo = getFileStatus(filename, fileInfo);
                     
                     return (
