@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { JobHeader, PSDTemplateSelector, DownloadSection, FilesSection } from '../';
+import { JobHeader, PSDTemplateSelector, DownloadSection, FilesSection, ExtractedDownloadSection } from '../';
 import { AssetCreationOverlay } from './AssetCreationOverlay';
 import { UIJobData } from '../../types';
 
@@ -179,6 +179,15 @@ export const JobDetailsContent = ({
               loadingStep={1}
               loadingMessage="Ready"
               loadingDetail=""
+            />
+
+            {/* Extracted Download Section - shown when status is 'extracted' */}
+            <ExtractedDownloadSection
+              jobData={mergedJobData}
+              isVisible={(() => {
+                const shouldShow = (mergedJobData?.job_status || '').toLowerCase() === 'extracted' && !loading;
+                return shouldShow;
+              })()}
             />
 
           </div>

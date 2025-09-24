@@ -401,7 +401,7 @@ function NewJobPageContent() {
                       Select an app...
                     </option>
                     <option value="BASEBALL" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                      ⚾ Baseball
+                      ⚾ BASEBALL
                     </option>
                     <option value="DISNEY" style={{ background: '#1f2937', color: '#f8f8f8' }}>
                       🏰 DISNEY
@@ -416,7 +416,7 @@ function NewJobPageContent() {
                       ⭐ STARWARS
                     </option>
                     <option value="BASKETBALL" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                      🏀 Basketball
+                      🏀 BASKETBALL
                     </option>
                     <option value="HUDDLE" style={{ background: '#1f2937', color: '#f8f8f8' }}>
                       🏈 HUDDLE

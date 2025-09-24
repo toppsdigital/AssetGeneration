@@ -795,6 +795,10 @@ export function useAppDataStore<T = any>(
         case 'createDownloadZip':
           if (!payload.jobId || !payload.data?.folderPath) throw new Error('Job ID and folder path required');
           return await contentPipelineApi.createDownloadZip(payload.jobId, payload.data.folderPath);
+        
+        case 'createExtractedZip':
+          if (!payload.jobId) throw new Error('Job ID required');
+          return await contentPipelineApi.createExtractedZip(payload.jobId);
           
         default:
           throw new Error(`Unknown mutation type: ${payload.type}`);
@@ -1132,6 +1136,19 @@ export function useAppDataStore<T = any>(
               download_url: 'pending',
               last_updated: new Date().toISOString()
             }, 'createDownloadZip');
+          }
+          break;
+
+        case 'createExtractedZip':
+          if (variables.jobId) {
+            // Set extracted_download_url to pending to start polling UI and preserve files
+            safeUpdateJobCache(variables.jobId, {
+              extracted_download_url: 'pending',
+              extracted_zip_status: 'creating',
+              last_updated: new Date().toISOString()
+            }, 'createExtractedZip');
+            // Invalidate job details to pick up status changes during polling
+            queryClient.invalidateQueries({ queryKey: dataStoreKeys.jobs.detail(variables.jobId) });
           }
           break;
       }

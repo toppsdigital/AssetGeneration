@@ -117,7 +117,8 @@ export type MutationType =
   | 'regenerateAssets'
   | 'extractPdfData'
   | 'refreshDownloadUrl'
-  | 'createDownloadZip';
+  | 'createDownloadZip'
+  | 'createExtractedZip';
 
 export interface MutationPayload {
   type: MutationType;
