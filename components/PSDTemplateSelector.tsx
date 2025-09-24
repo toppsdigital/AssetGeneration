@@ -486,6 +486,8 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     setSavingAsset(true);
     
     try {
+      // Resolve asset id from provided config or current editing state
+      const resolvedAssetId = (config.id && config.id !== '') ? config.id : (editingAssetId || '');
       // Build asset configuration
       let assetConfig: any = {
         type: config.type
@@ -494,6 +496,16 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       // Only include chrome if it has a value
       if (config.chrome) {
         assetConfig.chrome = config.chrome;
+      }
+
+      // Include foil if explicitly provided
+      if (typeof config.foil !== 'undefined') {
+        assetConfig.foil = config.foil;
+      }
+
+      // Always include asset_id when we have one to avoid duplicate creations on update
+      if (resolvedAssetId) {
+        assetConfig.asset_id = resolvedAssetId;
       }
 
       // Handle parallel/multi-parallel with multiple spot/color pairs
@@ -565,12 +577,12 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       };
 
       let response;
-      if (config.id && config.id !== '') {
+      if (resolvedAssetId) {
         // Update existing asset
         response = await assetMutation({
           type: 'updateAsset',
           jobId: jobData.job_id,
-          assetId: config.id,
+          assetId: resolvedAssetId,
           data: assetPayload
         });
       } else {
@@ -1219,7 +1231,8 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
         editingAsset={editingAsset}
         onAddAsset={async (config, spot_color_pairs_from_form) => {
           // Call addAsset directly with the config from the form
-          await addAssetWithConfig(config, spot_color_pairs_from_form);
+          const ensuredId = (config.id && config.id !== '') ? config.id : (editingAssetId || '');
+          await addAssetWithConfig({ ...config, id: ensuredId }, spot_color_pairs_from_form);
         }}
         onResetConfig={resetCurrentConfig}
       />
