@@ -12,6 +12,7 @@ interface SpotColorPair {
 
 interface AssetConfig {
   id: string;
+  asset_id?: string;
   name: string;
   type: 'wp' | 'back' | 'base' | 'parallel' | 'multi-parallel' | 'wp-1of1' | 'front';
   layer: string;
@@ -162,8 +163,11 @@ export const AssetAdvancedOptions = ({
           type: asset.type,
           layer: asset.layer
         };
+        // Ensure we pass asset_id (map from id if necessary) to avoid duplicates
+        const resolvedAssetId = asset.asset_id || asset.id;
+        if (resolvedAssetId) cleanAsset.asset_id = resolvedAssetId;
         
-        // Only include properties that have values (no redundant id since asset_id already exists)
+        // Only include properties that have values
         if (asset.spot) cleanAsset.spot = asset.spot;
         if (asset.color) cleanAsset.color = asset.color;
         
@@ -189,7 +193,11 @@ export const AssetAdvancedOptions = ({
       const chromeUpdatedAssets = assetsToUpdate.map(asset => {
         // Start with exact copy of asset to preserve all existing properties and field names
         const { oneOfOneWp, ...assetWithoutUIProps } = asset; // Remove only UI-specific properties
-        const updatedAsset = { ...assetWithoutUIProps };
+        const updatedAsset: any = { ...assetWithoutUIProps };
+        // Normalize identifier to asset_id and drop id
+        const resolvedAssetId = updatedAsset.asset_id || updatedAsset.id;
+        if (resolvedAssetId) updatedAsset.asset_id = resolvedAssetId;
+        if ('id' in updatedAsset) delete updatedAsset.id;
         
         if (shouldRemoveChrome) {
           // Remove chrome entirely
@@ -327,6 +335,9 @@ export const AssetAdvancedOptions = ({
           type: asset.type,
           layer: asset.layer
         };
+        // Ensure we pass asset_id (map from id if necessary) to avoid duplicates
+        const resolvedAssetId = asset.asset_id || asset.id;
+        if (resolvedAssetId) cleanAsset.asset_id = resolvedAssetId;
         
         // Only include properties that have values
         if (asset.spot) cleanAsset.spot = asset.spot;
@@ -353,7 +364,11 @@ export const AssetAdvancedOptions = ({
       const foilUpdatedAssets = eligibleAssets.map(asset => {
         // Start with exact copy of asset to preserve all existing properties
         const { oneOfOneWp, ...assetWithoutUIProps } = asset; // Remove only UI-specific properties
-        const updatedAsset = { ...assetWithoutUIProps };
+        const updatedAsset: any = { ...assetWithoutUIProps };
+        // Normalize identifier to asset_id and drop id
+        const resolvedAssetId = updatedAsset.asset_id || updatedAsset.id;
+        if (resolvedAssetId) updatedAsset.asset_id = resolvedAssetId;
+        if ('id' in updatedAsset) delete updatedAsset.id;
         
         if (shouldAddFoilFalse) {
           // Add foil: false when toggle is off
