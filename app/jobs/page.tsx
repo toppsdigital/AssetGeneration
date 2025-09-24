@@ -170,23 +170,13 @@ export default function JobsPage() {
     router.push(`/job/details?jobId=${job.job_id}`);
   };
 
-  const getSubsetName = (job: JobData) => {
-    if (!job.source_folder) return 'Unknown';
-    const parts = job.source_folder.split('/');
-    return parts.length > 0 ? parts[0] : 'Unknown';
-  };
+  
 
   const getJobDisplayName = (job: JobData) => {
     const parts = [];
     
     if (job.app_name) parts.push(job.app_name);
     if (job.filename_prefix) parts.push(job.filename_prefix);
-    
-    // Add subset name from source_folder
-    const subsetName = getSubsetName(job);
-    if (subsetName && subsetName !== 'Unknown' && subsetName !== job.app_name) {
-      parts.push(subsetName);
-    }
     
     const displayName = parts.length > 0 ? parts.join(' - ') : 'Untitled Job';
     const appIcon = getAppIcon(job.app_name);
@@ -757,9 +747,7 @@ export default function JobsPage() {
                         <span style={{ color: '#9ca3af', fontSize: 14 }}>
                           📅 {new Date(job.created_at || '').toLocaleString()}
                         </span>
-                        <span style={{ color: '#9ca3af', fontSize: 14 }}>
-                          📂 {getSubsetName(job)}
-                        </span>
+                        
                         <span style={{ 
                           color: getStatusColor(job.job_status),
                           fontSize: 14,

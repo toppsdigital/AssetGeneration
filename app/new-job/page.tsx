@@ -7,6 +7,7 @@ import PageTitle from '../../components/PageTitle';
 import Spinner from '../../components/Spinner';
 import { useAppDataStore } from '../../hooks/useAppDataStore';
 import { getAppIcon } from '../../utils/fileOperations';
+import { getEnvironmentConfig } from '../../utils/environment';
 
 interface NewJobFormData {
   appName: string;
@@ -15,11 +16,13 @@ interface NewJobFormData {
   uploadFolder: string;
   selectedFiles: FileList | null;
   edrPdfFilename?: string;
+  skipManualConfiguration?: boolean;
 }
 
 function NewJobPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { isDevelopment } = getEnvironmentConfig();
   
   // Use centralized data store for job mutations
   const { mutate: createJobMutation, forceRefreshJobsList } = useAppDataStore('jobs');
@@ -28,15 +31,7 @@ function NewJobPageContent() {
   const isRerun = searchParams.get('rerun') === 'true';
   const sourceJobId = searchParams.get('sourceJobId');
   
-  // Helper function to generate S3 file paths based on app and optional filename
-  const generateFilePath = (appName: string, filename?: string): string => {
-    // Sanitize path components to ensure they are URL-safe and consistent
-    // Replace spaces and special characters with hyphens, keep alphanumeric, hyphens, and underscores
-    const sanitize = (str: string) => str.trim().replace(/[^a-zA-Z0-9\-_]/g, '-').replace(/-+/g, '-');
-    
-    const basePath = `${sanitize(appName)}/PDFs`;
-    return filename ? `${basePath}/${filename}` : basePath;
-  };
+  
   
   // Rerun operations work exactly like new jobs - no file extraction needed
   // User will select the same folder again, ensuring identical file processing
@@ -48,7 +43,8 @@ function NewJobPageContent() {
     description: isRerun ? (searchParams.get('description') || '') : '',
     uploadFolder: '',
     selectedFiles: null,
-    edrPdfFilename: ''
+    edrPdfFilename: '',
+    skipManualConfiguration: false
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Partial<NewJobFormData>>({});
@@ -184,19 +180,19 @@ function NewJobPageContent() {
   const createJob = async (jobData: {
     appName: string;
     filenamePrefix: string;
-    sourceFolder: string;
     pdf_files?: string[];
     edr_pdf_filename?: string;
     description?: string;
+    skip_manual_configuration?: boolean;
   }) => {
     try {
       const jobPayload = {
         app_name: jobData.appName,
         filename_prefix: jobData.filenamePrefix,
-        source_folder: jobData.sourceFolder,
         pdf_files: jobData.pdf_files,
         edr_pdf_filename: jobData.edr_pdf_filename,
-        description: jobData.description
+        description: jobData.description,
+        ...(jobData.skip_manual_configuration ? { skip_manual_configuration: true } : {})
       };
 
       let response;
@@ -265,10 +261,10 @@ function NewJobPageContent() {
       const jobPayload = {
         appName: formData.appName,
         filenamePrefix: formData.filenamePrefix,
-        sourceFolder: generateFilePath(formData.appName),
         pdf_files: pdfFiles,
         edr_pdf_filename: formData.edrPdfFilename || undefined,
-        description: formData.description
+        description: formData.description,
+        skip_manual_configuration: formData.skipManualConfiguration ? true : undefined
       };
 
       console.log('🚀 Creating job with payload:', {
@@ -404,8 +400,8 @@ function NewJobPageContent() {
                     <option value="" style={{ background: '#1f2937', color: '#f8f8f8' }}>
                       Select an app...
                     </option>
-                    <option value="BUNT" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                      ⚾ BUNT
+                    <option value="BASEBALL" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                      ⚾ BASEBALL
                     </option>
                     <option value="DISNEY" style={{ background: '#1f2937', color: '#f8f8f8' }}>
                       🏰 DISNEY
@@ -413,17 +409,17 @@ function NewJobPageContent() {
                     <option value="MARVEL" style={{ background: '#1f2937', color: '#f8f8f8' }}>
                       🦸 MARVEL
                     </option>
-                    <option value="SLAM" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                      🤼 SLAM
+                    <option value="WWE" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                      🤼 WWE
                     </option>
                     <option value="STARWARS" style={{ background: '#1f2937', color: '#f8f8f8' }}>
                       ⭐ STARWARS
                     </option>
-                    <option value="NBA" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                      🏀 NBA
+                    <option value="BASKETBALL" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                      🏀 BASKETBALL
                     </option>
-                    <option value="NFL" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                      🏈 NFL
+                    <option value="HUDDLE" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                      🏈 HUDDLE
                     </option>
                   </select>
                   {errors.appName && (
@@ -704,6 +700,30 @@ function NewJobPageContent() {
                 )}
               </div>
             </div>
+
+            {/* Action Buttons */}
+            {isDevelopment && !!formData.edrPdfFilename && (
+              <div style={{ 
+                marginTop: 12,
+                marginBottom: 12,
+                padding: 12,
+                borderRadius: 12,
+                border: '1px dashed rgba(59, 130, 246, 0.4)',
+                background: 'rgba(59, 130, 246, 0.08)'
+              }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#c7d2fe', fontSize: 13 }}>
+                  <input 
+                    type="checkbox" 
+                    checked={!!formData.skipManualConfiguration}
+                    onChange={(e) => setFormData(prev => ({ ...prev, skipManualConfiguration: e.target.checked }))}
+                    style={{ width: 16, height: 16 }}
+                  />
+                  <span>
+                    Dev: skip manual configuration
+                  </span>
+                </label>
+              </div>
+            )}
 
             {/* Action Buttons */}
             <div style={{ 

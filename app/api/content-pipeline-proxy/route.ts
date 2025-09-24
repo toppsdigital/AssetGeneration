@@ -24,6 +24,11 @@ interface JobData {
   download_url?: string;
   download_url_expires?: string;
   download_url_created?: string;
+  // Extracted ZIP fields
+  extracted_zip_status?: 'creating' | 'zip_ready' | 'failed' | string;
+  extracted_download_url?: string;
+  extracted_download_url_expires?: string;
+  extracted_download_url_created?: string;
   assets?: Record<string, any>; // Asset configurations with server-generated IDs
 }
 
@@ -378,6 +383,7 @@ async function handleRequest(request: NextRequest, method: string) {
             });
             apiBody = {
               ...apiBody,
+              source: 'frontend',
               user_id: session.user.id || session.user.email || 'unknown',
               user_name: session.user.name || session.user.email || 'Unknown User'
             };
@@ -788,7 +794,8 @@ async function handleRequest(request: NextRequest, method: string) {
         // Use dedicated rerun endpoint
         apiUrl += `/jobs/${id}/rerun`;
         apiMethod = 'POST';
-        // Add rerun-specific data to the body
+        // Add rerun-specific data to the body and explicitly strip source_folder if present
+        const { source_folder: _omitSourceFolder, ...bodyWithoutSourceFolder } = apiBody || {};
         // Use original_files_total_count from request body (calculated correctly from frontend)
         // Frontend handles _FR/_BK files properly and deduplication
         
@@ -798,9 +805,10 @@ async function handleRequest(request: NextRequest, method: string) {
         });
         
         apiBody = {
-          ...apiBody,
+          ...bodyWithoutSourceFolder,
           // Do not include rerun_job_id per updated policy
           operation: 'rerun', // Backend may need this flag
+          source: 'frontend',
           job_status: 'uploading', // Set initial status same as create_job
           original_files_total_count: body.original_files_total_count, // Use frontend calculated value directly
           original_files_completed_count: 0,
@@ -826,9 +834,7 @@ async function handleRequest(request: NextRequest, method: string) {
         if (!id) {
           return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
         }
-        if (!body.assets || !body.psd_file) {
-          return NextResponse.json({ error: 'assets and psd_file are required' }, { status: 400 });
-        }
+        // No required payload fields for this operation; backend determines defaults
         // colors is optional - only required for spot layers
         apiUrl += `/jobs/${id}/generate-assets`;
         apiMethod = 'POST';
@@ -909,6 +915,31 @@ async function handleRequest(request: NextRequest, method: string) {
           }
         } catch (error) {
           console.warn('Failed to get session for createzip:', error);
+        }
+        break;
+
+      case 'createextractedzip':
+        if (!id) {
+          return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
+        }
+        console.log('🔄 CreateExtractedZip operation:', {
+          jobId: id,
+          requestBody: body
+        });
+        apiUrl += `/jobs/${id}/createextractedzip`;
+        apiMethod = 'POST';
+        // Get session and add user information for tracking
+        try {
+          const session = await auth();
+          if (session?.user) {
+            apiBody = {
+              ...apiBody,
+              created_by_user_id: session.user.id || session.user.email || 'unknown',
+              created_by_user_name: session.user.name || session.user.email || 'Unknown User'
+            };
+          }
+        } catch (error) {
+          console.warn('Failed to get session for createextractedzip:', error);
         }
         break;
 

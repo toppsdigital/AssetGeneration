@@ -111,7 +111,8 @@ function JobUploadingContent() {
       setEdrError(null);
 
       const appName = (uploadSession.appName || (jobData as any)?.app_name || '').trim() || 'UNKNOWN_APP';
-      const s3Key = `${appName}/PDFs/${uploadSession.edrPdfFilename}`;
+      const jobIdValue = (uploadSession.jobId || (jobData as any)?.job_id || jobId || '').toString().trim() || 'UNKNOWN_JOB';
+      const s3Key = `${appName}/${jobIdValue}/PDFs/${uploadSession.edrPdfFilename}`;
 
       // Get presigned URL via content pipeline
       const presignedData = await (await import('../../../web/utils/contentPipelineApi')).contentPipelineApi.getPresignedUrl({
@@ -341,6 +342,32 @@ function JobUploadingContent() {
       window.removeEventListener('popstate', handlePopState);
     };
   }, [currentStep, uploadEngine.uploadStarted, uploadEngine.uploadingFiles.size]);
+
+  // Safety net: When EDR finishes, trigger regular PDF uploads if not already attempted (helps rerun flow)
+  useEffect(() => {
+    if (
+      currentStep === 'uploading' &&
+      edrStatus === 'uploaded' &&
+      (jobData?.content_pipeline_files?.length || 0) > 0 &&
+      !uploadEngine.uploadStarted
+    ) {
+      console.log('🚀 EDR upload completed; starting regular PDF uploads via safety effect (idempotent)');
+      try {
+        const p = uploadEngine.checkAndStartUpload(true);
+        if (p && typeof (p as any).catch === 'function') {
+          (p as Promise<void>).catch(err => {
+            console.error('❌ Safety-start upload failed:', err);
+            setError(err instanceof Error ? err.message : 'Failed to start upload');
+            setCurrentStep('error');
+          });
+        }
+      } catch (err) {
+        console.error('❌ Safety-start synchronous error:', err);
+        setError('Failed to start upload process');
+        setCurrentStep('error');
+      }
+    }
+  }, [edrStatus, currentStep, jobData?.content_pipeline_files?.length, uploadEngine.uploadStarted, uploadEngine]);
 
   // Start upload when we transition to uploading step and have files from job
   useEffect(() => {

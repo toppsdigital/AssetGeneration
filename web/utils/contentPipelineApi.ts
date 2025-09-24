@@ -17,6 +17,7 @@ export interface JobData {
   pdf_files?: string[];
   edr_pdf_filename?: string;
   description?: string;
+  skip_manual_configuration?: boolean;
   job_status?:  'uploading' | 'uploaded' | 'upload-failed' | 'extracting' | 'extracted' | 'extraction-failed' | 'generating' | 'generated' | 'generation-failed' | 'completed' ;
   created_at?: string;
   last_updated?: string;
@@ -34,6 +35,11 @@ export interface JobData {
   download_url?: string;
   download_url_expires?: string;
   download_url_created?: string;
+  // Extracted ZIP fields
+  extracted_zip_status?: 'creating' | 'zip_ready' | 'failed' | string;
+  extracted_download_url?: string;
+  extracted_download_url_expires?: string;
+  extracted_download_url_created?: string;
   assets?: Record<string, any>; // Asset configurations with server-generated IDs
 }
 
@@ -428,10 +434,10 @@ class ContentPipelineAPI {
   // Re-run a job with new parameters - uses same payload structure as createJob
   async rerunJob(
     jobId: string, 
-    jobData: Omit<JobData, 'job_id' | 'created_at' | 'last_updated' | 'job_status'>,
+    jobData: Omit<JobData, 'job_id' | 'created_at' | 'last_updated' | 'job_status' | 'source_folder'>,
     onCacheClear?: CacheClearingCallback
   ): Promise<JobResponse> {
-    const { files: _omitFiles, original_files_total_count: _omitTotal, original_files_completed_count: _omitCompleted, original_files_failed_count: _omitFailed, ...rest } = jobData as any;
+    const { files: _omitFiles, original_files_total_count: _omitTotal, original_files_completed_count: _omitCompleted, original_files_failed_count: _omitFailed, source_folder: _omitSourceFolder, ...rest } = jobData as any;
     const jobPayload = {
       ...rest,
       job_status: 'uploading',
@@ -471,28 +477,14 @@ class ContentPipelineAPI {
   // Generate assets for a job
   async generateAssets(
     jobId: string,
-    payload: {
-      assets: Array<{
-        type: 'wp' | 'back' | 'base' | 'parallel' | 'multi-parallel';
-        layer: string;
-        spot?: string;
-        color?: { id: number; name: string };
-        spot_color_pairs?: Array<{
-          spot: string;
-          color?: { id: number; name: string };
-        }>;
-        vfx?: string;
-        chrome: boolean;
-      }>;
-      psd_file: string;
-    }
+    payload?: any
   ): Promise<any> {
     const response = await fetch(`${this.baseUrl}?operation=generate_assets&id=${encodeURIComponent(jobId)}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(payload || {}),
     });
 
     if (!response.ok) {
@@ -588,6 +580,29 @@ class ContentPipelineAPI {
 
     const result = await response.json();
     console.log(`✅ Create download ZIP result:`, result);
+    return result;
+  }
+
+  // Create extracted files ZIP for a job
+  async createExtractedZip(jobId: string): Promise<JobResponse> {
+    console.log(`🔄 Creating extracted files ZIP for job: ${jobId}`);
+    const response = await fetch(`${this.baseUrl}?operation=createextractedzip&id=${encodeURIComponent(jobId)}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    console.log(`📥 Create extracted ZIP response status: ${response.status}`);
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      console.error(`❌ Create extracted ZIP failed:`, error);
+      throw new Error((error as any).error || `Failed to create extracted ZIP: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log(`✅ Create extracted ZIP result:`, result);
     return result;
   }
 
@@ -864,11 +879,18 @@ class ContentPipelineAPI {
     
     console.log(`🔗 Getting presigned URL via /s3-files for: ${urlData.filename} (${urlData.client_method})`);
     
-    // Build folder and filename so final key is {APP}/{RELATIVE_PATH}
-    // Example: input "BUNT/PDFs/file.pdf" -> folder: "BUNT", filename: "PDFs/file.pdf"
+    // Build folder and filename so final key is {APP}/{job_id}/{RELATIVE_PATH}
+    // Examples:
+    //  - input "BUNT/job_123/PDFs/file.pdf" -> folder: "BUNT/job_123", filename: "PDFs/file.pdf"
+    //  - input "BUNT/PDFs/file.pdf" -> folder: "BUNT", filename: "PDFs/file.pdf" (legacy)
     const pathParts = urlData.filename.split('/');
-    const folder = pathParts[0];
-    const filename = pathParts.slice(1).join('/');
+    let folder = pathParts[0] || '';
+    let filename = pathParts.slice(1).join('/');
+    if (pathParts.length >= 3) {
+      // Treat first two segments as folder when a subfolder (e.g., job_id) is present
+      folder = `${pathParts[0]}/${pathParts[1]}`;
+      filename = pathParts.slice(2).join('/');
+    }
     
     const response = await fetch(`${this.baseUrl}?operation=s3_upload_files`, {
       method: 'POST',

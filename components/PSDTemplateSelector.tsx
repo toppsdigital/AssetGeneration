@@ -225,13 +225,9 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
   };
 
   const createAssets = async (retryFailedOnly: boolean = false) => {
-    if (!mergedJobData?.assets || Object.keys(mergedJobData.assets).length === 0) return;
-
-    console.log(`🎨 ${retryFailedOnly ? 'Retrying failed' : 'Creating'} digital assets with job assets:`, {
+    console.log(`🎨 ${retryFailedOnly ? 'Retrying failed' : 'Creating'} digital assets:`, {
       selectedFile: selectedPhysicalFile,
       psdFile: jsonData?.psd_file,
-      jobAssets: mergedJobData.assets,
-      totalAssets: Object.keys(mergedJobData.assets).length,
       retryFailedOnly
     });
 
@@ -240,11 +236,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     try {
       const psdFile = selectedPhysicalFile.split('/').pop()?.replace('.json', '.psd') || '';
       
-      // Convert job assets object to array format for API
-      const assets = Object.values(mergedJobData.assets) as any[];
-
       const payload: any = {
-        assets,
         psd_file: psdFile
       };
 
@@ -253,11 +245,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
         payload.retry_failed_only = true;
       }
 
-      console.log('📋 API Payload:', {
-        ...payload,
-        assetsCount: assets.length,
-        assetsPreview: assets.map((asset: any) => ({ name: asset.name, type: asset.type }))
-      });
+      console.log('📋 API Payload:', payload);
 
       const response = await assetMutation({
         type: 'generateAssets',
@@ -837,7 +825,8 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
     
     const s3FileName = file.name;
     const appName = jobData?.app_name || 'default_app';
-    const presignedPath = `${appName}/PDFs/${s3FileName}`;  // Use canonical PDFs path
+    const jobIdValue = (jobData?.job_id || '').toString().trim() || 'UNKNOWN_JOB';
+    const presignedPath = `${appName}/${jobIdValue}/PDFs/${s3FileName}`;  // Canonical PDFs path with job_id
     
     setUploadProgress(10);
 
