@@ -164,7 +164,7 @@ export const exampleJobExtractionInProgress: JobTracking = {
   job_id: "job_1735567890456_p2m4k9x7s",
   created_at: "2024-12-30T15:00:00.000Z",
   last_updated: "2024-12-30T15:15:45.678Z",
-  app_name: "NBA",
+  app_name: "BASKETBALL",
   release_name: "2024-Playoff-Series",
   Subset_name: "Rookie-Cards",
   job_status: "Extraction in progress",
