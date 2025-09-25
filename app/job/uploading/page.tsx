@@ -679,6 +679,9 @@ function JobUploadingContent() {
   
   // Use upload engine's uploaded count for progress (more reliable)
   const progressPercentage = totalFiles > 0 ? (uploadedFiles / totalFiles) * 100 : 0;
+
+  // Determine if this job uses images instead of PDFs
+  const isImagesJob = (jobData?.job_type || '').toLowerCase() !== 'physical_to_digital';
   
   console.log('📊 Progress calculation (using local file statuses):', {
     createdFilesLength: jobData?.content_pipeline_files?.length || 0,
@@ -1045,7 +1048,7 @@ function JobUploadingContent() {
                 fontSize: '1.25rem',
                 fontWeight: '700'
               }}>
-                PDF Files
+                {isImagesJob ? 'Image Files' : 'PDF Files'}
               </h4>
               <div style={{
                 background: 'rgba(255, 255, 255, 0.1)',
@@ -1114,7 +1117,7 @@ function JobUploadingContent() {
                               alignItems: 'center',
                               gap: '0.5rem'
                             }}>
-                              <span>{fileInfo.card_type ? `${fileInfo.card_type} side` : 'PDF file'}</span>
+                              <span>{fileInfo.card_type ? `${fileInfo.card_type} side` : (isImagesJob ? 'Image file' : 'PDF file')}</span>
                               {fileGroup.filename && (
                                 <>
                                   <span>•</span>
