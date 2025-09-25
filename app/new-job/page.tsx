@@ -11,6 +11,7 @@ import { getEnvironmentConfig } from '../../utils/environment';
 
 interface NewJobFormData {
   appName: string;
+  jobType?: 'physical_to_digital' | 'shiloutte_psd' | 'topps_now' | '';
   filenamePrefix: string;
   description: string;
   uploadFolder: string;
@@ -39,6 +40,7 @@ function NewJobPageContent() {
   // Initialize form data - pre-fill if this is a re-run
   const [formData, setFormData] = useState<NewJobFormData>({
     appName: isRerun ? (searchParams.get('appName') || '') : '',
+    jobType: '',
     filenamePrefix: isRerun ? (searchParams.get('filenamePrefix') || '') : '',
     description: isRerun ? (searchParams.get('description') || '') : '',
     uploadFolder: '',
@@ -193,6 +195,7 @@ function NewJobPageContent() {
   // Create or rerun job using centralized data store
   const createJob = async (jobData: {
     appName: string;
+    jobType?: 'physical_to_digital' | 'shiloutte_psd' | 'topps_now';
     filenamePrefix: string;
     pdf_files?: string[];
     files?: string[]; // grouped base names (without _FR/_BK)
@@ -205,6 +208,7 @@ function NewJobPageContent() {
       // Use identical payload shape for create and rerun (server computes groups from pdf_files)
       const jobPayload: any = {
         app_name: jobData.appName,
+        job_type: jobData.jobType,
         filename_prefix: jobData.filenamePrefix,
         pdf_files: jobData.pdf_files,
         edr_pdf_filename: jobData.edr_pdf_filename,
@@ -277,6 +281,7 @@ function NewJobPageContent() {
       // Prepare job data for API call
       const jobPayload = {
         appName: formData.appName,
+        ...(formData.jobType ? { jobType: formData.jobType } : {}),
         filenamePrefix: formData.filenamePrefix,
         pdf_files: pdfFiles,
         edr_pdf_filename: formData.edrPdfFilename || undefined,
@@ -377,77 +382,120 @@ function NewJobPageContent() {
               marginBottom: 24
             }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-                {/* App */}
-                <div>
-                  <label style={{
-                    display: 'block',
-                    fontSize: 14,
-                    fontWeight: 600,
-                    color: '#f3f4f6',
-                    marginBottom: 8
-                  }}>
-                    App *
-                  </label>
-                  <select
-                    value={formData.appName}
-                    onChange={(e) => handleInputChange('appName', e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '12px 16px',
-                      background: 'rgba(255, 255, 255, 0.08)',
-                      border: `1px solid ${errors.appName ? '#ef4444' : 'rgba(255, 255, 255, 0.2)'}`,
-                      borderRadius: 8,
-                      color: '#f8f8f8',
+                {/* App + Job Type (side-by-side) */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                  <div>
+                    <label style={{
+                      display: 'block',
                       fontSize: 14,
-                      outline: 'none',
-                      transition: 'border-color 0.2s',
-                      boxSizing: 'border-box'
-                    }}
-                    onFocus={(e) => {
-                      if (!errors.appName) {
-                        e.target.style.borderColor = '#60a5fa';
-                      }
-                    }}
-                    onBlur={(e) => {
-                      if (!errors.appName) {
-                        e.target.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-                      }
-                    }}
-                  >
-                    <option value="" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                      Select an app...
-                    </option>
-                    <option value="BASEBALL" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                      ⚾ BASEBALL
-                    </option>
-                    <option value="DISNEY" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                      🏰 DISNEY
-                    </option>
-                    <option value="MARVEL" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                      🦸 MARVEL
-                    </option>
-                    <option value="WWE" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                      🤼 WWE
-                    </option>
-                    <option value="STARWARS" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                      ⭐ STARWARS
-                    </option>
-                    <option value="BASKETBALL" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                      🏀 BASKETBALL
-                    </option>
-                    <option value="HUDDLE" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                      🏈 HUDDLE
-                    </option>
-                  </select>
-                  {errors.appName && (
-                    <p style={{ 
-                      color: '#ef4444', 
-                      fontSize: 12, 
-                      margin: '4px 0 0 0' 
+                      fontWeight: 600,
+                      color: '#f3f4f6',
+                      marginBottom: 8
                     }}>
-                      {errors.appName}
-                    </p>
-                  )}
+                      App *
+                    </label>
+                    <select
+                      value={formData.appName}
+                      onChange={(e) => handleInputChange('appName', e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        background: 'rgba(255, 255, 255, 0.08)',
+                        border: `1px solid ${errors.appName ? '#ef4444' : 'rgba(255, 255, 255, 0.2)'}`,
+                        borderRadius: 8,
+                        color: '#f8f8f8',
+                        fontSize: 14,
+                        outline: 'none',
+                        transition: 'border-color 0.2s',
+                        boxSizing: 'border-box'
+                      }}
+                      onFocus={(e) => {
+                        if (!errors.appName) {
+                          e.target.style.borderColor = '#60a5fa';
+                        }
+                      }}
+                      onBlur={(e) => {
+                        if (!errors.appName) {
+                          e.target.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                        }
+                      }}
+                    >
+                      <option value="" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                        Select an app...
+                      </option>
+                      <option value="BASEBALL" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                        ⚾ BASEBALL
+                      </option>
+                      <option value="DISNEY" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                        🏰 DISNEY
+                      </option>
+                      <option value="MARVEL" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                        🦸 MARVEL
+                      </option>
+                      <option value="WWE" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                        🤼 WWE
+                      </option>
+                      <option value="STARWARS" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                        ⭐ STARWARS
+                      </option>
+                      <option value="BASKETBALL" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                        🏀 BASKETBALL
+                      </option>
+                      <option value="HUDDLE" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                        🏈 HUDDLE
+                      </option>
+                    </select>
+                    {errors.appName && (
+                      <p style={{ 
+                        color: '#ef4444', 
+                        fontSize: 12, 
+                        margin: '4px 0 0 0' 
+                      }}>
+                        {errors.appName}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label style={{
+                      display: 'block',
+                      fontSize: 14,
+                      fontWeight: 600,
+                      color: '#f3f4f6',
+                      marginBottom: 8
+                    }}>
+                      Job Type
+                    </label>
+                    <select
+                      value={formData.jobType}
+                      onChange={(e) => handleInputChange('jobType', e.target.value as any)}
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        background: 'rgba(255, 255, 255, 0.08)',
+                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                        borderRadius: 8,
+                        color: '#f8f8f8',
+                        fontSize: 14,
+                        outline: 'none',
+                        transition: 'border-color 0.2s',
+                        boxSizing: 'border-box'
+                      }}
+                    >
+                      <option value="" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                        Select job type
+                      </option>
+                      <option value="physical_to_digital" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                        Physical to Digital
+                      </option>
+                      <option value="shiloutte_psd" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                        Shiloutte PSD
+                      </option>
+                      <option value="topps_now" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                        Topps Now
+                      </option>
+                    </select>
+                  </div>
                 </div>
 
                 {/* Filename Prefix */}
