@@ -774,20 +774,12 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
         fileType: cf.file?.type
       })));
       
-      // Prepare files for direct S3 upload using canonical key:
-      // - Physical to Digital -> {APP}/{JOB_ID}/PDFs/{filename}
-      // - Others (images)     -> {APP}/{JOB_ID}/Images/{filename}
+      // Prepare files using backend-provided file_path to ensure the
+      // presigned policy and S3 triggers match exactly (PDFs or images)
       const filesToUpload = convertedFiles.map(({ file, fileInfo, filename }) => {
-        const appName = (jobData?.app_name || '').trim() || 'UNKNOWN_APP';
-        const jobIdValue = (jobData?.job_id || '').toString().trim() || 'UNKNOWN_JOB';
-        const jobType = (jobData?.job_type || '').toString().toLowerCase();
-        const isPdfExt = /\.pdf$/i.test(filename);
-        const folder = jobType === 'physical_to_digital' || isPdfExt ? 'PDFs' : 'Images';
-        const canonicalKey = `${appName}/${jobIdValue}/${folder}/${filename}`;
-        console.log(`📄 Preparing file for direct upload: ${filename} -> ${canonicalKey}`, {
-          original_file_path: fileInfo.file_path
-        });
-        return { file, filePath: canonicalKey };
+        const destinationKey = fileInfo.file_path;
+        console.log(`📄 Preparing file for direct upload: ${filename} -> ${destinationKey}`);
+        return { file, filePath: destinationKey };
       });
       
       console.log(`🗂️ Final S3 keys for direct upload:`, filesToUpload.map(f => f.filePath));
