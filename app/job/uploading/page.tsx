@@ -112,7 +112,7 @@ function JobUploadingContent() {
       setEdrStatus('uploading');
       setEdrError(null);
 
-      const appName = (uploadSession.appName || (jobData as any)?.app_name || '').trim() || 'UNKNOWN_APP';
+      const appName = ((uploadSession.appName || (jobData as any)?.app_name || '').trim() || 'unknown_app').toLowerCase();
       const jobIdValue = (uploadSession.jobId || (jobData as any)?.job_id || jobId || '').toString().trim() || 'UNKNOWN_JOB';
       const s3Key = `${appName}/${jobIdValue}/PDFs/${uploadSession.edrPdfFilename}`;
 

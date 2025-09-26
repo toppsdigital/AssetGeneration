@@ -879,17 +879,13 @@ class ContentPipelineAPI {
     
     console.log(`🔗 Getting presigned URL via /s3-files for: ${urlData.filename} (${urlData.client_method})`);
     
-    // Build folder and filename so final key is {APP}/{job_id}/{RELATIVE_PATH}
-    // Examples:
-    //  - input "BUNT/job_123/PDFs/file.pdf" -> folder: "BUNT/job_123", filename: "PDFs/file.pdf"
-    //  - input "BUNT/PDFs/file.pdf" -> folder: "BUNT", filename: "PDFs/file.pdf" (legacy)
-    const pathParts = urlData.filename.split('/');
-    let folder = pathParts[0] || '';
-    let filename = pathParts.slice(1).join('/');
-    if (pathParts.length >= 3) {
-      // Treat first two segments as folder when a subfolder (e.g., job_id) is present
-      folder = `${pathParts[0]}/${pathParts[1]}`;
-      filename = pathParts.slice(2).join('/');
+    // Build folder and relative filename under uploads root to satisfy backend contract
+    // Folder must be the uploads root: asset_generator/{env}/uploads
+    // Filename must be relative to that root to avoid duplicated prefixes
+    const uploadsRoot = buildS3UploadsPath('').replace(/\/$/, '');
+    let relativeKey = (urlData.filename || '').replace(/^\/+/, '');
+    if (relativeKey.startsWith(`${uploadsRoot}/`)) {
+      relativeKey = relativeKey.slice(uploadsRoot.length + 1);
     }
     
     const response = await fetch(`${this.baseUrl}?operation=s3_upload_files`, {
@@ -899,9 +895,9 @@ class ContentPipelineAPI {
       },
       body: JSON.stringify({
         mode: 'upload',
-        folder: folder,
+        folder: uploadsRoot,
         files: [{
-          filename: filename,
+          filename: relativeKey,
           size: urlData.size || 1048576, // Default size if not provided
           content_type: urlData.content_type || 'application/pdf'
         }]
@@ -935,7 +931,7 @@ class ContentPipelineAPI {
     
     console.log(`✅ Presigned upload instructions generated via /s3-files:`, { 
       filename: urlData.filename,
-      folder: folder,
+      folder: uploadsRoot,
       upload_type: instruction.upload_type,
       method: uploadData.method,
       url_length: uploadData.url.length,
