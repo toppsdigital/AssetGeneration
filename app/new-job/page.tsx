@@ -189,9 +189,10 @@ function NewJobPageContent() {
 
   // Check if all required fields are valid
   const isFormValid = (): boolean => {
+    const requireFilenamePrefix = formData.jobType !== 'shiloutte_psd';
     const basicFieldsValid = !!(
       formData.appName.trim() &&
-      formData.filenamePrefix.trim() &&
+      (!requireFilenamePrefix || formData.filenamePrefix.trim()) &&
       formData.description.trim() &&
       formData.jobType
     );
@@ -219,7 +220,7 @@ function NewJobPageContent() {
     }
 
 
-    if (!formData.filenamePrefix.trim()) {
+    if (formData.jobType !== 'shiloutte_psd' && !formData.filenamePrefix.trim()) {
       newErrors.filenamePrefix = 'Filename prefix is required';
     }
 
@@ -417,7 +418,7 @@ function NewJobPageContent() {
     <div className={styles.container}>
       <PageTitle 
         title="Create New Job"
-        subtitle="Upload physical PDFs and convert them into layered, production-ready digital assets."
+        subtitle="Upload raw assets and convert them into layered, production-ready digital assets."
       />
       <div className={styles.content}>
         <div style={{ maxWidth: 800, margin: '0 auto', padding: '24px' }}>
@@ -568,6 +569,7 @@ function NewJobPageContent() {
                 </div>
 
                 {/* Filename Prefix */}
+                {formData.jobType !== 'shiloutte_psd' && (
                 <div>
                   <label style={{
                     display: 'block',
@@ -616,6 +618,7 @@ function NewJobPageContent() {
                     </p>
                   )}
                 </div>
+                )}
 
                 {/* Description */}
                 <div>
