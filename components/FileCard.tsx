@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 interface FileInfo {
   card_type: string;
   status: string;
+  file_path?: string;
 }
 
 interface ExtractedFile {
@@ -56,6 +57,7 @@ interface FileCardProps {
   jobData?: {
     job_id?: string;
     status?: string; // Add job status to determine when to show file status
+    job_type?: string; // Include job type for conditional UI
   };
   uploadingFiles?: Set<string>;
 }
@@ -241,14 +243,63 @@ const FileCard: React.FC<FileCardProps> = ({
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {/* Original PDF Files */}
         <div>
-          <h4 style={{
-            color: '#f59e0b',
-                    fontSize: 15,
-            fontWeight: 600,
-                    margin: '0 0 10px 0'
-          }}>
-            📄 Original PDF Files ({file.original_files ? Object.keys(file.original_files).length : 0})
-          </h4>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0 0 10px 0' }}>
+            <h4 style={{
+              color: '#f59e0b',
+              fontSize: 15,
+              fontWeight: 600,
+              margin: 0
+            }}>
+              📄 Original Files ({file.original_files ? Object.keys(file.original_files).length : 0})
+            </h4>
+            {(() => {
+              const nonPhysicalJob = (jobData?.job_type || '').toLowerCase() !== 'physical_to_digital';
+              const originalFiles = file.original_files || {};
+              const hasOriginal = Object.keys(originalFiles).length > 0;
+              const allOriginalUploaded = Object.values(originalFiles).every(of => (of.status || '').toLowerCase() === 'uploaded');
+              if (!nonPhysicalJob || !hasOriginal) return null;
+              return allOriginalUploaded ? (
+                <button
+                  onClick={() => {
+                    const jobId = jobData?.job_id || '';
+                    const fileId = file.filename;
+                    const mode = 'original-files';
+                    router.push(`/job/preview?jobId=${encodeURIComponent(jobId)}&fileId=${encodeURIComponent(fileId)}&mode=${mode}`);
+                  }}
+                  style={{
+                    background: 'rgba(245, 158, 11, 0.2)',
+                    border: '1px solid rgba(245, 158, 11, 0.4)',
+                    borderRadius: 4,
+                    color: '#f59e0b',
+                    cursor: 'pointer',
+                    fontSize: 11,
+                    padding: '4px 8px',
+                    transition: 'all 0.2s',
+                    fontWeight: 500
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(245, 158, 11, 0.3)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'rgba(245, 158, 11, 0.2)';
+                  }}
+                >
+                  👁️ Preview
+                </button>
+              ) : (
+                <span style={{
+                  fontSize: 11,
+                  color: '#9ca3af',
+                  padding: '4px 8px',
+                  border: '1px solid rgba(156, 163, 175, 0.3)',
+                  borderRadius: 4,
+                  background: 'rgba(156, 163, 175, 0.1)'
+                }}>
+                  ⏳ Processing...
+                </span>
+              );
+            })()}
+          </div>
           <div style={{
             background: 'rgba(245, 158, 11, 0.1)',
             border: '1px solid rgba(245, 158, 11, 0.3)',
@@ -486,14 +537,63 @@ const FileCard: React.FC<FileCardProps> = ({
               <>
                 {/* Original PDF Files */}
                 <div>
-                  <h4 style={{
-                    color: '#f59e0b',
-                    fontSize: 15,
-                    fontWeight: 600,
-                    margin: '0 0 10px 0'
-                  }}>
-                    📄 Original PDF Files ({file.original_files ? Object.keys(file.original_files).length : 0})
-                  </h4>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0 0 10px 0' }}>
+                    <h4 style={{
+                      color: '#f59e0b',
+                      fontSize: 15,
+                      fontWeight: 600,
+                      margin: 0
+                    }}>
+                      📄 Original Files ({file.original_files ? Object.keys(file.original_files).length : 0})
+                    </h4>
+                    {(() => {
+                      const nonPhysicalJob = (jobData?.job_type || '').toLowerCase() !== 'physical_to_digital';
+                      const originalFiles = file.original_files || {};
+                      const hasOriginal = Object.keys(originalFiles).length > 0;
+                      const allOriginalUploaded = Object.values(originalFiles).every(of => (of.status || '').toLowerCase() === 'uploaded');
+                      if (!nonPhysicalJob || !hasOriginal) return null;
+                      return allOriginalUploaded ? (
+                        <button
+                          onClick={() => {
+                            const jobId = jobData?.job_id || '';
+                            const fileId = file.filename;
+                            const mode = 'original-files';
+                            router.push(`/job/preview?jobId=${encodeURIComponent(jobId)}&fileId=${encodeURIComponent(fileId)}&mode=${mode}`);
+                          }}
+                          style={{
+                            background: 'rgba(245, 158, 11, 0.2)',
+                            border: '1px solid rgba(245, 158, 11, 0.4)',
+                            borderRadius: 4,
+                            color: '#f59e0b',
+                            cursor: 'pointer',
+                            fontSize: 11,
+                            padding: '4px 8px',
+                            transition: 'all 0.2s',
+                            fontWeight: 500
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = 'rgba(245, 158, 11, 0.3)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'rgba(245, 158, 11, 0.2)';
+                          }}
+                        >
+                          👁️ Preview
+                        </button>
+                      ) : (
+                        <span style={{
+                          fontSize: 11,
+                          color: '#9ca3af',
+                          padding: '4px 8px',
+                          border: '1px solid rgba(156, 163, 175, 0.3)',
+                          borderRadius: 4,
+                          background: 'rgba(156, 163, 175, 0.1)'
+                        }}>
+                          ⏳ Processing...
+                        </span>
+                      );
+                    })()}
+                  </div>
                   <div style={{
                     background: 'rgba(245, 158, 11, 0.1)',
                     border: '1px solid rgba(245, 158, 11, 0.3)',
@@ -743,7 +843,7 @@ const FileCard: React.FC<FileCardProps> = ({
                 fontWeight: 600,
                 margin: 0
               }}>
-                🎨 Digital Collectibles ({Object.keys(file.firefly_assets).length})
+                🎨 Final Assets ({Object.keys(file.firefly_assets).length})
               </h4>
               {(() => {
                 // Check if all digital collectibles have "succeeded" or "completed" status (case insensitive)
@@ -751,7 +851,8 @@ const FileCard: React.FC<FileCardProps> = ({
                   asset => ['succeeded', 'completed'].includes(asset.status.toLowerCase())
                 );
                 
-                return allSucceeded ? (
+                const isSilhouetteJob = (jobData?.job_type || '').toLowerCase() === 'shiloutte_psd';
+                return allSucceeded && !isSilhouetteJob ? (
                   <button
                     onClick={() => {
                       // Navigate to preview with simplified parameters
@@ -788,16 +889,19 @@ const FileCard: React.FC<FileCardProps> = ({
                     🎨 Preview
                   </button>
                 ) : (
-                  <span style={{
-                    fontSize: 11, // Reduced from 12
-                    color: '#9ca3af',
-                    padding: '4px 8px', // Reduced padding
-                    border: '1px solid rgba(156, 163, 175, 0.3)',
-                    borderRadius: 4, // Reduced from 6
-                    background: 'rgba(156, 163, 175, 0.1)'
-                  }}>
-                    ⏳ Generating...
-                  </span>
+                  // Hide completely for silhouette jobs; otherwise show generating
+                  !isSilhouetteJob ? (
+                    <span style={{
+                      fontSize: 11, // Reduced from 12
+                      color: '#9ca3af',
+                      padding: '4px 8px', // Reduced padding
+                      border: '1px solid rgba(156, 163, 175, 0.3)',
+                      borderRadius: 4, // Reduced from 6
+                      background: 'rgba(156, 163, 175, 0.1)'
+                    }}>
+                      ⏳ Generating...
+                    </span>
+                  ) : null
                 );
               })()}
             </div>
