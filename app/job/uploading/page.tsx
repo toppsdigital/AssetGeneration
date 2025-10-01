@@ -1066,8 +1066,14 @@ function JobUploadingContent() {
               <div style={{ display: 'grid', gap: '1rem' }}>
                 {(jobData?.content_pipeline_files || []).flatMap((fileGroup: any, groupIndex: number) => 
                   Object.entries(fileGroup.original_files || {})
-                    // If a rerun provided an explicit file set, show only those filenames
-                    .filter(([filename]) => selectedNames.size === 0 || selectedNames.has(filename))
+                    // If a rerun provided an explicit file set, show only selected files.
+                    // Match by sanitized key OR backend-provided original_filename (with diacritics).
+                    .filter(([filename, fileInfo]) => {
+                      if (selectedNames.size === 0) return true;
+                      if (selectedNames.has(filename)) return true;
+                      const originalName = (fileInfo as any)?.original_filename;
+                      return originalName ? selectedNames.has(originalName) : false;
+                    })
                     .map(([filename, fileInfo]: [string, any]) => {
                     const statusInfo = getFileStatus(filename, fileInfo);
                     

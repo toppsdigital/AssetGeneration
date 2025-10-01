@@ -789,27 +789,29 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
       const uploadResults = await withTimeout(
         Promise.allSettled(
           filesToUpload.map(async ({ file, filePath }, index) => {
+            // Use the sanitized filename from convertedFiles to keep keys consistent with backend
+            const displayName = convertedFiles[index]?.filename || file.name;
             try {
               console.log(`🔼 Starting direct upload for ${file.name} -> S3 path: ${filePath}...`);
               
               // Upload directly via our uploadFilesToContentPipeline function
               await uploadFilesToContentPipeline([{ file, filePath }]);
               
-              successfulFiles.push(file.name);
+              successfulFiles.push(displayName);
               console.log(`✅ Successfully uploaded ${file.name}`);
               // Notify UI of successful upload (local UI only - backend will be updated via S3 triggers)
               if (onFileStatusChange) {
-                onFileStatusChange(file.name, 'uploaded');
+                onFileStatusChange(displayName, 'uploaded');
               }
-              return { success: true, filename: file.name };
+              return { success: true, filename: displayName };
             } catch (error) {
               console.error(`❌ File ${file.name} upload failed:`, error);
-              failedFiles.push(file.name);
+              failedFiles.push(displayName);
               // Notify UI of upload failure
               if (onFileStatusChange) {
-                onFileStatusChange(file.name, 'upload-failed');
+                onFileStatusChange(displayName, 'upload-failed');
               }
-              return { success: false, filename: file.name, error };
+              return { success: false, filename: displayName, error };
             }
           })
         ),
@@ -907,7 +909,8 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
         console.log(`📁 Processing file group "${fileObj.filename}" with ${Object.keys(fileObj.original_files).length} original files:`);
         
         Object.entries(fileObj.original_files).forEach(([filename, fileInfo]: [string, any], index) => {
-          const file = fileMap.get(filename);
+          // Resolve the File object by sanitized key OR original_filename (may contain diacritics)
+          const file = fileMap.get(filename) || (fileInfo?.original_filename ? fileMap.get(fileInfo.original_filename) : undefined);
           console.log(`  📄 File ${index + 1}/${Object.keys(fileObj.original_files).length}: "${filename}" - File object ${file ? 'found' : 'NOT FOUND'}`);
           
           if (file) {
@@ -1041,7 +1044,8 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
     console.log('🔍 Using created files:', !!(createdFiles && createdFiles.length > 0));
     
     // Collect files that need uploading (consider available File objects during rerun)
-    const filesToUpload: { filename: string; filePath: string }[] = [];
+    // Support both sanitized keys and original filenames with diacritics
+    const filesToUpload: Array<{ filename: string; original_filename?: string; filePath: string }> = [];
     
     // Debug: log all file statuses
     const allFileStatuses: Record<string, string> = {};
@@ -1072,7 +1076,9 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
           
           // Treat undefined/missing status as pending to support rerun-created files
           const statusValue = fileInfo.status || 'pending';
-          const haveFileObject = availableFileNames.has(filename);
+          // Consider either sanitized key (filename) or backend's original_filename (may include diacritics)
+          const haveFileObject = availableFileNames.has(filename) ||
+                                 (fileInfo.original_filename && availableFileNames.has(fileInfo.original_filename));
           // If we have the File object, upload unless already marked uploaded
           const shouldUploadBecauseWeHaveFile = haveFileObject && statusValue !== 'uploaded';
           const shouldUploadByStatusOnly = (statusValue === 'pending' || statusValue === 'uploading') && !haveFileObject;
@@ -1081,6 +1087,7 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
             console.log(`📤 Adding file to upload queue: ${filename} (status: ${fileInfo.status})`);
             filesToUpload.push({
               filename: filename,
+              original_filename: fileInfo.original_filename,
               filePath: fileInfo.file_path
             });
           } else if (isInUploadingSet) {
@@ -1122,7 +1129,7 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
         const pendingFiles = (window as any).pendingUploadFiles;
         if (pendingFiles && pendingFiles.jobId === jobData.job_id && pendingFiles.files) {
           actualFiles = pendingFiles.files.filter((file: File) =>
-            filesToUpload.some(needed => needed.filename === file.name)
+            filesToUpload.some(needed => needed.filename === file.name || needed.original_filename === file.name)
           );
           console.log(`🚀 Found ${actualFiles.length} File objects for upload:`, actualFiles.map(f => f.name));
         }
@@ -1156,7 +1163,8 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
         pendingFilesJobId: (window as any).pendingUploadFiles?.jobId,
         currentJobId: jobData.job_id,
         availableFileNames: (window as any).pendingUploadFiles?.files?.map((f: File) => f.name) || [],
-        neededFileNames: filesToUpload.map(f => f.filename)
+        neededFileNames: filesToUpload.map(f => f.filename),
+        neededOriginalNames: filesToUpload.map(f => f.original_filename).filter(Boolean)
       });
       
       // Throw error to notify the calling component
