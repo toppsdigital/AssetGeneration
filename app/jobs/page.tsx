@@ -766,9 +766,11 @@ export default function JobsPage() {
                         <div style={{
                           display: 'flex',
                           alignItems: 'center',
-                          justifyContent: 'center'
+                          justifyContent: 'center',
+                          cursor: 'pointer'
                         }}
                           title={job.app_name || 'App'}
+                          onClick={() => viewJobDetails(job)}
                         >
                           <span style={{ fontSize: 16, lineHeight: 1 }}>{getAppIcon(job.app_name)}</span>
                         </div>

@@ -133,18 +133,23 @@ export const AssetCreationForm = ({
     
     const filtered = extractedLayers.filter(layer => {
       const lowerLayer = layer.toLowerCase();
+      const tokens = lowerLayer.split(/[^a-z0-9]+/).filter(Boolean);
       switch(type) {
         case 'wp':
         case 'wp-1of1':
-          return lowerLayer.includes('wp') && !lowerLayer.includes('inv'); // Include wp but exclude wp_inv
+          // Include any 'wp' but exclude 'wp_inv'
+          return (tokens.includes('wp') || lowerLayer.includes('wp')) && !lowerLayer.includes('inv');
         case 'back': 
-          return lowerLayer.startsWith('bk') || lowerLayer.includes('back');
+          // Accept 'bk' or 'back' appearing as tokens anywhere in the name
+          return tokens.includes('bk') || tokens.includes('back');
         case 'base':
         case 'front':
-          return lowerLayer.includes('fr_cmyk') || (lowerLayer.startsWith('fr') && lowerLayer.includes('cmyk'));
+          // Accept any CMYK base regardless of 'fr' prefix
+          return tokens.includes('cmyk') || lowerLayer.includes('fr_cmyk');
         case 'parallel':
         case 'multi-parallel':
-          return lowerLayer.includes('spot') && (lowerLayer.startsWith('fr') || lowerLayer.includes('front'));
+          // Accept any spot layers regardless of 'fr' prefix
+          return tokens.includes('spot') || lowerLayer.includes('spot');
         default:
           return false;
       }
@@ -156,9 +161,69 @@ export const AssetCreationForm = ({
 
   const getSpotLayers = () => {
     const extractedLayers = getExtractedLayers();
-    return extractedLayers.filter(layer => 
-      layer.toLowerCase().includes('spot')
-    );
+    // Return unique canonical spot labels: spot, spot1, spot2, spot3...
+    const spotSet = new Set<string>();
+    extractedLayers.forEach(layer => {
+      const lower = layer.toLowerCase();
+      if (lower.includes('spot')) {
+        const match = lower.match(/spot(\d+)/);
+        if (match && match[1]) {
+          spotSet.add(`spot${match[1]}`);
+        } else {
+          spotSet.add('spot');
+        }
+      }
+    });
+    return Array.from(spotSet).sort();
+  };
+
+  // Build unique canonical options per type for dropdowns
+  const getCanonicalOptionsForType = (type: 'wp' | 'back' | 'base' | 'parallel' | 'multi-parallel' | 'wp-1of1' | 'front'): string[] => {
+    const extractedLayers = getExtractedLayers();
+    const options = new Set<string>();
+
+    extractedLayers.forEach(layer => {
+      const lower = layer.toLowerCase();
+      const tokens = lower.split(/[^a-z0-9]+/).filter(Boolean);
+      switch (type) {
+        case 'back': {
+          if (tokens.includes('bk') || tokens.includes('back')) {
+            options.add('bk');
+          }
+          break;
+        }
+        case 'base':
+        case 'front': {
+          if (tokens.includes('cmyk') || lower.includes('fr_cmyk')) {
+            options.add('cmyk');
+          }
+          break;
+        }
+        case 'parallel':
+        case 'multi-parallel': {
+          if (lower.includes('spot')) {
+            const match = lower.match(/spot(\d+)/);
+            if (match && match[1]) {
+              options.add(`spot${match[1]}`);
+            } else {
+              options.add('spot');
+            }
+          }
+          break;
+        }
+        case 'wp':
+        case 'wp-1of1': {
+          if ((tokens.includes('wp') || lower.includes('wp')) && !lower.includes('inv')) {
+            options.add('wp');
+          }
+          break;
+        }
+        default:
+          break;
+      }
+    });
+
+    return Array.from(options).sort();
   };
 
   const getVfxTextures = () => {
@@ -457,8 +522,8 @@ export const AssetCreationForm = ({
                 if (type === 'front') {
                   // For front type, initialize with no spot pairs - user can add with + button
                   setSpot_color_pairs([]);
-                  const layersForType = getLayersByType(type);
-                  const autoSelectedLayer = layersForType.length === 1 ? layersForType[0] : '';
+                  const canonicalOptions = getCanonicalOptionsForType(type);
+                  const autoSelectedLayer = canonicalOptions.length === 1 ? canonicalOptions[0] : '';
                   const initialConfig = { 
                     chrome: false,
                     oneOfOneWp: false,
@@ -471,8 +536,8 @@ export const AssetCreationForm = ({
                 } else {
                   // For other types (wp, back), clear spot/color pairs
                   setSpot_color_pairs([]);
-                  const layersForType = getLayersByType(type);
-                  const autoSelectedLayer = layersForType.length === 1 ? layersForType[0] : '';
+                  const canonicalOptions = getCanonicalOptionsForType(type);
+                  const autoSelectedLayer = canonicalOptions.length === 1 ? canonicalOptions[0] : '';
                   const initialConfig = { 
                     chrome: false,
                     oneOfOneWp: false,
@@ -520,8 +585,8 @@ export const AssetCreationForm = ({
                 }}>
                   Select Base Layer
                   {(() => {
-                    const layersForType = getLayersByType(currentCardType);
-                    return layersForType.length === 1 ? (
+                    const canonicalOptions = getCanonicalOptionsForType(currentCardType);
+                    return canonicalOptions.length === 1 ? (
                       <span style={{ 
                         fontSize: 12, 
                         color: '#10b981', 
@@ -549,9 +614,9 @@ export const AssetCreationForm = ({
                   }}
                 >
                   <option value="" style={{ background: '#1f2937' }}>Select base layer...</option>
-                  {getLayersByType(currentCardType).map(layer => (
-                    <option key={layer} value={layer} style={{ background: '#1f2937' }}>
-                      {layer}
+                  {getCanonicalOptionsForType(currentCardType).map(opt => (
+                    <option key={opt} value={opt} style={{ background: '#1f2937' }}>
+                      {opt}
                     </option>
                   ))}
                 </select>
@@ -786,8 +851,8 @@ export const AssetCreationForm = ({
               }}>
                 Select Layer
                 {(() => {
-                  const layersForType = getLayersByType(currentCardType);
-                  return layersForType.length === 1 ? (
+                  const canonicalOptions = getCanonicalOptionsForType(currentCardType);
+                  return canonicalOptions.length === 1 ? (
                     <span style={{ 
                       fontSize: 12, 
                       color: '#10b981', 
@@ -815,9 +880,9 @@ export const AssetCreationForm = ({
                 }}
               >
                 <option value="" style={{ background: '#1f2937' }}>Select layer...</option>
-                {getLayersByType(currentCardType).map(layer => (
-                  <option key={layer} value={layer} style={{ background: '#1f2937' }}>
-                    {layer}
+                {getCanonicalOptionsForType(currentCardType).map(opt => (
+                  <option key={opt} value={opt} style={{ background: '#1f2937' }}>
+                    {opt}
                   </option>
                 ))}
               </select>
