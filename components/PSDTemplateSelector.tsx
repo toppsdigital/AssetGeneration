@@ -80,14 +80,40 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
   
   const [spot_color_pairs, setSpot_color_pairs] = useState<SpotColorPair[]>([{ spot: '', color: undefined }]);
 
-  // Auto-select PSD file when only one option is available
+  // Determine topps_now job type for UI behavior
+  const isToppsNow = (
+    ((jobData as any)?.job_type || (mergedJobData as any)?.job_type || (jobData as any)?.app_name || (mergedJobData as any)?.app_name || '')
+      .toString()
+      .toLowerCase()
+  ).includes('topps_now');
+
+  // Auto-select PSD file based on job type
   useEffect(() => {
-    if (physicalJsonFiles.length === 1 && !selectedPhysicalFile && !loadingPhysicalFiles) {
-      const singleFile = physicalJsonFiles[0].name;
-      console.log('🔄 Auto-selecting single PSD file:', singleFile);
-      setSelectedPhysicalFile(singleFile);
+    if (!loadingPhysicalFiles && physicalJsonFiles.length > 0 && !selectedPhysicalFile) {
+      const jobTypeSource = (
+        (jobData as any)?.job_type ||
+        (mergedJobData as any)?.job_type ||
+        (jobData as any)?.app_name ||
+        (mergedJobData as any)?.app_name ||
+        ''
+      )
+        .toString()
+        .toLowerCase();
+
+      let defaultIndex = 0; // default to first
+      if (jobTypeSource.includes('topps_now')) {
+        defaultIndex = Math.min(1, physicalJsonFiles.length - 1); // prefer second if available
+      }
+
+      const chosenFile = physicalJsonFiles[defaultIndex].name;
+      console.log('🔄 Auto-selecting PSD file based on job type:', {
+        jobType: jobTypeSource,
+        defaultIndex,
+        chosenFile,
+      });
+      setSelectedPhysicalFile(chosenFile);
     }
-  }, [physicalJsonFiles, selectedPhysicalFile, loadingPhysicalFiles]);
+  }, [physicalJsonFiles, selectedPhysicalFile, loadingPhysicalFiles, jobData?.job_type, mergedJobData?.job_type, jobData?.app_name, mergedJobData?.app_name]);
 
   // Download JSON when file is selected
   useEffect(() => {
@@ -152,11 +178,17 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
       const data = await response.json();
       console.log('📁 Physical PSD files response:', data);
       
-      const physicalFiles = (data.files || []).map((file: any) => ({
-        name: file.file_name || file.name || '',
-        lastModified: null,
-        json_url: file.json_url
-      }));
+      const physicalFiles = (data.files || []).map((file: any) => {
+        const derivedNameFromUrl = (file.json_url || '')
+          .toString()
+          .split('/')
+          .pop() || '';
+        return {
+          name: file.file_name || file.name || derivedNameFromUrl,
+          lastModified: null,
+          json_url: file.json_url
+        };
+      });
       
       console.log('🎯 Formatted physical JSON files:', physicalFiles);
       setPhysicalJsonFiles(physicalFiles);
@@ -1077,15 +1109,15 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
 
         {/* Configuration Sections */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {/* PSD File Selection */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
+          {/* PSD File Display */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
             <label style={{
               fontSize: 16,
               fontWeight: 600,
               color: '#f8f8f8',
-              minWidth: 120
+              minWidth: 60
             }}>
-              Select PSD:
+              PSD:
             </label>
             {loadingPhysicalFiles ? (
               <div style={{
@@ -1112,41 +1144,24 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
                 </span>
               </div>
             ) : (
-              <select
-                value={selectedPhysicalFile}
-                onChange={(e) => setSelectedPhysicalFile(e.target.value)}
-                disabled={loadingPhysicalFiles}
-                style={{
-                  flex: 1,
-                  maxWidth: 400,
-                  padding: '12px 16px',
-                  background: 'rgba(255, 255, 255, 0.08)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  borderRadius: 8,
-                  color: '#f8f8f8',
-                  fontSize: 14,
-                  outline: 'none',
-                  transition: 'border-color 0.2s',
-                  boxSizing: 'border-box'
-                }}
-              >
-                <option value="" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                  {physicalJsonFiles.length === 1 ? 'Auto-selected PSD file...' : 'Select PSD file...'}
-                </option>
-                {physicalJsonFiles.map((file, index) => {
-                  const filename = file.name.split('/').pop() || file.name;
+              <div style={{
+                flex: 1,
+                maxWidth: 400,
+                padding: '12px 16px',
+                background: 'rgba(255, 255, 255, 0.08)',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                borderRadius: 8,
+                color: '#f8f8f8',
+                fontSize: 14,
+                boxSizing: 'border-box'
+              }}>
+                {(() => {
+                  if (!selectedPhysicalFile) return '—';
+                  const filename = selectedPhysicalFile.split('/').pop() || selectedPhysicalFile;
                   const displayName = filename.replace('.json', '');
-                  return (
-                    <option 
-                      key={index} 
-                      value={file.name} 
-                      style={{ background: '#1f2937', color: '#f8f8f8' }}
-                    >
-                      {displayName}
-                    </option>
-                  );
-                })}
-              </select>
+                  return displayName;
+                })()}
+              </div>
             )}
           </div>
 
@@ -1235,6 +1250,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
           await addAssetWithConfig({ ...config, id: ensuredId }, spot_color_pairs_from_form);
         }}
         onResetConfig={resetCurrentConfig}
+        isToppsNow={isToppsNow}
       />
     </>
   );

@@ -37,6 +37,7 @@ interface AssetCreationFormProps {
   editingAsset: AssetConfig | null;
   onAddAsset: (config: AssetConfig, spot_color_pairs: SpotColorPair[]) => Promise<void>;
   onResetConfig: () => void;
+  isToppsNow?: boolean;
 }
 
 
@@ -52,7 +53,8 @@ export const AssetCreationForm = ({
   editingAssetId,
   editingAsset,
   onAddAsset,
-  onResetConfig
+  onResetConfig,
+  isToppsNow = false
 }: AssetCreationFormProps) => {
   // State management
   const [currentCardType, setCurrentCardType] = useState<'wp' | 'back' | 'base' | 'parallel' | 'multi-parallel' | 'wp-1of1' | 'front' | null>(null);
@@ -235,7 +237,11 @@ export const AssetCreationForm = ({
     if (vfxGroup && vfxGroup.children) {
       return vfxGroup.children
         .map((child: any) => child.name || 'Unnamed Texture')
-        .filter((textureName: string) => !textureName.toLowerCase().includes('wpcv')); // Filter out "wpcv"
+        .filter((textureName: string) => {
+          const lower = (textureName || '').toLowerCase();
+          // Filter out "wpcv" and items that start with "spot texture"
+          return !lower.includes('wpcv') && !lower.startsWith('spot texture');
+        });
     }
     return [];
   };
@@ -340,20 +346,20 @@ export const AssetCreationForm = ({
     }
   }, [currentCardType, currentConfig.layer, currentConfig.vfx, currentConfig.chrome, currentConfig.oneOfOneWp, spot_color_pairs, editingAssetId, getConfiguredAssets, generateAssetName]);
 
-  // Auto-select wp_inv layer when VFX or chrome is enabled and only one wp_inv layer exists
+  // Auto-select wp_inv layer when VFX or chrome is enabled and only one wp_inv layer exists (not required for topps_now)
   useEffect(() => {
     if (currentCardType && !editingAssetId) {
       const hasVfxOrChrome = currentConfig.vfx || currentConfig.chrome;
       const wpInvLayers = getWpInvLayers();
       
-      if (hasVfxOrChrome && wpInvLayers.length === 1 && !currentConfig.wp_inv_layer) {
+      if (!isToppsNow && hasVfxOrChrome && wpInvLayers.length === 1 && !currentConfig.wp_inv_layer) {
         setCurrentConfig(prev => ({ ...prev, wp_inv_layer: wpInvLayers[0] }));
       } else if (!hasVfxOrChrome && currentConfig.wp_inv_layer) {
         // Clear wp_inv_layer if VFX and chrome are both disabled
         setCurrentConfig(prev => ({ ...prev, wp_inv_layer: '' }));
       }
     }
-  }, [currentCardType, currentConfig.vfx, currentConfig.chrome, editingAssetId, getWpInvLayers]);
+  }, [currentCardType, currentConfig.vfx, currentConfig.chrome, editingAssetId, getWpInvLayers, isToppsNow]);
 
   const handleAddAsset = async () => {
     console.log('🔍 handleAddAsset called:', { 
@@ -890,7 +896,7 @@ export const AssetCreationForm = ({
           )}
 
           {/* VFX Texture Selection */}
-          {(currentCardType === 'front' || currentCardType === 'base') && getWpInvLayers().length > 0 && (
+          {(currentCardType === 'front' || currentCardType === 'base') && (isToppsNow || getWpInvLayers().length > 0) && (
             <div>
               <label style={{
                 display: 'block',
@@ -900,7 +906,7 @@ export const AssetCreationForm = ({
                 marginBottom: 8
               }}>
                 Select VFX Texture
-                {getWpInvLayers().length === 1 && (
+              {!isToppsNow && getWpInvLayers().length === 1 && (
                   <span style={{ 
                     fontSize: 12, 
                     color: '#9ca3af', 
@@ -933,7 +939,7 @@ export const AssetCreationForm = ({
               </select>
               
               {/* WP_INV Layer Selection - Only show when VFX or chrome is enabled and there are multiple wp_inv layers */}
-              {(currentConfig.vfx || currentConfig.chrome) && getWpInvLayers().length > 1 && (
+              {!isToppsNow && (currentConfig.vfx || currentConfig.chrome) && getWpInvLayers().length > 1 && (
                 <div style={{ marginTop: 12 }}>
                   <label style={{
                     display: 'block',
@@ -1134,7 +1140,7 @@ export const AssetCreationForm = ({
                   case 'wp-1of1':
                     if (!currentConfig.layer) {
                       validationMessage = currentCardType === 'front' ? 'Select base layer' : 'Select layer';
-                    } else if ((currentConfig.vfx || currentConfig.chrome) && getWpInvLayers().length > 1 && !currentConfig.wp_inv_layer) {
+                    } else if (!isToppsNow && (currentConfig.vfx || currentConfig.chrome) && getWpInvLayers().length > 1 && !currentConfig.wp_inv_layer) {
                       // Only require wp_inv layer selection if VFX/chrome is enabled and there are multiple layers
                       validationMessage = 'Select wp_inv layer';
                     } else {
@@ -1161,7 +1167,7 @@ export const AssetCreationForm = ({
                       // For original parallel/multi-parallel cards, always require spot colors
                       if (validPairs.length === 0 && currentCardType !== 'front') {
                         validationMessage = 'Select at least one spot layer and color';
-                      } else if ((currentConfig.vfx || currentConfig.chrome) && getWpInvLayers().length > 1 && !currentConfig.wp_inv_layer) {
+                      } else if (!isToppsNow && (currentConfig.vfx || currentConfig.chrome) && getWpInvLayers().length > 1 && !currentConfig.wp_inv_layer) {
                         // Only require wp_inv layer selection if VFX/chrome is enabled and there are multiple layers
                         validationMessage = 'Select wp_inv layer';
                       } else {
