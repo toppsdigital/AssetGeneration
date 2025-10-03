@@ -112,7 +112,7 @@ function JobUploadingContent() {
       setEdrStatus('uploading');
       setEdrError(null);
 
-      const appName = (uploadSession.appName || (jobData as any)?.app_name || '').trim() || 'UNKNOWN_APP';
+      const appName = ((uploadSession.appName || (jobData as any)?.app_name || '').trim() || 'unknown_app').toLowerCase();
       const jobIdValue = (uploadSession.jobId || (jobData as any)?.job_id || jobId || '').toString().trim() || 'UNKNOWN_JOB';
       const s3Key = `${appName}/${jobIdValue}/PDFs/${uploadSession.edrPdfFilename}`;
 
@@ -679,6 +679,9 @@ function JobUploadingContent() {
   
   // Use upload engine's uploaded count for progress (more reliable)
   const progressPercentage = totalFiles > 0 ? (uploadedFiles / totalFiles) * 100 : 0;
+
+  // Determine if this job uses images instead of PDFs
+  const isImagesJob = (jobData?.job_type || '').toLowerCase() !== 'physical_to_digital';
   
   console.log('📊 Progress calculation (using local file statuses):', {
     createdFilesLength: jobData?.content_pipeline_files?.length || 0,
@@ -1045,7 +1048,7 @@ function JobUploadingContent() {
                 fontSize: '1.25rem',
                 fontWeight: '700'
               }}>
-                PDF Files
+                {isImagesJob ? 'Image Files' : 'PDF Files'}
               </h4>
               <div style={{
                 background: 'rgba(255, 255, 255, 0.1)',
@@ -1063,8 +1066,14 @@ function JobUploadingContent() {
               <div style={{ display: 'grid', gap: '1rem' }}>
                 {(jobData?.content_pipeline_files || []).flatMap((fileGroup: any, groupIndex: number) => 
                   Object.entries(fileGroup.original_files || {})
-                    // If a rerun provided an explicit file set, show only those filenames
-                    .filter(([filename]) => selectedNames.size === 0 || selectedNames.has(filename))
+                    // If a rerun provided an explicit file set, show only selected files.
+                    // Match by sanitized key OR backend-provided original_filename (with diacritics).
+                    .filter(([filename, fileInfo]) => {
+                      if (selectedNames.size === 0) return true;
+                      if (selectedNames.has(filename)) return true;
+                      const originalName = (fileInfo as any)?.original_filename;
+                      return originalName ? selectedNames.has(originalName) : false;
+                    })
                     .map(([filename, fileInfo]: [string, any]) => {
                     const statusInfo = getFileStatus(filename, fileInfo);
                     
@@ -1114,7 +1123,7 @@ function JobUploadingContent() {
                               alignItems: 'center',
                               gap: '0.5rem'
                             }}>
-                              <span>{fileInfo.card_type ? `${fileInfo.card_type} side` : 'PDF file'}</span>
+                              <span>{fileInfo.card_type ? `${fileInfo.card_type} side` : (isImagesJob ? 'Image file' : 'PDF file')}</span>
                               {fileGroup.filename && (
                                 <>
                                   <span>•</span>

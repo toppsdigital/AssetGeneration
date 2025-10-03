@@ -253,12 +253,13 @@ export const getAppIcon = (appName: string | undefined): string => {
   
   const lowerAppName = appName.toLowerCase();
   
-  if (lowerAppName.includes('bunt')) return '⚾';
-  if (lowerAppName.includes('slam')) return '🤼';
+  // Match New Job form options and common brand names
+  if (lowerAppName.includes('baseball') || lowerAppName.includes('bunt')) return '⚾';
+  if (lowerAppName.includes('basketball') || lowerAppName.includes('nba')) return '🏀';
+  if (lowerAppName.includes('wwe') || lowerAppName.includes('slam')) return '🤼';
   if (lowerAppName.includes('disney')) return '🏰';
   if (lowerAppName.includes('starwars') || lowerAppName.includes('star wars')) return '⭐';
   if (lowerAppName.includes('marvel')) return '🦸';
-  if (lowerAppName.includes('nba')) return '🏀';
   if (lowerAppName.includes('nfl') || lowerAppName.includes('huddle')) return '🏈';
   
   // Default app icon

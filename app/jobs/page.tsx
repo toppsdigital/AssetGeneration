@@ -173,15 +173,43 @@ export default function JobsPage() {
   
 
   const getJobDisplayName = (job: JobData) => {
-    const parts = [];
-    
-    if (job.app_name) parts.push(job.app_name);
-    if (job.filename_prefix) parts.push(job.filename_prefix);
-    
-    const displayName = parts.length > 0 ? parts.join(' - ') : 'Untitled Job';
-    const appIcon = getAppIcon(job.app_name);
-    
-    return `${appIcon} ${displayName}`;
+    // Display only the app name as the title (remove filename_prefix)
+    const displayName = job.app_name ? job.app_name : 'Untitled Job';
+    return displayName;
+  };
+
+  const getJobTypeBadgeMeta = (jobTypeRaw: string | undefined) => {
+    const jobType = (jobTypeRaw || '').toLowerCase();
+    switch (jobType) {
+      case 'physical_to_digital':
+        return {
+          label: 'Physical to Digital',
+          color: '#3b82f6',
+          bg: 'rgba(59, 130, 246, 0.15)',
+          border: '1px solid rgba(59, 130, 246, 0.4)'
+        };
+      case 'shiloutte_psd':
+        return {
+          label: 'Shiloutte PSD',
+          color: '#f59e0b',
+          bg: 'rgba(245, 158, 11, 0.15)',
+          border: '1px solid rgba(245, 158, 11, 0.4)'
+        };
+      case 'topps_now':
+        return {
+          label: 'Topps Now',
+          color: '#10b981',
+          bg: 'rgba(16, 185, 129, 0.15)',
+          border: '1px solid rgba(16, 185, 129, 0.4)'
+        };
+      default:
+        return {
+          label: jobTypeRaw || 'Unknown',
+          color: '#9ca3af',
+          bg: 'rgba(156, 163, 175, 0.15)',
+          border: '1px solid rgba(156, 163, 175, 0.4)'
+        };
+    }
   };
 
   const getStatusColor = (status: string | undefined) => {
@@ -734,6 +762,18 @@ export default function JobsPage() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+                        {/* App logo/avatar matching New Job form emoji */}
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer'
+                        }}
+                          title={job.app_name || 'App'}
+                          onClick={() => viewJobDetails(job)}
+                        >
+                          <span style={{ fontSize: 16, lineHeight: 1 }}>{getAppIcon(job.app_name)}</span>
+                        </div>
                         <h3 style={{ 
                           fontSize: '1.2rem', 
                           fontWeight: 600, 
@@ -742,6 +782,28 @@ export default function JobsPage() {
                         }}>
                           {getJobDisplayName(job)}
                         </h3>
+                        {(() => {
+                          const jobType = (job as any)?.job_type as string | undefined;
+                          if (!jobType) return null;
+                          const meta = getJobTypeBadgeMeta(jobType);
+                          return (
+                            <span
+                              title={meta.label}
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 600,
+                                padding: '3px 8px',
+                                borderRadius: 6,
+                                color: meta.color,
+                                background: meta.bg,
+                                border: meta.border,
+                                letterSpacing: '0.02em'
+                              }}
+                            >
+                              {meta.label}
+                            </span>
+                          );
+                        })()}
                       </div>
                       <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
                         <span style={{ color: '#9ca3af', fontSize: 14 }}>

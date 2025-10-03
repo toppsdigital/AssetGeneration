@@ -22,7 +22,7 @@ function JobPreviewPageContent() {
   // New URL format parameters
   let jobId = searchParams.get('jobId');
   let fileId = searchParams.get('fileId'); 
-  let mode = searchParams.get('mode'); // 'extracted-assets' or 'digital-assets'
+  let mode = searchParams.get('mode'); // 'extracted-assets' | 'digital-assets' | 'original-files'
   
   // Legacy URL format parameters (for backward compatibility)
   const legacyJobPath = searchParams.get('jobPath');
@@ -179,12 +179,50 @@ function JobPreviewPageContent() {
       }).filter(Boolean) as string[];
       
       modeDisplayName = 'Digital Collectibles';
+    } else if (mode === 'original-files') {
+      // Show thumbnails for original input files when available
+      const originalFiles = targetFile.original_files || {};
+      const rawAssets = Object.values(originalFiles).flat().filter(Boolean);
+      const assetPaths = rawAssets.map((asset: any) => {
+        if (typeof asset === 'string') {
+          return asset;
+        } else if (asset && typeof asset === 'object' && asset.file_path) {
+          return asset.file_path;
+        } else {
+          console.warn(`🚫 [Preview] Invalid original file format:`, asset);
+          return null;
+        }
+      }).filter(Boolean) as string[];
+
+      const imageExtensions = [
+        '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', 
+        '.tif', '.tiff', '.svg', '.ico', '.avif', '.heic', '.heif'
+      ];
+      const imageAssets = assetPaths
+        .filter((filePath: any): filePath is string => {
+          if (typeof filePath !== 'string' || !filePath.trim()) return false;
+          const filename = filePath.split('/').pop() || filePath;
+          const extension = filename.toLowerCase().substring(filename.lastIndexOf('.'));
+          return imageExtensions.includes(extension);
+        })
+        .map((filePath: string): AssetItem => {
+          const filename = filePath.split('/').pop() || filePath;
+          const isTiff = filename.toLowerCase().endsWith('.tif') || filename.toLowerCase().endsWith('.tiff');
+          return { filePath, filename, isTiff };
+        });
+
+      return {
+        fileData: targetFile,
+        assets: imageAssets,
+        displayName: `${targetFile.filename} • Original Files`,
+        error: imageAssets.length === 0 ? 'No image files found in original files' : null
+      };
     } else {
       return {
         fileData: targetFile,
         assets: [],
         displayName: '',
-        error: `Invalid mode "${mode}". Must be "extracted-assets" or "digital-assets"`
+        error: `Invalid mode "${mode}". Must be "extracted-assets", "digital-assets" or "original-files"`
       };
     }
 
@@ -400,7 +438,7 @@ function JobPreviewPageContent() {
   return (
     <>
       <Head>
-        <title>Preview {mode === 'extracted-assets' ? 'Extracted Layers' : 'Digital Collectibles'}</title>
+        <title>Preview {mode === 'extracted-assets' ? 'Extracted Layers' : mode === 'original-files' ? 'Original Files' : 'Digital Collectibles'}</title>
       </Head>
       <div style={{ 
         minHeight: '100vh',

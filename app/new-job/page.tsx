@@ -11,6 +11,7 @@ import { getEnvironmentConfig } from '../../utils/environment';
 
 interface NewJobFormData {
   appName: string;
+  jobType?: 'physical_to_digital' | 'shiloutte_psd' | 'topps_now' | '';
   filenamePrefix: string;
   description: string;
   uploadFolder: string;
@@ -39,6 +40,7 @@ function NewJobPageContent() {
   // Initialize form data - pre-fill if this is a re-run
   const [formData, setFormData] = useState<NewJobFormData>({
     appName: isRerun ? (searchParams.get('appName') || '') : '',
+    jobType: '',
     filenamePrefix: isRerun ? (searchParams.get('filenamePrefix') || '') : '',
     description: isRerun ? (searchParams.get('description') || '') : '',
     uploadFolder: '',
@@ -125,6 +127,44 @@ function NewJobPageContent() {
     }
   };
 
+  // Handle images folder selection for shiloutte_psd / topps_now
+  const handleImagesFolderSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (files && files.length > 0) {
+      const firstFile = files[0];
+      const folderPath = firstFile.webkitRelativePath.split('/')[0];
+
+      const allowed = new Set(['image/tiff', 'image/tif', 'image/png', 'image/jpeg']);
+
+      const imageFiles = Array.from(files).filter(file => {
+        const lower = file.name.toLowerCase();
+        const isAllowedExt = lower.endsWith('.tif') || lower.endsWith('.tiff') || lower.endsWith('.png') || lower.endsWith('.jpg') || lower.endsWith('.jpeg');
+        const isAllowedType = allowed.has(file.type);
+        return isAllowedExt || isAllowedType;
+      });
+
+      const dataTransfer = new DataTransfer();
+      imageFiles.forEach(file => dataTransfer.items.add(file));
+
+      setFormData(prev => ({
+        ...prev,
+        uploadFolder: folderPath,
+        selectedFiles: dataTransfer.files
+      }));
+
+      setIsFileListExpanded(false);
+
+      if (errors.uploadFolder) {
+        setErrors(prev => ({
+          ...prev,
+          uploadFolder: ''
+        }));
+      }
+    } else {
+      setIsFileListExpanded(false);
+    }
+  };
+
   // Handle EDR file selection (single PDF)
   const handleEdrFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files && event.target.files[0];
@@ -149,14 +189,17 @@ function NewJobPageContent() {
 
   // Check if all required fields are valid
   const isFormValid = (): boolean => {
+    const requireFilenamePrefix = formData.jobType !== 'shiloutte_psd';
     const basicFieldsValid = !!(
       formData.appName.trim() &&
-      formData.filenamePrefix.trim() &&
-      formData.description.trim()
+      (!requireFilenamePrefix || formData.filenamePrefix.trim()) &&
+      formData.description.trim() &&
+      formData.jobType
     );
     
-    // Both new jobs and reruns require file selection before submission
-    const filesValid = !!(
+    // Require files only after a job type is chosen
+    const needsFiles = !!formData.jobType;
+    const filesValid = !needsFiles || !!(
       formData.uploadFolder.trim() &&
       formData.selectedFiles &&
       formData.selectedFiles.length > 0
@@ -172,8 +215,12 @@ function NewJobPageContent() {
     if (!formData.appName.trim()) {
       newErrors.appName = 'App name is required';
     }
+    if (!formData.jobType) {
+      (newErrors as any).jobType = 'Job type is required';
+    }
 
-    if (!formData.filenamePrefix.trim()) {
+
+    if (formData.jobType !== 'shiloutte_psd' && !formData.filenamePrefix.trim()) {
       newErrors.filenamePrefix = 'Filename prefix is required';
     }
 
@@ -181,8 +228,8 @@ function NewJobPageContent() {
       newErrors.description = 'Description is required';
     }
 
-    // Require upload folder for both new jobs and reruns
-    if (!formData.uploadFolder.trim()) {
+    // Require upload folder when a job type is chosen
+    if (formData.jobType && !formData.uploadFolder.trim()) {
       newErrors.uploadFolder = 'Upload folder is required';
     }
 
@@ -193,8 +240,10 @@ function NewJobPageContent() {
   // Create or rerun job using centralized data store
   const createJob = async (jobData: {
     appName: string;
+    jobType?: 'physical_to_digital' | 'shiloutte_psd' | 'topps_now';
     filenamePrefix: string;
     pdf_files?: string[];
+    image_files?: string[];
     files?: string[]; // grouped base names (without _FR/_BK)
     original_files_total_count?: number;
     edr_pdf_filename?: string;
@@ -205,8 +254,10 @@ function NewJobPageContent() {
       // Use identical payload shape for create and rerun (server computes groups from pdf_files)
       const jobPayload: any = {
         app_name: jobData.appName,
+        job_type: jobData.jobType,
         filename_prefix: jobData.filenamePrefix,
         pdf_files: jobData.pdf_files,
+        image_files: jobData.image_files,
         edr_pdf_filename: jobData.edr_pdf_filename,
         description: jobData.description,
         ...(jobData.skip_manual_configuration ? { skip_manual_configuration: true } : {})
@@ -257,28 +308,52 @@ function NewJobPageContent() {
       console.log('Starting job creation process...');
 
       if (!formData.selectedFiles || formData.selectedFiles.length === 0) {
-        throw new Error('Please select a folder containing PDF files');
+        if (formData.jobType === 'physical_to_digital') {
+          throw new Error('Please select a folder containing PDF files');
+        } else {
+          throw new Error('Please select an images folder (.tiff/.png/.jpg)');
+        }
       }
 
-      // Derive pdf_files from selected files (_FR/_BK only, deduped by name)
-      const pdfFilesSet = new Set<string>();
-      Array.from(formData.selectedFiles).forEach(file => {
-        const name = file.name;
-        if (/_FR\.pdf$/i.test(name) || /_BK\.pdf$/i.test(name)) {
-          pdfFilesSet.add(name);
-        }
-      });
-      const pdfFiles = Array.from(pdfFilesSet);
+      let pdfFiles: string[] | undefined = undefined;
+      let imageFiles: string[] | undefined = undefined;
 
-      if (pdfFiles.length === 0) {
-        throw new Error('No valid _FR/_BK PDF files found in the selected folder');
+      if (formData.jobType === 'physical_to_digital') {
+        // Derive pdf_files from selected files (_FR/_BK only, deduped by name)
+        const pdfFilesSet = new Set<string>();
+        Array.from(formData.selectedFiles).forEach(file => {
+          const name = file.name;
+          if (/_FR\.pdf$/i.test(name) || /_BK\.pdf$/i.test(name)) {
+            pdfFilesSet.add(name);
+          }
+        });
+        pdfFiles = Array.from(pdfFilesSet);
+
+        if (pdfFiles.length === 0) {
+          throw new Error('No valid _FR/_BK PDF files found in the selected folder');
+        }
+      } else {
+        // Images flow: collect allowed image filenames
+        const allowedImageNames: string[] = [];
+        Array.from(formData.selectedFiles).forEach(file => {
+          const lower = file.name.toLowerCase();
+          if (lower.endsWith('.tif') || lower.endsWith('.tiff') || lower.endsWith('.png') || lower.endsWith('.jpg') || lower.endsWith('.jpeg')) {
+            allowedImageNames.push(file.name);
+          }
+        });
+        if (allowedImageNames.length === 0) {
+          throw new Error('No valid image files (.tiff/.png/.jpg) found in the selected folder');
+        }
+        imageFiles = allowedImageNames;
       }
 
       // Prepare job data for API call
       const jobPayload = {
         appName: formData.appName,
+        ...(formData.jobType ? { jobType: formData.jobType } : {}),
         filenamePrefix: formData.filenamePrefix,
         pdf_files: pdfFiles,
+        image_files: imageFiles,
         edr_pdf_filename: formData.edrPdfFilename || undefined,
         description: formData.description,
         skip_manual_configuration: formData.skipManualConfiguration ? true : undefined
@@ -343,7 +418,7 @@ function NewJobPageContent() {
     <div className={styles.container}>
       <PageTitle 
         title="Create New Job"
-        subtitle="Upload physical PDFs and convert them into layered, production-ready digital assets."
+        subtitle="Upload raw assets and convert them into layered, production-ready digital assets."
       />
       <div className={styles.content}>
         <div style={{ maxWidth: 800, margin: '0 auto', padding: '24px' }}>
@@ -377,80 +452,124 @@ function NewJobPageContent() {
               marginBottom: 24
             }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-                {/* App */}
-                <div>
-                  <label style={{
-                    display: 'block',
-                    fontSize: 14,
-                    fontWeight: 600,
-                    color: '#f3f4f6',
-                    marginBottom: 8
-                  }}>
-                    App *
-                  </label>
-                  <select
-                    value={formData.appName}
-                    onChange={(e) => handleInputChange('appName', e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '12px 16px',
-                      background: 'rgba(255, 255, 255, 0.08)',
-                      border: `1px solid ${errors.appName ? '#ef4444' : 'rgba(255, 255, 255, 0.2)'}`,
-                      borderRadius: 8,
-                      color: '#f8f8f8',
+                {/* App + Job Type (side-by-side) */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                  <div>
+                    <label style={{
+                      display: 'block',
                       fontSize: 14,
-                      outline: 'none',
-                      transition: 'border-color 0.2s',
-                      boxSizing: 'border-box'
-                    }}
-                    onFocus={(e) => {
-                      if (!errors.appName) {
-                        e.target.style.borderColor = '#60a5fa';
-                      }
-                    }}
-                    onBlur={(e) => {
-                      if (!errors.appName) {
-                        e.target.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-                      }
-                    }}
-                  >
-                    <option value="" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                      Select an app...
-                    </option>
-                    <option value="BASEBALL" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                      ⚾ BASEBALL
-                    </option>
-                    <option value="DISNEY" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                      🏰 DISNEY
-                    </option>
-                    <option value="MARVEL" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                      🦸 MARVEL
-                    </option>
-                    <option value="WWE" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                      🤼 WWE
-                    </option>
-                    <option value="STARWARS" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                      ⭐ STARWARS
-                    </option>
-                    <option value="BASKETBALL" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                      🏀 BASKETBALL
-                    </option>
-                    <option value="HUDDLE" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                      🏈 HUDDLE
-                    </option>
-                  </select>
-                  {errors.appName && (
-                    <p style={{ 
-                      color: '#ef4444', 
-                      fontSize: 12, 
-                      margin: '4px 0 0 0' 
+                      fontWeight: 600,
+                      color: '#f3f4f6',
+                      marginBottom: 8
                     }}>
-                      {errors.appName}
-                    </p>
-                  )}
+                      App *
+                    </label>
+                    <select
+                      value={formData.appName}
+                      onChange={(e) => handleInputChange('appName', e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        background: 'rgba(255, 255, 255, 0.08)',
+                        border: `1px solid ${errors.appName ? '#ef4444' : 'rgba(255, 255, 255, 0.2)'}`,
+                        borderRadius: 8,
+                        color: '#f8f8f8',
+                        fontSize: 14,
+                        outline: 'none',
+                        transition: 'border-color 0.2s',
+                        boxSizing: 'border-box'
+                      }}
+                      onFocus={(e) => {
+                        if (!errors.appName) {
+                          e.target.style.borderColor = '#60a5fa';
+                        }
+                      }}
+                      onBlur={(e) => {
+                        if (!errors.appName) {
+                          e.target.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                        }
+                      }}
+                    >
+                      <option value="" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                        Select an app...
+                      </option>
+                      <option value="BASEBALL" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                        ⚾ BASEBALL
+                      </option>
+                      <option value="DISNEY" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                        🏰 DISNEY
+                      </option>
+                      <option value="MARVEL" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                        🦸 MARVEL
+                      </option>
+                      <option value="WWE" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                        🤼 WWE
+                      </option>
+                      <option value="STARWARS" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                        ⭐ STARWARS
+                      </option>
+                      <option value="BASKETBALL" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                        🏀 BASKETBALL
+                      </option>
+                      <option value="HUDDLE" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                        🏈 HUDDLE
+                      </option>
+                    </select>
+                    {errors.appName && (
+                      <p style={{ 
+                        color: '#ef4444', 
+                        fontSize: 12, 
+                        margin: '4px 0 0 0' 
+                      }}>
+                        {errors.appName}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label style={{
+                      display: 'block',
+                      fontSize: 14,
+                      fontWeight: 600,
+                      color: '#f3f4f6',
+                      marginBottom: 8
+                    }}>
+                      Job Type
+                    </label>
+                    <select
+                      value={formData.jobType}
+                      onChange={(e) => handleInputChange('jobType', e.target.value as any)}
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        background: 'rgba(255, 255, 255, 0.08)',
+                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                        borderRadius: 8,
+                        color: '#f8f8f8',
+                        fontSize: 14,
+                        outline: 'none',
+                        transition: 'border-color 0.2s',
+                        boxSizing: 'border-box'
+                      }}
+                    >
+                      <option value="" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                        Select job type
+                      </option>
+                      <option value="physical_to_digital" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                        Physical to Digital
+                      </option>
+                      <option value="shiloutte_psd" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                        Shiloutte PSD
+                      </option>
+                      <option value="topps_now" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                        Topps Now
+                      </option>
+                    </select>
+                  </div>
                 </div>
 
                 {/* Filename Prefix */}
+                {formData.jobType !== 'shiloutte_psd' && (
                 <div>
                   <label style={{
                     display: 'block',
@@ -499,6 +618,7 @@ function NewJobPageContent() {
                     </p>
                   )}
                 </div>
+                )}
 
                 {/* Description */}
                 <div>
@@ -551,8 +671,9 @@ function NewJobPageContent() {
                   )}
                 </div>
 
-                {/* Select PDF Folder to Upload */}
-                <div>
+              {/* Select Folder to Upload (conditional) */}
+              {formData.jobType === 'physical_to_digital' && (
+              <div>
                   <label style={{
                     display: 'block',
                     fontSize: 14,
@@ -653,9 +774,96 @@ function NewJobPageContent() {
                     </p>
                   )}
                 </div>
+              )}
+
+              {(formData.jobType === 'shiloutte_psd' || formData.jobType === 'topps_now') && (
+              <div>
+                <label style={{
+                  display: 'block',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: '#f3f4f6',
+                  marginBottom: 8
+                }}>
+                  Select Images Folder to Upload (.tiff/.png/.jpg)
+                </label>
+                <input
+                  type="file"
+                  ref={(input) => {
+                    if (input) {
+                      (input as any).webkitdirectory = true;
+                      (input as any).directory = true;
+                    }
+                  }}
+                  onChange={handleImagesFolderSelect}
+                  style={{ display: 'none' }}
+                  id="images-folder-input"
+                  accept=".tif,.tiff,.png,.jpg,.jpeg,image/*"
+                  multiple
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const input = document.getElementById('images-folder-input') as HTMLInputElement;
+                    input?.click();
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    border: `1px solid ${errors.uploadFolder ? '#ef4444' : 'rgba(255, 255, 255, 0.2)'}`,
+                    borderRadius: 8,
+                    color: '#f8f8f8',
+                    fontSize: 14,
+                    outline: 'none',
+                    transition: 'all 0.2s',
+                    boxSizing: 'border-box',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!errors.uploadFolder) {
+                      e.currentTarget.style.borderColor = '#60a5fa';
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.12)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!errors.uploadFolder) {
+                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+                    }
+                  }}
+                >
+                  <span>
+                    {formData.uploadFolder ? (
+                      <>
+                        📁 {formData.uploadFolder}
+                        {formData.selectedFiles && (
+                          <span style={{ color: '#10b981', marginLeft: 8 }}>
+                            ({formData.selectedFiles.length} image files)
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      'Click to select folder containing .tiff/.png/.jpg images'
+                    )}
+                  </span>
+                  <span style={{ color: '#9ca3af' }}>📂</span>
+                </button>
+                {errors.uploadFolder && (
+                  <p style={{ color: '#ef4444', fontSize: 12, margin: '4px 0 0 0' }}>
+                    {errors.uploadFolder}
+                  </p>
+                )}
+              </div>
+              )}
               </div>
 
               {/* EDR PDF selector (single PDF picker) */}
+              {formData.jobType === 'physical_to_digital' && (
               <div style={{ marginTop: 24 }}>
                 <label style={{
                   display: 'block',
@@ -716,6 +924,7 @@ function NewJobPageContent() {
                   <p style={{ color: '#ef4444', fontSize: 12, margin: '4px 0 0 0' }}>{errors.edrPdfFilename}</p>
                 )}
               </div>
+              )}
             </div>
 
             {/* Action Buttons */}

@@ -37,6 +37,7 @@ interface AssetCreationFormProps {
   editingAsset: AssetConfig | null;
   onAddAsset: (config: AssetConfig, spot_color_pairs: SpotColorPair[]) => Promise<void>;
   onResetConfig: () => void;
+  isToppsNow?: boolean;
 }
 
 
@@ -52,7 +53,8 @@ export const AssetCreationForm = ({
   editingAssetId,
   editingAsset,
   onAddAsset,
-  onResetConfig
+  onResetConfig,
+  isToppsNow = false
 }: AssetCreationFormProps) => {
   // State management
   const [currentCardType, setCurrentCardType] = useState<'wp' | 'back' | 'base' | 'parallel' | 'multi-parallel' | 'wp-1of1' | 'front' | null>(null);
@@ -133,18 +135,23 @@ export const AssetCreationForm = ({
     
     const filtered = extractedLayers.filter(layer => {
       const lowerLayer = layer.toLowerCase();
+      const tokens = lowerLayer.split(/[^a-z0-9]+/).filter(Boolean);
       switch(type) {
         case 'wp':
         case 'wp-1of1':
-          return lowerLayer.includes('wp') && !lowerLayer.includes('inv'); // Include wp but exclude wp_inv
+          // Include any 'wp' but exclude 'wp_inv'
+          return (tokens.includes('wp') || lowerLayer.includes('wp')) && !lowerLayer.includes('inv');
         case 'back': 
-          return lowerLayer.startsWith('bk') || lowerLayer.includes('back');
+          // Accept 'bk' or 'back' appearing as tokens anywhere in the name
+          return tokens.includes('bk') || tokens.includes('back');
         case 'base':
         case 'front':
-          return lowerLayer.includes('fr_cmyk') || (lowerLayer.startsWith('fr') && lowerLayer.includes('cmyk'));
+          // Accept any CMYK base regardless of 'fr' prefix
+          return tokens.includes('cmyk') || lowerLayer.includes('fr_cmyk');
         case 'parallel':
         case 'multi-parallel':
-          return lowerLayer.includes('spot') && (lowerLayer.startsWith('fr') || lowerLayer.includes('front'));
+          // Accept any spot layers regardless of 'fr' prefix
+          return tokens.includes('spot') || lowerLayer.includes('spot');
         default:
           return false;
       }
@@ -156,9 +163,69 @@ export const AssetCreationForm = ({
 
   const getSpotLayers = () => {
     const extractedLayers = getExtractedLayers();
-    return extractedLayers.filter(layer => 
-      layer.toLowerCase().includes('spot')
-    );
+    // Return unique canonical spot labels: spot, spot1, spot2, spot3...
+    const spotSet = new Set<string>();
+    extractedLayers.forEach(layer => {
+      const lower = layer.toLowerCase();
+      if (lower.includes('spot')) {
+        const match = lower.match(/spot(\d+)/);
+        if (match && match[1]) {
+          spotSet.add(`spot${match[1]}`);
+        } else {
+          spotSet.add('spot');
+        }
+      }
+    });
+    return Array.from(spotSet).sort();
+  };
+
+  // Build unique canonical options per type for dropdowns
+  const getCanonicalOptionsForType = (type: 'wp' | 'back' | 'base' | 'parallel' | 'multi-parallel' | 'wp-1of1' | 'front'): string[] => {
+    const extractedLayers = getExtractedLayers();
+    const options = new Set<string>();
+
+    extractedLayers.forEach(layer => {
+      const lower = layer.toLowerCase();
+      const tokens = lower.split(/[^a-z0-9]+/).filter(Boolean);
+      switch (type) {
+        case 'back': {
+          if (tokens.includes('bk') || tokens.includes('back')) {
+            options.add('bk');
+          }
+          break;
+        }
+        case 'base':
+        case 'front': {
+          if (tokens.includes('cmyk') || lower.includes('fr_cmyk')) {
+            options.add('cmyk');
+          }
+          break;
+        }
+        case 'parallel':
+        case 'multi-parallel': {
+          if (lower.includes('spot')) {
+            const match = lower.match(/spot(\d+)/);
+            if (match && match[1]) {
+              options.add(`spot${match[1]}`);
+            } else {
+              options.add('spot');
+            }
+          }
+          break;
+        }
+        case 'wp':
+        case 'wp-1of1': {
+          if ((tokens.includes('wp') || lower.includes('wp')) && !lower.includes('inv')) {
+            options.add('wp');
+          }
+          break;
+        }
+        default:
+          break;
+      }
+    });
+
+    return Array.from(options).sort();
   };
 
   const getVfxTextures = () => {
@@ -170,7 +237,11 @@ export const AssetCreationForm = ({
     if (vfxGroup && vfxGroup.children) {
       return vfxGroup.children
         .map((child: any) => child.name || 'Unnamed Texture')
-        .filter((textureName: string) => !textureName.toLowerCase().includes('wpcv')); // Filter out "wpcv"
+        .filter((textureName: string) => {
+          const lower = (textureName || '').toLowerCase();
+          // Filter out "wpcv" and items that start with "spot texture"
+          return !lower.includes('wpcv') && !lower.startsWith('spot texture');
+        });
     }
     return [];
   };
@@ -275,20 +346,20 @@ export const AssetCreationForm = ({
     }
   }, [currentCardType, currentConfig.layer, currentConfig.vfx, currentConfig.chrome, currentConfig.oneOfOneWp, spot_color_pairs, editingAssetId, getConfiguredAssets, generateAssetName]);
 
-  // Auto-select wp_inv layer when VFX or chrome is enabled and only one wp_inv layer exists
+  // Auto-select wp_inv layer when VFX or chrome is enabled and only one wp_inv layer exists (not required for topps_now)
   useEffect(() => {
     if (currentCardType && !editingAssetId) {
       const hasVfxOrChrome = currentConfig.vfx || currentConfig.chrome;
       const wpInvLayers = getWpInvLayers();
       
-      if (hasVfxOrChrome && wpInvLayers.length === 1 && !currentConfig.wp_inv_layer) {
+      if (!isToppsNow && hasVfxOrChrome && wpInvLayers.length === 1 && !currentConfig.wp_inv_layer) {
         setCurrentConfig(prev => ({ ...prev, wp_inv_layer: wpInvLayers[0] }));
       } else if (!hasVfxOrChrome && currentConfig.wp_inv_layer) {
         // Clear wp_inv_layer if VFX and chrome are both disabled
         setCurrentConfig(prev => ({ ...prev, wp_inv_layer: '' }));
       }
     }
-  }, [currentCardType, currentConfig.vfx, currentConfig.chrome, editingAssetId, getWpInvLayers]);
+  }, [currentCardType, currentConfig.vfx, currentConfig.chrome, editingAssetId, getWpInvLayers, isToppsNow]);
 
   const handleAddAsset = async () => {
     console.log('🔍 handleAddAsset called:', { 
@@ -457,8 +528,8 @@ export const AssetCreationForm = ({
                 if (type === 'front') {
                   // For front type, initialize with no spot pairs - user can add with + button
                   setSpot_color_pairs([]);
-                  const layersForType = getLayersByType(type);
-                  const autoSelectedLayer = layersForType.length === 1 ? layersForType[0] : '';
+                  const canonicalOptions = getCanonicalOptionsForType(type);
+                  const autoSelectedLayer = canonicalOptions.length === 1 ? canonicalOptions[0] : '';
                   const initialConfig = { 
                     chrome: false,
                     oneOfOneWp: false,
@@ -471,8 +542,8 @@ export const AssetCreationForm = ({
                 } else {
                   // For other types (wp, back), clear spot/color pairs
                   setSpot_color_pairs([]);
-                  const layersForType = getLayersByType(type);
-                  const autoSelectedLayer = layersForType.length === 1 ? layersForType[0] : '';
+                  const canonicalOptions = getCanonicalOptionsForType(type);
+                  const autoSelectedLayer = canonicalOptions.length === 1 ? canonicalOptions[0] : '';
                   const initialConfig = { 
                     chrome: false,
                     oneOfOneWp: false,
@@ -520,8 +591,8 @@ export const AssetCreationForm = ({
                 }}>
                   Select Base Layer
                   {(() => {
-                    const layersForType = getLayersByType(currentCardType);
-                    return layersForType.length === 1 ? (
+                    const canonicalOptions = getCanonicalOptionsForType(currentCardType);
+                    return canonicalOptions.length === 1 ? (
                       <span style={{ 
                         fontSize: 12, 
                         color: '#10b981', 
@@ -549,9 +620,9 @@ export const AssetCreationForm = ({
                   }}
                 >
                   <option value="" style={{ background: '#1f2937' }}>Select base layer...</option>
-                  {getLayersByType(currentCardType).map(layer => (
-                    <option key={layer} value={layer} style={{ background: '#1f2937' }}>
-                      {layer}
+                  {getCanonicalOptionsForType(currentCardType).map(opt => (
+                    <option key={opt} value={opt} style={{ background: '#1f2937' }}>
+                      {opt}
                     </option>
                   ))}
                 </select>
@@ -786,8 +857,8 @@ export const AssetCreationForm = ({
               }}>
                 Select Layer
                 {(() => {
-                  const layersForType = getLayersByType(currentCardType);
-                  return layersForType.length === 1 ? (
+                  const canonicalOptions = getCanonicalOptionsForType(currentCardType);
+                  return canonicalOptions.length === 1 ? (
                     <span style={{ 
                       fontSize: 12, 
                       color: '#10b981', 
@@ -815,9 +886,9 @@ export const AssetCreationForm = ({
                 }}
               >
                 <option value="" style={{ background: '#1f2937' }}>Select layer...</option>
-                {getLayersByType(currentCardType).map(layer => (
-                  <option key={layer} value={layer} style={{ background: '#1f2937' }}>
-                    {layer}
+                {getCanonicalOptionsForType(currentCardType).map(opt => (
+                  <option key={opt} value={opt} style={{ background: '#1f2937' }}>
+                    {opt}
                   </option>
                 ))}
               </select>
@@ -825,7 +896,7 @@ export const AssetCreationForm = ({
           )}
 
           {/* VFX Texture Selection */}
-          {(currentCardType === 'front' || currentCardType === 'base') && getWpInvLayers().length > 0 && (
+          {(currentCardType === 'front' || currentCardType === 'base') && (isToppsNow || getWpInvLayers().length > 0) && (
             <div>
               <label style={{
                 display: 'block',
@@ -835,7 +906,7 @@ export const AssetCreationForm = ({
                 marginBottom: 8
               }}>
                 Select VFX Texture
-                {getWpInvLayers().length === 1 && (
+              {!isToppsNow && getWpInvLayers().length === 1 && (
                   <span style={{ 
                     fontSize: 12, 
                     color: '#9ca3af', 
@@ -868,7 +939,7 @@ export const AssetCreationForm = ({
               </select>
               
               {/* WP_INV Layer Selection - Only show when VFX or chrome is enabled and there are multiple wp_inv layers */}
-              {(currentConfig.vfx || currentConfig.chrome) && getWpInvLayers().length > 1 && (
+              {!isToppsNow && (currentConfig.vfx || currentConfig.chrome) && getWpInvLayers().length > 1 && (
                 <div style={{ marginTop: 12 }}>
                   <label style={{
                     display: 'block',
@@ -1069,7 +1140,7 @@ export const AssetCreationForm = ({
                   case 'wp-1of1':
                     if (!currentConfig.layer) {
                       validationMessage = currentCardType === 'front' ? 'Select base layer' : 'Select layer';
-                    } else if ((currentConfig.vfx || currentConfig.chrome) && getWpInvLayers().length > 1 && !currentConfig.wp_inv_layer) {
+                    } else if (!isToppsNow && (currentConfig.vfx || currentConfig.chrome) && getWpInvLayers().length > 1 && !currentConfig.wp_inv_layer) {
                       // Only require wp_inv layer selection if VFX/chrome is enabled and there are multiple layers
                       validationMessage = 'Select wp_inv layer';
                     } else {
@@ -1096,7 +1167,7 @@ export const AssetCreationForm = ({
                       // For original parallel/multi-parallel cards, always require spot colors
                       if (validPairs.length === 0 && currentCardType !== 'front') {
                         validationMessage = 'Select at least one spot layer and color';
-                      } else if ((currentConfig.vfx || currentConfig.chrome) && getWpInvLayers().length > 1 && !currentConfig.wp_inv_layer) {
+                      } else if (!isToppsNow && (currentConfig.vfx || currentConfig.chrome) && getWpInvLayers().length > 1 && !currentConfig.wp_inv_layer) {
                         // Only require wp_inv layer selection if VFX/chrome is enabled and there are multiple layers
                         validationMessage = 'Select wp_inv layer';
                       } else {

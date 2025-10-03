@@ -758,19 +758,20 @@ async function handleRequest(request: NextRequest, method: string) {
         if (!body.files || !Array.isArray(body.files) || body.files.length === 0) {
           return NextResponse.json({ error: 'files array is required for S3 upload' }, { status: 400 });
         }
-        if (!body.folder) {
-          return NextResponse.json({ error: 'folder is required for S3 upload' }, { status: 400 });
-        }
         apiUrl += '/s3-files';
         apiMethod = 'POST';
-        // Add the hardcoded bucket name, mode, and folder to the request body
+        // Add the hardcoded bucket name and mode to the request body.
+        // Folder is optional: when omitted, backend should treat filename as full S3 key.
         apiBody = { 
           mode: 'upload',
           bucket: S3_BUCKET_NAME,
-          folder: body.folder,
-          files: body.files.map(file => ({
+          ...(body.folder ? { folder: body.folder } : {}),
+          files: body.files.map((file: any) => ({
             filename: file.filename,
-            content: file.content
+            // Pass through optional fields if provided
+            ...(file.content ? { content: file.content } : {}),
+            ...(file.content_type ? { content_type: file.content_type } : {}),
+            ...(file.size ? { size: file.size } : {}),
           }))
         };
         break;

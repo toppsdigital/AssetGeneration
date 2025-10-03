@@ -161,7 +161,8 @@ export function useAppDataStore<T = any>(
         
         const mappedData: UIJobData = {
           ...response.job,
-          api_files: response.job.files,
+          // Support both PDFs-based jobs (files) and images-based jobs (image_files)
+          api_files: (response.job as any).files || (response.job as any).image_files || [],
           files: [],
           // PRESERVE existing files data if we're not specifically fetching files
           content_pipeline_files: options.includeFiles ? [] : (existingCachedJob?.content_pipeline_files || []),
