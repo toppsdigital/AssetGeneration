@@ -10,6 +10,7 @@ import Spinner from '../../components/Spinner';
 import { ConfirmationModal } from '../../components/ConfirmationModal';
 import { JobData } from '../../web/utils/contentPipelineApi';
 import { getAppIcon } from '../../utils/fileOperations';
+import { getAppDisplayNameFromAppName } from '../../utils/appNameDisplay';
 import { useAppDataStore, dataStoreKeys } from '../../hooks/useAppDataStore';
 import { contentPipelineApi } from '../../web/utils/contentPipelineApi';
 import { ConfigHelpers } from '../../hooks/useAppDataStore.config';
@@ -173,8 +174,8 @@ export default function JobsPage() {
   
 
   const getJobDisplayName = (job: JobData) => {
-    // Display only the app name as the title (remove filename_prefix)
-    const displayName = job.app_name ? job.app_name : 'Untitled Job';
+    // Display the mapped app display name based on shared mapping
+    const displayName = job.app_name ? getAppDisplayNameFromAppName(job.app_name) : 'Untitled Job';
     return displayName;
   };
 
