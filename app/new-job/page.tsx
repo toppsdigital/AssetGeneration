@@ -189,7 +189,8 @@ function NewJobPageContent() {
 
   // Check if all required fields are valid
   const isFormValid = (): boolean => {
-    const requireFilenamePrefix = formData.jobType !== 'shiloutte_psd';
+    const requireFilenamePrefix =
+      formData.jobType === 'physical_to_digital' || formData.jobType === 'topps_now';
     const basicFieldsValid = !!(
       formData.appName.trim() &&
       (!requireFilenamePrefix || formData.filenamePrefix.trim()) &&
@@ -218,9 +219,7 @@ function NewJobPageContent() {
     if (!formData.jobType) {
       (newErrors as any).jobType = 'Job type is required';
     }
-
-
-    if (formData.jobType !== 'shiloutte_psd' && !formData.filenamePrefix.trim()) {
+    if ((formData.jobType === 'physical_to_digital' || formData.jobType === 'topps_now') && !formData.filenamePrefix.trim()) {
       newErrors.filenamePrefix = 'Filename prefix is required';
     }
 
@@ -494,7 +493,7 @@ function NewJobPageContent() {
                         Select an app...
                       </option>
                       <option value="BASEBALL" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                        ⚾ BASEBALL
+                        ⚾ BUNT
                       </option>
                       <option value="DISNEY" style={{ background: '#1f2937', color: '#f8f8f8' }}>
                         🏰 DISNEY
@@ -503,13 +502,13 @@ function NewJobPageContent() {
                         🦸 MARVEL
                       </option>
                       <option value="WWE" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                        🤼 WWE
+                        🤼 SLAM
                       </option>
                       <option value="STARWARS" style={{ background: '#1f2937', color: '#f8f8f8' }}>
                         ⭐ STARWARS
                       </option>
                       <option value="BASKETBALL" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                        🏀 BASKETBALL
+                        🏀 NBA
                       </option>
                       <option value="HUDDLE" style={{ background: '#1f2937', color: '#f8f8f8' }}>
                         🏈 HUDDLE
@@ -569,7 +568,7 @@ function NewJobPageContent() {
                 </div>
 
                 {/* Filename Prefix */}
-                {formData.jobType !== 'shiloutte_psd' && (
+                {(formData.jobType === 'physical_to_digital' || formData.jobType === 'topps_now') && (
                 <div>
                   <label style={{
                     display: 'block',
