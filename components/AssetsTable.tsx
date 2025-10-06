@@ -62,6 +62,11 @@ export const AssetsTable = ({
   // Advanced options state
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
   
+  // Show EDR import only for physical_to_digital jobs
+  const jobTypeRaw = (jobData as any)?.job_type || '';
+  const jobType = typeof jobTypeRaw === 'string' ? jobTypeRaw.toLowerCase() : '';
+  const showEdrImport = jobType === 'physical_to_digital';
+  
   // Use centralized data store for asset mutations
   const { mutate: bulkUpdateAssetsMutation } = useAppDataStore('jobAssets', { 
     jobId: jobData?.job_id || '', 
@@ -176,65 +181,69 @@ export const AssetsTable = ({
               Add Asset
             </button>
           )}
-          <button
-            onClick={() => document.getElementById('edr-pdf-input')?.click()}
-            disabled={savingAsset || creatingAssets || processingPdf}
-            style={{
-              padding: '10px 18px',
-              background: (savingAsset || creatingAssets || processingPdf)
-                ? 'rgba(156, 163, 175, 0.3)'
-                : 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
-              border: 'none',
-              borderRadius: 8,
-              color: 'white',
-              fontSize: 15,
-              fontWeight: 600,
-              cursor: (savingAsset || creatingAssets || processingPdf) ? 'not-allowed' : 'pointer',
-              transition: 'all 0.2s',
-              opacity: (savingAsset || creatingAssets || processingPdf) ? 0.6 : 1,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6
-            }}
-            onMouseEnter={(e) => {
-              if (!savingAsset && !creatingAssets && !processingPdf) {
-                e.currentTarget.style.transform = 'scale(1.02)';
-                e.currentTarget.style.boxShadow = '0 4px 12px rgba(139, 92, 246, 0.3)';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!savingAsset && !creatingAssets && !processingPdf) {
-                e.currentTarget.style.transform = 'scale(1)';
-                e.currentTarget.style.boxShadow = 'none';
-              }
-            }}
-          >
-            {processingPdf ? (
-              <>
-                <div style={{
-                  width: 14,
-                  height: 14,
-                  border: '2px solid rgba(255, 255, 255, 0.3)',
-                  borderTop: '2px solid white',
-                  borderRadius: '50%',
-                  animation: 'spin 1s linear infinite'
-                }} />
-                Processing PDF...
-              </>
-            ) : (
-              <>
-                📋 Import from EDR
-              </>
-            )}
-          </button>
-          <input
-            id="edr-pdf-input"
-            type="file"
-            accept=".pdf"
-            style={{ display: 'none' }}
-            disabled={processingPdf}
-            onChange={onEDRPdfUpload}
-          />
+          {showEdrImport && (
+            <>
+              <button
+                onClick={() => document.getElementById('edr-pdf-input')?.click()}
+                disabled={savingAsset || creatingAssets || processingPdf}
+                style={{
+                  padding: '10px 18px',
+                  background: (savingAsset || creatingAssets || processingPdf)
+                    ? 'rgba(156, 163, 175, 0.3)'
+                    : 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
+                  border: 'none',
+                  borderRadius: 8,
+                  color: 'white',
+                  fontSize: 15,
+                  fontWeight: 600,
+                  cursor: (savingAsset || creatingAssets || processingPdf) ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s',
+                  opacity: (savingAsset || creatingAssets || processingPdf) ? 0.6 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}
+                onMouseEnter={(e) => {
+                  if (!savingAsset && !creatingAssets && !processingPdf) {
+                    e.currentTarget.style.transform = 'scale(1.02)';
+                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(139, 92, 246, 0.3)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!savingAsset && !creatingAssets && !processingPdf) {
+                    e.currentTarget.style.transform = 'scale(1)';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }
+                }}
+              >
+                {processingPdf ? (
+                  <>
+                    <div style={{
+                      width: 14,
+                      height: 14,
+                      border: '2px solid rgba(255, 255, 255, 0.3)',
+                      borderTop: '2px solid white',
+                      borderRadius: '50%',
+                      animation: 'spin 1s linear infinite'
+                    }} />
+                    Processing PDF...
+                  </>
+                ) : (
+                  <>
+                    📋 Import from EDR
+                  </>
+                )}
+              </button>
+              <input
+                id="edr-pdf-input"
+                type="file"
+                accept=".pdf"
+                style={{ display: 'none' }}
+                disabled={processingPdf}
+                onChange={onEDRPdfUpload}
+              />
+            </>
+          )}
         </div>
       </div>
 
