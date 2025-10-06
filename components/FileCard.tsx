@@ -851,7 +851,8 @@ const FileCard: React.FC<FileCardProps> = ({
                   asset => ['succeeded', 'completed'].includes(asset.status.toLowerCase())
                 );
                 
-                const isSilhouetteJob = (jobData?.job_type || '').toLowerCase() === 'shiloutte_psd';
+                const jt = (jobData?.job_type || '').toLowerCase();
+                const isSilhouetteJob = jt === 'silhouette_psd';
                 return allSucceeded && !isSilhouetteJob ? (
                   <button
                     onClick={() => {

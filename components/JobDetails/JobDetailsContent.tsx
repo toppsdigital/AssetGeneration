@@ -141,9 +141,10 @@ export const JobDetailsContent = ({
                 // Show PSDTemplateSelector only when assets need to be configured or regenerated
                 const allowedStatuses = ['extracted', 'generation-failed'];
                 const currentStatus = mergedJobData?.job_status?.toLowerCase();
-                // Hide for shiloutte_psd job type
+                // Hide for silhouette job type
                 const jobType = (mergedJobData as any)?.job_type?.toLowerCase?.() || '';
-                const isSupportedJobType = jobType !== 'shiloutte_psd';
+                const isSilhouetteJob = jobType === 'silhouette_psd';
+                const isSupportedJobType = !isSilhouetteJob;
                 const shouldShow = allowedStatuses.includes(currentStatus) && !loading && isSupportedJobType;
                 console.log('🔍 PSDTemplateSelector visibility check:', {
                   jobStatus: currentStatus,

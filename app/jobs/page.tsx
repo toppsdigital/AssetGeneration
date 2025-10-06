@@ -189,9 +189,9 @@ export default function JobsPage() {
           bg: 'rgba(59, 130, 246, 0.15)',
           border: '1px solid rgba(59, 130, 246, 0.4)'
         };
-      case 'shiloutte_psd':
+      case 'silhouette_psd':
         return {
-          label: 'Shiloutte PSD',
+          label: 'Silhouette PSD',
           color: '#f59e0b',
           bg: 'rgba(245, 158, 11, 0.15)',
           border: '1px solid rgba(245, 158, 11, 0.4)'

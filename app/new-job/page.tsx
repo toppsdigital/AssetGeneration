@@ -11,7 +11,7 @@ import { getEnvironmentConfig } from '../../utils/environment';
 
 interface NewJobFormData {
   appName: string;
-  jobType?: 'physical_to_digital' | 'shiloutte_psd' | 'topps_now' | '';
+  jobType?: 'physical_to_digital' | 'silhouette_psd' | 'topps_now' | '';
   filenamePrefix: string;
   description: string;
   uploadFolder: string;
@@ -127,7 +127,7 @@ function NewJobPageContent() {
     }
   };
 
-  // Handle images folder selection for shiloutte_psd / topps_now
+  // Handle images folder selection for silhouette_psd / topps_now
   const handleImagesFolderSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (files && files.length > 0) {
@@ -248,7 +248,7 @@ function NewJobPageContent() {
   // Create or rerun job using centralized data store
   const createJob = async (jobData: {
     appName: string;
-    jobType?: 'physical_to_digital' | 'shiloutte_psd' | 'topps_now';
+    jobType?: 'physical_to_digital' | 'silhouette_psd' | 'topps_now';
     filenamePrefix: string;
     pdf_files?: string[];
     image_files?: string[];
@@ -567,8 +567,8 @@ function NewJobPageContent() {
                       <option value="physical_to_digital" style={{ background: '#1f2937', color: '#f8f8f8' }}>
                         Physical to Digital
                       </option>
-                      <option value="shiloutte_psd" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                        Shiloutte PSD
+                      <option value="silhouette_psd" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                        Silhouette PSD
                       </option>
                       <option value="topps_now" style={{ background: '#1f2937', color: '#f8f8f8' }}>
                         Topps Now
@@ -785,7 +785,7 @@ function NewJobPageContent() {
                 </div>
               )}
 
-              {(formData.jobType === 'shiloutte_psd' || formData.jobType === 'topps_now') && (
+              {(formData.jobType === 'silhouette_psd' || formData.jobType === 'topps_now') && (
               <div>
                 <label style={{
                   display: 'block',
