@@ -47,6 +47,11 @@ export const AssetAdvancedOptions = ({
   onAssetsUpdate,
   isVisible
 }: AssetAdvancedOptionsProps) => {
+  // Determine job type for conditional UI (special-case topps_now)
+  const jobTypeRaw = (jobData as any)?.job_type || (jobData as any)?.app_name || '';
+  const jobType = typeof jobTypeRaw === 'string' ? jobTypeRaw.toLowerCase() : '';
+  const isToppsNow = jobType.includes('topps_now');
+  const isPhysicalToDigital = jobType === 'physical_to_digital';
   // Initialize foil toggle state based on current assets
   const getInitialFoilToggleState = () => {
     // Find front card assets
@@ -516,123 +521,127 @@ export const AssetAdvancedOptions = ({
       
       <div style={{
         display: 'grid',
-        gridTemplateColumns: '1fr 1fr auto',
+        gridTemplateColumns: isToppsNow ? 'auto' : '1fr 1fr auto',
         gap: 20,
         alignItems: 'center'
       }}>
-        {/* Chrome Toggle */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '12px 16px',
-          background: 'rgba(255, 255, 255, 0.03)',
-          borderRadius: 8,
-          border: '1px solid rgba(255, 255, 255, 0.08)'
-        }}>
-          <div>
-            <div style={{
-              color: '#f8f8f8',
-              fontSize: 14,
-              fontWeight: 500
-            }}>
-              Apply Chrome
+        {/* Chrome Toggle (hidden for topps_now) */}
+        {!isToppsNow && (
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '12px 16px',
+            background: 'rgba(255, 255, 255, 0.03)',
+            borderRadius: 8,
+            border: '1px solid rgba(255, 255, 255, 0.08)'
+          }}>
+            <div>
+              <div style={{
+                color: '#f8f8f8',
+                fontSize: 14,
+                fontWeight: 500
+              }}>
+                Apply Chrome
+              </div>
             </div>
-          </div>
-          <button
-            onClick={handleBulkChromeToggle}
-            disabled={savingAsset || creatingAssets || processingPdf}
-            style={{
-              padding: '8px 16px',
-              background: (savingAsset || creatingAssets || processingPdf)
-                ? 'rgba(156, 163, 175, 0.3)'
-                : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
-              border: 'none',
-              borderRadius: 6,
-              color: (savingAsset || creatingAssets || processingPdf) ? '#6b7280' : '#374151',
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: (savingAsset || creatingAssets || processingPdf) ? 'not-allowed' : 'pointer',
-              transition: 'all 0.2s',
-              opacity: (savingAsset || creatingAssets || processingPdf) ? 0.6 : 1
-            }}
-            onMouseEnter={(e) => {
-              if (!savingAsset && !creatingAssets && !processingPdf) {
-                e.currentTarget.style.background = 'linear-gradient(135deg, #9ca3af, #6b7280)';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!savingAsset && !creatingAssets && !processingPdf) {
-                e.currentTarget.style.background = 'linear-gradient(135deg, #d1d5db, #9ca3af)';
-              }
-            }}
-          >
-            Toggle Chrome
-          </button>
-        </div>
-
-        {/* Foil Toggle */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '12px 16px',
-          background: 'rgba(255, 255, 255, 0.03)',
-          borderRadius: 8,
-          border: '1px solid rgba(255, 255, 255, 0.08)'
-        }}>
-          <div>
-            <div style={{
-              color: '#f8f8f8',
-              fontSize: 14,
-              fontWeight: 500
-            }}>
-              Apply Foil (Enabled by default)
-            </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{
-              color: foilToggleState ? '#10b981' : '#6b7280',
-              fontSize: 13,
-              fontWeight: 600
-            }}>
-              {foilToggleState ? 'ON' : 'OFF'}
-            </span>
             <button
-              onClick={async () => {
-                const newState = !foilToggleState;
-                setFoilToggleState(newState);
-                await handleBulkFoilToggle(newState);
-              }}
+              onClick={handleBulkChromeToggle}
               disabled={savingAsset || creatingAssets || processingPdf}
               style={{
-                width: 44,
-                height: 24,
-                background: foilToggleState 
-                  ? 'linear-gradient(135deg, #10b981, #059669)'
-                  : 'rgba(156, 163, 175, 0.5)',
+                padding: '8px 16px',
+                background: (savingAsset || creatingAssets || processingPdf)
+                  ? 'rgba(156, 163, 175, 0.3)'
+                  : 'linear-gradient(135deg, #d1d5db, #9ca3af)',
                 border: 'none',
-                borderRadius: 12,
+                borderRadius: 6,
+                color: (savingAsset || creatingAssets || processingPdf) ? '#6b7280' : '#374151',
+                fontSize: 13,
+                fontWeight: 600,
                 cursor: (savingAsset || creatingAssets || processingPdf) ? 'not-allowed' : 'pointer',
                 transition: 'all 0.2s',
-                position: 'relative',
                 opacity: (savingAsset || creatingAssets || processingPdf) ? 0.6 : 1
               }}
+              onMouseEnter={(e) => {
+                if (!savingAsset && !creatingAssets && !processingPdf) {
+                  e.currentTarget.style.background = 'linear-gradient(135deg, #9ca3af, #6b7280)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!savingAsset && !creatingAssets && !processingPdf) {
+                  e.currentTarget.style.background = 'linear-gradient(135deg, #d1d5db, #9ca3af)';
+                }
+              }}
             >
-              <div style={{
-                width: 20,
-                height: 20,
-                background: 'white',
-                borderRadius: '50%',
-                transition: 'transform 0.2s',
-                transform: foilToggleState ? 'translateX(22px)' : 'translateX(2px)',
-                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
-              }} />
+              Toggle Chrome
             </button>
           </div>
-        </div>
+        )}
 
-        {/* Delete All Assets */}
+        {/* Foil Toggle (hidden for topps_now) */}
+        {!isToppsNow && (
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '12px 16px',
+            background: 'rgba(255, 255, 255, 0.03)',
+            borderRadius: 8,
+            border: '1px solid rgba(255, 255, 255, 0.08)'
+          }}>
+            <div>
+              <div style={{
+                color: '#f8f8f8',
+                fontSize: 14,
+                fontWeight: 500
+              }}>
+                Apply Foil (Enabled by default)
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{
+                color: foilToggleState ? '#10b981' : '#6b7280',
+                fontSize: 13,
+                fontWeight: 600
+              }}>
+                {foilToggleState ? 'ON' : 'OFF'}
+              </span>
+              <button
+                onClick={async () => {
+                  const newState = !foilToggleState;
+                  setFoilToggleState(newState);
+                  await handleBulkFoilToggle(newState);
+                }}
+                disabled={savingAsset || creatingAssets || processingPdf}
+                style={{
+                  width: 44,
+                  height: 24,
+                  background: foilToggleState 
+                    ? 'linear-gradient(135deg, #10b981, #059669)'
+                    : 'rgba(156, 163, 175, 0.5)',
+                  border: 'none',
+                  borderRadius: 12,
+                  cursor: (savingAsset || creatingAssets || processingPdf) ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s',
+                  position: 'relative',
+                  opacity: (savingAsset || creatingAssets || processingPdf) ? 0.6 : 1
+                }}
+              >
+                <div style={{
+                  width: 20,
+                  height: 20,
+                  background: 'white',
+                  borderRadius: '50%',
+                  transition: 'transform 0.2s',
+                  transform: foilToggleState ? 'translateX(22px)' : 'translateX(2px)',
+                  boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
+                }} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Delete All Assets (always visible; only control for topps_now) */}
         <button
           onClick={() => setShowDeleteConfirmation(true)}
           disabled={savingAsset || creatingAssets || processingPdf || configuredAssets.length === 0}
@@ -650,7 +659,7 @@ export const AssetAdvancedOptions = ({
             transition: 'all 0.2s',
             opacity: (savingAsset || creatingAssets || processingPdf || configuredAssets.length === 0) ? 0.6 : 1,
             boxShadow: (savingAsset || creatingAssets || processingPdf || configuredAssets.length === 0) ? 'none' : '0 4px 12px rgba(239, 68, 68, 0.3)',
-            justifySelf: 'end'
+            justifySelf: isToppsNow ? 'start' : 'end'
           }}
           onMouseEnter={(e) => {
             if (!savingAsset && !creatingAssets && !processingPdf && configuredAssets.length > 0) {
