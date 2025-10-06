@@ -143,8 +143,17 @@ function NewJobPageContent() {
         return isAllowedExt || isAllowedType;
       });
 
+      // Deduplicate by filename (case-insensitive) to avoid duplicate uploads
+      const dedupedByName = new Map<string, File>();
+      imageFiles.forEach(file => {
+        const key = file.name.toLowerCase();
+        if (!dedupedByName.has(key)) {
+          dedupedByName.set(key, file);
+        }
+      });
+
       const dataTransfer = new DataTransfer();
-      imageFiles.forEach(file => dataTransfer.items.add(file));
+      Array.from(dedupedByName.values()).forEach(file => dataTransfer.items.add(file));
 
       setFormData(prev => ({
         ...prev,
@@ -333,13 +342,14 @@ function NewJobPageContent() {
         }
       } else {
         // Images flow: collect allowed image filenames
-        const allowedImageNames: string[] = [];
+        const imageFilesSet = new Set<string>();
         Array.from(formData.selectedFiles).forEach(file => {
           const lower = file.name.toLowerCase();
           if (lower.endsWith('.tif') || lower.endsWith('.tiff') || lower.endsWith('.png') || lower.endsWith('.jpg') || lower.endsWith('.jpeg')) {
-            allowedImageNames.push(file.name);
+            imageFilesSet.add(file.name);
           }
         });
+        const allowedImageNames = Array.from(imageFilesSet);
         if (allowedImageNames.length === 0) {
           throw new Error('No valid image files (.tiff/.png/.jpg) found in the selected folder');
         }
