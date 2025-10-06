@@ -8,6 +8,7 @@ import { getTotalLoadingSteps, getLoadingStepInfo } from '../utils/fileOperation
 interface FilesSectionProps {
   mergedJobData: any;
   jobData: any;
+  isRefreshing?: boolean;
   uploadingFiles: Set<string>;
   loadingFiles: boolean;
   filesLoaded: boolean;
@@ -20,6 +21,7 @@ interface FilesSectionProps {
 export const FilesSection = ({
   mergedJobData,
   jobData,
+  isRefreshing = false,
   uploadingFiles,
   loadingFiles,
   filesLoaded,
@@ -59,7 +61,10 @@ export const FilesSection = ({
   };
 
   return (
-    <div className={className} style={{ marginTop: 32 }}>
+    <div className={className} style={{ marginTop: 32, opacity: isRefreshing ? 0.5 : 1, pointerEvents: isRefreshing ? 'none' as any : 'auto', position: 'relative' }}>
+      {isRefreshing && (
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.15)' }} />
+      )}
       <h2 style={{
         fontSize: '1.5rem',
         fontWeight: 600,

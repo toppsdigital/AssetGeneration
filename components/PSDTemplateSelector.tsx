@@ -18,6 +18,7 @@ interface PSDFile {
 interface PSDTemplateSelectorProps {
   jobData: any;
   mergedJobData: any;
+  isRefreshing?: boolean;
   isVisible: boolean;
   creatingAssets: boolean;
   setCreatingAssets: React.Dispatch<React.SetStateAction<boolean>>;
@@ -45,7 +46,7 @@ interface AssetConfig {
   foil?: boolean; // For foil effect control
 }
 
-export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatingAssets, setCreatingAssets, onAssetsUpdate }: PSDTemplateSelectorProps) => {
+export const PSDTemplateSelector = ({ jobData, mergedJobData, isRefreshing = false, isVisible, creatingAssets, setCreatingAssets, onAssetsUpdate }: PSDTemplateSelectorProps) => {
   const router = useRouter();
   
   // Use centralized data store for asset operations only (no data fetching)
@@ -1036,8 +1037,17 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isVisible, creatin
         position: 'relative', // For loading overlay positioning
         padding: 24,
         marginBottom: 32,
-        overflow: 'hidden'
+        overflow: 'hidden',
+        opacity: isRefreshing ? 0.5 : 1,
+        pointerEvents: isRefreshing ? 'none' as any : 'auto'
       }}>
+        {isRefreshing && (
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'rgba(0,0,0,0.2)'
+          }} />
+        )}
         {/* Simple loading overlay */}
         {savingAsset && (
           <div style={{

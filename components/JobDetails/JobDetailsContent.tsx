@@ -136,6 +136,7 @@ export const JobDetailsContent = ({
             <PSDTemplateSelector
               jobData={jobData}
               mergedJobData={mergedJobData}
+              isRefreshing={isRefreshing}
               isVisible={(() => {
                 // Show PSDTemplateSelector only when assets need to be configured or regenerated
                 const allowedStatuses = ['extracted', 'generation-failed'];
@@ -177,6 +178,7 @@ export const JobDetailsContent = ({
             <FilesSection
               mergedJobData={mergedJobData}
               jobData={jobData}
+              isRefreshing={isRefreshing}
               // Details page: files are always loaded and no uploads in progress
               uploadingFiles={new Set()}
               loadingFiles={false}
