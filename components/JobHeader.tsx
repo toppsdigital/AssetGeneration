@@ -153,11 +153,6 @@ export const JobHeader = ({
           fontSize: 12,
           color: '#6b7280'
         }}>
-          <span>
-            Files: <span style={{ color: '#9ca3af' }}>
-              {jobData.original_files_total_count || jobData.files?.length || jobData.content_pipeline_files?.length || 0}
-            </span>
-          </span>
           {jobData.created_at && (
             <span>
               Created: <span style={{ color: '#9ca3af' }}>
