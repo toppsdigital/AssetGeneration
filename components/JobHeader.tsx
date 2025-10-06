@@ -39,6 +39,7 @@ export const JobHeader = ({
   const router = useRouter();
   const [showRerunModal, setShowRerunModal] = useState(false);
   const [isProcessingRerun, setIsProcessingRerun] = useState(false);
+  const isRerunEnabled = false;
 
   const getJobTitle = () => {
     if (!jobData) return 'Loading...';
@@ -160,7 +161,7 @@ export const JobHeader = ({
               </span>
             </span>
           )}
-          {onRerunJob && (
+          {isRerunEnabled && onRerunJob && (
             <button
               onClick={handleRerunClick}
               style={{

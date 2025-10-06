@@ -30,6 +30,11 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
   // Use polled data if available, otherwise fall back to prop data
   const currentJobData = polledJobData || jobData;
   
+  // Determine job type for conditional UI (hide regenerate for silhouette_psd)
+  const jobTypeRaw = (currentJobData as any)?.job_type || (currentJobData as any)?.app_name || '';
+  const jobType = typeof jobTypeRaw === 'string' ? jobTypeRaw.toLowerCase() : '';
+  const isSilhouetteJob = jobType === 'silhouette_psd';
+  
   
   // Debug logging for polling state
   useEffect(() => {
@@ -460,8 +465,8 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
           </button>
         </div>
 
-        {/* Re-Generate Assets Button - Always visible for completed jobs */}
-        {currentJobData?.job_id && (
+        {/* Re-Generate Assets Button - hidden for silhouette_psd jobs */}
+        {currentJobData?.job_id && !isSilhouetteJob && (
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -544,7 +549,7 @@ export const DownloadSection = ({ jobData, isVisible, onJobDataUpdate }: Downloa
             }
             return 'Download archive will contain all generated digital assets from this job';
           })()}
-          {currentJobData?.job_id && (
+          {currentJobData?.job_id && !isSilhouetteJob && (
             <>
               <br />
               <span style={{ fontSize: 11, opacity: 0.8 }}>
