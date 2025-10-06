@@ -831,6 +831,19 @@ export default function JobsPage() {
                               </span>
                             ) : null;
                           })()}
+                          {/* Show upload progress when status is uploading */}
+                          {job.job_status?.toLowerCase() === 'uploading' && 
+                           job.original_files_total_count && 
+                           job.original_files_total_count > 0 && (
+                            <span style={{ 
+                              fontSize: 12, 
+                              fontWeight: 500,
+                              marginLeft: 4,
+                              opacity: 0.9
+                            }}>
+                              ({job.original_files_completed_count || 0}/{job.original_files_total_count} files)
+                            </span>
+                          )}
                           {/* Show extraction progress when status is extracting */}
                           {job.job_status?.toLowerCase() === 'extracting' && 
                            job.extracted_files_total_count && 
