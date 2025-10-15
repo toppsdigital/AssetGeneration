@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 // Removed unused useQuery import - now using centralized useAppDataStore
 import { useSession } from 'next-auth/react';
 import styles from '../../styles/Home.module.css';
@@ -17,11 +17,15 @@ import { ConfigHelpers } from '../../hooks/useAppDataStore.config';
 
 export default function JobsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: session, status: sessionStatus } = useSession();
   
   // Filter states
-  const [userFilter, setUserFilter] = useState<'all' | 'my'>('all');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'in-progress' | 'completed'>('all');
+  const [userFilter, setUserFilter] = useState<'all' | 'my'>(() => (searchParams.get('user') === 'my' ? 'my' : 'all'));
+  const [statusFilter, setStatusFilter] = useState<'all' | 'in-progress' | 'completed'>(() => {
+    const s = searchParams.get('status');
+    return s === 'in-progress' || s === 'completed' ? (s as 'in-progress' | 'completed') : 'all';
+  });
   
   // Delete confirmation state
   const [jobToDelete, setJobToDelete] = useState<JobData | null>(null);
@@ -30,6 +34,18 @@ export default function JobsPage() {
   // Timestamp tracking
   const [jobsListLastUpdate, setJobsListLastUpdate] = useState<string | null>(null);
   const [, forceUpdate] = useState({});
+
+  // Keep URL in sync with filters so state is preserved on back navigation
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (userFilter === 'my') params.set('user', 'my');
+    if (statusFilter !== 'all') params.set('status', statusFilter);
+    const next = params.toString();
+    const current = searchParams.toString();
+    if (next !== current) {
+      router.replace(next ? `/jobs?${next}` : '/jobs');
+    }
+  }, [userFilter, statusFilter, router, searchParams]);
 
   // Build options for useAppDataStore (memoized to prevent unnecessary re-renders)
   const dataStoreOptions = useMemo(() => ({

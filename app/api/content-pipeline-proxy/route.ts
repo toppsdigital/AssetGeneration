@@ -413,8 +413,8 @@ async function handleRequest(request: NextRequest, method: string) {
           ]
         });
         
-        // Try with query parameter instead of path parameter
-        apiUrl += `/jobs?job_id=${id}`;
+        // Prefer direct job endpoint first; fallback logic below will handle list responses
+        apiUrl += `/jobs/${id}`;
         apiMethod = 'GET';
         break;
         
@@ -1109,30 +1109,32 @@ async function handleRequest(request: NextRequest, method: string) {
     console.log(`Response status: ${response.status}`);
     console.log('Response headers:', Object.fromEntries(response.headers.entries()));
     
-    // Special handling for get_job operation to transform list response to single job response
+    // Special handling for get_job operation: support both direct job and list responses
     if (operation === 'get_job' && response.ok) {
       const responseText = await response.text();
       
       try {
-        const listResponse = JSON.parse(responseText);
+        const parsed = JSON.parse(responseText);
         
-        // Transform list response to single job response
-        if (listResponse.jobs && listResponse.jobs.length > 0) {
-          // CRITICAL: Find the specific job by ID, don't just take the first one
-          const job = listResponse.jobs.find((j: any) => j.job_id === id);
-          
-          console.log('🔍 GET_JOB: Job search in list response:', {
-            requestedJobId: id,
-            totalJobsInResponse: listResponse.jobs.length,
-            jobIds: listResponse.jobs.map((j: any) => j.job_id),
-            foundMatchingJob: !!job,
-            matchingJobId: job?.job_id
-          });
-          
-          if (job) {
-            console.log('✅ GET_JOB: Successfully found and returned matching job');
-            return NextResponse.json({ job }, { status: 200 });
-          } else {
+        // If backend returned a list (fallback or legacy), find the specific job
+        if (parsed && Array.isArray(parsed.jobs)) {
+          const listResponse = parsed;
+          if (listResponse.jobs && listResponse.jobs.length > 0) {
+            const job = listResponse.jobs.find((j: any) => j.job_id === id);
+            
+            console.log('🔍 GET_JOB: Job search in list response:', {
+              requestedJobId: id,
+              totalJobsInResponse: listResponse.jobs.length,
+              jobIds: listResponse.jobs.map((j: any) => j.job_id),
+              foundMatchingJob: !!job,
+              matchingJobId: job?.job_id
+            });
+            
+            if (job) {
+              console.log('✅ GET_JOB: Successfully found and returned matching job');
+              return NextResponse.json({ job }, { status: 200 });
+            }
+            
             console.log('❌ GET_JOB: Requested job ID not found in list response');
             return NextResponse.json({ 
               error: 'Job not found',
@@ -1140,13 +1142,16 @@ async function handleRequest(request: NextRequest, method: string) {
               available_jobs: listResponse.jobs.map((j: any) => j.job_id)
             }, { status: 404 });
           }
-        } else {
+          
           console.log('❌ GET_JOB: No job found in list response');
           return NextResponse.json({ 
             error: 'Job not found',
             message: `Job with ID ${id} does not exist`
           }, { status: 404 });
         }
+        
+        // Otherwise, assume parsed is already the direct job response and pass it through
+        return NextResponse.json(parsed, { status: response.status });
       } catch (parseError) {
         console.error('❌ GET_JOB: Failed to parse response:', parseError);
         // Continue with normal response handling below
