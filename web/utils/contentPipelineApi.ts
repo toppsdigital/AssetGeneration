@@ -208,7 +208,7 @@ class ContentPipelineAPI {
     limit?: number;
     recentOnly?: boolean;
     lastModifiedOnly?: boolean;
-    exclusiveStartKey?: string;
+    nextToken?: string;
     my_jobs?: boolean;
     user_id?: string;
     status?: string;
@@ -219,7 +219,7 @@ class ContentPipelineAPI {
     if (options.limit) params.append('limit', options.limit.toString());
     if (options.recentOnly) params.append('recent_only', 'true');
     if (options.lastModifiedOnly) params.append('last_modified_only', 'true');
-    if (options.exclusiveStartKey) params.append('exclusive_start_key', options.exclusiveStartKey);
+    if (options.nextToken) params.append('next_token', options.nextToken);
     if (options.my_jobs) params.append('my_jobs', 'true');
     if (options.user_id) params.append('user_id', options.user_id);
     if (options.status) params.append('status', options.status);

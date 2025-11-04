@@ -35,6 +35,10 @@ export default function JobsPage() {
   const [jobsListLastUpdate, setJobsListLastUpdate] = useState<string | null>(null);
   const [, forceUpdate] = useState({});
 
+  // Pagination tokens and index
+  const [pageTokens, setPageTokens] = useState<(string | null)[]>([null]);
+  const [pageIndex, setPageIndex] = useState(0);
+
   // Keep URL in sync with filters so state is preserved on back navigation
   useEffect(() => {
     const params = new URLSearchParams();
@@ -54,7 +58,9 @@ export default function JobsPage() {
       ...(statusFilter !== 'all' && { statusFilter }),
     },
     autoRefresh: true, // Enable auto-refresh polling
-  }), [userFilter, statusFilter]);
+    limit: 20,
+    nextToken: pageTokens[pageIndex] || undefined,
+  }), [userFilter, statusFilter, pageTokens, pageIndex]);
 
   // Use centralized data store for jobs list with auto-refresh
   // This will show cached data immediately (if available) while fetching fresh data in background
@@ -66,8 +72,35 @@ export default function JobsPage() {
     isRefreshing,
     isAutoRefreshActive,
     forceRefreshJobsList,
-    mutate: performMutation
+    mutate: performMutation,
+    pageInfo
   } = useAppDataStore('jobs', dataStoreOptions);
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setPageTokens([null]);
+    setPageIndex(0);
+  }, [userFilter, statusFilter]);
+
+  // Cached pages are shown instantly via query key change; background refresh handled by hook
+
+  // Pagination handlers
+  const handleNextPage = () => {
+    if (!pageInfo?.next_token) return;
+    // If we already have the token stored for next page, just move index
+    if (pageTokens[pageIndex + 1] !== undefined) {
+      setPageIndex(prev => prev + 1);
+      return;
+    }
+    // Otherwise push the new token and advance
+    setPageTokens(prev => [...prev, pageInfo.next_token || null]);
+    setPageIndex(prev => prev + 1);
+  };
+
+  const handlePrevPage = () => {
+    if (pageIndex === 0) return;
+    setPageIndex(prev => Math.max(0, prev - 1));
+  };
 
   // Debug logging to track cached vs fresh data usage
   useEffect(() => {
@@ -1022,6 +1055,56 @@ export default function JobsPage() {
                   </div>
                 </div>
               ))}
+
+              {/* Pagination Controls */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr auto 1fr',
+                alignItems: 'center',
+                marginTop: 8
+              }}>
+                <div style={{ justifySelf: 'start' }}>
+                  {pageIndex > 0 && (
+                    <button
+                      onClick={handlePrevPage}
+                      style={{
+                        padding: '8px 16px',
+                        background: 'rgba(255, 255, 255, 0.1)',
+                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                        borderRadius: 6,
+                        color: '#e5e7eb',
+                        cursor: 'pointer',
+                        fontSize: 14,
+                        fontWeight: 500
+                      }}
+                    >
+                      ← Previous
+                    </button>
+                  )}
+                </div>
+                <div style={{ color: '#9ca3af', fontSize: 12, textAlign: 'center' }}>
+                  Page {pageIndex + 1}
+                </div>
+                <div style={{ justifySelf: 'end' }}>
+                  {pageInfo?.next_token && (
+                    <button
+                      onClick={handleNextPage}
+                      style={{
+                        padding: '8px 16px',
+                        background: 'rgba(255, 255, 255, 0.1)',
+                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                        borderRadius: 6,
+                        color: '#e5e7eb',
+                        cursor: 'pointer',
+                        fontSize: 14,
+                        fontWeight: 500
+                      }}
+                    >
+                      Next →
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </div>

@@ -62,6 +62,7 @@ export function useAppDataStore<T = any>(
   const queryClient = useQueryClient();
   const pathname = usePathname();
   // React Query now handles polling internally via refetchInterval
+  const [pageInfo, setPageInfo] = useState<{ next_token?: string; count?: number } | undefined>(undefined);
   
   // Define pages where auto-refresh is allowed
   const isAutoRefreshAllowedOnPage = AppDataStoreConfig.ALLOWED_AUTO_REFRESH_PAGES.includes(pathname as any);
@@ -99,7 +100,12 @@ export function useAppDataStore<T = any>(
   const queryKey = useMemo(() => {
     switch (selector) {
       case 'jobs':
-        return dataStoreKeys.jobs.list(options.filters || {});
+        // Include pagination in the key so pages are cached independently
+        return dataStoreKeys.jobs.list({
+          ...(options.filters || {}),
+          limit: options.limit || 20,
+          nextToken: options.nextToken || null,
+        });
       case 'jobDetails':
         return options.jobId ? dataStoreKeys.jobs.detail(options.jobId) : [];
       case 'jobFiles':
@@ -113,7 +119,7 @@ export function useAppDataStore<T = any>(
       default:
         return [];
     }
-  }, [selector, options.filters, options.jobId, options.jobIds]);
+  }, [selector, options.filters, options.jobId, options.jobIds, options.limit, options.nextToken]);
 
   // Query function based on selector
   const queryFn = useCallback(async (): Promise<T> => {
@@ -121,6 +127,8 @@ export function useAppDataStore<T = any>(
       console.log(`🔄 [DataStore] Fetching fresh jobs data:`, {
         userFilter: options.filters?.userFilter,
         statusFilter: options.filters?.statusFilter,
+        limit: options.limit,
+        nextToken: options.nextToken,
         autoRefresh: options.autoRefresh,
         timestamp: new Date().toLocaleTimeString()
       });
@@ -128,7 +136,9 @@ export function useAppDataStore<T = any>(
     
     switch (selector) {
       case 'jobs': {
-        const filterOptions: any = {};
+        const filterOptions: any = {
+          limit: options.limit || 20,
+        };
         
         if (options.filters?.userFilter === 'my') {
           filterOptions.my_jobs = true;
@@ -140,6 +150,10 @@ export function useAppDataStore<T = any>(
           filterOptions.status = 'completed';
         }
         
+        if (options.nextToken) {
+          filterOptions.nextToken = options.nextToken;
+        }
+        
         const response = await contentPipelineApi.listJobs(filterOptions);
         
         // Sort jobs by creation date (most recent first)
@@ -147,7 +161,9 @@ export function useAppDataStore<T = any>(
           new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime()
         );
         
-        console.log(`✅ [DataStore] Fetched ${sortedJobs.length} jobs`);
+        const nextToken = (response as any).next_token || (response as any).last_evaluated_key;
+        setPageInfo({ next_token: nextToken, count: response.count });
+        console.log(`✅ [DataStore] Fetched ${sortedJobs.length} jobs`, { nextToken });
         return sortedJobs as T;
       }
       
@@ -1278,6 +1294,7 @@ export function useAppDataStore<T = any>(
   return {
     // Data
     data: data || (selector === 'jobs' ? [] : null) as T,
+    pageInfo,
     
     // State
     isLoading,

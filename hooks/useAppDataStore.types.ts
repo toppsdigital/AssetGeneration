@@ -89,6 +89,9 @@ export interface SelectorOptions {
     userFilter?: string;
     statusFilter?: string;
   };
+  // Pagination for 'jobs' selector
+  limit?: number;
+  nextToken?: string;
   includeFiles?: boolean;
   includeAssets?: boolean;
   autoRefresh?: boolean;
@@ -141,6 +144,12 @@ export interface AppDataStoreReturn<T = any> {
   // Data
   data: T;
   
+  // Optional page info for paginated selectors (e.g., 'jobs')
+  pageInfo?: {
+    next_token?: string;
+    count?: number;
+  };
+
   // State
   isLoading: boolean;
   isRefreshing: boolean;
