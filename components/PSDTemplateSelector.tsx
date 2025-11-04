@@ -942,11 +942,20 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isRefreshing = fal
              !lowerLayer.includes('bk_seq_bb');
     });
     
+    // Normalize layer names for extract API: use only the last underscore segment (e.g., 'spot1', 'wp1')
+    const normalizedLayersSet = new Set(
+      filteredLayers.map(layer => {
+        const parts = (layer || '').split('_').filter(Boolean);
+        return parts.length > 0 ? parts[parts.length - 1] : layer;
+      })
+    );
+    const normalizedLayers = Array.from(normalizedLayersSet);
+    
     // Prepare API request with full S3 key for extract API
     const requestPayload = {
       s3_key: extractApiS3Key,  // Use full S3 key for extract API
       filename: file.name,
-      layers: filteredLayers.length > 0 ? filteredLayers : undefined,
+      layers: normalizedLayers.length > 0 ? normalizedLayers : undefined,
       job_id: jobData?.job_id
     };
 
@@ -958,6 +967,8 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isRefreshing = fal
       totalLayersFound: allExtractedLayers.length,
       filteredLayersCount: filteredLayers.length,
       filteredLayers: filteredLayers,
+      normalizedLayersCount: normalizedLayers.length,
+      normalizedLayers: normalizedLayers,
       excludedLayers: allExtractedLayers.filter(layer => !filteredLayers.includes(layer))
     });
 
