@@ -475,7 +475,9 @@ async function handleRequest(request: NextRequest, method: string) {
         if (searchParams.get('limit')) jobParams.append('limit', searchParams.get('limit')!);
         if (searchParams.get('recent_only')) jobParams.append('recent_only', searchParams.get('recent_only')!);
         if (searchParams.get('last_modified_only')) jobParams.append('last_modified_only', searchParams.get('last_modified_only')!);
-        if (searchParams.get('exclusive_start_key')) jobParams.append('exclusive_start_key', searchParams.get('exclusive_start_key')!);
+        // Accept only 'next_token' from callers and forward as 'next_token'
+        const incomingNextToken = searchParams.get('next_token');
+        if (incomingNextToken) jobParams.append('next_token', incomingNextToken);
         // Handle user_id parameter - either passed directly or get from session for "my jobs"
         if (searchParams.get('user_id')) {
           jobParams.append('user_id', searchParams.get('user_id')!);
