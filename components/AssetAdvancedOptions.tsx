@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAppDataStore } from '../hooks/useAppDataStore';
 import { ConfirmationModal } from './ConfirmationModal';
 
@@ -54,67 +54,10 @@ export const AssetAdvancedOptions = ({
   const jobType = typeof jobTypeRaw === 'string' ? jobTypeRaw.toLowerCase() : '';
   const isToppsNow = jobType.includes('topps_now');
   const isPhysicalToDigital = jobType === 'physical_to_digital';
-  // Initialize foil toggle state based on current assets
-  const getInitialFoilToggleState = () => {
-    // Find front card assets
-    const frontCardAssets = configuredAssets.filter(asset => 
-      asset.type === 'base' || asset.type === 'parallel' || asset.type === 'multi-parallel' || asset.type === 'front'
-    );
-    
-    // Check if any front card asset has a 'foil' property defined (regardless of true/false)
-    const hasFoilProperty = frontCardAssets.some(asset => 'foil' in asset);
-    
-    // Toggle is OFF if any front card has foil property defined, otherwise ON (default foil behavior)
-    const initialState = !hasFoilProperty;
-    
-    console.log(`🔄 [Foil Toggle] State calculation:`, {
-      totalAssets: configuredAssets.length,
-      frontCardAssets: frontCardAssets.map(asset => ({
-        name: asset.name,
-        type: asset.type,
-        foil: asset.foil,
-        hasFoilProperty: 'foil' in asset
-      })),
-      hasFoilProperty,
-      toggleState: initialState ? 'ON' : 'OFF'
-    });
-    
-    return initialState;
-  };
-
-  const [foilToggleState, setFoilToggleState] = useState(getInitialFoilToggleState);
   
   // State for delete confirmation modal
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [isDeletingAssets, setIsDeletingAssets] = useState(false);
-  
-  // Update foil toggle state when assets change (for navigation between pages)
-  useEffect(() => {
-    // Find front card assets
-    const frontCardAssets = configuredAssets.filter(asset => 
-      asset.type === 'base' || asset.type === 'parallel' || asset.type === 'multi-parallel' || asset.type === 'front'
-    );
-    
-    // Check if any front card asset has a 'foil' property defined (regardless of true/false)
-    const hasFoilProperty = frontCardAssets.some(asset => 'foil' in asset);
-    
-    // Toggle is OFF if any front card has foil property defined, otherwise ON (default foil behavior)
-    const newToggleState = !hasFoilProperty;
-    
-    console.log(`🔄 [Foil Toggle] useEffect state sync:`, {
-      totalAssets: configuredAssets.length,
-      frontCardAssets: frontCardAssets.map(asset => ({
-        name: asset.name,
-        type: asset.type,
-        foil: asset.foil,
-        hasFoilProperty: 'foil' in asset
-      })),
-      hasFoilProperty,
-      newToggleState: newToggleState ? 'ON' : 'OFF'
-    });
-    
-    setFoilToggleState(newToggleState);
-  }, [configuredAssets]);
   
   // Use centralized data store for asset mutations
   const { mutate: bulkUpdateAssetsMutation } = useAppDataStore('jobAssets', { 
@@ -310,156 +253,6 @@ export const AssetAdvancedOptions = ({
     }
   };
 
-  const handleBulkFoilToggle = async (newToggleState?: boolean) => {
-    if (savingAsset || !jobData?.job_id) return;
-    
-    // Find all eligible assets (only front card types: base, parallel, multi-parallel)
-    const eligibleAssets = configuredAssets.filter(asset => 
-      asset.type === 'base' || asset.type === 'parallel' || asset.type === 'multi-parallel' || asset.type === 'front'
-    );
-    
-    if (eligibleAssets.length === 0) {
-      console.log('📋 No eligible assets for foil operations (only base, parallel, multi-parallel front cards)');
-      return;
-    }
-    
-    // Use the new state if provided, otherwise use current state
-    const currentToggleState = newToggleState !== undefined ? newToggleState : foilToggleState;
-    
-    // Check current foil state based on toggle - when toggle is on, remove foil property; when off, add foil: false
-    const shouldAddFoilFalse = !currentToggleState;
-    
-    console.log(`🔧 ${shouldAddFoilFalse ? 'Adding foil: false' : 'Removing foil property'} ${shouldAddFoilFalse ? 'to' : 'from'} ${eligibleAssets.length} front card assets (base/parallel/multi-parallel only)`);
-    
-    try {
-      // Create a complete assets array: unchanged assets + foil-updated assets
-      const assetsToUpdateIds = new Set(eligibleAssets.map(a => a.id));
-      
-      // Helper function to create clean asset object with only essential properties
-      const createCleanAsset = (asset: AssetConfig) => {
-        const cleanAsset: any = {
-          name: asset.name,
-          type: asset.type,
-          layer: asset.layer
-        };
-        // Ensure we pass asset_id (map from id if necessary) to avoid duplicates
-        const resolvedAssetId = asset.asset_id || asset.id;
-        if (resolvedAssetId) cleanAsset.asset_id = resolvedAssetId;
-        
-        // Only include properties that have values
-        if (asset.spot) cleanAsset.spot = asset.spot;
-        if (asset.color) cleanAsset.color = asset.color;
-        
-        if (asset.spot_color_pairs && asset.spot_color_pairs.length > 0) {
-          cleanAsset.spot_color_pairs = asset.spot_color_pairs;
-        }
-        
-        if (asset.vfx) cleanAsset.vfx = asset.vfx;
-        if (asset.chrome) cleanAsset.chrome = asset.chrome;
-        if (asset.wp_inv_layer) cleanAsset.wp_inv_layer = asset.wp_inv_layer;
-        if (asset.foil !== undefined) cleanAsset.foil = asset.foil; // Include foil property if defined
-        
-        return cleanAsset;
-      };
-      
-      // Start with all assets that are NOT being updated (wp, back, wp-1of1, etc.)
-      const unchangedAssets = configuredAssets
-        .filter(asset => !assetsToUpdateIds.has(asset.id))
-        .map(asset => createCleanAsset(asset));
-      
-      // Create updated versions of the front card assets we're changing
-      const foilUpdatedAssets = eligibleAssets.map(asset => {
-        // Start with exact copy of asset to preserve all existing properties
-        const { oneOfOneWp, ...assetWithoutUIProps } = asset; // Remove only UI-specific properties
-        const updatedAsset: any = { ...assetWithoutUIProps };
-        // Normalize identifier to asset_id and drop id
-        const resolvedAssetId = updatedAsset.asset_id || updatedAsset.id;
-        if (resolvedAssetId) updatedAsset.asset_id = resolvedAssetId;
-        if ('id' in updatedAsset) delete updatedAsset.id;
-        
-        if (shouldAddFoilFalse) {
-          // Add foil: false when toggle is off
-          updatedAsset.foil = false;
-        } else {
-          // Remove foil property entirely when toggle is on (default foil behavior)
-          delete updatedAsset.foil;
-        }
-        
-        return updatedAsset;
-      });
-      
-      // Combine unchanged + updated assets for complete bulk update
-      const allAssets = [...unchangedAssets, ...foilUpdatedAssets];
-      
-      console.log(`📦 Bulk updating all ${allAssets.length} assets (${unchangedAssets.length} unchanged + ${foilUpdatedAssets.length} foil-updated front cards):`, {
-        unchanged: unchangedAssets.map(a => `${a.name} (${a.type})`),
-        foilUpdated: foilUpdatedAssets.map(a => `${a.name} (${a.type})`),
-        toggleState: `${currentToggleState ? 'ON' : 'OFF'}`
-      });
-      
-      // Make single bulk update API call with ALL assets via centralized data store
-      const response = await bulkUpdateAssetsMutation({
-        type: 'bulkUpdateAssets',
-        jobId: jobData.job_id,
-        data: allAssets
-      });
-      
-      if (response.success) {
-        console.log(`✅ Successfully ${shouldAddFoilFalse ? 'added foil: false to' : 'removed foil property from'} ${eligibleAssets.length} front card assets`);
-        
-        // Extract updated assets from normalized response - handle nested structure
-        const extractedAssets = response.assets?.assets || response.assets;
-        
-        // Update assets with the extracted assets (handle empty object and error cases)
-        const responseError = response.error;
-        
-        // Handle explicit "No assets found" error response
-        if (responseError && responseError.includes('No assets found') && onAssetsUpdate) {
-          console.log('ℹ️ bulk_update_assets returned "No assets found" - treating as empty assets');
-          onAssetsUpdate({ 
-            job_id: jobData.job_id, 
-            assets: {},
-            _cacheTimestamp: Date.now()
-          });
-        } else if (extractedAssets && typeof extractedAssets === 'object' && onAssetsUpdate) {
-          console.log('🔄 Foil: Using bulk_update_assets response assets directly (no redundant list_assets call):', {
-            assetsCount: Object.keys(extractedAssets).length,
-            isEmpty: Object.keys(extractedAssets).length === 0,
-            assetIds: Object.keys(extractedAssets),
-            jobId: jobData.job_id,
-            hasNestedStructure: !!response.assets?.assets,
-            isNormalized: response._normalized,
-            assetsSource: response._assets_source,
-            hasError: !!responseError
-          });
-          
-          // Create assets update with the new assets
-          onAssetsUpdate({ 
-            job_id: jobData.job_id, 
-            assets: extractedAssets,
-            _cacheTimestamp: Date.now() // Force UI refresh
-          });
-        } else if (onAssetsUpdate) {
-          console.log('⚠️ Unexpected response format from bulk_update_assets, using fallback refetch');
-          console.log('🔄 Foil: Response structure:', {
-            hasAssets: !!response.assets,
-            assetsType: typeof response.assets,
-            assetsCount: response.assets ? Object.keys(response.assets).length : 0,
-            isNormalized: response._normalized,
-            operation: response._operation,
-            error: responseError
-          });
-          onAssetsUpdate({ _forceRefetch: true, job_id: jobData.job_id });
-        }
-      } else {
-        console.error('❌ Bulk foil update failed:', response);
-      }
-      
-    } catch (error) {
-      console.error('❌ Error in bulk foil update:', error);
-    }
-  };
-
   const handleDeleteAllAssets = async () => {
     if (!jobData?.job_id || isDeletingAssets) return;
     
@@ -523,20 +316,23 @@ export const AssetAdvancedOptions = ({
       
       <div style={{
         display: 'grid',
-        gridTemplateColumns: isToppsNow ? 'auto' : '1fr 1fr auto',
+        gridTemplateColumns: isToppsNow ? 'auto' : 'auto auto',
         gap: 20,
-        alignItems: 'center'
+        alignItems: 'center',
+        justifyContent: 'start'
       }}>
         {/* Chrome Toggle (hidden for topps_now) */}
         {!isToppsNow && (
           <div style={{
             display: 'flex',
-            justifyContent: 'space-between',
+            justifyContent: 'flex-start',
+            gap: 12,
             alignItems: 'center',
             padding: '12px 16px',
             background: 'rgba(255, 255, 255, 0.03)',
             borderRadius: 8,
-            border: '1px solid rgba(255, 255, 255, 0.08)'
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            width: 'fit-content'
           }}>
             <div>
               <div style={{
@@ -580,69 +376,6 @@ export const AssetAdvancedOptions = ({
           </div>
         )}
 
-        {/* Foil Toggle (hidden for topps_now) */}
-        {!isToppsNow && (
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: '12px 16px',
-            background: 'rgba(255, 255, 255, 0.03)',
-            borderRadius: 8,
-            border: '1px solid rgba(255, 255, 255, 0.08)'
-          }}>
-            <div>
-              <div style={{
-                color: '#f8f8f8',
-                fontSize: 14,
-                fontWeight: 500
-              }}>
-                Apply Foil (Enabled by default)
-              </div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{
-                color: foilToggleState ? '#10b981' : '#6b7280',
-                fontSize: 13,
-                fontWeight: 600
-              }}>
-                {foilToggleState ? 'ON' : 'OFF'}
-              </span>
-              <button
-                onClick={async () => {
-                  const newState = !foilToggleState;
-                  setFoilToggleState(newState);
-                  await handleBulkFoilToggle(newState);
-                }}
-                disabled={savingAsset || creatingAssets || processingPdf}
-                style={{
-                  width: 44,
-                  height: 24,
-                  background: foilToggleState 
-                    ? 'linear-gradient(135deg, #10b981, #059669)'
-                    : 'rgba(156, 163, 175, 0.5)',
-                  border: 'none',
-                  borderRadius: 12,
-                  cursor: (savingAsset || creatingAssets || processingPdf) ? 'not-allowed' : 'pointer',
-                  transition: 'all 0.2s',
-                  position: 'relative',
-                  opacity: (savingAsset || creatingAssets || processingPdf) ? 0.6 : 1
-                }}
-              >
-                <div style={{
-                  width: 20,
-                  height: 20,
-                  background: 'white',
-                  borderRadius: '50%',
-                  transition: 'transform 0.2s',
-                  transform: foilToggleState ? 'translateX(22px)' : 'translateX(2px)',
-                  boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
-                }} />
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Delete All Assets (always visible; only control for topps_now) */}
         <button
           onClick={() => setShowDeleteConfirmation(true)}
@@ -661,7 +394,7 @@ export const AssetAdvancedOptions = ({
             transition: 'all 0.2s',
             opacity: (savingAsset || creatingAssets || processingPdf || configuredAssets.length === 0) ? 0.6 : 1,
             boxShadow: (savingAsset || creatingAssets || processingPdf || configuredAssets.length === 0) ? 'none' : '0 4px 12px rgba(239, 68, 68, 0.3)',
-            justifySelf: isToppsNow ? 'start' : 'end'
+            justifySelf: 'start'
           }}
           onMouseEnter={(e) => {
             if (!savingAsset && !creatingAssets && !processingPdf && configuredAssets.length > 0) {
