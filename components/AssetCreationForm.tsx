@@ -23,12 +23,12 @@ interface AssetConfig {
   oneOfOneWp?: boolean; // For BASE assets with superfractor chrome
   wp_inv_layer?: string; // For VFX and chrome effects
   foil?: {
-    foil_layer: string;
-    foil_color: 'silver' | 'gold';
+    foil_layer?: string;
+    foil_color?: 'silver' | 'gold';
   };
   coldfoil?: {
-    coldfoil_layer: string;
-    coldfoil_color: 'silver' | 'gold';
+    coldfoil_layer?: string;
+    coldfoil_color?: 'silver' | 'gold';
   };
 }
 

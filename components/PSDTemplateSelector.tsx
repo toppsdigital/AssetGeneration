@@ -47,9 +47,9 @@ interface AssetConfig {
   // Coldfoil/foil metadata
   coldfoil?: {
     coldfoil_layer?: string;
-    coldfoil_color?: string;
+    coldfoil_color?: 'silver' | 'gold';
   };
-  foil?: boolean | { foil_layer?: string; foil_color?: string };
+  foil?: { foil_layer?: string; foil_color?: 'silver' | 'gold' };
 }
 
 export const PSDTemplateSelector = ({ jobData, mergedJobData, isRefreshing = false, isVisible, creatingAssets, setCreatingAssets, onAssetsUpdate }: PSDTemplateSelectorProps) => {
@@ -383,9 +383,9 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isRefreshing = fal
         wp_inv_layer: assetData.wp_inv_layer || ''
       };
       
-      // Only include foil property if it has a defined value
-      if (assetData.foil !== undefined) {
-        asset.foil = assetData.foil;
+      // Only include foil property if it is an object with metadata
+      if (assetData.foil && typeof assetData.foil === 'object') {
+        asset.foil = assetData.foil as { foil_layer?: string; foil_color?: string };
       }
 
       // Include coldfoil metadata when present
