@@ -21,6 +21,7 @@ interface AssetConfig {
   spot_color_pairs?: SpotColorPair[]; // For PARALLEL cards with multiple combinations
   vfx?: string;
   chrome: string | boolean;
+  foilfractor?: boolean; // When true, show a gold "foilfractor" pill next to type
   oneOfOneWp?: boolean; // For BASE assets with superfractor chrome
   wp_inv_layer?: string; // For VFX and chrome effects
   // Coldfoil/foil objects rendered under Layers
@@ -368,26 +369,42 @@ export const AssetsTable = ({
                         }}>
                           {asset.name}
                         </span>
-                        <span style={{
-                          background: asset.type === 'wp' ? 'rgba(34, 197, 94, 0.2)' : 
-                                     asset.type === 'back' ? 'rgba(168, 85, 247, 0.2)' :
-                                     asset.type === 'base' ? 'rgba(59, 130, 246, 0.2)' :
-                                     asset.type === 'wp-1of1' ? 'rgba(245, 158, 11, 0.2)' :
-                                     'rgba(236, 72, 153, 0.2)',
-                          color: asset.type === 'wp' ? '#86efac' : 
-                                 asset.type === 'back' ? '#c084fc' :
-                                 asset.type === 'base' ? '#93c5fd' :
-                                 asset.type === 'wp-1of1' ? '#fbbf24' :
-                                 '#f9a8d4',
-                          padding: '2px 6px',
-                          borderRadius: 3,
-                          fontSize: 11,
-                          fontWeight: 600,
-                          letterSpacing: '0.02em',
-                          alignSelf: 'flex-start'
-                        }}>
-                          {asset.type === 'base' ? 'BASE' : asset.type === 'parallel' ? 'PARALLEL' : asset.type === 'multi-parallel' ? 'MULTI-PARALLEL' : asset.type === 'wp-1of1' ? 'WP-1OF1' : asset.type.toUpperCase()}
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{
+                            background: asset.type === 'wp' ? 'rgba(34, 197, 94, 0.2)' : 
+                                       asset.type === 'back' ? 'rgba(168, 85, 247, 0.2)' :
+                                       asset.type === 'base' ? 'rgba(59, 130, 246, 0.2)' :
+                                       asset.type === 'wp-1of1' ? 'rgba(245, 158, 11, 0.2)' :
+                                       'rgba(236, 72, 153, 0.2)',
+                            color: asset.type === 'wp' ? '#86efac' : 
+                                   asset.type === 'back' ? '#c084fc' :
+                                   asset.type === 'base' ? '#93c5fd' :
+                                   asset.type === 'wp-1of1' ? '#fbbf24' :
+                                   '#f9a8d4',
+                            padding: '2px 6px',
+                            borderRadius: 3,
+                            fontSize: 11,
+                            fontWeight: 600,
+                            letterSpacing: '0.02em',
+                            alignSelf: 'flex-start'
+                          }}>
+                            {asset.type === 'base' ? 'BASE' : asset.type === 'parallel' ? 'PARALLEL' : asset.type === 'multi-parallel' ? 'MULTI-PARALLEL' : asset.type === 'wp-1of1' ? 'WP-1OF1' : asset.type.toUpperCase()}
+                          </span>
+                          {asset.foilfractor && (
+                            <span style={{
+                              background: 'rgba(245, 158, 11, 0.2)', // gold-like background
+                              color: '#fbbf24', // gold text
+                              padding: '2px 6px',
+                              borderRadius: 3,
+                              fontSize: 11,
+                              fontWeight: 600,
+                              letterSpacing: '0.02em',
+                              alignSelf: 'flex-start'
+                            }}>
+                              FOILFRACTOR
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td style={{ padding: '12px 14px', color: '#e5e7eb', fontSize: 14, textAlign: 'left' }}>
@@ -432,11 +449,6 @@ export const AssetsTable = ({
                                 display: 'inline-block',
                                 border: '1px solid rgba(255, 255, 255, 0.2)'
                               }} />
-                              <span style={{ fontSize: 14, color: '#d1d5db' }}>
-                                {asset.coldfoil?.coldfoil_color?.startsWith('R')
-                                  ? getColorDisplayNameByRgb(asset.coldfoil.coldfoil_color as string)
-                                  : (HARDCODED_COLORS.find(c => c.name.toLowerCase() === (asset.coldfoil?.coldfoil_color || 'silver')!.toLowerCase())?.name || (asset.coldfoil?.coldfoil_color || 'silver'))}
-                              </span>
                             </div>
                           </div>
                         )}
@@ -461,11 +473,6 @@ export const AssetsTable = ({
                                 display: 'inline-block',
                                 border: '1px solid rgba(255, 255, 255, 0.2)'
                               }} />
-                              <span style={{ fontSize: 14, color: '#d1d5db' }}>
-                                {((asset.foil as { foil_layer?: string; foil_color?: string }).foil_color as string | undefined)?.startsWith('R')
-                                  ? getColorDisplayNameByRgb((asset.foil as { foil_layer?: string; foil_color?: string }).foil_color as string)
-                                  : (HARDCODED_COLORS.find(c => c.name.toLowerCase() === ((((asset.foil as { foil_layer?: string; foil_color?: string }).foil_color as string | undefined) || 'silver')).toLowerCase())?.name || (((asset.foil as { foil_layer?: string; foil_color?: string }).foil_color as string | undefined) || 'silver'))}
-                              </span>
                             </div>
                           </div>
                         )}

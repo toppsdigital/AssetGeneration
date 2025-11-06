@@ -41,6 +41,7 @@ interface AssetConfig {
   spot_color_pairs?: SpotColorPair[]; // For PARALLEL cards with multiple combinations
   vfx?: string;
   chrome: string | boolean;
+  foilfractor?: boolean;
   oneOfOneWp?: boolean; // For BASE assets with superfractor chrome
   wp_inv_layer?: string; // For VFX and chrome effects
   // Coldfoil/foil metadata
@@ -377,6 +378,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isRefreshing = fal
         spot_color_pairs: assetData.spot_color_pairs || [],
         vfx: assetData.vfx,
         chrome: assetData.chrome || false,
+        foilfractor: assetData.foilfractor === true,
         oneOfOneWp: assetData.oneOfOneWp || false,
         wp_inv_layer: assetData.wp_inv_layer || ''
       };
