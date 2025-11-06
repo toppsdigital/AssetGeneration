@@ -92,6 +92,20 @@ export const AssetCreationForm = ({
       
       setCurrentCardType(cardTypeForUI);
       
+      // Build normalized foil/coldfoil layers to match available options
+      const foilOptions = getFoilLayers();
+      const coldfoilOptions = getColdfoilLayers();
+      const normalizedFoilLayer = normalizeEffectLayerSelection(
+        typeof editingAsset.foil === 'object' ? editingAsset.foil?.foil_layer : undefined,
+        foilOptions,
+        'foil'
+      );
+      const normalizedColdfoilLayer = normalizeEffectLayerSelection(
+        editingAsset.coldfoil?.coldfoil_layer,
+        coldfoilOptions,
+        'coldfoil'
+      );
+
       // Set the configuration
       setCurrentConfig({
         id: editingAsset.id,
@@ -101,8 +115,18 @@ export const AssetCreationForm = ({
         chrome: editingAsset.chrome || false,
         oneOfOneWp: editingAsset.oneOfOneWp || false,
         wp_inv_layer: editingAsset.wp_inv_layer || '',
-        foil: editingAsset.foil,
-        coldfoil: editingAsset.coldfoil,
+        foil: typeof editingAsset.foil === 'object'
+          ? {
+              foil_layer: normalizedFoilLayer || editingAsset.foil?.foil_layer,
+              foil_color: (editingAsset.foil?.foil_color as 'silver' | 'gold') || 'silver'
+            }
+          : undefined,
+        coldfoil: editingAsset.coldfoil
+          ? {
+              coldfoil_layer: normalizedColdfoilLayer || editingAsset.coldfoil?.coldfoil_layer,
+              coldfoil_color: (editingAsset.coldfoil?.coldfoil_color as 'silver' | 'gold') || 'silver'
+            }
+          : undefined,
         type: editingAsset.type
       });
       
@@ -304,6 +328,23 @@ export const AssetCreationForm = ({
       }
     });
     return Array.from(cfSet).sort();
+  };
+
+  // Normalize foil/coldfoil layer to match available options (e.g., 'coldfoil1' -> 'coldfoil' if only base exists)
+  const normalizeEffectLayerSelection = (
+    desiredLayer: string | undefined,
+    availableOptions: string[],
+    baseToken: 'foil' | 'coldfoil'
+  ): string | undefined => {
+    if (!desiredLayer) return undefined;
+    const desired = desiredLayer.toLowerCase();
+    if (availableOptions.includes(desired)) return desired;
+    // Try base token (strip trailing digits)
+    const base = desired.replace(new RegExp(`^(${baseToken})(\\d+)$`), '$1');
+    if (availableOptions.includes(base)) return base;
+    // Try first option that starts with base token
+    const firstCandidate = availableOptions.find(opt => opt.startsWith(baseToken));
+    return firstCandidate || desiredLayer;
   };
 
   // Function to determine the actual asset type based on configuration
