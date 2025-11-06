@@ -23,7 +23,9 @@ interface AssetConfig {
   chrome: string | boolean;
   oneOfOneWp?: boolean;
   wp_inv_layer?: string;
-  foil?: boolean; // For foil effect control
+  // Foil/coldfoil metadata for compatibility with table props
+  coldfoil?: { coldfoil_layer?: string; coldfoil_color?: string };
+  foil?: boolean | { foil_layer?: string; foil_color?: string };
 }
 
 interface AssetAdvancedOptionsProps {

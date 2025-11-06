@@ -43,7 +43,12 @@ interface AssetConfig {
   chrome: string | boolean;
   oneOfOneWp?: boolean; // For BASE assets with superfractor chrome
   wp_inv_layer?: string; // For VFX and chrome effects
-  foil?: boolean; // For foil effect control
+  // Coldfoil/foil metadata
+  coldfoil?: {
+    coldfoil_layer?: string;
+    coldfoil_color?: string;
+  };
+  foil?: boolean | { foil_layer?: string; foil_color?: string };
 }
 
 export const PSDTemplateSelector = ({ jobData, mergedJobData, isRefreshing = false, isVisible, creatingAssets, setCreatingAssets, onAssetsUpdate }: PSDTemplateSelectorProps) => {
@@ -379,6 +384,11 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isRefreshing = fal
       // Only include foil property if it has a defined value
       if (assetData.foil !== undefined) {
         asset.foil = assetData.foil;
+      }
+
+      // Include coldfoil metadata when present
+      if (assetData.coldfoil !== undefined) {
+        asset.coldfoil = assetData.coldfoil;
       }
       
       return asset;

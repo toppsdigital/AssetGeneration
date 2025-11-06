@@ -23,7 +23,17 @@ interface AssetConfig {
   chrome: string | boolean;
   oneOfOneWp?: boolean; // For BASE assets with superfractor chrome
   wp_inv_layer?: string; // For VFX and chrome effects
-  foil?: boolean; // For foil effect control
+  // Coldfoil/foil objects rendered under Layers
+  coldfoil?: {
+    coldfoil_layer?: string;
+    coldfoil_color?: string; // e.g., 'silver' | 'gold' or RGB like RxxxGxxxBxxx
+  };
+  foil?:
+    | boolean
+    | {
+        foil_layer?: string;
+        foil_color?: string; // optional; default display to 'silver' if absent
+      };
 }
 
 interface AssetsTableProps {
@@ -401,6 +411,64 @@ export const AssetsTable = ({
                             )}
                           </div>
                         )}
+
+                        {/* Coldfoil layer and color (default to silver) */}
+                        {asset.coldfoil?.coldfoil_layer && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, justifyContent: 'flex-start' }}>
+                            <span style={{
+                              fontSize: 14,
+                              color: '#e5e7eb'
+                            }}>
+                              {asset.coldfoil.coldfoil_layer}
+                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{
+                                width: 10,
+                                height: 10,
+                                borderRadius: '50%',
+                                background: asset.coldfoil?.coldfoil_color?.startsWith('R')
+                                  ? getColorHexByRgb(asset.coldfoil.coldfoil_color as string)
+                                  : getColorHexByName((asset.coldfoil?.coldfoil_color || 'silver') as string),
+                                display: 'inline-block',
+                                border: '1px solid rgba(255, 255, 255, 0.2)'
+                              }} />
+                              <span style={{ fontSize: 14, color: '#d1d5db' }}>
+                                {asset.coldfoil?.coldfoil_color?.startsWith('R')
+                                  ? getColorDisplayNameByRgb(asset.coldfoil.coldfoil_color as string)
+                                  : (HARDCODED_COLORS.find(c => c.name.toLowerCase() === (asset.coldfoil?.coldfoil_color || 'silver')!.toLowerCase())?.name || (asset.coldfoil?.coldfoil_color || 'silver'))}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Foil layer and color (default to silver) */}
+                        {typeof asset.foil === 'object' && asset.foil !== null && (asset.foil as { foil_layer?: string; foil_color?: string })?.foil_layer && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, justifyContent: 'flex-start' }}>
+                            <span style={{
+                              fontSize: 14,
+                              color: '#e5e7eb'
+                            }}>
+                              {(asset.foil as { foil_layer?: string; foil_color?: string }).foil_layer}
+                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{
+                                width: 10,
+                                height: 10,
+                                borderRadius: '50%',
+                                background: ((asset.foil as { foil_layer?: string; foil_color?: string }).foil_color as string | undefined)?.startsWith('R')
+                                  ? getColorHexByRgb((asset.foil as { foil_layer?: string; foil_color?: string }).foil_color as string)
+                                  : getColorHexByName((((asset.foil as { foil_layer?: string; foil_color?: string }).foil_color as string | undefined) || 'silver') as string),
+                                display: 'inline-block',
+                                border: '1px solid rgba(255, 255, 255, 0.2)'
+                              }} />
+                              <span style={{ fontSize: 14, color: '#d1d5db' }}>
+                                {((asset.foil as { foil_layer?: string; foil_color?: string }).foil_color as string | undefined)?.startsWith('R')
+                                  ? getColorDisplayNameByRgb((asset.foil as { foil_layer?: string; foil_color?: string }).foil_color as string)
+                                  : (HARDCODED_COLORS.find(c => c.name.toLowerCase() === ((((asset.foil as { foil_layer?: string; foil_color?: string }).foil_color as string | undefined) || 'silver')).toLowerCase())?.name || (((asset.foil as { foil_layer?: string; foil_color?: string }).foil_color as string | undefined) || 'silver'))}
+                              </span>
+                            </div>
+                          </div>
+                        )}
                         
                         {/* Show spot values from spot_color_pairs */}
                         {asset.spot_color_pairs && asset.spot_color_pairs.length > 0 && (
@@ -463,7 +531,7 @@ export const AssetsTable = ({
                         )}
                         
                         {/* Fallback: Show dash for empty cases */}
-                        {!asset.layer && (!asset.spot_color_pairs || asset.spot_color_pairs.length === 0) && !asset.spot && (
+                        {!asset.layer && (!asset.spot_color_pairs || asset.spot_color_pairs.length === 0) && !asset.spot && !asset.coldfoil?.coldfoil_layer && !(typeof asset.foil === 'object' && asset.foil !== null && (asset.foil as { foil_layer?: string }).foil_layer) && (
                           <span style={{ color: '#6b7280' }}>—</span>
                         )}
                       </div>
