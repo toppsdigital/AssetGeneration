@@ -22,7 +22,14 @@ interface AssetConfig {
   chrome: string | boolean;
   oneOfOneWp?: boolean; // For BASE assets with superfractor chrome
   wp_inv_layer?: string; // For VFX and chrome effects
-  foil?: boolean; // For foil effect control
+  foil?: {
+    foil_layer: string;
+    foil_color: 'silver' | 'gold';
+  };
+  coldfoil?: {
+    coldfoil_layer: string;
+    coldfoil_color: 'silver' | 'gold';
+  };
 }
 
 interface AssetCreationFormProps {
@@ -94,6 +101,8 @@ export const AssetCreationForm = ({
         chrome: editingAsset.chrome || false,
         oneOfOneWp: editingAsset.oneOfOneWp || false,
         wp_inv_layer: editingAsset.wp_inv_layer || '',
+        foil: editingAsset.foil,
+        coldfoil: editingAsset.coldfoil,
         type: editingAsset.type
       });
       
@@ -259,6 +268,42 @@ export const AssetCreationForm = ({
       groupName: 'COLORS',
       colors: HARDCODED_COLORS
     }];
+  };
+
+  const getFoilLayers = () => {
+    const extractedLayers = getExtractedLayers();
+    const foilSet = new Set<string>();
+    extractedLayers.forEach(layer => {
+      const lower = layer.toLowerCase();
+      // Exclude coldfoil from plain foil detection
+      if (lower.includes('coldfoil')) return;
+      if (lower.includes('foil')) {
+        const match = lower.match(/foil(\d+)/);
+        if (match && match[1]) {
+          foilSet.add(`foil${match[1]}`);
+        } else {
+          foilSet.add('foil');
+        }
+      }
+    });
+    return Array.from(foilSet).sort();
+  };
+
+  const getColdfoilLayers = () => {
+    const extractedLayers = getExtractedLayers();
+    const cfSet = new Set<string>();
+    extractedLayers.forEach(layer => {
+      const lower = layer.toLowerCase();
+      if (lower.includes('coldfoil')) {
+        const match = lower.match(/coldfoil(\d+)/);
+        if (match && match[1]) {
+          cfSet.add(`coldfoil${match[1]}`);
+        } else {
+          cfSet.add('coldfoil');
+        }
+      }
+    });
+    return Array.from(cfSet).sort();
   };
 
   // Function to determine the actual asset type based on configuration
@@ -893,6 +938,177 @@ export const AssetCreationForm = ({
                 ))}
               </select>
             </div>
+          )}
+
+          {/* Foil and Coldfoil Selection */}
+          {(currentCardType === 'front' || currentCardType === 'base') && (
+            <>
+              {/* Foil */}
+              {getFoilLayers().length > 0 && (
+                <div>
+                  <label style={{
+                    display: 'block',
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: '#f8f8f8',
+                    marginBottom: 8
+                  }}>
+                    Foil
+                  </label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <select
+                      value={currentConfig.foil?.foil_layer || ''}
+                      onChange={(e) => {
+                        const layerVal = e.target.value;
+                        if (!layerVal) {
+                          setCurrentConfig(prev => {
+                            const { foil, ...rest } = prev;
+                            return { ...rest };
+                          });
+                        } else {
+                          setCurrentConfig(prev => ({
+                            ...prev,
+                            foil: {
+                              foil_layer: layerVal,
+                              foil_color: prev.foil?.foil_color || 'silver'
+                            }
+                          }));
+                        }
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: '8px 12px',
+                        background: 'rgba(255, 255, 255, 0.08)',
+                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                        borderRadius: 8,
+                        color: '#f8f8f8',
+                        fontSize: 14
+                      }}
+                    >
+                      <option value="" style={{ background: '#1f2937' }}>None</option>
+                      {getFoilLayers().map(foilLayer => (
+                        <option key={foilLayer} value={foilLayer} style={{ background: '#1f2937' }}>
+                          {foilLayer}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={currentConfig.foil?.foil_color || 'silver'}
+                      onChange={(e) => {
+                        const colorVal = e.target.value as 'silver' | 'gold';
+                        setCurrentConfig(prev => {
+                          if (!prev.foil?.foil_layer) return prev; // ignore when layer not selected
+                          return {
+                            ...prev,
+                            foil: {
+                              foil_layer: prev.foil.foil_layer,
+                              foil_color: colorVal
+                            }
+                          };
+                        });
+                      }}
+                      disabled={!currentConfig.foil?.foil_layer}
+                      style={{
+                        width: 140,
+                        padding: '8px 12px',
+                        background: 'rgba(255, 255, 255, 0.08)',
+                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                        borderRadius: 8,
+                        color: '#f8f8f8',
+                        fontSize: 14,
+                        opacity: currentConfig.foil?.foil_layer ? 1 : 0.5
+                      }}
+                    >
+                      <option value="silver" style={{ background: '#1f2937' }}>Silver</option>
+                      <option value="gold" style={{ background: '#1f2937' }}>Gold</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Coldfoil */}
+              {getColdfoilLayers().length > 0 && (
+                <div>
+                  <label style={{
+                    display: 'block',
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: '#f8f8f8',
+                    marginBottom: 8
+                  }}>
+                    Coldfoil
+                  </label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <select
+                      value={currentConfig.coldfoil?.coldfoil_layer || ''}
+                      onChange={(e) => {
+                        const layerVal = e.target.value;
+                        if (!layerVal) {
+                          setCurrentConfig(prev => {
+                            const { coldfoil, ...rest } = prev;
+                            return { ...rest };
+                          });
+                        } else {
+                          setCurrentConfig(prev => ({
+                            ...prev,
+                            coldfoil: {
+                              coldfoil_layer: layerVal,
+                              coldfoil_color: prev.coldfoil?.coldfoil_color || 'silver'
+                            }
+                          }));
+                        }
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: '8px 12px',
+                        background: 'rgba(255, 255, 255, 0.08)',
+                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                        borderRadius: 8,
+                        color: '#f8f8f8',
+                        fontSize: 14
+                      }}
+                    >
+                      <option value="" style={{ background: '#1f2937' }}>None</option>
+                      {getColdfoilLayers().map(cfLayer => (
+                        <option key={cfLayer} value={cfLayer} style={{ background: '#1f2937' }}>
+                          {cfLayer}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={currentConfig.coldfoil?.coldfoil_color || 'silver'}
+                      onChange={(e) => {
+                        const colorVal = e.target.value as 'silver' | 'gold';
+                        setCurrentConfig(prev => {
+                          if (!prev.coldfoil?.coldfoil_layer) return prev; // ignore when layer not selected
+                          return {
+                            ...prev,
+                            coldfoil: {
+                              coldfoil_layer: prev.coldfoil.coldfoil_layer,
+                              coldfoil_color: colorVal
+                            }
+                          };
+                        });
+                      }}
+                      disabled={!currentConfig.coldfoil?.coldfoil_layer}
+                      style={{
+                        width: 140,
+                        padding: '8px 12px',
+                        background: 'rgba(255, 255, 255, 0.08)',
+                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                        borderRadius: 8,
+                        color: '#f8f8f8',
+                        fontSize: 14,
+                        opacity: currentConfig.coldfoil?.coldfoil_layer ? 1 : 0.5
+                      }}
+                    >
+                      <option value="silver" style={{ background: '#1f2937' }}>Silver</option>
+                      <option value="gold" style={{ background: '#1f2937' }}>Gold</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           {/* VFX Texture Selection */}

@@ -548,6 +548,11 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isRefreshing = fal
         assetConfig.foil = config.foil;
       }
 
+      // Include coldfoil if explicitly provided
+      if (typeof config.coldfoil !== 'undefined') {
+        assetConfig.coldfoil = config.coldfoil;
+      }
+
       // Always include asset_id when we have one to avoid duplicate creations on update
       if (resolvedAssetId) {
         assetConfig.asset_id = resolvedAssetId;
