@@ -593,8 +593,8 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isRefreshing = fal
           }));
         }
 
-        // Include wp_inv_layer if VFX is enabled OR chrome is present
-        if ((config.vfx && config.vfx.trim() !== '') || config.chrome) {
+        // Include wp_inv_layer if VFX is enabled, chrome is present, or foilfractor is enabled
+        if ((config.vfx && config.vfx.trim() !== '') || config.chrome || config.foilfractor === true) {
           const wpInvLayer = config.wp_inv_layer || getWpInvLayers()[0];
           if (wpInvLayer) {
             assetConfig.wp_inv_layer = wpInvLayer;
@@ -616,8 +616,8 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isRefreshing = fal
           assetConfig.vfx = config.vfx;
         }
 
-        // Include wp_inv_layer if VFX is enabled OR chrome is present
-        if ((config.vfx && config.vfx.trim() !== '') || config.chrome) {
+        // Include wp_inv_layer if VFX is enabled, chrome is present, or foilfractor is enabled
+        if ((config.vfx && config.vfx.trim() !== '') || config.chrome || config.foilfractor === true) {
           const wpInvLayer = config.wp_inv_layer || getWpInvLayers()[0];
           if (wpInvLayer) {
             assetConfig.wp_inv_layer = wpInvLayer;
