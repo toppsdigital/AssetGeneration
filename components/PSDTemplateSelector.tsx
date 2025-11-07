@@ -543,6 +543,11 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isRefreshing = fal
         assetConfig.chrome = config.chrome;
       }
 
+      // Include foilfractor only when enabled; omit entirely when disabled
+      if (config.foilfractor === true) {
+        assetConfig.foilfractor = true;
+      }
+
       // Include foil if explicitly provided
       if (typeof config.foil !== 'undefined') {
         assetConfig.foil = config.foil;
