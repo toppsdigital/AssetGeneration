@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { contentPipelineApi } from '../web/utils/contentPipelineApi';
+import { buildS3UploadsPath } from '../utils/environment';
 
 type LayerType = 'overlay1' | 'back' | 'cmyk' | 'spot' | 'wp' | 'wp_inv' | 'foil' | 'coldfoil';
 
@@ -20,6 +22,8 @@ interface UploadLayersModalProps {
   ) => void;
   cardIds: string[]; // expected card identifiers to match against (derived from job files)
   fileRelease?: string; // optional release prefix to use in upload naming
+  jobId?: string;
+  appName?: string;
 }
 
 export const UploadLayersModal = ({
@@ -27,10 +31,16 @@ export const UploadLayersModal = ({
   onClose,
   onConfirm,
   cardIds,
-  fileRelease
+  fileRelease,
+  jobId,
+  appName
 }: UploadLayersModalProps) => {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [selectedLayerType, setSelectedLayerType] = useState<LayerType | ''>('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadedCount, setUploadedCount] = useState(0);
+  const [totalToUpload, setTotalToUpload] = useState(0);
+  const [uploadErrors, setUploadErrors] = useState<string[]>([]);
 
   const layerTypes: LayerType[] = useMemo(
     () => ['overlay1', 'back', 'cmyk', 'spot', 'wp', 'wp_inv', 'foil', 'coldfoil'],
@@ -105,6 +115,58 @@ export const UploadLayersModal = ({
 
   // Important: guard comes AFTER all hooks to preserve hook order across renders
   if (!isOpen) return null;
+
+  const matchedResults = previewResults.filter(r => r.matchStatus === 'matched' && r.newFilename);
+
+  const handleUpload = async () => {
+    if (!selectedLayerType || matchedResults.length === 0) return;
+    const safeJobId = (jobId || '').trim();
+    const safeAppName = (appName || '').trim();
+    const extractedFolder = buildS3UploadsPath(`${safeAppName || 'UnknownApp'}/${safeJobId || 'UnknownJob'}/Extracted_new`);
+
+    setIsUploading(true);
+    setUploadedCount(0);
+    setTotalToUpload(matchedResults.length);
+    setUploadErrors([]);
+    
+    for (const result of matchedResults) {
+      try {
+        const filenameKey = `${extractedFolder}/${result.newFilename}`;
+        const presigned = await contentPipelineApi.getPresignedUrl({
+          client_method: 'put',
+          filename: filenameKey,
+          size: result.file.size,
+          content_type: result.file.type || 'application/octet-stream'
+        });
+        
+        let resp;
+        if (presigned.fields && presigned.method === 'POST') {
+          const formData = new FormData();
+          Object.entries(presigned.fields).forEach(([k, v]) => {
+            if (k.toLowerCase().startsWith('x-amz-meta-')) return; // avoid extra meta fields not in policy
+            formData.append(k, v as string);
+          });
+          formData.append('file', result.file);
+          resp = await fetch(presigned.url, { method: 'POST', body: formData });
+        } else {
+          resp = await fetch(presigned.url, {
+            method: 'PUT',
+            headers: { 'Content-Type': result.file.type || 'application/octet-stream' },
+            body: result.file
+          });
+        }
+        if (!resp.ok) {
+          const errText = await resp.text().catch(() => '');
+          throw new Error(`S3 upload failed: ${resp.status} ${errText}`);
+        }
+        setUploadedCount(prev => prev + 1);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setUploadErrors(prev => [...prev, `${result.newFilename}: ${msg}`]);
+      }
+    }
+    setIsUploading(false);
+  };
 
   const modalContent = (
     <div
@@ -272,6 +334,31 @@ export const UploadLayersModal = ({
               </div>
             </div>
           )}
+          
+          {isUploading && (
+            <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{
+                width: 16,
+                height: 16,
+                border: '2px solid rgba(255,255,255,0.3)',
+                borderTop: '2px solid #fff',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite'
+              }} />
+              <div style={{ fontSize: 13, color: '#d1d5db' }}>
+                Uploading {uploadedCount}/{totalToUpload}...
+              </div>
+            </div>
+          )}
+          {uploadErrors.length > 0 && (
+            <div style={{ marginTop: 8, fontSize: 12, color: '#fca5a5' }}>
+              {uploadErrors.length} failed:
+              <ul style={{ margin: '6px 0 0 16px' }}>
+                {uploadErrors.slice(0, 3).map((e, i) => (<li key={i}>{e}</li>))}
+              </ul>
+              {uploadErrors.length > 3 && <div>…and {uploadErrors.length - 3} more</div>}
+            </div>
+          )}
         </div>
 
         <div
@@ -284,13 +371,14 @@ export const UploadLayersModal = ({
         >
           <button
             onClick={onClose}
+            disabled={isUploading}
             style={{
               background: 'transparent',
               color: '#e5e7eb',
               border: '1px solid rgba(255,255,255,0.12)',
               padding: '10px 14px',
               borderRadius: 8,
-              cursor: 'pointer',
+              cursor: isUploading ? 'not-allowed' : 'pointer',
               fontSize: 14,
               fontWeight: 600
             }}
@@ -298,25 +386,33 @@ export const UploadLayersModal = ({
             Cancel
           </button>
           <button
-            disabled={!canConfirm}
+            disabled={!canConfirm || isUploading}
             onClick={() => {
-              if (!canConfirm) return;
-              onConfirm(selectedFiles, selectedLayerType as LayerType, previewResults);
+              if (!canConfirm || isUploading) return;
+              // Begin upload; when finished, keep modal open and switch button label to Done
+              handleUpload();
             }}
             style={{
-              background: canConfirm ? '#2563eb' : '#1f2a44',
-              color: canConfirm ? 'white' : '#94a3b8',
+              background: canConfirm && !isUploading ? '#2563eb' : '#1f2a44',
+              color: canConfirm && !isUploading ? 'white' : '#94a3b8',
               border: 'none',
               padding: '10px 14px',
               borderRadius: 8,
-              cursor: canConfirm ? 'pointer' : 'not-allowed',
+              cursor: canConfirm && !isUploading ? 'pointer' : 'not-allowed',
               fontSize: 14,
               fontWeight: 700
             }}
           >
-            Upload
+            {uploadedCount > 0 && uploadedCount === totalToUpload && uploadErrors.length === 0 ? 'Done' : 'Upload'}
           </button>
         </div>
+        
+        <style jsx>{`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}</style>
       </div>
     </div>
   );

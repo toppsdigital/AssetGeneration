@@ -208,6 +208,8 @@ export const FilesSection = ({
           (typeof jobData?.filename_prefix === 'string' && jobData.filename_prefix) ||
           ''
         }
+        jobId={jobData?.job_id || mergedJobData?.job_id || ''}
+        appName={jobData?.app_name || mergedJobData?.app_name || ''}
       />
     </div>
   );
