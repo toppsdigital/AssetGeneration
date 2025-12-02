@@ -385,26 +385,35 @@ export const UploadLayersModal = ({
           >
             Cancel
           </button>
-          <button
-            disabled={!canConfirm || isUploading}
-            onClick={() => {
-              if (!canConfirm || isUploading) return;
-              // Begin upload; when finished, keep modal open and switch button label to Done
-              handleUpload();
-            }}
-            style={{
-              background: canConfirm && !isUploading ? '#2563eb' : '#1f2a44',
-              color: canConfirm && !isUploading ? 'white' : '#94a3b8',
-              border: 'none',
-              padding: '10px 14px',
-              borderRadius: 8,
-              cursor: canConfirm && !isUploading ? 'pointer' : 'not-allowed',
-              fontSize: 14,
-              fontWeight: 700
-            }}
-          >
-            {uploadedCount > 0 && uploadedCount === totalToUpload && uploadErrors.length === 0 ? 'Done' : 'Upload'}
-          </button>
+          {(() => {
+            const isCompleted = uploadedCount > 0 && uploadedCount === totalToUpload && uploadErrors.length === 0;
+            const isDisabled = isUploading || (!canConfirm && !isCompleted);
+            return (
+              <button
+                disabled={isDisabled}
+                onClick={() => {
+                  if (isDisabled) return;
+                  if (isCompleted) {
+                    onClose();
+                    return;
+                  }
+                  handleUpload();
+                }}
+                style={{
+                  background: (!isDisabled && !isCompleted) ? '#2563eb' : (isCompleted ? '#10b981' : '#1f2a44'),
+                  color: (!isDisabled || isCompleted) ? 'white' : '#94a3b8',
+                  border: 'none',
+                  padding: '10px 14px',
+                  borderRadius: 8,
+                  cursor: (!isDisabled) ? 'pointer' : 'not-allowed',
+                  fontSize: 14,
+                  fontWeight: 700
+                }}
+              >
+                {isCompleted ? 'Done' : 'Upload'}
+              </button>
+            );
+          })()}
         </div>
         
         <style jsx>{`

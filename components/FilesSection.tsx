@@ -1,11 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { LoadingProgress } from './skeletons/LoadingProgress';
 import { FileCardSkeleton } from './skeletons/FileCardSkeleton';
 import FileCard from './FileCard';
 import { getTotalLoadingSteps, getLoadingStepInfo } from '../utils/fileOperations';
 import { UploadLayersModal } from './UploadLayersModal';
+import { contentPipelineApi } from '../web/utils/contentPipelineApi';
+import { dataStoreKeys } from '../hooks/useAppDataStore';
 
 interface FilesSectionProps {
   mergedJobData: any;
@@ -32,6 +35,8 @@ export const FilesSection = ({
   loadingDetail,
   className = ''
 }: FilesSectionProps) => {
+  const queryClient = useQueryClient();
+  const [isRefreshingFilesOnly, setIsRefreshingFilesOnly] = useState(false);
   // Debug file data flow to FileCard
   console.log('🔍 FilesSection Data Flow Debug:', {
     timestamp: new Date().toISOString(),
@@ -63,6 +68,7 @@ export const FilesSection = ({
   };
 
   const [isUploadLayersOpen, setIsUploadLayersOpen] = useState(false);
+  const canUploadLayers = ((mergedJobData?.job_status || jobData?.job_status || '') as string).toLowerCase() === 'extracted';
 
   const handleConfirmUploadLayers = (files: File[], layerType: string, results: Array<{ file: File; matchStatus: 'matched' | 'unmatched' | 'ambiguous'; matchedCardId?: string; newFilename?: string; }>) => {
     // For now, just log selection and computed matches; integration with upload pipeline can hook here.
@@ -81,9 +87,46 @@ export const FilesSection = ({
     setIsUploadLayersOpen(false);
   };
 
+  const handleRefreshFilesOnly = async () => {
+    try {
+      setIsRefreshingFilesOnly(true);
+      const jobId = mergedJobData?.job_id || jobData?.job_id;
+      const apiFiles: string[] = mergedJobData?.api_files || jobData?.api_files || [];
+      if (!jobId || apiFiles.length === 0) {
+        console.warn('⚠️ Unable to refresh files: missing jobId or api_files', { jobId, apiFilesCount: apiFiles.length });
+        return;
+      }
+      const filesResponse = await contentPipelineApi.batchGetFiles(apiFiles);
+      const mappedFiles = filesResponse.files.map(apiFile => ({
+        filename: apiFile.filename,
+        job_id: apiFile.job_id,
+        last_updated: apiFile.last_updated || new Date().toISOString(),
+        original_files: apiFile.original_files || {},
+        extracted_files: apiFile.extracted_files || {},
+        firefly_assets: apiFile.firefly_assets || {}
+      }));
+      // Update files cache
+      queryClient.setQueryData(dataStoreKeys.files.byJob(jobId), mappedFiles);
+      // Update job details cache with fresh files (preserving other fields)
+      queryClient.setQueryData(
+        dataStoreKeys.jobs.detail(jobId),
+        (prev: any) => ({
+          ...(prev || mergedJobData || {}),
+          content_pipeline_files: mappedFiles,
+          last_updated: new Date().toISOString()
+        })
+      );
+      console.log(`✅ Refreshed files for job ${jobId}:`, { count: mappedFiles.length });
+    } catch (err) {
+      console.error('❌ Failed to refresh files only:', err);
+    } finally {
+      setIsRefreshingFilesOnly(false);
+    }
+  };
+
   return (
-    <div className={className} style={{ marginTop: 32, opacity: isRefreshing ? 0.5 : 1, pointerEvents: isRefreshing ? 'none' as any : 'auto', position: 'relative' }}>
-      {isRefreshing && (
+    <div className={className} style={{ marginTop: 32, opacity: (isRefreshing || isRefreshingFilesOnly) ? 0.5 : 1, pointerEvents: (isRefreshing || isRefreshingFilesOnly) ? 'none' as any : 'auto', position: 'relative' }}>
+      {(isRefreshing || isRefreshingFilesOnly) && (
         <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.15)' }} />
       )}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
@@ -95,24 +138,47 @@ export const FilesSection = ({
         }}>
           📁 Files ({mergedJobData?.content_pipeline_files?.length || 0})
         </h2>
-        <button
-          onClick={() => setIsUploadLayersOpen(true)}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 8,
-            background: '#2563eb',
-            color: 'white',
-            border: 'none',
-            padding: '8px 12px',
-            borderRadius: 8,
-            cursor: 'pointer',
-            fontSize: 14,
-            fontWeight: 600
-          }}
-        >
-          ⬆️ Upload layers
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            onClick={handleRefreshFilesOnly}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              background: '#374151',
+              color: 'white',
+              border: 'none',
+              padding: '8px 12px',
+              borderRadius: 8,
+              cursor: 'pointer',
+              fontSize: 14,
+              fontWeight: 600
+            }}
+            title="Refresh files"
+          >
+            🔄 Refresh
+          </button>
+          {canUploadLayers && (
+            <button
+              onClick={() => setIsUploadLayersOpen(true)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                background: '#2563eb',
+                color: 'white',
+                border: 'none',
+                padding: '8px 12px',
+                borderRadius: 8,
+                cursor: 'pointer',
+                fontSize: 14,
+                fontWeight: 600
+              }}
+            >
+              ⬆️ Upload layers
+            </button>
+          )}
+        </div>
       </div>
 
       {shouldShowLoading() ? (
