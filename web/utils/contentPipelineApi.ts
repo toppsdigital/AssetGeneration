@@ -875,7 +875,14 @@ class ContentPipelineAPI {
     expires_in?: number;
     size?: number;
     content_type?: string;
-  }): Promise<{ url: string; fields?: Record<string, string>; method?: string; s3_key?: string }> {
+  }): Promise<{ 
+    url?: string; 
+    fields?: Record<string, string>; 
+    method?: string; 
+    s3_key?: string;
+    upload_type?: string;
+    upload_data?: any;
+  }> {
     
     console.log(`🔗 Getting presigned URL via /s3-files for: ${urlData.filename} (${urlData.client_method})`);
     
@@ -924,6 +931,22 @@ class ContentPipelineAPI {
     
     const instruction = uploadInstructions[0];
     const uploadData = instruction.upload_data;
+    
+    // Support both single-part (PUT/POST) and multipart responses
+    if (instruction.upload_type === 'multipart') {
+      console.log(`✅ Multipart upload instructions received:`, {
+        filename: urlData.filename,
+        part_size: uploadData?.part_size,
+        parts: uploadData?.total_parts,
+        has_part_urls: Array.isArray(uploadData?.part_urls),
+        s3_key: instruction.s3_key
+      });
+      return {
+        upload_type: 'multipart',
+        upload_data: uploadData,
+        s3_key: instruction.s3_key
+      };
+    }
     
     if (!uploadData?.url) {
       throw new Error('No upload URL found in upload instructions');

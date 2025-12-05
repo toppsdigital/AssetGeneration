@@ -232,6 +232,19 @@ export const useUploadEngine = ({
           content_type: file.type || 'application/pdf'
         });
 
+        // If backend returned multipart instructions, use multipart uploader
+        if (presignedData.upload_type === 'multipart' && presignedData.upload_data?.part_urls) {
+          console.log('🔀 Switching to multipart upload path for large file');
+          await uploadLargeFileToS3(file, filePath, {
+            upload_type: 'multipart',
+            upload_data: presignedData.upload_data,
+            s3_key: presignedData.s3_key
+          });
+          uploadedFiles.push({ filename: filePath, s3_key: s3Key });
+          console.log(`✅ Successfully uploaded via multipart: ${filePath}`);
+          continue;
+        }
+
         const presignedUrl = presignedData.url;
         
         // Step 2: Upload file directly to S3 - use POST for form uploads, PUT for simple URLs
@@ -390,7 +403,15 @@ export const useUploadEngine = ({
             throw new Error(`Part ${partInfo.part_number} upload failed: ${partResponse.status}`);
           }
           
-          const etag = partResponse.headers.get('ETag');
+          // Ensure ETag is captured and quoted as required by S3 completion XML
+          const rawEtag = partResponse.headers.get('ETag') || partResponse.headers.get('etag');
+          let etag = (rawEtag || '').trim();
+          if (!etag) {
+            throw new Error(`Missing ETag header for part ${partInfo.part_number}`);
+          }
+          if (!/^".*"$/.test(etag)) {
+            etag = `"${etag}"`;
+          }
           partETags.push({
             PartNumber: partInfo.part_number,
             ETag: etag
@@ -404,10 +425,13 @@ export const useUploadEngine = ({
 ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETag>${part.ETag}</ETag></Part>`).join('\n')}
 </CompleteMultipartUpload>`;
         
+        // Important: Do NOT set Content-Type when using a presigned completion URL (SigV2).
+        // Sending a Content-Type not included in the signature causes SignatureDoesNotMatch.
+        // Use a Blob without a type to avoid implicit Content-Type headers.
+        const completionBody = new Blob([completeXML]);
         uploadResponse = await fetch(uploadInstruction.upload_data.complete_url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/xml' },
-          body: completeXML,
+          body: completionBody,
         });
       }
 
@@ -719,95 +743,60 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
     groupFiles: Array<{filename: string, file: File, fileInfo: any}>
   ): Promise<void> => {
     console.log(`🚀 Robust upload for group ${groupFilename} with ${groupFiles.length} files`);
-    
+
     // Start with processing state for UI feedback (local UI only)
     const filesToCleanup = groupFiles.map(f => f.filename);
     groupFiles.forEach(({ filename }) => {
-      console.log(`🔄 Setting ${filename} to processing status for UI (base64 conversion)`);
-      // Notify UI of processing status (local UI only)
+      console.log(`🔄 Setting ${filename} to processing status for UI`);
       if (onFileStatusChange) {
         onFileStatusChange(filename, 'processing');
       }
     });
-    
+
     let successfulFiles: string[] = [];
     let failedFiles: string[] = [];
     
     try {
-      // Convert files to base64 first with timeout
-      console.log(`🔄 Converting ${groupFiles.length} files to base64...`);
-      const convertedFiles = await withTimeout(
-        Promise.all(
-          groupFiles.map(async (fileData) => ({
-            ...fileData,
-            base64Content: await fileToBase64(fileData.file)
-          }))
-        ),
-        30000, // 30 second timeout for base64 conversion
-        `Base64 conversion for group ${groupFilename}`
-      );
-      console.log(`✅ Base64 conversion completed for group ${groupFilename}`);
-      
-      // Transition to uploading state after base64 conversion (local UI only)
+      // Transition to uploading state (local UI only)
       groupFiles.forEach(({ filename }) => {
         console.log(`📤 Adding ${filename} to uploadingFiles set and setting uploading status`);
         setUploadingFiles(prev => new Set(prev).add(filename));
-        // Notify UI of uploading status (local UI only)
         if (onFileStatusChange) {
           onFileStatusChange(filename, 'uploading');
         }
       });
-      
+
       // Small delay to make uploading state visible before actual uploads
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Upload files directly via S3 proxy without using s3_upload_files operation
-      console.log(`📤 Uploading files directly via S3 proxy for group ${groupFilename}...`);
-      
-      // Debug: Log the structure of convertedFiles
-      console.log(`🔍 Debug - convertedFiles structure:`, convertedFiles.map((cf, i) => ({
-        index: i,
-        filename: cf.filename,
-        hasFileInfo: !!cf.fileInfo,
-        fileInfoPath: cf.fileInfo?.file_path,
-        fileSize: cf.file?.size,
-        fileType: cf.file?.type
-      })));
-      
+      await new Promise(resolve => setTimeout(resolve, 300));
+
       // Prepare files using backend-provided file_path to ensure the
       // presigned policy and S3 triggers match exactly (PDFs or images)
-      const filesToUpload = convertedFiles.map(({ file, fileInfo, filename }) => {
+      const filesToUpload = groupFiles.map(({ file, fileInfo, filename }) => {
         const destinationKey = fileInfo.file_path;
         console.log(`📄 Preparing file for direct upload: ${filename} -> ${destinationKey}`);
         return { file, filePath: destinationKey };
       });
-      
+
       console.log(`🗂️ Final S3 keys for direct upload:`, filesToUpload.map(f => f.filePath));
-      
-      // Upload each file directly via S3 proxy
+
+      // Upload each file directly
       console.log(`🚀 Starting individual file uploads for group ${groupFilename}...`);
       const uploadResults = await withTimeout(
         Promise.allSettled(
           filesToUpload.map(async ({ file, filePath }, index) => {
-            // Use the sanitized filename from convertedFiles to keep keys consistent with backend
-            const displayName = convertedFiles[index]?.filename || file.name;
+            const displayName = groupFiles[index]?.filename || file.name;
             try {
-              console.log(`🔼 Starting direct upload for ${file.name} -> S3 path: ${filePath}...`);
-              
-              // Upload directly via our uploadFilesToContentPipeline function
+              console.log(`🔼 Starting direct upload for ${displayName} -> S3 path: ${filePath}... (${(file.size/1024/1024).toFixed(2)}MB)`);
               await uploadFilesToContentPipeline([{ file, filePath }]);
-              
               successfulFiles.push(displayName);
-              console.log(`✅ Successfully uploaded ${file.name}`);
-              // Notify UI of successful upload (local UI only - backend will be updated via S3 triggers)
+              console.log(`✅ Successfully uploaded ${displayName}`);
               if (onFileStatusChange) {
                 onFileStatusChange(displayName, 'uploaded');
               }
               return { success: true, filename: displayName };
             } catch (error) {
-              console.error(`❌ File ${file.name} upload failed:`, error);
+              console.error(`❌ File ${displayName} upload failed:`, error);
               failedFiles.push(displayName);
-              // Notify UI of upload failure
               if (onFileStatusChange) {
                 onFileStatusChange(displayName, 'upload-failed');
               }
@@ -815,7 +804,7 @@ ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETa
             }
           })
         ),
-        60000, // 60 second timeout for all individual uploads
+        600000, // 10 minute timeout for all individual uploads in this group
         `Individual file uploads for group ${groupFilename}`
       );
       
