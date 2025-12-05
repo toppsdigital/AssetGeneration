@@ -196,7 +196,10 @@ export function useAppDataStore<T = any>(
               last_updated: apiFile.last_updated || new Date().toISOString(),
               original_files: apiFile.original_files || {},
               extracted_files: apiFile.extracted_files || {},
-              firefly_assets: apiFile.firefly_assets || {}
+              firefly_assets: apiFile.firefly_assets || {},
+              // Preserve additional fields from API when present
+              card_id: (apiFile as any).card_id,
+              release: (apiFile as any).release
             }));
           } catch (error) {
             console.warn(`⚠️ [DataStore] Failed to fetch files for job ${options.jobId}:`, error);
@@ -273,7 +276,10 @@ export function useAppDataStore<T = any>(
           last_updated: apiFile.last_updated || new Date().toISOString(),
           original_files: apiFile.original_files || {},
           extracted_files: apiFile.extracted_files || {},
-          firefly_assets: apiFile.firefly_assets || {}
+          firefly_assets: apiFile.firefly_assets || {},
+          // Preserve additional fields from API when present
+          card_id: (apiFile as any).card_id,
+          release: (apiFile as any).release
         }));
         
         console.log(`✅ [DataStore] Fetched ${fileObjects.length} files for job ${options.jobId}`);
@@ -1026,7 +1032,10 @@ export function useAppDataStore<T = any>(
                       last_updated: apiFile.last_updated || new Date().toISOString(),
                       original_files: apiFile.original_files || {},
                       extracted_files: apiFile.extracted_files || {},
-                      firefly_assets: apiFile.firefly_assets || {}
+                      firefly_assets: apiFile.firefly_assets || {},
+                      // Preserve additional fields from API when present
+                      card_id: (apiFile as any).card_id,
+                      release: (apiFile as any).release
                     }));
                     
                     console.log(`✅ [DataStore] Fetched ${fileObjects.length} fresh files after regeneration`);
@@ -1069,7 +1078,10 @@ export function useAppDataStore<T = any>(
                         last_updated: apiFile.last_updated || new Date().toISOString(),
                         original_files: apiFile.original_files || {},
                         extracted_files: apiFile.extracted_files || {},
-                        firefly_assets: apiFile.firefly_assets || {}
+                        firefly_assets: apiFile.firefly_assets || {},
+                        // Preserve additional fields from API when present
+                        card_id: (apiFile as any).card_id,
+                        release: (apiFile as any).release
                       }));
                     }
                     

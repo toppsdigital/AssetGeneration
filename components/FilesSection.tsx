@@ -103,7 +103,10 @@ export const FilesSection = ({
         last_updated: apiFile.last_updated || new Date().toISOString(),
         original_files: apiFile.original_files || {},
         extracted_files: apiFile.extracted_files || {},
-        firefly_assets: apiFile.firefly_assets || {}
+        firefly_assets: apiFile.firefly_assets || {},
+        // Preserve additional fields from API when present
+        card_id: (apiFile as any).card_id,
+        release: (apiFile as any).release
       }));
       // Update files cache
       queryClient.setQueryData(dataStoreKeys.files.byJob(jobId), mappedFiles);
@@ -258,22 +261,7 @@ export const FilesSection = ({
         isOpen={isUploadLayersOpen}
         onClose={() => setIsUploadLayersOpen(false)}
         onConfirm={handleConfirmUploadLayers}
-        cardIds={Array.from(new Set(
-          (mergedJobData?.content_pipeline_files || [])
-            .map((f: any) => {
-              const name = (f?.filename || '').replace(/^.*[\\/]/, '');
-              const idx = name.lastIndexOf('.');
-              const base = idx > 0 ? name.substring(0, idx) : name;
-              const m = base.match(/(\d+)$/); // extract trailing numeric card_id like ..._7002
-              return m ? m[1] : undefined;
-            })
-            .filter(Boolean)
-        ))}
-        fileRelease={
-          (typeof jobData?.release_name === 'string' && jobData.release_name) ||
-          (typeof jobData?.filename_prefix === 'string' && jobData.filename_prefix) ||
-          ''
-        }
+        fileObjects={(mergedJobData?.content_pipeline_files || [])}
         jobId={jobData?.job_id || mergedJobData?.job_id || ''}
         appName={jobData?.app_name || mergedJobData?.app_name || ''}
       />

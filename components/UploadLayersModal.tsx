@@ -15,13 +15,12 @@ interface UploadLayersModalProps {
     layerType: LayerType,
     results: Array<{
       file: File;
-      matchStatus: 'matched' | 'unmatched' | 'ambiguous';
+      matchStatus: 'matched' | 'unmatched';
       matchedCardId?: string;
       newFilename?: string;
     }>
   ) => void;
-  cardIds: string[]; // expected card identifiers to match against (derived from job files)
-  fileRelease?: string; // optional release prefix to use in upload naming
+  fileObjects: Array<{ card_id?: string; release?: string } & Record<string, any>>; // pass in full file objects; we'll read card_id/release
   jobId?: string;
   appName?: string;
 }
@@ -30,8 +29,7 @@ export const UploadLayersModal = ({
   isOpen,
   onClose,
   onConfirm,
-  cardIds,
-  fileRelease,
+  fileObjects,
   jobId,
   appName
 }: UploadLayersModalProps) => {
@@ -66,27 +64,20 @@ export const UploadLayersModal = ({
   const canConfirm = selectedFiles.length > 0 && !!selectedLayerType;
 
   const previewResults = useMemo(() => {
-    const normalizedCardIds = (cardIds || []).map((id) => id.toLowerCase());
+    const normalizedFileObjects = (fileObjects || []).map((fo) => ({
+      card_id: (fo.card_id || '').toLowerCase(),
+      release: (fo.release || '').trim()
+    })).filter(fo => !!fo.card_id);
     return selectedFiles.map((file) => {
       const fileNameLower = file.name.toLowerCase();
-      const matches = normalizedCardIds.filter((id) => fileNameLower.includes(id));
+      const matches = normalizedFileObjects.filter((fo) => fileNameLower.includes(fo.card_id));
       if (matches.length === 1) {
-        const matchedCardId = matches[0];
+        const matched = matches[0];
+        const matchedCardId = matched.card_id;
         const ext = getExtension(file.name);
-        // Build: {file_release}_{file_card_id}_{selected_type}.{ext}
-        // Derive file_release from the selected file's base name by stripping trailing _<digits>
-        const base = getBaseName(file.name);
-        const derivedRelease = base.replace(/(?:[_-])?\d+$/, ''); // remove trailing id with optional sep
-        // Extract release as the 2nd segment (underscore or hyphen separated). Fallbacks applied if unavailable.
-        const releaseFromName = (() => {
-          const cleaned = (derivedRelease || '').replace(/(^[_-]+|[_-]+$)/g, '');
-          const segments = cleaned.split(/[_-]+/).filter(Boolean);
-          if (segments.length >= 2) return segments[1];
-          if (segments.length === 1) return segments[0];
-          return '';
-        })();
-        // Prefer extracted token; then prop; otherwise empty
-        const release = (releaseFromName || (fileRelease || '')).trim();
+        // Build strictly from file object values:
+        // {file_release}_{file_card_id}_{selected_type}.{ext}
+        const release = matched.release;
         const newFilename =
           selectedLayerType && release
             ? `${release}_${matchedCardId}_${selectedLayerType}.${ext}`
@@ -105,13 +96,14 @@ export const UploadLayersModal = ({
           matchStatus: 'unmatched' as const
         };
       } else {
+        // Treat ambiguous (>1 match) as unmatched per requirement
         return {
           file,
-          matchStatus: 'ambiguous' as const
+          matchStatus: 'unmatched' as const
         };
       }
     });
-  }, [selectedFiles, selectedLayerType, cardIds, fileRelease]);
+  }, [selectedFiles, selectedLayerType, fileObjects]);
 
   // Important: guard comes AFTER all hooks to preserve hook order across renders
   if (!isOpen) return null;
@@ -324,8 +316,8 @@ export const UploadLayersModal = ({
                         <div style={{ fontSize: 13, color: '#d1d5db' }}>
                           <span style={{ color: '#9ca3af' }}>File:</span> {r.file.name}
                         </div>
-                        <div style={{ fontSize: 12, color: r.matchStatus === 'ambiguous' ? '#f59e0b' : '#ef4444' }}>
-                          {r.matchStatus === 'ambiguous' ? 'Multiple possible card_id matches' : 'No matching card_id found'}
+                        <div style={{ fontSize: 12, color: '#ef4444' }}>
+                          No matching card_id found
                         </div>
                       </div>
                     ))
