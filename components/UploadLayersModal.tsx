@@ -35,6 +35,7 @@ export const UploadLayersModal = ({
 }: UploadLayersModalProps) => {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [selectedLayerType, setSelectedLayerType] = useState<LayerType | ''>('');
+  const [spotSuffix, setSpotSuffix] = useState<string>('');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedCount, setUploadedCount] = useState(0);
   const [totalToUpload, setTotalToUpload] = useState(0);
@@ -75,15 +76,23 @@ export const UploadLayersModal = ({
         const matched = matches[0];
         const matchedCardId = matched.card_id;
         const ext = getExtension(file.name);
-        // Build strictly from file object values:
-        // {file_release}_{file_card_id}_{selected_type}.{ext}
+        // Filename rules:
+        // - Non-'back' layers: {release?}{release_}{card_id}_fr_{layer}{spotSuffix?}.{ext}
+        // - 'back' layer:       {release?}{release_}{card_id}_bk.{ext}
         const release = matched.release;
-        const newFilename =
-          selectedLayerType && release
-            ? `${release}_${matchedCardId}_${selectedLayerType}.${ext}`
-            : selectedLayerType
-              ? `${matchedCardId}_${selectedLayerType}.${ext}`
-              : '';
+        const basePrefix = release ? `${release}_` : '';
+        let newFilename = '';
+        if (selectedLayerType) {
+          if (selectedLayerType === 'back') {
+            newFilename = `${basePrefix}${matchedCardId}_bk.${ext}`;
+          } else {
+            const layerWithSuffix =
+              selectedLayerType === 'spot'
+                ? `spot${(spotSuffix || '').trim()}`
+                : selectedLayerType;
+            newFilename = `${basePrefix}${matchedCardId}_fr_${layerWithSuffix}.${ext}`;
+          }
+        }
         return {
           file,
           matchStatus: 'matched' as const,
@@ -103,7 +112,7 @@ export const UploadLayersModal = ({
         };
       }
     });
-  }, [selectedFiles, selectedLayerType, fileObjects]);
+  }, [selectedFiles, selectedLayerType, spotSuffix, fileObjects]);
 
   // Important: guard comes AFTER all hooks to preserve hook order across renders
   if (!isOpen) return null;
@@ -240,6 +249,29 @@ export const UploadLayersModal = ({
 
           {selectedLayerType && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {selectedLayerType === 'spot' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <label style={{ fontSize: 14, color: '#d1d5db', fontWeight: 600 }}>
+                    Spot suffix
+                  </label>
+                  <input
+                    type="text"
+                    value={spotSuffix}
+                    onChange={(e) => setSpotSuffix(e.target.value)}
+                    placeholder="e.g., 1,2 or auto"
+                    style={{
+                      background: '#0b1220',
+                      color: '#e5e7eb',
+                      border: '1px solid rgba(255,255,255,0.08)',
+                      borderRadius: 8,
+                      padding: '10px 12px'
+                    }}
+                  />
+                  <div style={{ fontSize: 12, color: '#9ca3af' }}>
+                    Example filename: …_fr_spot{(spotSuffix || '').trim()}.ext
+                  </div>
+                </div>
+              )}
               <label style={{ fontSize: 14, color: '#d1d5db', fontWeight: 600 }}>
                 Select folder with layer image files
               </label>
