@@ -75,12 +75,12 @@ export const UploadLayersModal = ({
       if (matches.length === 1) {
         const matched = matches[0];
         const matchedCardId = matched.card_id;
-        const ext = getExtension(file.name);
+        const ext = getExtension(file.name).toLowerCase();
         // Filename rules:
-        // - Non-'back' layers: {release?}{release_}{card_id}_fr_{layer}{spotSuffix?}.{ext}
+        // - Non-'back' layers: {release?}{release_}{card_id}_fr_{layer}{spotSuffix?}.{ext} (all lower case)
         // - 'back' layer:       {release?}{release_}{card_id}_bk.{ext}
-        const release = matched.release;
-        const basePrefix = release ? `${release}_` : '';
+        const releaseLower = (matched.release || '').trim().toLowerCase();
+        const basePrefix = releaseLower ? `${releaseLower}_` : '';
         let newFilename = '';
         if (selectedLayerType) {
           if (selectedLayerType === 'back') {
@@ -88,11 +88,12 @@ export const UploadLayersModal = ({
           } else {
             const layerWithSuffix =
               selectedLayerType === 'spot'
-                ? `spot${(spotSuffix || '').trim()}`
+                ? `spot${(spotSuffix || '').trim().toLowerCase()}`
                 : selectedLayerType;
             newFilename = `${basePrefix}${matchedCardId}_fr_${layerWithSuffix}.${ext}`;
           }
         }
+        newFilename = newFilename.toLowerCase();
         return {
           file,
           matchStatus: 'matched' as const,
@@ -268,7 +269,7 @@ export const UploadLayersModal = ({
                     }}
                   />
                   <div style={{ fontSize: 12, color: '#9ca3af' }}>
-                    Example filename: …_fr_spot{(spotSuffix || '').trim()}.ext
+                    Example filename: …_fr_spot{(spotSuffix || '').trim().toLowerCase()}.ext
                   </div>
                 </div>
               )}
