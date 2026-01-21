@@ -151,6 +151,9 @@ const getImageUrl = async (filePath: string): Promise<string | null> => {
         let contentType = 'image/jpeg'; // default
         
         switch (extension) {
+          case 'pdf':
+            contentType = 'application/pdf';
+            break;
           case 'png':
             contentType = 'image/png';
             break;
@@ -267,6 +270,7 @@ export default function ImagePreview({
   const containerRef = useRef<HTMLDivElement>(null);
 
   const isTiff = filePath.toLowerCase().endsWith('.tif') || filePath.toLowerCase().endsWith('.tiff');
+  const isPdf = filePath.toLowerCase().endsWith('.pdf');
 
   // Cleanup blob URL when component unmounts or filePath changes
   useEffect(() => {
@@ -484,7 +488,58 @@ export default function ImagePreview({
             })
           }}
         >
-          {isTiff ? (
+          {isPdf ? (
+            <div
+              style={{
+                width: '100%',
+                height: '100%',
+                borderRadius: 4,
+                overflow: 'hidden',
+                position: 'relative',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.8)'
+              }}
+            >
+              {/* Use browser-native PDF renderer */}
+              <iframe
+                // In the grid we want a "thumbnail-ish" first page; in the modal we want full viewer controls.
+                src={
+                  onExpand
+                    ? `${imageUrl}#page=1&zoom=page-fit&toolbar=0&navpanes=0`
+                    : imageUrl
+                }
+                title={alt}
+                onLoad={handleImageLoad}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  border: 'none',
+                  // In grids we want the parent card click to work; in modals (no onExpand) allow interaction/scrolling.
+                  pointerEvents: onExpand ? 'none' : 'auto',
+                  background: 'rgba(0,0,0,0.25)',
+                  display: 'block'
+                }}
+              />
+
+              {/* Small "PDF" badge */}
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 8,
+                  left: 8,
+                  background: 'rgba(0,0,0,0.6)',
+                  color: 'white',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  padding: '4px 8px',
+                  borderRadius: 999,
+                  letterSpacing: 0.5,
+                  pointerEvents: 'none'
+                }}
+              >
+                PDF
+              </div>
+            </div>
+          ) : isTiff ? (
             <TiffImageViewer
               src={imageUrl}
               alt={alt}

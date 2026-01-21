@@ -253,12 +253,13 @@ const FileCard: React.FC<FileCardProps> = ({
               📄 Original Files ({file.original_files ? Object.keys(file.original_files).length : 0})
             </h4>
             {(() => {
-              const nonPhysicalJob = (jobData?.job_type || '').toLowerCase() !== 'physical_to_digital';
               const originalFiles = file.original_files || {};
               const hasOriginal = Object.keys(originalFiles).length > 0;
-              const allOriginalUploaded = Object.values(originalFiles).every(of => (of.status || '').toLowerCase() === 'uploaded');
-              if (!nonPhysicalJob || !hasOriginal) return null;
-              return allOriginalUploaded ? (
+              const hasPreviewablePdf = Object.entries(originalFiles).some(([name, info]) =>
+                name.toLowerCase().endsWith('.pdf') && !!(info as any)?.file_path
+              );
+              if (!hasOriginal || !hasPreviewablePdf) return null;
+              return (
                 <button
                   onClick={() => {
                     const jobId = jobData?.job_id || '';
@@ -286,17 +287,6 @@ const FileCard: React.FC<FileCardProps> = ({
                 >
                   👁️ Preview
                 </button>
-              ) : (
-                <span style={{
-                  fontSize: 11,
-                  color: '#9ca3af',
-                  padding: '4px 8px',
-                  border: '1px solid rgba(156, 163, 175, 0.3)',
-                  borderRadius: 4,
-                  background: 'rgba(156, 163, 175, 0.1)'
-                }}>
-                  ⏳ Processing...
-                </span>
               );
             })()}
           </div>
@@ -547,12 +537,13 @@ const FileCard: React.FC<FileCardProps> = ({
                       📄 Original Files ({file.original_files ? Object.keys(file.original_files).length : 0})
                     </h4>
                     {(() => {
-                      const nonPhysicalJob = (jobData?.job_type || '').toLowerCase() !== 'physical_to_digital';
                       const originalFiles = file.original_files || {};
                       const hasOriginal = Object.keys(originalFiles).length > 0;
-                      const allOriginalUploaded = Object.values(originalFiles).every(of => (of.status || '').toLowerCase() === 'uploaded');
-                      if (!nonPhysicalJob || !hasOriginal) return null;
-                      return allOriginalUploaded ? (
+                      const hasPreviewablePdf = Object.entries(originalFiles).some(([name, info]) =>
+                        name.toLowerCase().endsWith('.pdf') && !!(info as any)?.file_path
+                      );
+                      if (!hasOriginal || !hasPreviewablePdf) return null;
+                      return (
                         <button
                           onClick={() => {
                             const jobId = jobData?.job_id || '';
@@ -580,17 +571,6 @@ const FileCard: React.FC<FileCardProps> = ({
                         >
                           👁️ Preview
                         </button>
-                      ) : (
-                        <span style={{
-                          fontSize: 11,
-                          color: '#9ca3af',
-                          padding: '4px 8px',
-                          border: '1px solid rgba(156, 163, 175, 0.3)',
-                          borderRadius: 4,
-                          background: 'rgba(156, 163, 175, 0.1)'
-                        }}>
-                          ⏳ Processing...
-                        </span>
                       );
                     })()}
                   </div>

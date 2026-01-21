@@ -68,6 +68,8 @@ export default function ExpandedImageModal({
     }
   }, [image?.src]);
 
+  const isPdf = image?.src?.toLowerCase().endsWith('.pdf');
+
   // Auto-hide controls after 3 seconds of no mouse movement
   useEffect(() => {
     if (!image) return;
@@ -359,7 +361,7 @@ export default function ExpandedImageModal({
           </div>
           
           {/* Loading indicator for modal - only show for non-TIFF when using optimized URL */}
-          {isImageLoading && optimizedImageUrl && !image.isTiff && (
+          {isImageLoading && optimizedImageUrl && !image.isTiff && !isPdf && (
             <div style={{
               position: 'absolute',
               top: '50%',

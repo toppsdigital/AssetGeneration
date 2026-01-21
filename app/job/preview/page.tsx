@@ -13,6 +13,7 @@ interface AssetItem {
   filePath: string;
   filename: string;
   isTiff: boolean;
+  isPdf: boolean;
 }
 
 function JobPreviewPageContent() {
@@ -141,6 +142,14 @@ function JobPreviewPageContent() {
     let assetPaths: string[] = [];
     let modeDisplayName = '';
 
+    const supportedExtensions = [
+      // images
+      '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp',
+      '.tif', '.tiff', '.svg', '.ico', '.avif', '.heic', '.heif',
+      // documents
+      '.pdf'
+    ];
+
     if (mode === 'extracted-assets') {
       // Get extracted layer assets
       const extractedFiles = targetFile.extracted_files || {};
@@ -194,28 +203,25 @@ function JobPreviewPageContent() {
         }
       }).filter(Boolean) as string[];
 
-      const imageExtensions = [
-        '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', 
-        '.tif', '.tiff', '.svg', '.ico', '.avif', '.heic', '.heif'
-      ];
-      const imageAssets = assetPaths
+      const previewableAssets = assetPaths
         .filter((filePath: any): filePath is string => {
           if (typeof filePath !== 'string' || !filePath.trim()) return false;
           const filename = filePath.split('/').pop() || filePath;
           const extension = filename.toLowerCase().substring(filename.lastIndexOf('.'));
-          return imageExtensions.includes(extension);
+          return supportedExtensions.includes(extension);
         })
         .map((filePath: string): AssetItem => {
           const filename = filePath.split('/').pop() || filePath;
           const isTiff = filename.toLowerCase().endsWith('.tif') || filename.toLowerCase().endsWith('.tiff');
-          return { filePath, filename, isTiff };
+          const isPdf = filename.toLowerCase().endsWith('.pdf');
+          return { filePath, filename, isTiff, isPdf };
         });
 
       return {
         fileData: targetFile,
-        assets: imageAssets,
+        assets: previewableAssets,
         displayName: `${targetFile.filename} • Original Files`,
-        error: imageAssets.length === 0 ? 'No image files found in original files' : null
+        error: previewableAssets.length === 0 ? 'No previewable files found in original files' : null
       };
     } else {
       return {
@@ -238,14 +244,8 @@ function JobPreviewPageContent() {
       };
     }
 
-    // Define supported image formats
-    const imageExtensions = [
-      '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', 
-      '.tif', '.tiff', '.svg', '.ico', '.avif', '.heic', '.heif'
-    ];
-    
-    // Filter to only include valid string paths and image files
-    const imageAssets = assetPaths
+    // Filter to only include valid string paths and supported preview file types
+    const previewableAssets = assetPaths
       .filter((filePath: any): filePath is string => {
         // First, ensure filePath is a valid string
         if (typeof filePath !== 'string' || !filePath.trim()) {
@@ -253,35 +253,37 @@ function JobPreviewPageContent() {
           return false;
         }
         
-        // Then check if it's an image file
+        // Then check if it's a supported file type
         const filename = filePath.split('/').pop() || filePath;
         const extension = filename.toLowerCase().substring(filename.lastIndexOf('.'));
-        const isImage = imageExtensions.includes(extension);
+        const isSupported = supportedExtensions.includes(extension);
         
-        if (!isImage) {
-          console.log(`🚫 [Preview] Excluding non-image file: ${filename} (${extension})`);
+        if (!isSupported) {
+          console.log(`🚫 [Preview] Excluding unsupported file: ${filename} (${extension})`);
         }
         
-        return isImage;
+        return isSupported;
       })
       .map((filePath: string): AssetItem => {
         const filename = filePath.split('/').pop() || filePath;
         const isTiff = filename.toLowerCase().endsWith('.tif') || filename.toLowerCase().endsWith('.tiff');
+        const isPdf = filename.toLowerCase().endsWith('.pdf');
         
         return {
           filePath,
           filename,
-          isTiff
+          isTiff,
+          isPdf
         };
       });
 
-    console.log(`📊 [Preview] Created ${imageAssets.length} image assets from ${assetPaths.length} total files`);
+    console.log(`📊 [Preview] Created ${previewableAssets.length} previewable assets from ${assetPaths.length} total files`);
 
     return {
       fileData: targetFile,
-      assets: imageAssets,
-      displayName: `${targetFile.filename} • ${imageAssets.length} ${modeDisplayName}`,
-      error: imageAssets.length === 0 ? `No image files found in ${modeDisplayName.toLowerCase()}` : null
+      assets: previewableAssets,
+      displayName: `${targetFile.filename} • ${previewableAssets.length} ${modeDisplayName}`,
+      error: previewableAssets.length === 0 ? `No previewable files found in ${modeDisplayName.toLowerCase()}` : null
     };
   }, [jobId, fileId, mode, jobFiles, filesError, cachedJobData]);
 
@@ -517,6 +519,10 @@ function JobPreviewPageContent() {
                           onExpand={handleImageExpand}
                           lazy={index >= 12} // Load first 12 images immediately
                           priority={index < 6} // Preload first 6 images for instant loading
+                          style={{
+                            width: '100%',
+                            height: '100%'
+                          }}
                         />
                       </div>
                       
