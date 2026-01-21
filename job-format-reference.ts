@@ -50,7 +50,8 @@ export type AppName =
   | "WWE" 
   | "STARWARS" 
   | "BASKETBALL" 
-  | "HUDDLE";
+  | "HUDDLE"
+  | "TTF";
 
 // ============================================================================
 // INTERFACE DEFINITIONS

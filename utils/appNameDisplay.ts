@@ -8,7 +8,8 @@ export const APP_DISPLAY_NAME_MAP: Record<string, string> = {
   DISNEY: 'DISNEY',
   STARWARS: 'STARWARS',
   MARVEL: 'MARVEL',
-  HUDDLE: 'HUDDLE'
+  HUDDLE: 'HUDDLE',
+  TTF: 'TTF'
 };
 
 export const getAppDisplayNameFromAppName = (appName: string | undefined): string => {

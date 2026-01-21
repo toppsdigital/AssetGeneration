@@ -523,6 +523,9 @@ function NewJobPageContent() {
                       <option value="HUDDLE" style={{ background: '#1f2937', color: '#f8f8f8' }}>
                         🏈 HUDDLE
                       </option>
+                      <option value="TTF" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                        ⚽ TTF
+                      </option>
                     </select>
                     {errors.appName && (
                       <p style={{ 
