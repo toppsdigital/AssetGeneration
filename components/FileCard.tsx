@@ -252,43 +252,35 @@ const FileCard: React.FC<FileCardProps> = ({
             }}>
               📄 Original Files ({file.original_files ? Object.keys(file.original_files).length : 0})
             </h4>
-            {(() => {
-              const originalFiles = file.original_files || {};
-              const hasOriginal = Object.keys(originalFiles).length > 0;
-              const hasPreviewablePdf = Object.entries(originalFiles).some(([name, info]) =>
-                name.toLowerCase().endsWith('.pdf') && !!(info as any)?.file_path
-              );
-              if (!hasOriginal || !hasPreviewablePdf) return null;
-              return (
-                <button
-                  onClick={() => {
-                    const jobId = jobData?.job_id || '';
-                    const fileId = file.filename;
-                    const mode = 'original-files';
-                    router.push(`/job/preview?jobId=${encodeURIComponent(jobId)}&fileId=${encodeURIComponent(fileId)}&mode=${mode}`);
-                  }}
-                  style={{
-                    background: 'rgba(245, 158, 11, 0.2)',
-                    border: '1px solid rgba(245, 158, 11, 0.4)',
-                    borderRadius: 4,
-                    color: '#f59e0b',
-                    cursor: 'pointer',
-                    fontSize: 11,
-                    padding: '4px 8px',
-                    transition: 'all 0.2s',
-                    fontWeight: 500
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'rgba(245, 158, 11, 0.3)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'rgba(245, 158, 11, 0.2)';
-                  }}
-                >
-                  👁️ Preview
-                </button>
-              );
-            })()}
+            {!!jobData?.job_id && !!file.original_files && Object.keys(file.original_files).length > 0 && (
+              <button
+                onClick={() => {
+                  const jobId = jobData?.job_id || '';
+                  const fileId = file.filename;
+                  const mode = 'original-files';
+                  router.push(`/job/preview?jobId=${encodeURIComponent(jobId)}&fileId=${encodeURIComponent(fileId)}&mode=${mode}`);
+                }}
+                style={{
+                  background: 'rgba(245, 158, 11, 0.2)',
+                  border: '1px solid rgba(245, 158, 11, 0.4)',
+                  borderRadius: 4,
+                  color: '#f59e0b',
+                  cursor: 'pointer',
+                  fontSize: 11,
+                  padding: '4px 8px',
+                  transition: 'all 0.2s',
+                  fontWeight: 500
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(245, 158, 11, 0.3)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(245, 158, 11, 0.2)';
+                }}
+              >
+                👁️ Preview
+              </button>
+            )}
           </div>
           <div style={{
             background: 'rgba(245, 158, 11, 0.1)',
@@ -536,43 +528,35 @@ const FileCard: React.FC<FileCardProps> = ({
                     }}>
                       📄 Original Files ({file.original_files ? Object.keys(file.original_files).length : 0})
                     </h4>
-                    {(() => {
-                      const originalFiles = file.original_files || {};
-                      const hasOriginal = Object.keys(originalFiles).length > 0;
-                      const hasPreviewablePdf = Object.entries(originalFiles).some(([name, info]) =>
-                        name.toLowerCase().endsWith('.pdf') && !!(info as any)?.file_path
-                      );
-                      if (!hasOriginal || !hasPreviewablePdf) return null;
-                      return (
-                        <button
-                          onClick={() => {
-                            const jobId = jobData?.job_id || '';
-                            const fileId = file.filename;
-                            const mode = 'original-files';
-                            router.push(`/job/preview?jobId=${encodeURIComponent(jobId)}&fileId=${encodeURIComponent(fileId)}&mode=${mode}`);
-                          }}
-                          style={{
-                            background: 'rgba(245, 158, 11, 0.2)',
-                            border: '1px solid rgba(245, 158, 11, 0.4)',
-                            borderRadius: 4,
-                            color: '#f59e0b',
-                            cursor: 'pointer',
-                            fontSize: 11,
-                            padding: '4px 8px',
-                            transition: 'all 0.2s',
-                            fontWeight: 500
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = 'rgba(245, 158, 11, 0.3)';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = 'rgba(245, 158, 11, 0.2)';
-                          }}
-                        >
-                          👁️ Preview
-                        </button>
-                      );
-                    })()}
+                    {!!jobData?.job_id && !!file.original_files && Object.keys(file.original_files).length > 0 && (
+                      <button
+                        onClick={() => {
+                          const jobId = jobData?.job_id || '';
+                          const fileId = file.filename;
+                          const mode = 'original-files';
+                          router.push(`/job/preview?jobId=${encodeURIComponent(jobId)}&fileId=${encodeURIComponent(fileId)}&mode=${mode}`);
+                        }}
+                        style={{
+                          background: 'rgba(245, 158, 11, 0.2)',
+                          border: '1px solid rgba(245, 158, 11, 0.4)',
+                          borderRadius: 4,
+                          color: '#f59e0b',
+                          cursor: 'pointer',
+                          fontSize: 11,
+                          padding: '4px 8px',
+                          transition: 'all 0.2s',
+                          fontWeight: 500
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = 'rgba(245, 158, 11, 0.3)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'rgba(245, 158, 11, 0.2)';
+                        }}
+                      >
+                        👁️ Preview
+                      </button>
+                    )}
                   </div>
                   <div style={{
                     background: 'rgba(245, 158, 11, 0.1)',
