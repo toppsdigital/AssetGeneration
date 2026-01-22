@@ -20,6 +20,13 @@ interface NewJobFormData {
   skipManualConfiguration?: boolean;
 }
 
+interface SelectedPdfDisplayInfo {
+  originalName: string;
+  canonicalName: string;
+  size: number;
+  type: string;
+}
+
 function NewJobPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -52,6 +59,7 @@ function NewJobPageContent() {
   const [errors, setErrors] = useState<Partial<NewJobFormData>>({});
   const [jobCreated, setJobCreated] = useState<any>(null);
   const [isFileListExpanded, setIsFileListExpanded] = useState(false);
+  const [selectedPdfDisplayInfos, setSelectedPdfDisplayInfos] = useState<SelectedPdfDisplayInfo[]>([]);
 
   // Clear any stale globals from previous sessions so reruns respect new selections
   useEffect(() => {
@@ -66,6 +74,39 @@ function NewJobPageContent() {
       // no-op
     }
   }, []);
+
+  const canonicalizePdfFilename = (originalFilename: string): { canonicalName: string; side: 'BK' | 'FR' } | null => {
+    // Expected input format: CARDID_PROJECTCODE_..._SIDE.pdf
+    // Example: 1184_26PLCM_BASE_CRB.pdf -> 26PLCM_1184_BK.pdf
+    const name = originalFilename.trim();
+    const lower = name.toLowerCase();
+    if (!lower.endsWith('.pdf')) return null;
+
+    const stem = name.slice(0, -4); // remove ".pdf"
+    const parts = stem.split('_').filter(Boolean);
+    if (parts.length < 3) return null;
+
+    const cardId = parts[0];
+    const projectCode = parts[1];
+    const sideToken = parts[parts.length - 1].toUpperCase();
+
+    if (!/^\d{4}$/.test(cardId)) return null;
+    if (!projectCode) return null;
+
+    const sideMap: Record<string, 'BK' | 'FR' | null> = {
+      CRB: 'BK',
+      BK: 'BK',
+      CRF: 'FR',
+      FR: 'FR',
+    };
+
+    const side = sideMap[sideToken] || null;
+    if (!side) return null;
+
+    // Canonical format: projectCode_cardId_side.pdf (force side uppercase; keep projectCode/cardId as-is)
+    const canonicalName = `${projectCode}_${cardId}_${side}.pdf`;
+    return { canonicalName, side };
+  };
 
   // Handle input changes
   const handleInputChange = (field: keyof NewJobFormData, value: string) => {
@@ -94,22 +135,74 @@ function NewJobPageContent() {
       const firstFile = files[0];
       const folderPath = firstFile.webkitRelativePath.split('/')[0];
       
-      // Filter only PDF files with _FR.pdf or _BK.pdf endings
+      // Accept PDF files ending with _CRB/_CRF/_BK/_FR (we will canonicalize to *_BK/_FR)
       const pdfFiles = Array.from(files).filter(file => {
-        const isCorrectType = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-        const hasCorrectNaming = file.name.match(/_(FR|BK)\.pdf$/i);
-        return isCorrectType && hasCorrectNaming;
+        const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+        const hasRecognizedSide = /_(CRB|CRF|BK|FR)\.pdf$/i.test(file.name);
+        return isPdf && hasRecognizedSide;
       });
-      
-      // Create a new FileList-like object with only PDF files
+
+      const renameErrors: string[] = [];
+      const collisionNames: string[] = [];
+      const canonicalNameSeen = new Set<string>();
+      const renamedFiles: File[] = [];
+      const displayInfos: SelectedPdfDisplayInfo[] = [];
+
+      pdfFiles.forEach(file => {
+        const canonical = canonicalizePdfFilename(file.name);
+        if (!canonical) {
+          renameErrors.push(file.name);
+          return;
+        }
+
+        const canonicalKey = canonical.canonicalName.toLowerCase();
+        if (canonicalNameSeen.has(canonicalKey)) {
+          collisionNames.push(canonical.canonicalName);
+          return;
+        }
+        canonicalNameSeen.add(canonicalKey);
+
+        // Create a new File object with canonical name so downstream upload matches by File.name
+        const renamed = new File([file], canonical.canonicalName, {
+          type: file.type || 'application/pdf',
+          lastModified: file.lastModified,
+        });
+
+        renamedFiles.push(renamed);
+        displayInfos.push({
+          originalName: file.name,
+          canonicalName: canonical.canonicalName,
+          size: file.size,
+          type: file.type || 'application/pdf',
+        });
+      });
+
+      // If collisions exist, block selection to avoid ambiguous uploads
+      if (collisionNames.length > 0) {
+        setSelectedPdfDisplayInfos([]);
+        setFormData(prev => ({
+          ...prev,
+          uploadFolder: folderPath,
+          selectedFiles: null,
+        }));
+        setIsFileListExpanded(false);
+        setErrors(prev => ({
+          ...prev,
+          uploadFolder: `Filename collision after renaming. Multiple files map to the same canonical name: ${Array.from(new Set(collisionNames)).slice(0, 5).join(', ')}${collisionNames.length > 5 ? '…' : ''}`
+        }));
+        return;
+      }
+
+      // Create a new FileList-like object with renamed PDFs
       const dataTransfer = new DataTransfer();
-      pdfFiles.forEach(file => dataTransfer.items.add(file));
+      renamedFiles.forEach(file => dataTransfer.items.add(file));
       
       setFormData(prev => ({
         ...prev,
         uploadFolder: folderPath,
         selectedFiles: dataTransfer.files
       }));
+      setSelectedPdfDisplayInfos(displayInfos);
 
       // Collapse file list when new files are selected
       setIsFileListExpanded(false);
@@ -121,9 +214,15 @@ function NewJobPageContent() {
           uploadFolder: ''
         }));
       }
+
+      // Non-blocking warning if some files could not be parsed/canonicalized
+      if (renameErrors.length > 0) {
+        console.warn('⚠️ Some PDFs matched side suffix but could not be canonicalized:', renameErrors);
+      }
     } else {
       // If no files selected, collapse the file list
       setIsFileListExpanded(false);
+      setSelectedPdfDisplayInfos([]);
     }
   };
 
@@ -160,6 +259,7 @@ function NewJobPageContent() {
         uploadFolder: folderPath,
         selectedFiles: dataTransfer.files
       }));
+      setSelectedPdfDisplayInfos([]); // Only applies to PDF flow
 
       setIsFileListExpanded(false);
 
@@ -171,6 +271,7 @@ function NewJobPageContent() {
       }
     } else {
       setIsFileListExpanded(false);
+      setSelectedPdfDisplayInfos([]);
     }
   };
 
@@ -772,7 +873,7 @@ function NewJobPageContent() {
                       fontSize: 12, 
                       margin: '4px 0 0 0' 
                     }}>
-                      No valid PDF files found. Please ensure files end with _FR.pdf or _BK.pdf
+                      No valid PDF files found. Please ensure files end with _CRF/_CRB or _FR/_BK
                     </p>
                   )}
                   
@@ -1162,7 +1263,12 @@ function NewJobPageContent() {
                   gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
                   gap: 8
                 }}>
-                  {Array.from(formData.selectedFiles).map((file, index) => (
+                  {(selectedPdfDisplayInfos.length > 0 ? selectedPdfDisplayInfos : Array.from(formData.selectedFiles).map(file => ({
+                    originalName: file.name,
+                    canonicalName: file.name,
+                    size: file.size,
+                    type: file.type
+                  }))).map((info, index) => (
                     <div
                       key={index}
                       style={{
@@ -1186,17 +1292,32 @@ function NewJobPageContent() {
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
                         <span style={{ fontSize: 18, flexShrink: 0 }}>📄</span>
-                        <span style={{
-                          color: '#f8f8f8',
-                          fontSize: 14,
-                          fontFamily: 'monospace',
-                          fontWeight: 500,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap'
-                        }}>
-                          {file.name}
-                        </span>
+                        <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+                          <span style={{
+                            color: '#f8f8f8',
+                            fontSize: 14,
+                            fontFamily: 'monospace',
+                            fontWeight: 600,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap'
+                          }} title={info.canonicalName}>
+                            {info.canonicalName}
+                          </span>
+                          {info.originalName !== info.canonicalName && (
+                            <span style={{
+                              color: '#9ca3af',
+                              fontSize: 12,
+                              fontFamily: 'monospace',
+                              fontWeight: 500,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap'
+                            }} title={`${info.originalName} → ${info.canonicalName}`}>
+                              {info.originalName} → {info.canonicalName}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <span style={{
                         color: '#9ca3af',
@@ -1208,7 +1329,7 @@ function NewJobPageContent() {
                         flexShrink: 0,
                         marginLeft: 8
                       }}>
-                        {(file.size / 1024).toFixed(1)} KB
+                        {(info.size / 1024).toFixed(1)} KB
                       </span>
                     </div>
                   ))}
