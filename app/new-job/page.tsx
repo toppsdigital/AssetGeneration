@@ -95,10 +95,14 @@ function NewJobPageContent() {
 
     const sideMap: Record<string, 'BK' | 'FR' | null> = {
       CRB: 'BK',
-      BK: 'BK',
       CRF: 'FR',
-      FR: 'FR',
     };
+
+    // IMPORTANT: If the filename already ends with _BK/_FR, do NOT change it at all.
+    // We only rename when the side token is CRB/CRF.
+    if (sideToken === 'BK' || sideToken === 'FR') {
+      return { canonicalName: originalFilename, side: sideToken as 'BK' | 'FR' };
+    }
 
     const side = sideMap[sideToken] || null;
     if (!side) return null;
@@ -162,13 +166,16 @@ function NewJobPageContent() {
         }
         canonicalNameSeen.add(canonicalKey);
 
-        // Create a new File object with canonical name so downstream upload matches by File.name
-        const renamed = new File([file], canonical.canonicalName, {
-          type: file.type || 'application/pdf',
-          lastModified: file.lastModified,
-        });
+        // Only rename if the filename was CRB/CRF; if it's already BK/FR, keep it as-is.
+        const shouldRename = canonical.canonicalName !== file.name;
+        const finalFile = shouldRename
+          ? new File([file], canonical.canonicalName, {
+              type: file.type || 'application/pdf',
+              lastModified: file.lastModified,
+            })
+          : file;
 
-        renamedFiles.push(renamed);
+        renamedFiles.push(finalFile);
         displayInfos.push({
           originalName: file.name,
           canonicalName: canonical.canonicalName,
