@@ -82,6 +82,11 @@ function NewJobPageContent() {
     const lower = name.toLowerCase();
     if (!lower.endsWith('.pdf')) return null;
 
+    // IMPORTANT: If the filename already ends with _BK/_FR, do NOT change it at all.
+    // Also do not enforce any token-position rules for already-canonical uploads.
+    if (/_BK\.pdf$/i.test(name)) return { canonicalName: originalFilename, side: 'BK' };
+    if (/_FR\.pdf$/i.test(name)) return { canonicalName: originalFilename, side: 'FR' };
+
     const stem = name.slice(0, -4); // remove ".pdf"
     const parts = stem.split('_').filter(Boolean);
     if (parts.length < 3) return null;
@@ -90,6 +95,7 @@ function NewJobPageContent() {
     const projectCode = parts[1];
     const sideToken = parts[parts.length - 1].toUpperCase();
 
+    // Only CRB/CRF conversions use the strict 4-digit-first + project-code-second convention
     if (!/^\d{4}$/.test(cardId)) return null;
     if (!projectCode) return null;
 
@@ -97,12 +103,6 @@ function NewJobPageContent() {
       CRB: 'BK',
       CRF: 'FR',
     };
-
-    // IMPORTANT: If the filename already ends with _BK/_FR, do NOT change it at all.
-    // We only rename when the side token is CRB/CRF.
-    if (sideToken === 'BK' || sideToken === 'FR') {
-      return { canonicalName: originalFilename, side: sideToken as 'BK' | 'FR' };
-    }
 
     const side = sideMap[sideToken] || null;
     if (!side) return null;
