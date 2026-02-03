@@ -628,8 +628,8 @@ function NewJobPageContent() {
                       <option value="BASKETBALL" style={{ background: '#1f2937', color: '#f8f8f8' }}>
                         🏀 NBA
                       </option>
-                      <option value="HUDDLE" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                        🏈 HUDDLE
+                      <option value="NFL" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                        🏈 NFL
                       </option>
                       <option value="TTF" style={{ background: '#1f2937', color: '#f8f8f8' }}>
                         ⚽ TTF

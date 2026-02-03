@@ -339,8 +339,8 @@ export default function NewJobPage() {
                     <option value="BASKETBALL" style={{ background: '#1f2937', color: '#f8f8f8' }}>
                       BASKETBALL
                     </option>
-                    <option value="HUDDLE" style={{ background: '#1f2937', color: '#f8f8f8' }}>
-                      HUDDLE
+                    <option value="NFL" style={{ background: '#1f2937', color: '#f8f8f8' }}>
+                      NFL
                     </option>
                     <option value="TTF" style={{ background: '#1f2937', color: '#f8f8f8' }}>
                       TTF

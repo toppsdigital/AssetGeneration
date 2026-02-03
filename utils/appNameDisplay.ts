@@ -8,7 +8,9 @@ export const APP_DISPLAY_NAME_MAP: Record<string, string> = {
   DISNEY: 'DISNEY',
   STARWARS: 'STARWARS',
   MARVEL: 'MARVEL',
-  HUDDLE: 'HUDDLE',
+  // Legacy + new naming: HUDDLE was renamed to NFL
+  HUDDLE: 'NFL',
+  NFL: 'NFL',
   TTF: 'TTF'
 };
 
