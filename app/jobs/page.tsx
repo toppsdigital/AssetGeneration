@@ -725,38 +725,64 @@ export default function JobsPage() {
                </div>
 
                {/* Enhanced Action Section */}
-               <div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-end' }}>
                 <button
-                  onClick={() => router.push('/new-job')}
-                  style={{
-                    padding: '14px 28px',
-                    background: 'linear-gradient(135deg, #10b981, #059669)',
-                    border: 'none',
-                    borderRadius: 14,
-                    color: 'white',
-                    cursor: 'pointer',
-                    fontSize: 16,
-                    fontWeight: 700,
-                    transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-                    boxShadow: '0 8px 24px rgba(16, 185, 129, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
-                    letterSpacing: '-0.01em',
-                    textShadow: '0 1px 2px rgba(0, 0, 0, 0.1)',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    height: '46px'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = 'translateY(-2px) scale(1.02)';
-                    e.currentTarget.style.boxShadow = '0 12px 32px rgba(16, 185, 129, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'translateY(0) scale(1)';
-                    e.currentTarget.style.boxShadow = '0 8px 24px rgba(16, 185, 129, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2)';
-                  }}
-                >
-                  <span style={{ position: 'relative', zIndex: 1 }}>➕ New</span>
-                </button>
-              </div>
+                    onClick={() => router.push('/new-job')}
+                    style={{
+                      padding: '14px 28px',
+                      background: 'linear-gradient(135deg, #10b981, #059669)',
+                      border: 'none',
+                      borderRadius: 14,
+                      color: 'white',
+                      cursor: 'pointer',
+                      fontSize: 16,
+                      fontWeight: 700,
+                      transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                      boxShadow: '0 8px 24px rgba(16, 185, 129, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
+                      letterSpacing: '-0.01em',
+                      textShadow: '0 1px 2px rgba(0, 0, 0, 0.1)',
+                      position: 'relative',
+                      overflow: 'hidden',
+                      height: '46px'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'translateY(-2px) scale(1.02)';
+                      e.currentTarget.style.boxShadow = '0 12px 32px rgba(16, 185, 129, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'translateY(0) scale(1)';
+                      e.currentTarget.style.boxShadow = '0 8px 24px rgba(16, 185, 129, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2)';
+                    }}
+                  >
+                    <span style={{ position: 'relative', zIndex: 1 }}>➕ New</span>
+                  </button>
+
+                  <button
+                    onClick={() => router.push('/pending-jobs')}
+                    style={{
+                      padding: '10px 16px',
+                      background: 'rgba(255, 255, 255, 0.08)',
+                      border: '1px solid rgba(255, 255, 255, 0.18)',
+                      borderRadius: 12,
+                      color: '#e5e7eb',
+                      cursor: 'pointer',
+                      fontSize: 14,
+                      fontWeight: 700,
+                      transition: 'all 0.2s',
+                      height: '42px',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.12)';
+                      e.currentTarget.style.transform = 'translateY(-1px)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+                      e.currentTarget.style.transform = 'translateY(0)';
+                    }}
+                  >
+                    ⏳ Pending Jobs
+                  </button>
+                </div>
             </div>
           </div>
 

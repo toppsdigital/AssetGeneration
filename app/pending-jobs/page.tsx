@@ -91,7 +91,7 @@ export default function PendingJobsPage() {
   if (isLoading) {
     return (
       <div className={styles.container}>
-        <PageTitle title="Pending Jobs" leftButton="home" />
+        <PageTitle title="Pending Jobs" leftButton="back" />
         <div className={styles.content}>
           <div style={{ textAlign: 'center', padding: '48px 0' }}>
             <Spinner />
@@ -105,7 +105,7 @@ export default function PendingJobsPage() {
   if (error) {
     return (
       <div className={styles.container}>
-        <PageTitle title="Pending Jobs" leftButton="home" />
+        <PageTitle title="Pending Jobs" leftButton="back" />
         <div className={styles.content}>
           <div style={{ textAlign: 'center', padding: '48px 0' }}>
             <h2 style={{ color: '#ef4444', marginBottom: 16 }}>❌ Error Loading Pending Jobs</h2>
@@ -132,7 +132,7 @@ export default function PendingJobsPage() {
 
   return (
     <div className={styles.container}>
-      <PageTitle title="Pending Jobs" leftButton="home" />
+      <PageTitle title="Pending Jobs" leftButton="back" />
       <div className={styles.content}>
         <div style={{ maxWidth: 1000, margin: '0 auto', padding: '24px' }}>
           <div
