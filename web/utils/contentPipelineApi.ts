@@ -129,6 +129,60 @@ import { buildS3UploadsPath } from '../../utils/environment';
 class ContentPipelineAPI {
   private baseUrl = '/api/content-pipeline-proxy';
 
+  // Subset operations
+  // Returns subset names in "dash format" (no spaces) as string[]
+  async listNotProcessedSubsets(): Promise<string[]> {
+    const response = await fetch(`${this.baseUrl}?operation=list_not_processed_subsets`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error((error as any).error || (error as any).message || `Failed to list pending subsets: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    // Support both raw-array response and wrapped shapes
+    if (Array.isArray(data)) return data.filter((x) => typeof x === 'string') as string[];
+    if (Array.isArray((data as any)?.not_processed)) return (data as any).not_processed.filter((x: any) => typeof x === 'string');
+    if (Array.isArray((data as any)?.items)) return (data as any).items.filter((x: any) => typeof x === 'string');
+    if (Array.isArray((data as any)?.subsets)) return (data as any).subsets.filter((x: any) => typeof x === 'string');
+
+    return [];
+  }
+
+  // Fetch presigned URLs for a subset (used by Pending Jobs)
+  async getSubsetPresignedUrls(subsetName: string): Promise<string[]> {
+    const response = await fetch(
+      `${this.baseUrl}?operation=get_subset_presigned_urls&subset=${encodeURIComponent(subsetName)}`,
+      {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error((error as any).error || (error as any).message || `Failed to fetch presigned URLs: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    // Support multiple possible response shapes
+    if (Array.isArray(data)) return data.filter((x) => typeof x === 'string') as string[];
+    if (Array.isArray((data as any)?.presigned_urls)) return (data as any).presigned_urls.filter((x: any) => typeof x === 'string');
+    if (Array.isArray((data as any)?.presignedUrls)) return (data as any).presignedUrls.filter((x: any) => typeof x === 'string');
+    if (Array.isArray((data as any)?.urls)) return (data as any).urls.filter((x: any) => typeof x === 'string');
+
+    return [];
+  }
+
   // Job operations
   async createJob(jobData: Omit<JobData, 'job_id' | 'created_at' | 'last_updated' | 'priority' | 'metadata' | 'job_status'>): Promise<JobResponse> {
     const { files: _omitFiles, original_files_total_count: _omitTotal, original_files_completed_count: _omitCompleted, original_files_failed_count: _omitFailed, ...rest } = jobData as any;
