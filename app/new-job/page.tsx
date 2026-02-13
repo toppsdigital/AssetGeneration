@@ -16,6 +16,7 @@ interface NewJobFormData {
   description: string;
   uploadFolder: string;
   selectedFiles: FileList | null;
+  presignedUrls?: string[]; // When present, skip local folder selection and pass presigned_urls to backend
   edrPdfFilename?: string;
   skipManualConfiguration?: boolean;
 }
@@ -38,6 +39,8 @@ function NewJobPageContent() {
   // Check if this is a re-run operation
   const isRerun = searchParams.get('rerun') === 'true';
   const sourceJobId = searchParams.get('sourceJobId');
+  const pendingSubset = searchParams.get('pendingSubset');
+  const presignKey = searchParams.get('presignKey');
   
   
   
@@ -60,6 +63,7 @@ function NewJobPageContent() {
   const [jobCreated, setJobCreated] = useState<any>(null);
   const [isFileListExpanded, setIsFileListExpanded] = useState(false);
   const [selectedPdfDisplayInfos, setSelectedPdfDisplayInfos] = useState<SelectedPdfDisplayInfo[]>([]);
+  const usingPresignedUrls = !!(formData.presignedUrls && formData.presignedUrls.length > 0);
 
   // Clear any stale globals from previous sessions so reruns respect new selections
   useEffect(() => {
@@ -74,6 +78,44 @@ function NewJobPageContent() {
       // no-op
     }
   }, []);
+
+  // If user came from Pending Jobs, prefill description (only if blank and not rerun)
+  useEffect(() => {
+    if (isRerun) return;
+    if (!pendingSubset) return;
+
+    setFormData(prev => {
+      if (prev.description?.trim()) return prev;
+      return {
+        ...prev,
+        description: pendingSubset,
+      };
+    });
+  }, [isRerun, pendingSubset]);
+
+  // If user came from Pending Jobs "Process Job", load presigned URLs from sessionStorage
+  useEffect(() => {
+    if (isRerun) return;
+    if (!presignKey) return;
+
+    try {
+      const raw = sessionStorage.getItem(presignKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      const urls = parsed?.presigned_urls || parsed?.presignedUrls || parsed?.urls;
+      if (!Array.isArray(urls) || urls.length === 0) return;
+
+      setFormData(prev => ({
+        ...prev,
+        jobType: prev.jobType || 'physical_to_digital',
+        presignedUrls: urls,
+        uploadFolder: '',
+        selectedFiles: null,
+      }));
+    } catch (e) {
+      console.warn('Failed to load presigned URLs from sessionStorage:', e);
+    }
+  }, [isRerun, presignKey]);
 
   const canonicalizePdfFilename = (originalFilename: string): { canonicalName: string; side: 'BK' | 'FR' } | null => {
     // Expected input format: CARDID_PROJECTCODE_..._SIDE.pdf
@@ -317,11 +359,13 @@ function NewJobPageContent() {
     
     // Require files only after a job type is chosen
     const needsFiles = !!formData.jobType;
-    const filesValid = !needsFiles || !!(
+    const hasLocalSelection = !!(
       formData.uploadFolder.trim() &&
       formData.selectedFiles &&
       formData.selectedFiles.length > 0
     );
+    const hasPresignedSelection = formData.jobType === 'physical_to_digital' && usingPresignedUrls;
+    const filesValid = !needsFiles || hasLocalSelection || hasPresignedSelection;
     
     return basicFieldsValid && filesValid;
   };
@@ -344,8 +388,11 @@ function NewJobPageContent() {
       newErrors.description = 'Description is required';
     }
 
-    // Require upload folder when a job type is chosen
-    if (formData.jobType && !formData.uploadFolder.trim()) {
+    // Require upload folder when a job type is chosen (unless using presigned URLs)
+    const needsFolderSelection =
+      !!formData.jobType &&
+      !(formData.jobType === 'physical_to_digital' && usingPresignedUrls);
+    if (needsFolderSelection && !formData.uploadFolder.trim()) {
       newErrors.uploadFolder = 'Upload folder is required';
     }
 
@@ -360,6 +407,8 @@ function NewJobPageContent() {
     filenamePrefix: string;
     pdf_files?: string[];
     image_files?: string[];
+    presigned_urls?: string[];
+    processed?: string;
     files?: string[]; // grouped base names (without _FR/_BK)
     original_files_total_count?: number;
     edr_pdf_filename?: string;
@@ -374,6 +423,8 @@ function NewJobPageContent() {
         filename_prefix: jobData.filenamePrefix,
         pdf_files: jobData.pdf_files,
         image_files: jobData.image_files,
+        presigned_urls: jobData.presigned_urls,
+        processed: jobData.processed,
         edr_pdf_filename: jobData.edr_pdf_filename,
         description: jobData.description,
         ...(jobData.skip_manual_configuration ? { skip_manual_configuration: true } : {})
@@ -423,18 +474,23 @@ function NewJobPageContent() {
     try {
       console.log('Starting job creation process...');
 
-      if (!formData.selectedFiles || formData.selectedFiles.length === 0) {
-        if (formData.jobType === 'physical_to_digital') {
-          throw new Error('Please select a folder containing PDF files');
-        } else {
-          throw new Error('Please select an images folder (.tiff/.png/.jpg)');
+      // If we have presigned URLs, skip local folder selection entirely.
+      const shouldUsePresignedUrls = formData.jobType === 'physical_to_digital' && usingPresignedUrls;
+
+      if (!shouldUsePresignedUrls) {
+        if (!formData.selectedFiles || formData.selectedFiles.length === 0) {
+          if (formData.jobType === 'physical_to_digital') {
+            throw new Error('Please select a folder containing PDF files');
+          } else {
+            throw new Error('Please select an images folder (.tiff/.png/.jpg)');
+          }
         }
       }
 
       let pdfFiles: string[] | undefined = undefined;
       let imageFiles: string[] | undefined = undefined;
 
-      if (formData.jobType === 'physical_to_digital') {
+      if (formData.jobType === 'physical_to_digital' && !shouldUsePresignedUrls) {
         // Derive pdf_files from selected files (_FR/_BK only, deduped by name)
         const pdfFilesSet = new Set<string>();
         Array.from(formData.selectedFiles).forEach(file => {
@@ -448,7 +504,7 @@ function NewJobPageContent() {
         if (pdfFiles.length === 0) {
           throw new Error('No valid _FR/_BK PDF files found in the selected folder');
         }
-      } else {
+      } else if (formData.jobType !== 'physical_to_digital') {
         // Images flow: collect allowed image filenames
         const imageFilesSet = new Set<string>();
         Array.from(formData.selectedFiles).forEach(file => {
@@ -471,6 +527,8 @@ function NewJobPageContent() {
         filenamePrefix: formData.filenamePrefix,
         pdf_files: pdfFiles,
         image_files: imageFiles,
+        presigned_urls: shouldUsePresignedUrls ? formData.presignedUrls : undefined,
+        processed: shouldUsePresignedUrls ? (pendingSubset || undefined) : undefined,
         edr_pdf_filename: formData.edrPdfFilename || undefined,
         description: formData.description,
         skip_manual_configuration: formData.skipManualConfiguration ? true : undefined
@@ -480,7 +538,8 @@ function NewJobPageContent() {
         ...jobPayload,
         operation: isRerun ? 'rerun' : 'create',
         stats: {
-          totalFilesSelected: formData.selectedFiles.length
+          totalFilesSelected: formData.selectedFiles?.length || 0,
+          presignedUrlsCount: shouldUsePresignedUrls ? (formData.presignedUrls?.length || 0) : 0,
         }
       });
       
@@ -488,8 +547,14 @@ function NewJobPageContent() {
       const createdJob = await createJob(jobPayload);
 
       setJobCreated(createdJob);
-      console.log(`${isRerun ? 'Job re-run' : 'Job created'} successfully, navigating to job details page...`);
+      console.log(`${isRerun ? 'Job re-run' : 'Job created'} successfully, navigating...`);
       
+      // If using presigned URLs, do NOT go to the upload page (it requires File objects in memory).
+      if (shouldUsePresignedUrls) {
+        router.push('/jobs');
+        return;
+      }
+
       // Both new jobs and reruns now work the same way - store file data and start upload
       const uploadSession = {
         jobId: createdJob.job_id,
@@ -792,7 +857,20 @@ function NewJobPageContent() {
                 </div>
 
               {/* Select Folder to Upload (conditional) */}
-              {formData.jobType === 'physical_to_digital' && (
+              {formData.jobType === 'physical_to_digital' && usingPresignedUrls && (
+                <div style={{
+                  padding: 12,
+                  background: 'rgba(16, 185, 129, 0.08)',
+                  border: '1px solid rgba(16, 185, 129, 0.25)',
+                  borderRadius: 10,
+                }}>
+                  <p style={{ margin: 0, color: '#a7f3d0', fontSize: 13, fontWeight: 600 }}>
+                    Using presigned URLs ({formData.presignedUrls?.length || 0} files). PDF folder selection is hidden.
+                  </p>
+                </div>
+              )}
+
+              {formData.jobType === 'physical_to_digital' && !usingPresignedUrls && (
               <div>
                   <label style={{
                     display: 'block',

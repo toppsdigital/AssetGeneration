@@ -86,6 +86,10 @@ export default function Home() {
     router.push('/jobs');
   };
 
+  const handlePendingJobs = () => {
+    router.push('/pending-jobs');
+  };
+
   return (
     <div className={styles.container}>
       <div className={styles.content}>
@@ -110,6 +114,13 @@ export default function Home() {
               >
                 <span className={styles.buttonIcon}>📋</span>
                 View Jobs
+              </button>
+              <button
+                onClick={handlePendingJobs}
+                className={styles.secondaryButton}
+              >
+                <span className={styles.buttonIcon}>⏳</span>
+                Pending Jobs
               </button>
             </div>
           </div>

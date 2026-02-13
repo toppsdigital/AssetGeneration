@@ -353,6 +353,7 @@ async function handleRequest(request: NextRequest, method: string) {
     const operation = searchParams.get('operation');
     const resource = searchParams.get('resource');
     const id = searchParams.get('id');
+    const subset = searchParams.get('subset');
     
     console.log('🔍 Parsed Parameters:', {
       operation,
@@ -516,6 +517,26 @@ async function handleRequest(request: NextRequest, method: string) {
         }
         console.log('🔗 Final API URL for list_jobs:', apiUrl);
         console.log('🔗 Job params constructed:', jobParams.toString());
+        break;
+
+      // Subset operations
+      // Returns an array of subset names (string[])
+      // Backend endpoint: GET /subsets/not-processed
+      case 'list_not_processed_subsets':
+        apiUrl += '/subsets/not-processed';
+        apiMethod = 'GET';
+        apiBody = {}; // no body for GET
+        break;
+
+      // Fetch presigned URLs for a given subset
+      // Backend endpoint: GET /subsets/presignurls?subset=<subset>
+      case 'get_subset_presigned_urls':
+        if (!subset) {
+          return NextResponse.json({ error: 'subset is required' }, { status: 400 });
+        }
+        apiUrl += `/subsets/presignurls?subset=${encodeURIComponent(subset)}`;
+        apiMethod = 'GET';
+        apiBody = {}; // no body for GET
         break;
         
       case 'delete_job':
@@ -1049,6 +1070,8 @@ async function handleRequest(request: NextRequest, method: string) {
           error: 'Invalid operation',
           available_operations: [
             'create_job', 'get_job', 'update_job', 'delete_job', 'list_jobs', 'rerun_job',
+            'list_not_processed_subsets',
+            'get_subset_presigned_urls',
             'create_file', 'get_file', 'update_file', 'list_files',
             'batch_create_files', 'batch_get_files', 'update_pdf_status', 'batch_update_pdf_status',
             'generate_assets', 'regenerate_assets', 'update_download_url',
