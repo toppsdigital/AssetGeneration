@@ -183,6 +183,36 @@ class ContentPipelineAPI {
     return [];
   }
 
+  // Download any S3 folder as a ZIP via backend /s3-files (returns a presigned URL)
+  async downloadS3Folder(folder: string): Promise<{
+    success: boolean;
+    message: string;
+    data?: {
+      download_url: string;
+      expires_in: number;
+      zip_key?: string;
+      source_folder?: string;
+      files_count?: number;
+      [key: string]: any;
+    };
+    [key: string]: any;
+  }> {
+    const response = await fetch(`${this.baseUrl}?operation=s3_download_folder`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ folder }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error((error as any).error || (error as any).message || `Failed to create folder download URL: ${response.status}`);
+    }
+
+    return response.json();
+  }
+
   // Job operations
   async createJob(jobData: Omit<JobData, 'job_id' | 'created_at' | 'last_updated' | 'priority' | 'metadata' | 'job_status'>): Promise<JobResponse> {
     const { files: _omitFiles, original_files_total_count: _omitTotal, original_files_completed_count: _omitCompleted, original_files_failed_count: _omitFailed, ...rest } = jobData as any;

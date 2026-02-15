@@ -1,11 +1,91 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import styles from '../../styles/Home.module.css';
 import PageTitle from '../../components/PageTitle';
 import Spinner from '../../components/Spinner';
 import { contentPipelineApi } from '../../web/utils/contentPipelineApi';
+import { SubsetDownloadButton } from '../../components/SubsetDownloadButton';
+
+function OneLineAutoFitText({
+  text,
+  maxFontSizePx = 15,
+  minFontSizePx = 9,
+  style,
+}: {
+  text: string;
+  maxFontSizePx?: number;
+  minFontSizePx?: number;
+  style?: React.CSSProperties;
+}) {
+  const elRef = useRef<HTMLDivElement>(null);
+  const [fontSizePx, setFontSizePx] = useState(maxFontSizePx);
+
+  const recompute = useCallback(() => {
+    const el = elRef.current;
+    if (!el) return;
+
+    // Start from max each time (handles widening after resize).
+    let lo = minFontSizePx;
+    let hi = maxFontSizePx;
+    let best = minFontSizePx;
+
+    // Ensure we have a width constraint before measuring.
+    if (el.clientWidth <= 0) {
+      setFontSizePx(maxFontSizePx);
+      return;
+    }
+
+    while (lo <= hi) {
+      const mid = Math.floor((lo + hi) / 2);
+      el.style.fontSize = `${mid}px`;
+
+      // scrollWidth includes overflow; clientWidth is the visible width.
+      if (el.scrollWidth <= el.clientWidth) {
+        best = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+
+    setFontSizePx(best);
+    el.style.fontSize = `${best}px`;
+  }, [maxFontSizePx, minFontSizePx]);
+
+  useLayoutEffect(() => {
+    recompute();
+  }, [recompute, text]);
+
+  useEffect(() => {
+    const el = elRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+
+    const ro = new ResizeObserver(() => recompute());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [recompute]);
+
+  return (
+    <div
+      ref={elRef}
+      title={text}
+      style={{
+        ...style,
+        width: '100%',
+        fontSize: fontSizePx,
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        // Prefer fitting by shrinking. If we *still* overflow at min font size,
+        // clip instead of showing trailing "…".
+        textOverflow: 'clip',
+      }}
+    >
+      {text}
+    </div>
+  );
+}
 
 export default function PendingJobsPage() {
   const router = useRouter();
@@ -148,8 +228,9 @@ export default function PendingJobsPage() {
   return (
     <div className={styles.container}>
       <PageTitle title="Pending Jobs" leftButton="back" />
-      <div className={styles.content}>
-        <div style={{ maxWidth: 1000, margin: '0 auto', padding: '24px' }}>
+      {/* Override `styles.content` max-width (default 800px) for this page */}
+      <div className={styles.content} style={{ maxWidth: 1160, padding: '0 1.5rem' }}>
+        <div style={{ maxWidth: '100%', margin: '0 auto', padding: '24px' }}>
           <div
             style={{
               display: 'flex',
@@ -306,32 +387,40 @@ export default function PendingJobsPage() {
                         gap: 12,
                       }}
                     >
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ color: '#f8f8f8', fontSize: 15, fontWeight: 700, fontFamily: 'monospace' }}>
-                          {subsetName}
-                        </div>
+                      <div style={{ minWidth: 0, flex: '1 1 auto' }}>
+                        <OneLineAutoFitText
+                          text={subsetName}
+                          maxFontSizePx={15}
+                          minFontSizePx={9}
+                          style={{ color: '#f8f8f8', fontWeight: 700, fontFamily: 'monospace' }}
+                        />
                       </div>
 
-                      <button
-                        onClick={() => handleProcess(subsetName)}
-                        disabled={processingSubset === subsetName}
-                        style={{
-                          padding: '10px 14px',
-                          background: processingSubset === subsetName
-                            ? 'rgba(156, 163, 175, 0.5)'
-                            : 'linear-gradient(135deg, #10b981, #059669)',
-                          border: 'none',
-                          borderRadius: 10,
-                          color: 'white',
-                          cursor: processingSubset === subsetName ? 'not-allowed' : 'pointer',
-                          fontSize: 14,
-                          fontWeight: 700,
-                          whiteSpace: 'nowrap',
-                          opacity: processingSubset === subsetName ? 0.7 : 1,
-                        }}
-                      >
-                        {processingSubset === subsetName ? 'Fetching files...' : '▶︎ Process Job'}
-                      </button>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'nowrap', justifyContent: 'flex-end' }}>
+                        <SubsetDownloadButton subsetName={subsetName} />
+
+                        <button
+                          onClick={() => handleProcess(subsetName)}
+                          disabled={processingSubset === subsetName}
+                          style={{
+                            padding: '10px 14px',
+                            background: processingSubset === subsetName
+                              ? 'rgba(156, 163, 175, 0.5)'
+                              : 'linear-gradient(135deg, #10b981, #059669)',
+                            border: 'none',
+                            borderRadius: 10,
+                            color: 'white',
+                            cursor: processingSubset === subsetName ? 'not-allowed' : 'pointer',
+                            fontSize: 14,
+                            fontWeight: 700,
+                            whiteSpace: 'nowrap',
+                            opacity: processingSubset === subsetName ? 0.7 : 1,
+                            minHeight: 40,
+                          }}
+                        >
+                          {processingSubset === subsetName ? 'Fetching files...' : '▶︎ Process Job'}
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
