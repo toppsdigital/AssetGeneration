@@ -117,6 +117,21 @@ function NewJobPageContent() {
     }
   }, [isRerun, presignKey]);
 
+  // If we're using presigned URLs for a new job, hide/clear EDR selection (EDR upload requires File objects).
+  useEffect(() => {
+    if (!usingPresignedUrls) return;
+    if (formData.edrPdfFilename) {
+      setFormData(prev => ({ ...prev, edrPdfFilename: '' }));
+    }
+    try {
+      if ((window as any).pendingEdrFile) {
+        delete (window as any).pendingEdrFile;
+      }
+    } catch (_) {
+      // no-op
+    }
+  }, [usingPresignedUrls, formData.edrPdfFilename]);
+
   const canonicalizePdfFilename = (originalFilename: string): { canonicalName: string; side: 'BK' | 'FR' } | null => {
     // Expected input format: CARDID_PROJECTCODE_..._SIDE.pdf
     // Example: 1184_26PLCM_BASE_CRB.pdf -> 26PLCM_1184_BK.pdf
@@ -529,7 +544,7 @@ function NewJobPageContent() {
         image_files: imageFiles,
         presigned_urls: shouldUsePresignedUrls ? formData.presignedUrls : undefined,
         processed: shouldUsePresignedUrls ? (pendingSubset || undefined) : undefined,
-        edr_pdf_filename: formData.edrPdfFilename || undefined,
+        edr_pdf_filename: shouldUsePresignedUrls ? undefined : (formData.edrPdfFilename || undefined),
         description: formData.description,
         skip_manual_configuration: formData.skipManualConfiguration ? true : undefined
       };
@@ -1061,7 +1076,7 @@ function NewJobPageContent() {
               </div>
 
               {/* EDR PDF selector (single PDF picker) */}
-              {formData.jobType === 'physical_to_digital' && (
+              {formData.jobType === 'physical_to_digital' && !usingPresignedUrls && (
               <div style={{ marginTop: 24 }}>
                 <label style={{
                   display: 'block',
