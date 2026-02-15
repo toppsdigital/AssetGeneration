@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import styles from '../../styles/Home.module.css';
 import PageTitle from '../../components/PageTitle';
@@ -13,6 +13,8 @@ export default function PendingJobsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [processingSubset, setProcessingSubset] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -42,6 +44,13 @@ export default function PendingJobsPage() {
   const sortedSubsets = useMemo(() => {
     return [...subsets].sort((a, b) => a.localeCompare(b));
   }, [subsets]);
+
+  const normalizedQuery = useMemo(() => searchQuery.trim().toLowerCase(), [searchQuery]);
+
+  const filteredSubsets = useMemo(() => {
+    if (!normalizedQuery) return sortedSubsets;
+    return sortedSubsets.filter((subsetName) => subsetName.toLowerCase().includes(normalizedQuery));
+  }, [normalizedQuery, sortedSubsets]);
 
   const handleProcess = async (subsetName: string) => {
     setProcessingSubset(subsetName);
@@ -86,6 +95,12 @@ export default function PendingJobsPage() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    // Keep the user in flow: clear + refocus.
+    searchInputRef.current?.focus();
   };
 
   if (isLoading) {
@@ -182,50 +197,146 @@ export default function PendingJobsPage() {
               </p>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {sortedSubsets.map((subsetName) => (
+            <>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                  marginBottom: 12,
+                  flexWrap: 'wrap',
+                }}
+              >
+                <div style={{ position: 'relative', flex: '1 1 360px', minWidth: 260, maxWidth: 520 }}>
+                  <input
+                    ref={searchInputRef}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search subsets…"
+                    aria-label="Search pending subsets"
+                    style={{
+                      width: '100%',
+                      padding: '10px 40px 10px 12px',
+                      borderRadius: 10,
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
+                      background: 'rgba(255, 255, 255, 0.06)',
+                      color: '#e5e7eb',
+                      outline: 'none',
+                      fontSize: 14,
+                    }}
+                  />
+                  {searchQuery.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleClearSearch}
+                      aria-label="Clear search"
+                      style={{
+                        position: 'absolute',
+                        right: 8,
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        width: 28,
+                        height: 28,
+                        borderRadius: 8,
+                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                        background: 'rgba(255, 255, 255, 0.08)',
+                        color: '#e5e7eb',
+                        cursor: 'pointer',
+                        display: 'grid',
+                        placeItems: 'center',
+                        lineHeight: 1,
+                        fontWeight: 700,
+                      }}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+
+                <div style={{ color: '#9ca3af', fontSize: 13 }}>
+                  {filteredSubsets.length} / {sortedSubsets.length}
+                </div>
+              </div>
+
+              {filteredSubsets.length === 0 ? (
                 <div
-                  key={subsetName}
                   style={{
-                    background: 'rgba(255, 255, 255, 0.06)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    textAlign: 'center',
+                    padding: '32px 0',
+                    background: 'rgba(255, 255, 255, 0.05)',
                     borderRadius: 12,
-                    padding: 16,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 12,
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
                   }}
                 >
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ color: '#f8f8f8', fontSize: 15, fontWeight: 700, fontFamily: 'monospace' }}>
-                      {subsetName}
-                    </div>
-                  </div>
-
+                  <h3 style={{ color: '#9ca3af', fontSize: 16, marginBottom: 8 }}>No matching subsets</h3>
+                  <p style={{ color: '#6b7280', fontSize: 14, marginBottom: 16 }}>
+                    Try a different search term.
+                  </p>
                   <button
-                    onClick={() => handleProcess(subsetName)}
-                    disabled={processingSubset === subsetName}
+                    type="button"
+                    onClick={handleClearSearch}
                     style={{
                       padding: '10px 14px',
-                      background: processingSubset === subsetName
-                        ? 'rgba(156, 163, 175, 0.5)'
-                        : 'linear-gradient(135deg, #10b981, #059669)',
-                      border: 'none',
+                      background: 'rgba(255, 255, 255, 0.08)',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
                       borderRadius: 10,
-                      color: 'white',
-                      cursor: processingSubset === subsetName ? 'not-allowed' : 'pointer',
+                      color: '#e5e7eb',
+                      cursor: 'pointer',
                       fontSize: 14,
-                      fontWeight: 700,
-                      whiteSpace: 'nowrap',
-                      opacity: processingSubset === subsetName ? 0.7 : 1,
+                      fontWeight: 600,
                     }}
                   >
-                    {processingSubset === subsetName ? 'Fetching files...' : '▶︎ Process Job'}
+                    Clear search
                   </button>
                 </div>
-              ))}
-            </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {filteredSubsets.map((subsetName) => (
+                    <div
+                      key={subsetName}
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.06)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        borderRadius: 12,
+                        padding: 16,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 12,
+                      }}
+                    >
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ color: '#f8f8f8', fontSize: 15, fontWeight: 700, fontFamily: 'monospace' }}>
+                          {subsetName}
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => handleProcess(subsetName)}
+                        disabled={processingSubset === subsetName}
+                        style={{
+                          padding: '10px 14px',
+                          background: processingSubset === subsetName
+                            ? 'rgba(156, 163, 175, 0.5)'
+                            : 'linear-gradient(135deg, #10b981, #059669)',
+                          border: 'none',
+                          borderRadius: 10,
+                          color: 'white',
+                          cursor: processingSubset === subsetName ? 'not-allowed' : 'pointer',
+                          fontSize: 14,
+                          fontWeight: 700,
+                          whiteSpace: 'nowrap',
+                          opacity: processingSubset === subsetName ? 0.7 : 1,
+                        }}
+                      >
+                        {processingSubset === subsetName ? 'Fetching files...' : '▶︎ Process Job'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
