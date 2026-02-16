@@ -611,6 +611,17 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isRefreshing = fal
           color: config.color ? getColorRgbByName(config.color) : undefined
         };
 
+        // Back-side spot support: include spot_color_pairs when provided (bk_spot... exists)
+        if (config.type === 'back') {
+          const validPairs = spot_color_pairs_from_form.filter(pair => pair.spot && pair.color);
+          if (validPairs.length > 0) {
+            assetConfig.spot_color_pairs = validPairs.map(pair => ({
+              spot: pair.spot,
+              color: getColorRgbByName(pair.color || '')
+            }));
+          }
+        }
+
         // Only include VFX if it has a valid non-empty value
         if (config.vfx && config.vfx.trim() !== '') {
           assetConfig.vfx = config.vfx;
