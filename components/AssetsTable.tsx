@@ -16,6 +16,7 @@ interface AssetConfig {
   name: string; // User-editable name for the asset
   type: 'wp' | 'back' | 'base' | 'parallel' | 'multi-parallel' | 'wp-1of1' | 'front';
   layer: string;
+  seq?: string; // e.g. "1/1" for 1-of-1 assets
   spot?: string;
   color?: string;
   spot_color_pairs?: SpotColorPair[]; // For PARALLEL cards with multiple combinations
@@ -402,6 +403,21 @@ export const AssetsTable = ({
                               alignSelf: 'flex-start'
                             }}>
                               FOILFRACTOR
+                            </span>
+                          )}
+                          {asset.seq === '1/1' && (
+                            <span style={{
+                              background: 'rgba(16, 185, 129, 0.18)', // emerald-like background
+                              color: '#34d399', // emerald text
+                              padding: '2px 6px',
+                              borderRadius: 3,
+                              fontSize: 11,
+                              fontWeight: 700,
+                              letterSpacing: '0.02em',
+                              alignSelf: 'flex-start',
+                              border: '1px solid rgba(16, 185, 129, 0.25)'
+                            }}>
+                              1/1
                             </span>
                           )}
                         </div>

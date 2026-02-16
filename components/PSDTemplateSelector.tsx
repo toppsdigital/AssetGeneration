@@ -36,6 +36,7 @@ interface AssetConfig {
   name: string; // User-editable name for the asset
   type: 'wp' | 'back' | 'base' | 'parallel' | 'multi-parallel' | 'wp-1of1' | 'front';
   layer: string;
+  seq?: string; // e.g. "1/1"
   spot?: string;
   color?: string;
   spot_color_pairs?: SpotColorPair[]; // For PARALLEL cards with multiple combinations
@@ -368,11 +369,18 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isRefreshing = fal
     }
     
     const assets = Object.entries(mergedJobData.assets).map(([assetId, assetData]: [string, any]) => {
+      const seq =
+        typeof assetData?.seq === 'string'
+          ? assetData.seq.trim()
+          : assetData?.seq != null
+            ? String(assetData.seq).trim()
+            : undefined;
       const asset: any = {
         id: assetId,
         name: assetData.name || assetData.type?.toUpperCase() || 'UNNAMED',
         type: assetData.type || 'wp',
         layer: assetData.layer || '',
+        seq: seq || undefined,
         spot: assetData.spot,
         color: assetData.color,
         spot_color_pairs: assetData.spot_color_pairs || [],
@@ -531,6 +539,38 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isRefreshing = fal
     setSavingAsset(true);
     
     try {
+      const pushAssetsUpdate = (resp: any) => {
+        if (!onAssetsUpdate) return;
+        const responseError = resp?.error;
+
+        // Handle explicit "No assets found" error response
+        if (responseError && responseError.includes('No assets found')) {
+          onAssetsUpdate({ job_id: jobData.job_id, assets: {} });
+          return;
+        }
+
+        if (resp?.job) {
+          onAssetsUpdate(resp.job);
+          return;
+        }
+
+        if (resp?.assets?.assets && typeof resp.assets.assets === 'object') {
+          onAssetsUpdate({ job_id: jobData.job_id, assets: resp.assets.assets });
+          return;
+        }
+
+        // Fallback: refetch
+        onAssetsUpdate({ _forceRefetch: true, job_id: jobData.job_id });
+      };
+
+      const hasWp1of1Asset = (assetsObj: any): boolean => {
+        if (!assetsObj || typeof assetsObj !== 'object') return false;
+        return Object.values(assetsObj).some((a: any) => {
+          const t = (a?.type || '').toString().toLowerCase();
+          return t === 'wp-1of1';
+        });
+      };
+
       // Resolve asset id from provided config or current editing state
       const resolvedAssetId = (config.id && config.id !== '') ? config.id : (editingAssetId || '');
       // Build asset configuration
@@ -546,6 +586,11 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isRefreshing = fal
       // Include foilfractor only when enabled; omit entirely when disabled
       if (config.foilfractor === true) {
         assetConfig.foilfractor = true;
+      }
+      
+      // Include seq only when explicitly "1/1"
+      if (config.seq && config.seq.toString().trim() === '1/1') {
+        assetConfig.seq = '1/1';
       }
 
       // Include foil if explicitly provided
@@ -658,63 +703,47 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isRefreshing = fal
           jobId: jobData.job_id,
           data: assetPayload
         });
-        
-        // If creating a new asset with superfractor chrome and oneOfOneWp enabled, also create a wp-1of1 version
-        // This applies to both original 'base' type and 'front' cards that become 'parallel' due to superfractor
-        if (response.success && config.chrome === 'superfractor' && config.oneOfOneWp) {
-          console.log('🎯 Creating additional wp-1of1 asset for superfractor + oneOfOneWp...');
-          
-          // Get WP layers for the wp-1of1 asset
-          const wpLayers = getLayersByType('wp');
-          if (wpLayers.length > 0) {
-            const wp1of1Payload = {
-              type: 'wp-1of1',
-              layer: wpLayers[0], // Use first available WP layer - no VFX or chrome like regular wp
-              name: `${config.name?.trim()}_WP_1OF1`
-            };
-            
-            try {
-              const wp1of1Response = await assetMutation({
-                type: 'createAsset',
-                jobId: jobData.job_id,
-                data: wp1of1Payload
-              });
-              console.log('✅ wp-1of1 asset created for superfractor + oneOfOneWp:', wp1of1Response);
-            } catch (wp1of1Error) {
-              console.error('❌ Error creating wp-1of1 asset:', wp1of1Error);
-              // Don't fail the main asset creation if wp-1of1 fails
-            }
-          }
-        }
       }
 
       if (response.success) {
         console.log('✅ Asset saved successfully:', response);
         
-        // Handle create_asset response format: nested assets structure
-        if (onAssetsUpdate) {
-          const responseError = response.error;
-          
-          // Handle explicit "No assets found" error response
-          if (responseError && responseError.includes('No assets found')) {
-            console.log('ℹ️ create_asset returned "No assets found" - treating as empty assets');
-            onAssetsUpdate({ job_id: jobData.job_id, assets: {} });
-          } else if (response.job) {
-            console.log('🔄 Using legacy job object from response to update UI');
-            onAssetsUpdate(response.job);
-          } else if (response.assets?.assets && typeof response.assets.assets === 'object') {
-            console.log('🔄 Using create_asset response assets directly (no redundant list_assets call)');
-            console.log('📊 Assets in response:', {
-              assetCount: Object.keys(response.assets.assets).length,
-              isEmpty: Object.keys(response.assets.assets).length === 0
-            });
-            onAssetsUpdate({ job_id: jobData.job_id, assets: response.assets.assets });
-          } else {
-            console.log('⚠️ Unexpected response format from create_asset, using fallback refetch');
-            console.log('Response structure:', Object.keys(response));
-            console.log('Assets structure:', response.assets ? Object.keys(response.assets) : 'no assets');
-            console.log('Error in response:', responseError);
-            onAssetsUpdate({ _forceRefetch: true, job_id: jobData.job_id });
+        // Update UI/cached assets from the response
+        pushAssetsUpdate(response);
+
+        // If seq=1/1, ensure a wp-1of1 asset exists.
+        const shouldEnsureWp1of1 = config.seq && config.seq.toString().trim() === '1/1';
+
+        if (shouldEnsureWp1of1) {
+          const assetsObjFromResponse = response?.assets?.assets;
+          const assetsObjFromState = (mergedJobData?.assets || {}) as Record<string, any>;
+          const hasAlready = hasWp1of1Asset(assetsObjFromResponse || assetsObjFromState);
+
+          if (!hasAlready) {
+            console.log('🎯 Creating wp-1of1 asset (missing) due to 1/1 policy...');
+            const wpLayers = getLayersByType('wp');
+            if (wpLayers.length > 0) {
+              const wp1of1Payload = {
+                type: 'wp-1of1',
+                layer: wpLayers[0],
+                name: 'wp-1of1'
+              };
+              try {
+                const wp1of1Response = await assetMutation({
+                  type: 'createAsset',
+                  jobId: jobData.job_id,
+                  data: wp1of1Payload
+                });
+                console.log('✅ wp-1of1 asset created:', wp1of1Response);
+                // Push updated assets into UI/cache if possible
+                pushAssetsUpdate(wp1of1Response);
+              } catch (wp1of1Error) {
+                console.error('❌ Error creating wp-1of1 asset:', wp1of1Error);
+                // Don't fail the main asset save if wp-1of1 fails
+              }
+            } else {
+              console.warn('⚠️ No WP layers available; cannot auto-create wp-1of1 asset.');
+            }
           }
         }
       } else {

@@ -15,12 +15,12 @@ interface AssetConfig {
   name: string; // User-editable name for the asset
   type: 'wp' | 'back' | 'base' | 'parallel' | 'multi-parallel' | 'wp-1of1' | 'front';
   layer: string;
+  seq?: string; // e.g. "1/1" for 1-of-1 assets
   spot?: string;
   color?: string;
   spot_color_pairs?: SpotColorPair[]; // For PARALLEL cards with multiple combinations
   vfx?: string;
   chrome: string | boolean;
-  oneOfOneWp?: boolean; // For BASE assets with superfractor chrome
   wp_inv_layer?: string; // For VFX and chrome effects
   foil?: {
     foil_layer?: string;
@@ -68,7 +68,6 @@ export const AssetCreationForm = ({
   const [currentCardType, setCurrentCardType] = useState<'wp' | 'back' | 'base' | 'parallel' | 'multi-parallel' | 'wp-1of1' | 'front' | null>(null);
   const [currentConfig, setCurrentConfig] = useState<Partial<AssetConfig>>({
     chrome: false,
-    oneOfOneWp: false,
     name: '',
     wp_inv_layer: ''
   });
@@ -122,9 +121,9 @@ export const AssetCreationForm = ({
         id: editingAsset.id,
         name: editingAsset.name,
         layer: editingAsset.layer,
+        seq: (editingAsset as any).seq || undefined,
         vfx: editingAsset.vfx || '',
         chrome: editingAsset.chrome || false,
-        oneOfOneWp: editingAsset.oneOfOneWp || false,
         wp_inv_layer: editingAsset.wp_inv_layer || '',
         foil: typeof editingAsset.foil === 'object'
           ? {
@@ -163,7 +162,6 @@ export const AssetCreationForm = ({
       setCurrentCardType(null);
       setCurrentConfig({
         chrome: false,
-        oneOfOneWp: false,
         name: '',
         wp_inv_layer: ''
       });
@@ -629,7 +627,7 @@ export const AssetCreationForm = ({
         console.log('🚫 Not updating name - appears to be user-edited');
       }
     }
-  }, [currentCardType, currentConfig.layer, currentConfig.vfx, currentConfig.chrome, currentConfig.oneOfOneWp, spot_color_pairs, editingAssetId, getConfiguredAssets, generateAssetName]);
+  }, [currentCardType, currentConfig.layer, currentConfig.vfx, currentConfig.chrome, spot_color_pairs, editingAssetId, getConfiguredAssets, generateAssetName]);
 
   // Auto-select wp_inv layer when VFX or chrome is enabled and only one wp_inv layer exists (not required for topps_now)
   useEffect(() => {
@@ -645,6 +643,17 @@ export const AssetCreationForm = ({
       }
     }
   }, [currentCardType, currentConfig.vfx, currentConfig.chrome, currentConfig.foilfractor, editingAssetId, getWpInvLayers, isToppsNow]);
+
+  // Auto-enable 1/1 when foilfractor is selected or chrome=superfractor
+  useEffect(() => {
+    if (!currentCardType) return;
+    const shouldBeOneOfOne = !!currentConfig.foilfractor || currentConfig.chrome === 'superfractor';
+    if (!shouldBeOneOfOne) return;
+
+    if ((currentConfig as any).seq !== '1/1') {
+      setCurrentConfig(prev => ({ ...prev, seq: '1/1' } as any));
+    }
+  }, [currentCardType, currentConfig.foilfractor, currentConfig.chrome, (currentConfig as any).seq]);
 
   const handleAddAsset = async () => {
     console.log('🔍 handleAddAsset called:', { 
@@ -674,6 +683,11 @@ export const AssetCreationForm = ({
     if (!currentConfig.foilfractor) {
       delete (assetConfig as any).foilfractor;
     }
+    
+    // Ensure seq key is only present when explicitly 1/1
+    if ((currentConfig as any).seq !== '1/1') {
+      delete (assetConfig as any).seq;
+    }
 
     console.log('🔍 Calling onAddAsset with config:', assetConfig);
     
@@ -682,7 +696,7 @@ export const AssetCreationForm = ({
       
       console.log('✅ onAddAsset completed successfully, resetting form');
       // Only reset form if the operation was successful
-      setCurrentConfig({ chrome: false, oneOfOneWp: false, name: '', wp_inv_layer: '' });
+      setCurrentConfig({ chrome: false, name: '', wp_inv_layer: '' });
       setCurrentCardType(null);
       setSpot_color_pairs([]);
       // Close modal on successful add
@@ -695,7 +709,7 @@ export const AssetCreationForm = ({
 
   // Close modal and reset form when closed
   const handleClose = () => {
-    setCurrentConfig({ chrome: false, oneOfOneWp: false, name: '', wp_inv_layer: '' });
+    setCurrentConfig({ chrome: false, name: '', wp_inv_layer: '' });
     setCurrentCardType(null);
     setSpot_color_pairs([]);
     onClose();
@@ -822,7 +836,6 @@ export const AssetCreationForm = ({
                   const autoSelectedLayer = canonicalOptions.length === 1 ? canonicalOptions[0] : '';
                   const initialConfig = { 
                     chrome: false,
-                    oneOfOneWp: false,
                     type,
                     layer: autoSelectedLayer,
                     name: ''
@@ -836,7 +849,6 @@ export const AssetCreationForm = ({
                   const autoSelectedLayer = canonicalOptions.length === 1 ? canonicalOptions[0] : '';
                   const initialConfig = { 
                     chrome: false,
-                    oneOfOneWp: false,
                     type,
                     layer: autoSelectedLayer,
                     name: ''
@@ -1675,9 +1687,7 @@ export const AssetCreationForm = ({
                       const newChrome = e.target.value || false;
                       setCurrentConfig(prev => ({ 
                         ...prev, 
-                        chrome: newChrome,
-                        // Enable oneOfOneWp by default when superfractor is selected
-                        oneOfOneWp: newChrome === 'superfractor' ? true : prev.oneOfOneWp
+                        chrome: newChrome
                       }));
                     }}
                     style={{
@@ -1694,29 +1704,6 @@ export const AssetCreationForm = ({
                     <option value="silver" style={{ background: '#1f2937' }}>Silver</option>
                     <option value="superfractor" style={{ background: '#1f2937' }}>Superfractor</option>
                   </select>
-                  
-                  {/* 10f1 wp checkbox - only show for superfractor */}
-                  {currentConfig.chrome === 'superfractor' && (
-                    <div style={{ marginTop: 12 }}>
-                      <label style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        fontSize: 14,
-                        fontWeight: 600,
-                        color: '#f8f8f8',
-                        cursor: 'pointer'
-                      }}>
-                        <input
-                          type="checkbox"
-                          checked={currentConfig.oneOfOneWp || false}
-                          onChange={(e) => setCurrentConfig(prev => ({ ...prev, oneOfOneWp: e.target.checked }))}
-                          style={{ width: 16, height: 16 }}
-                        />
-                        10f1 wp
-                      </label>
-                    </div>
-                  )}
                 </>
               ) : null}
             </div>
@@ -1790,6 +1777,39 @@ export const AssetCreationForm = ({
                   style={{ width: 16, height: 16 }}
                 />
                 Foilfractor
+              </label>
+            </div>
+          )}
+
+          {/* Seq 1/1 Checkbox */}
+          {currentCardType && (
+            <div style={{ marginTop: 10 }}>
+              <label style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                fontSize: 14,
+                fontWeight: 600,
+                color: '#f8f8f8',
+                cursor: 'pointer'
+              }}>
+                <input
+                  type="checkbox"
+                  checked={(currentConfig as any).seq === '1/1'}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setCurrentConfig(prev => {
+                      if (checked) {
+                        return { ...prev, seq: '1/1' } as any;
+                      } else {
+                        const { seq, ...rest } = prev as any;
+                        return { ...rest };
+                      }
+                    });
+                  }}
+                  style={{ width: 16, height: 16 }}
+                />
+                1/1
               </label>
             </div>
           )}

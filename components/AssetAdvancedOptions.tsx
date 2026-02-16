@@ -16,6 +16,7 @@ interface AssetConfig {
   name: string;
   type: 'wp' | 'back' | 'base' | 'parallel' | 'multi-parallel' | 'wp-1of1' | 'front';
   layer: string;
+  seq?: string; // e.g. "1/1"
   spot?: string;
   color?: string;
   spot_color_pairs?: SpotColorPair[];
