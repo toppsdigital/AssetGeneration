@@ -74,6 +74,8 @@ export const AssetCreationForm = ({
   });
   const [spot_color_pairs, setSpot_color_pairs] = useState<SpotColorPair[]>([{ spot: '', color: undefined }]);
 
+  type CardSide = 'front' | 'back';
+
   // Effect to populate form when editing an existing asset
   useEffect(() => {
     if (editingAsset && editingAssetId) {
@@ -94,13 +96,21 @@ export const AssetCreationForm = ({
       setCurrentCardType(cardTypeForUI);
       
       // Build normalized foil/coldfoil layers to match available options
-      const foilOptions = getFoilLayers();
+      const foilOptions = cardTypeForUI === 'back' ? getFoilLayersForSide('back') : getFoilLayers();
       const coldfoilOptions = getColdfoilLayers();
-      const normalizedFoilLayer = normalizeEffectLayerSelection(
-        typeof editingAsset.foil === 'object' ? editingAsset.foil?.foil_layer : undefined,
-        foilOptions,
-        'foil'
-      );
+      const normalizedFoilLayer =
+        cardTypeForUI === 'back'
+          ? normalizeEffectLayerSelectionForSide(
+              typeof editingAsset.foil === 'object' ? editingAsset.foil?.foil_layer : undefined,
+              foilOptions,
+              'foil',
+              'back'
+            )
+          : normalizeEffectLayerSelection(
+              typeof editingAsset.foil === 'object' ? editingAsset.foil?.foil_layer : undefined,
+              foilOptions,
+              'foil'
+            );
       const normalizedColdfoilLayer = normalizeEffectLayerSelection(
         editingAsset.coldfoil?.coldfoil_layer,
         coldfoilOptions,
@@ -136,14 +146,14 @@ export const AssetCreationForm = ({
       if (editingAsset.spot_color_pairs && editingAsset.spot_color_pairs.length > 0) {
         // Convert RGB values back to color names for the UI
         const convertedPairs = editingAsset.spot_color_pairs.map(pair => ({
-          spot: pair.spot,
+          spot: cardTypeForUI === 'back' ? normalizeSpotSelectionForSide(pair.spot, 'back') : pair.spot,
           color: pair.color?.startsWith('R') ? getColorNameByRgb(pair.color) : pair.color
         }));
         setSpot_color_pairs(convertedPairs);
       } else if (editingAsset.spot && editingAsset.color) {
         // Handle legacy single spot/color format
         const colorName = editingAsset.color.startsWith('R') ? getColorNameByRgb(editingAsset.color) : editingAsset.color;
-        setSpot_color_pairs([{ spot: editingAsset.spot, color: colorName }]);
+        setSpot_color_pairs([{ spot: cardTypeForUI === 'back' ? normalizeSpotSelectionForSide(editingAsset.spot, 'back') : editingAsset.spot, color: colorName }]);
       } else {
         // No spot colors - start with empty array for 'front' type
         setSpot_color_pairs([]);
@@ -212,6 +222,82 @@ export const AssetCreationForm = ({
       }
     });
     return Array.from(spotSet).sort();
+  };
+
+  const getFrontSpotLayers = () => {
+    const extractedLayers = getExtractedLayers();
+    const frontSet = new Set<string>();
+
+    extractedLayers.forEach((layer) => {
+      const lower = (layer || '').toLowerCase();
+      if (!lower.includes('spot')) return;
+
+      const tokens = lower.split(/[^a-z0-9]+/).filter(Boolean);
+      const isFrontQualified = tokens.includes('fr') || tokens.includes('front');
+      if (!isFrontQualified) return;
+
+      // Prefer extracting "spotuv", "spot1", etc from "fr_spotuv"
+      const frMatch = lower.match(/(?:^|[^a-z0-9])fr_(spot[a-z0-9]*)/);
+      if (frMatch && frMatch[1]) {
+        frontSet.add(frMatch[1]);
+        return;
+      }
+
+      // Fallback: keep legacy canonicalization for numeric spots
+      const match = lower.match(/spot(\d+)/);
+      if (match && match[1]) frontSet.add(`spot${match[1]}`);
+      else frontSet.add('spot');
+    });
+
+    const frontOnly = Array.from(frontSet).sort();
+    // If we have any front-qualified spot layers, use those; otherwise fall back to legacy behavior.
+    return frontOnly.length > 0 ? frontOnly : getSpotLayers();
+  };
+
+  const getSpotLayersForSide = (side: CardSide) => {
+    const extractedLayers = getExtractedLayers();
+    const spotSet = new Set<string>();
+
+    extractedLayers.forEach((layer) => {
+      const lower = (layer || '').toLowerCase();
+      if (!lower.includes('spot')) return;
+
+      const tokens = lower.split(/[^a-z0-9]+/).filter(Boolean);
+      const isBackQualified = tokens.includes('bk') || tokens.includes('back');
+      const isFrontQualified = tokens.includes('fr') || tokens.includes('front');
+
+      if (side === 'back' && !isBackQualified) return;
+      if (side === 'front' && !isFrontQualified) return;
+
+      // Prefer preserving the full qualified token (bk_spot1, fr_spotuv, etc)
+      const qualifiedMatch = lower.match(/(?:^|[^a-z0-9])((?:bk|fr)_spot[a-z0-9]*)/);
+      if (qualifiedMatch && qualifiedMatch[1]) {
+        spotSet.add(qualifiedMatch[1]);
+        return;
+      }
+
+      // Back-only: if not explicitly bk_spot..., synthesize bk_spot... for differentiation
+      if (side === 'back') {
+        const match = lower.match(/spot([a-z0-9]*)/);
+        const suffix = match?.[1] || '';
+        spotSet.add(`bk_spot${suffix}`);
+        return;
+      }
+
+      // Front fallback (legacy): canonicalize to spot/spot1/spot2...
+      const match = lower.match(/spot(\d+)/);
+      if (match && match[1]) spotSet.add(`spot${match[1]}`);
+      else spotSet.add('spot');
+    });
+
+    const sideQualified = Array.from(spotSet).sort();
+
+    // Back-compat: if no side-qualified spots exist, fall back to legacy detection.
+    if (sideQualified.length === 0) {
+      return getSpotLayers();
+    }
+
+    return sideQualified;
   };
 
   // Build unique canonical options per type for dropdowns
@@ -313,6 +399,117 @@ export const AssetCreationForm = ({
       }
     });
     return Array.from(foilSet).sort();
+  };
+
+  const getFrontFoilLayers = () => {
+    const extractedLayers = getExtractedLayers();
+    const frontSet = new Set<string>();
+
+    extractedLayers.forEach((layer) => {
+      const lower = (layer || '').toLowerCase();
+      if (lower.includes('coldfoil')) return;
+      if (!lower.includes('foil')) return;
+
+      const tokens = lower.split(/[^a-z0-9]+/).filter(Boolean);
+      const isFrontQualified = tokens.includes('fr') || tokens.includes('front');
+      if (!isFrontQualified) return;
+
+      const frMatch = lower.match(/(?:^|[^a-z0-9])fr_(foil\d*)/);
+      if (frMatch && frMatch[1]) {
+        // keep unprefixed label for front UI
+        frontSet.add(frMatch[1]);
+        return;
+      }
+
+      const match = lower.match(/foil(\d+)/);
+      if (match && match[1]) frontSet.add(`foil${match[1]}`);
+      else frontSet.add('foil');
+    });
+
+    const frontOnly = Array.from(frontSet).sort();
+    // If we have any front-qualified foil layers, use those; otherwise fall back to legacy behavior.
+    return frontOnly.length > 0 ? frontOnly : getFoilLayers();
+  };
+
+  const getFoilLayersForSide = (side: CardSide) => {
+    const extractedLayers = getExtractedLayers();
+    const foilSet = new Set<string>();
+
+    extractedLayers.forEach((layer) => {
+      const lower = (layer || '').toLowerCase();
+      if (lower.includes('coldfoil')) return;
+      if (!lower.includes('foil')) return;
+
+      // Prefer side-qualified foil layers (e.g. fr_foil1, bk_foil1)
+      const tokens = lower.split(/[^a-z0-9]+/).filter(Boolean);
+      const isBackQualified = tokens.includes('bk') || tokens.includes('back');
+      const isFrontQualified = tokens.includes('fr') || tokens.includes('front');
+
+      if (side === 'back' && !isBackQualified) return;
+      if (side === 'front' && !isFrontQualified) return;
+
+      // Prefer preserving full qualified token (bk_foil1 / fr_foil1)
+      const qualifiedMatch = lower.match(/(?:^|[^a-z0-9])((?:bk|fr)_foil\d*)/);
+      if (qualifiedMatch && qualifiedMatch[1]) {
+        foilSet.add(qualifiedMatch[1]);
+        return;
+      }
+
+      // Back-only: if not explicitly bk_foil..., synthesize bk_foil... for differentiation
+      if (side === 'back') {
+        const match = lower.match(/foil(\d*)/);
+        const suffix = match?.[1] || '';
+        foilSet.add(`bk_foil${suffix}`);
+        return;
+      }
+
+      // Front fallback (legacy): canonicalize to foil/foil1...
+      const match = lower.match(/foil(\d+)/);
+      if (match && match[1]) foilSet.add(`foil${match[1]}`);
+      else foilSet.add('foil');
+    });
+
+    const sideQualified = Array.from(foilSet).sort();
+
+    // Back-compat: only fall back for front; back should stay bk_* (or empty).
+    if (sideQualified.length === 0 && side !== 'back') return getFoilLayers();
+
+    return sideQualified;
+  };
+
+  const normalizeEffectLayerSelectionForSide = (
+    desiredLayer: string | undefined,
+    availableOptions: string[],
+    baseToken: 'foil' | 'coldfoil',
+    side: CardSide
+  ): string | undefined => {
+    if (!desiredLayer) return undefined;
+
+    const normalized = normalizeEffectLayerSelection(desiredLayer, availableOptions, baseToken);
+    if (!normalized) return normalized;
+
+    // Back-only: map legacy "foil1" -> "bk_foil1" when options exist.
+    if (side === 'back' && !normalized.includes('_') && baseToken === 'foil') {
+      const candidate = `bk_${normalized}`;
+      if (availableOptions.includes(candidate)) return candidate;
+    }
+
+    return normalized;
+  };
+
+  const normalizeSpotSelectionForSide = (spot: string, side: CardSide): string => {
+    const desired = (spot || '').toLowerCase();
+    const options = getSpotLayersForSide(side);
+    if (options.includes(desired)) return desired;
+
+    // Map legacy "spot1" -> "bk_spot1" (or "fr_spot1") when those exist.
+    if (!desired.includes('_')) {
+      const prefix = side === 'back' ? 'bk_' : 'fr_';
+      const candidate = `${prefix}${desired}`;
+      if (options.includes(candidate)) return candidate;
+    }
+
+    return spot;
   };
 
   const getColdfoilLayers = () => {
@@ -722,7 +919,7 @@ export const AssetCreationForm = ({
               </div>
 
               {/* Add Spot Colors Button - Only show if spot layers exist */}
-              {getSpotLayers().length > 0 && spot_color_pairs.length === 0 ? (
+              {getFrontSpotLayers().length > 0 && spot_color_pairs.length === 0 ? (
                 <div style={{ marginBottom: 12 }}>
                   <button
                     onClick={() => {
@@ -754,7 +951,7 @@ export const AssetCreationForm = ({
                     Add Spot Colors
                   </button>
                 </div>
-              ) : getSpotLayers().length > 0 && spot_color_pairs.length > 0 ? (
+              ) : getFrontSpotLayers().length > 0 && spot_color_pairs.length > 0 ? (
                 /* Spot Colors Section - Only shown when there are pairs and spot layers exist */
                 <div>
                   <div style={{
@@ -772,33 +969,33 @@ export const AssetCreationForm = ({
                     </label>
                     <button
                       onClick={() => {
-                        const maxSpots = Math.min(3, getSpotLayers().length);
+                        const maxSpots = Math.min(3, getFrontSpotLayers().length);
                         if (spot_color_pairs.length < maxSpots) {
                           setSpot_color_pairs(prev => [...prev, { spot: '', color: undefined }]);
                         }
                       }}
-                      disabled={spot_color_pairs.length >= Math.min(3, getSpotLayers().length)}
+                      disabled={spot_color_pairs.length >= Math.min(3, getFrontSpotLayers().length)}
                       style={{
                         width: 24,
                         height: 24,
-                        background: spot_color_pairs.length >= Math.min(3, getSpotLayers().length)
+                        background: spot_color_pairs.length >= Math.min(3, getFrontSpotLayers().length)
                           ? 'rgba(156, 163, 175, 0.3)'
                           : 'rgba(34, 197, 94, 0.2)',
-                        border: '1px solid ' + (spot_color_pairs.length >= Math.min(3, getSpotLayers().length)
+                        border: '1px solid ' + (spot_color_pairs.length >= Math.min(3, getFrontSpotLayers().length)
                           ? 'rgba(156, 163, 175, 0.3)'
                           : 'rgba(34, 197, 94, 0.4)'),
                         borderRadius: 6,
-                        color: spot_color_pairs.length >= Math.min(3, getSpotLayers().length) ? '#6b7280' : '#86efac',
+                        color: spot_color_pairs.length >= Math.min(3, getFrontSpotLayers().length) ? '#6b7280' : '#86efac',
                         fontSize: 16,
-                        cursor: spot_color_pairs.length >= Math.min(3, getSpotLayers().length) ? 'not-allowed' : 'pointer',
+                        cursor: spot_color_pairs.length >= Math.min(3, getFrontSpotLayers().length) ? 'not-allowed' : 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         transition: 'all 0.2s'
                       }}
                       title={
-                        spot_color_pairs.length >= Math.min(3, getSpotLayers().length) 
-                          ? `Maximum ${Math.min(3, getSpotLayers().length)} spots allowed` 
+                        spot_color_pairs.length >= Math.min(3, getFrontSpotLayers().length) 
+                          ? `Maximum ${Math.min(3, getFrontSpotLayers().length)} spots allowed` 
                           : "Add another spot/color pair"
                       }
                     >
@@ -842,7 +1039,7 @@ export const AssetCreationForm = ({
                           }}
                         >
                           <option value="" style={{ background: '#1f2937' }}>Select...</option>
-                          {getSpotLayers()
+                          {getFrontSpotLayers()
                             .filter(layer => !spot_color_pairs.some((p, i) => i !== index && p.spot === layer))
                             .map(layer => (
                               <option key={layer} value={layer} style={{ background: '#1f2937' }}>
@@ -988,11 +1185,219 @@ export const AssetCreationForm = ({
             </div>
           )}
 
+          {/* Back: Spot Colors Section (only when bk_spot... layers exist) */}
+          {currentCardType === 'back' && getSpotLayersForSide('back').length > 0 && (
+            <div>
+              {spot_color_pairs.length === 0 ? (
+                <div style={{ marginBottom: 12 }}>
+                  <button
+                    onClick={() => {
+                      setSpot_color_pairs([{ spot: '', color: undefined }]);
+                    }}
+                    style={{
+                      padding: '10px 18px',
+                      background: 'rgba(34, 197, 94, 0.2)',
+                      border: '1px solid rgba(34, 197, 94, 0.4)',
+                      borderRadius: 8,
+                      color: '#86efac',
+                      fontSize: 14,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseOver={(e) => {
+                      e.currentTarget.style.background = 'rgba(34, 197, 94, 0.3)';
+                      e.currentTarget.style.borderColor = 'rgba(34, 197, 94, 0.6)';
+                    }}
+                    onMouseOut={(e) => {
+                      e.currentTarget.style.background = 'rgba(34, 197, 94, 0.2)';
+                      e.currentTarget.style.borderColor = 'rgba(34, 197, 94, 0.4)';
+                    }}
+                  >
+                    <span style={{ fontSize: 16 }}>+</span>
+                    Add Back Spot Colors
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    marginBottom: 8
+                  }}>
+                    <label style={{
+                      fontSize: 14,
+                      fontWeight: 600,
+                      color: '#f8f8f8'
+                    }}>
+                      Back Spot Colors
+                    </label>
+                    <button
+                      onClick={() => {
+                        const maxSpots = Math.min(3, getSpotLayersForSide('back').length);
+                        if (spot_color_pairs.length < maxSpots) {
+                          setSpot_color_pairs(prev => [...prev, { spot: '', color: undefined }]);
+                        }
+                      }}
+                      disabled={spot_color_pairs.length >= Math.min(3, getSpotLayersForSide('back').length)}
+                      style={{
+                        width: 24,
+                        height: 24,
+                        background: spot_color_pairs.length >= Math.min(3, getSpotLayersForSide('back').length)
+                          ? 'rgba(156, 163, 175, 0.3)'
+                          : 'rgba(34, 197, 94, 0.2)',
+                        border: '1px solid ' + (spot_color_pairs.length >= Math.min(3, getSpotLayersForSide('back').length)
+                          ? 'rgba(156, 163, 175, 0.3)'
+                          : 'rgba(34, 197, 94, 0.4)'),
+                        borderRadius: 6,
+                        color: spot_color_pairs.length >= Math.min(3, getSpotLayersForSide('back').length) ? '#6b7280' : '#86efac',
+                        fontSize: 16,
+                        cursor: spot_color_pairs.length >= Math.min(3, getSpotLayersForSide('back').length) ? 'not-allowed' : 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transition: 'all 0.2s'
+                      }}
+                      title={
+                        spot_color_pairs.length >= Math.min(3, getSpotLayersForSide('back').length) 
+                          ? `Maximum ${Math.min(3, getSpotLayersForSide('back').length)} spots allowed` 
+                          : "Add another spot/color pair"
+                      }
+                    >
+                      +
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {spot_color_pairs.map((pair, index) => {
+                      const spotGroup = getColorVariants()[0];
+                      return (
+                        <div key={index} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            {index === 0 && (
+                              <label style={{
+                                display: 'block',
+                                fontSize: 12,
+                                color: '#9ca3af',
+                                marginBottom: 4
+                              }}>
+                                Spot Layer
+                              </label>
+                            )}
+                            <select
+                              value={pair.spot || ''}
+                              onChange={(e) => {
+                                const newPairs = [...spot_color_pairs];
+                                newPairs[index] = { ...newPairs[index], spot: e.target.value };
+                                setSpot_color_pairs(newPairs);
+                              }}
+                              style={{
+                                width: '100%',
+                                padding: '8px 12px',
+                                background: 'rgba(255, 255, 255, 0.08)',
+                                border: '1px solid rgba(255, 255, 255, 0.2)',
+                                borderRadius: 8,
+                                color: '#f8f8f8',
+                                fontSize: 14
+                              }}
+                            >
+                              <option value="" style={{ background: '#1f2937' }}>Select...</option>
+                              {getSpotLayersForSide('back')
+                                .filter(layer => !spot_color_pairs.some((p, i) => i !== index && p.spot === layer))
+                                .map(layer => (
+                                  <option key={layer} value={layer} style={{ background: '#1f2937' }}>
+                                    {layer}
+                                  </option>
+                                ))}
+                            </select>
+                          </div>
+
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            {index === 0 && (
+                              <label style={{
+                                display: 'block',
+                                fontSize: 12,
+                                color: '#9ca3af',
+                                marginBottom: 4
+                              }}>
+                                Color
+                              </label>
+                            )}
+                            <select
+                              value={pair.color || ''}
+                              onChange={(e) => {
+                                if (e.target.value) {
+                                  const newPairs = [...spot_color_pairs];
+                                  newPairs[index] = { ...newPairs[index], color: e.target.value };
+                                  setSpot_color_pairs(newPairs);
+                                } else {
+                                  const newPairs = [...spot_color_pairs];
+                                  newPairs[index] = { ...newPairs[index], color: undefined };
+                                  setSpot_color_pairs(newPairs);
+                                }
+                              }}
+                              disabled={!pair.spot}
+                              style={{
+                                width: '100%',
+                                padding: '8px 12px',
+                                background: 'rgba(255, 255, 255, 0.08)',
+                                border: '1px solid rgba(255, 255, 255, 0.2)',
+                                borderRadius: 8,
+                                color: '#f8f8f8',
+                                fontSize: 14,
+                                opacity: !pair.spot ? 0.5 : 1
+                              }}
+                            >
+                              <option value="" style={{ background: '#1f2937' }}>Select...</option>
+                              {spotGroup?.colors.map((colorLayer: any, idx: number) => (
+                                <option key={idx} value={colorLayer.name} style={{ background: '#1f2937' }}>
+                                  {colorLayer.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <button
+                            onClick={() => {
+                              setSpot_color_pairs(prev => prev.filter((_, i) => i !== index));
+                            }}
+                            style={{
+                              width: 32,
+                              height: 32,
+                              background: 'rgba(239, 68, 68, 0.1)',
+                              border: '1px solid rgba(239, 68, 68, 0.2)',
+                              borderRadius: 8,
+                              color: '#ef4444',
+                              fontSize: 16,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              transition: 'all 0.2s',
+                              alignSelf: 'flex-start',
+                              marginTop: index === 0 ? 22 : 0
+                            }}
+                            title={'Remove'}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Foil and Coldfoil Selection */}
-          {(currentCardType === 'front' || currentCardType === 'base') && (
+          {(currentCardType === 'front' || currentCardType === 'base' || currentCardType === 'back') && (
             <>
               {/* Foil */}
-              {getFoilLayers().length > 0 && (
+              {(currentCardType === 'back' ? getFoilLayersForSide('back') : getFrontFoilLayers()).length > 0 && (
                 <div>
                   <label style={{
                     display: 'block',
@@ -1034,7 +1439,7 @@ export const AssetCreationForm = ({
                       }}
                     >
                       <option value="" style={{ background: '#1f2937' }}>None</option>
-                      {getFoilLayers().map(foilLayer => (
+                      {(currentCardType === 'back' ? getFoilLayersForSide('back') : getFrontFoilLayers()).map(foilLayer => (
                         <option key={foilLayer} value={foilLayer} style={{ background: '#1f2937' }}>
                           {foilLayer}
                         </option>
@@ -1075,7 +1480,7 @@ export const AssetCreationForm = ({
               )}
 
               {/* Coldfoil */}
-              {getColdfoilLayers().length > 0 && (
+              {currentCardType !== 'back' && getColdfoilLayers().length > 0 && (
                 <div>
                   <label style={{
                     display: 'block',
