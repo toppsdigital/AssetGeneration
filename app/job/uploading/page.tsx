@@ -127,18 +127,25 @@ function JobUploadingContent() {
 
       let uploadResponse: Response;
       if (presignedData.fields && presignedData.method === 'POST') {
-        // Direct presigned POST to S3 (filter out disallowed metadata)
-        const formData = new FormData();
-        Object.entries(presignedData.fields)
-          .filter(([k]) => !k.toLowerCase().startsWith('x-amz-meta-'))
-          .forEach(([k, v]) => formData.append(k, v as string));
-        formData.append('file', edrFile);
-        uploadResponse = await fetch(presignedData.url, { method: 'POST', body: formData });
+        // Proxied presigned POST to avoid CORS on Vercel
+        uploadResponse = await fetch('/api/s3-upload', {
+          method: 'POST',
+          headers: {
+            'Content-Type': edrFile.type || 'application/pdf',
+            'x-upload-url': presignedData.url,
+            'x-upload-fields': JSON.stringify(presignedData.fields),
+            'x-upload-method': 'POST',
+          },
+          body: edrFile,
+        });
       } else {
-        // Direct presigned PUT to S3
-        uploadResponse = await fetch(presignedData.url, {
+        // Proxied presigned PUT to avoid CORS on Vercel
+        uploadResponse = await fetch('/api/s3-upload', {
           method: 'PUT',
-          headers: { 'Content-Type': edrFile.type || 'application/pdf' },
+          headers: {
+            'Content-Type': edrFile.type || 'application/pdf',
+            'x-presigned-url': presignedData.url,
+          },
           body: edrFile,
         });
       }
