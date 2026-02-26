@@ -247,22 +247,33 @@ export const useUploadEngine = ({
 
         const presignedUrl = presignedData.url;
         
-        // Step 2: Upload file directly to S3 - use POST for form uploads, PUT for simple URLs
+        // Step 2: Upload file to S3 via server-side proxy to avoid CORS issues
         if (presignedData.fields && presignedData.method === 'POST') {
-          console.log(`📤 Using direct presigned POST with ${Object.keys(presignedData.fields).length} fields`);
-          const formData = new FormData();
-          Object.entries(presignedData.fields)
-            .filter(([k]) => !k.toLowerCase().startsWith('x-amz-meta-'))
-            .forEach(([k, v]) => formData.append(k, v as string));
-          formData.append('file', file);
-          const resp = await fetch(presignedUrl, { method: 'POST', body: formData });
+          console.log(`📤 Using proxied presigned POST with ${Object.keys(presignedData.fields).length} fields`);
+          const resp = await fetch('/api/s3-upload', {
+            method: 'POST',
+            headers: {
+              'Content-Type': file.type || 'application/pdf',
+              'x-upload-url': presignedUrl,
+              'x-upload-fields': JSON.stringify(presignedData.fields),
+              'x-upload-method': 'POST',
+            },
+            body: file,
+          });
           if (!resp.ok) {
             const txt = await resp.text();
             throw new Error(`S3 POST failed: ${resp.status} ${txt}`);
           }
         } else {
-          console.log(`📤 Using direct presigned PUT`);
-          const resp = await fetch(presignedUrl, { method: 'PUT', headers: { 'Content-Type': file.type || 'application/pdf' }, body: file });
+          console.log(`📤 Using proxied presigned PUT`);
+          const resp = await fetch('/api/s3-upload', {
+            method: 'PUT',
+            headers: {
+              'Content-Type': file.type || 'application/pdf',
+              'x-presigned-url': presignedUrl,
+            },
+            body: file,
+          });
           if (!resp.ok) {
             const txt = await resp.text();
             throw new Error(`S3 PUT failed: ${resp.status} ${txt}`);
@@ -383,29 +394,34 @@ export const useUploadEngine = ({
         }
         
       } else if (uploadInstruction.upload_type === 'multipart') {
-        // Multipart upload for very large files
-        console.log('📤 Using multipart upload');
+        // Multipart upload for very large files - proxy through server to avoid CORS
+        console.log('📤 Using multipart upload (proxied)');
         const partETags = [];
-        
+
         for (const partInfo of uploadInstruction.upload_data.part_urls) {
           const start = partInfo.size_range.start;
           const end = Math.min(partInfo.size_range.end + 1, file.size);
           const chunk = file.slice(start, end);
-          
+
           console.log(`📤 Uploading part ${partInfo.part_number} (${start}-${end})`);
-          
-          const partResponse = await fetch(partInfo.url, {
+
+          const partResponse = await fetch('/api/s3-upload', {
             method: 'PUT',
+            headers: {
+              'Content-Type': 'application/octet-stream',
+              'x-presigned-url': partInfo.url,
+            },
             body: chunk,
           });
-          
+
           if (!partResponse.ok) {
-            throw new Error(`Part ${partInfo.part_number} upload failed: ${partResponse.status}`);
+            const errorText = await partResponse.text();
+            throw new Error(`Part ${partInfo.part_number} upload failed: ${partResponse.status} ${errorText}`);
           }
-          
-          // Ensure ETag is captured and quoted as required by S3 completion XML
-          const rawEtag = partResponse.headers.get('ETag') || partResponse.headers.get('etag');
-          let etag = (rawEtag || '').trim();
+
+          // ETag is returned from the proxy response
+          const proxyResult = await partResponse.json();
+          let etag = (proxyResult.etag || '').trim();
           if (!etag) {
             throw new Error(`Missing ETag header for part ${partInfo.part_number}`);
           }
@@ -417,21 +433,23 @@ export const useUploadEngine = ({
             ETag: etag
           });
         }
-        
-        // Complete multipart upload
-        console.log('📤 Completing multipart upload');
+
+        // Complete multipart upload via proxy
+        console.log('📤 Completing multipart upload (proxied)');
         const completeXML = `<?xml version="1.0" encoding="UTF-8"?>
 <CompleteMultipartUpload>
 ${partETags.map(part => `  <Part><PartNumber>${part.PartNumber}</PartNumber><ETag>${part.ETag}</ETag></Part>`).join('\n')}
 </CompleteMultipartUpload>`;
-        
-        // Important: Do NOT set Content-Type when using a presigned completion URL (SigV2).
-        // Sending a Content-Type not included in the signature causes SignatureDoesNotMatch.
-        // Use a Blob without a type to avoid implicit Content-Type headers.
-        const completionBody = new Blob([completeXML]);
-        uploadResponse = await fetch(uploadInstruction.upload_data.complete_url, {
+
+        uploadResponse = await fetch('/api/s3-upload', {
           method: 'POST',
-          body: completionBody,
+          headers: {
+            'Content-Type': 'application/xml',
+            'x-upload-url': uploadInstruction.upload_data.complete_url,
+            'x-upload-method': 'POST',
+            'x-multipart-complete': 'true',
+          },
+          body: completeXML,
         });
       }
 

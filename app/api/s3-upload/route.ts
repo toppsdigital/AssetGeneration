@@ -77,7 +77,9 @@ export async function PUT(request: NextRequest) {
     }
 
     console.log('--- s3-upload: File successfully uploaded to S3 ---');
-    return NextResponse.json({ success: true }, { status: 200 });
+    // Return ETag for multipart part uploads
+    const etag = response.headers.get('ETag') || response.headers.get('etag') || '';
+    return NextResponse.json({ success: true, etag }, { status: 200 });
 
   } catch (error) {
     console.error('s3-upload: Internal server error:', error);
@@ -100,9 +102,63 @@ export async function POST(request: NextRequest) {
     const uploadUrl = request.headers.get('x-upload-url');
     const uploadFieldsHeader = request.headers.get('x-upload-fields');
     const uploadMethod = request.headers.get('x-upload-method');
+    const isMultipartComplete = request.headers.get('x-multipart-complete') === 'true';
 
     if (!uploadUrl) {
       return NextResponse.json({ error: 'Missing x-upload-url header' }, { status: 400 });
+    }
+
+    // Handle multipart completion - forward raw XML body to S3
+    if (isMultipartComplete) {
+      console.log('--- s3-upload: Handling multipart completion ---');
+      console.log('Completion URL:', uploadUrl);
+
+      let bodyBuffer;
+      try {
+        bodyBuffer = await request.arrayBuffer();
+        console.log('✅ Completion XML size:', bodyBuffer.byteLength);
+      } catch (bufferError) {
+        console.error('❌ Failed to read completion body:', bufferError);
+        return NextResponse.json({
+          error: 'Failed to process completion body',
+          details: bufferError.message
+        }, { status: 500 });
+      }
+
+      let response;
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+        // Important: Do NOT set Content-Type when using a presigned completion URL (SigV2).
+        // Sending a Content-Type not included in the signature causes SignatureDoesNotMatch.
+        response = await fetch(uploadUrl, {
+          method: 'POST',
+          body: bodyBuffer,
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+        console.log('✅ Multipart completion response status:', response.status);
+      } catch (fetchError) {
+        console.error('❌ Multipart completion failed:', fetchError);
+        return NextResponse.json({
+          error: 'Failed to complete multipart upload',
+          details: fetchError.message
+        }, { status: 500 });
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('s3-upload: Multipart completion error:', response.status, errorText);
+        return NextResponse.json({
+          error: 'Multipart completion failed',
+          details: errorText
+        }, { status: response.status });
+      }
+
+      console.log('--- s3-upload: Multipart upload completed successfully ---');
+      return NextResponse.json({ success: true }, { status: 200 });
     }
 
     console.log('--- s3-upload: Handling presigned POST form upload ---');
@@ -130,38 +186,33 @@ export async function POST(request: NextRequest) {
       console.log('✅ File buffer size:', fileBuffer.byteLength);
     } catch (bufferError) {
       console.error('❌ Failed to convert request body to ArrayBuffer:', bufferError);
-      return NextResponse.json({ 
-        error: 'Failed to process request body', 
-        details: bufferError.message 
+      return NextResponse.json({
+        error: 'Failed to process request body',
+        details: bufferError.message
       }, { status: 500 });
     }
 
     // Create FormData for S3 POST upload
     const formData = new FormData();
-    
+
     // Filter out problematic metadata fields that cause policy violations
-    // The backend provides these fields in upload instructions but they're not allowed by the policy
     const allowedFields = Object.entries(uploadFields).filter(([key, value]) => {
-      // Skip x-amz-meta-* fields that often cause "Extra input fields" policy violations
       if (key.startsWith('x-amz-meta-')) {
         console.log(`⚠️ Skipping metadata field (not in policy): ${key}`);
         return false;
       }
-      
-      // Allow all other fields provided by the backend
       return true;
     });
-    
+
     console.log(`📤 Adding ${allowedFields.length} fields to form (filtered out ${Object.keys(uploadFields).length - allowedFields.length} fields)`);
-    
+
     // Add filtered fields first (order matters for S3)
     allowedFields.forEach(([key, value]) => {
       formData.append(key, value);
       console.log(`📤 Adding field: ${key} = ${value.substring(0, 50)}${value.length > 50 ? '...' : ''}`);
     });
-    
+
     // Add file last (required by S3)
-    // Don't set the Blob type - let the Content-Type field from upload instructions handle it
     const file = new Blob([fileBuffer]);
     formData.append('file', file);
     console.log('📤 Added file to form data');
@@ -170,21 +221,21 @@ export async function POST(request: NextRequest) {
     let response;
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout for form uploads
-      
+      const timeoutId = setTimeout(() => controller.abort(), 60000);
+
       response = await fetch(uploadUrl, {
         method: 'POST',
         body: formData,
         signal: controller.signal,
       });
-      
+
       clearTimeout(timeoutId);
       console.log('✅ S3 form POST completed, status:', response.status);
     } catch (fetchError) {
       console.error('❌ S3 form POST failed:', fetchError);
-      return NextResponse.json({ 
-        error: 'Failed to connect to S3', 
-        details: fetchError.message 
+      return NextResponse.json({
+        error: 'Failed to connect to S3',
+        details: fetchError.message
       }, { status: 500 });
     }
 
@@ -194,8 +245,8 @@ export async function POST(request: NextRequest) {
       console.error('s3-upload: Response headers:', Object.fromEntries(response.headers.entries()));
       console.error('s3-upload: Fields sent to S3:', allowedFields.map(([key]) => key));
       console.error('s3-upload: Metadata fields filtered out:', Object.keys(uploadFields).filter(key => key.startsWith('x-amz-meta-')));
-      return NextResponse.json({ 
-        error: 'Failed to upload to S3 via form POST', 
+      return NextResponse.json({
+        error: 'Failed to upload to S3 via form POST',
         details: errorText,
         debug: {
           fieldsCount: allowedFields.length,
@@ -215,7 +266,7 @@ export async function POST(request: NextRequest) {
       stack: error?.stack,
       cause: error?.cause
     });
-    return NextResponse.json({ 
+    return NextResponse.json({
       error: 'Internal Server Error',
       details: error?.message || 'Unknown error'
     }, { status: 500 });
