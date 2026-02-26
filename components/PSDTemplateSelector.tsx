@@ -44,7 +44,8 @@ interface AssetConfig {
   chrome: string | boolean;
   foilfractor?: boolean;
   oneOfOneWp?: boolean; // For BASE assets with superfractor chrome
-  wp_inv_layer?: string; // For VFX and chrome effects
+  wp_inv_layer?: string; // For chrome effects
+  wp?: string; // For VFX effects (wp layer, v20+)
   // Coldfoil/foil metadata
   coldfoil?: {
     coldfoil_layer?: string;
@@ -77,7 +78,8 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isRefreshing = fal
     chrome: false,
     oneOfOneWp: false,
     name: '',
-    wp_inv_layer: ''
+    wp_inv_layer: '',
+    wp: ''
   });
   const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
   const [editingAsset, setEditingAsset] = useState<AssetConfig | null>(null);
@@ -388,7 +390,8 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isRefreshing = fal
         chrome: assetData.chrome || false,
         foilfractor: assetData.foilfractor === true,
         oneOfOneWp: assetData.oneOfOneWp || false,
-        wp_inv_layer: assetData.wp_inv_layer || ''
+        wp_inv_layer: assetData.wp_inv_layer || '',
+        wp: assetData.wp || ''
       };
       
       // Only include foil property if it is an object with metadata
@@ -516,7 +519,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isRefreshing = fal
   };
 
   const resetCurrentConfig = () => {
-    setCurrentConfig({ chrome: false, oneOfOneWp: false, name: '', wp_inv_layer: '' });
+    setCurrentConfig({ chrome: false, oneOfOneWp: false, name: '', wp_inv_layer: '', wp: '' });
     setCurrentCardType(null);
     setEditingAssetId(null);
     setSpot_color_pairs([{ spot: '', color: undefined }]);
@@ -638,11 +641,18 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isRefreshing = fal
           }));
         }
 
-        // Include wp_inv_layer if VFX is enabled, chrome is present, or foilfractor is enabled
-        if ((config.vfx && config.vfx.trim() !== '') || config.chrome || config.foilfractor === true) {
+        // Include wp_inv_layer for chrome/foilfractor
+        if (config.chrome || config.foilfractor === true) {
           const wpInvLayer = config.wp_inv_layer || getWpInvLayers()[0];
           if (wpInvLayer) {
             assetConfig.wp_inv_layer = wpInvLayer;
+          }
+        }
+        // Include wp for VFX (v20+ wpcv uses wp layer)
+        if (config.vfx && config.vfx.trim() !== '') {
+          const wpLayer = config.wp || getWpLayers()[0];
+          if (wpLayer) {
+            assetConfig.wp = wpLayer;
           }
         }
       } else {
@@ -672,11 +682,18 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isRefreshing = fal
           assetConfig.vfx = config.vfx;
         }
 
-        // Include wp_inv_layer if VFX is enabled, chrome is present, or foilfractor is enabled
-        if ((config.vfx && config.vfx.trim() !== '') || config.chrome || config.foilfractor === true) {
+        // Include wp_inv_layer for chrome/foilfractor
+        if (config.chrome || config.foilfractor === true) {
           const wpInvLayer = config.wp_inv_layer || getWpInvLayers()[0];
           if (wpInvLayer) {
             assetConfig.wp_inv_layer = wpInvLayer;
+          }
+        }
+        // Include wp for VFX (v20+ wpcv uses wp layer)
+        if (config.vfx && config.vfx.trim() !== '') {
+          const wpLayer = config.wp || getWpLayers()[0];
+          if (wpLayer) {
+            assetConfig.wp = wpLayer;
           }
         }
       }
@@ -893,9 +910,17 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isRefreshing = fal
 
   const getWpInvLayers = () => {
     const extractedLayers = getExtractedLayers();
-    return extractedLayers.filter(layer => 
+    return extractedLayers.filter(layer =>
       layer.toLowerCase().includes('wp') && layer.toLowerCase().includes('inv')
     );
+  };
+
+  const getWpLayers = () => {
+    const extractedLayers = getExtractedLayers();
+    return extractedLayers.filter(layer => {
+      const lower = layer.toLowerCase();
+      return lower.includes('wp') && !lower.includes('inv');
+    });
   };
 
   // EDR PDF upload handling

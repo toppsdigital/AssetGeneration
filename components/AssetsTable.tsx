@@ -24,7 +24,8 @@ interface AssetConfig {
   chrome: string | boolean;
   foilfractor?: boolean; // When true, show a gold "foilfractor" pill next to type
   oneOfOneWp?: boolean; // For BASE assets with superfractor chrome
-  wp_inv_layer?: string; // For VFX and chrome effects
+  wp_inv_layer?: string; // For chrome effects
+  wp?: string; // For VFX effects (wp layer, v20+)
   // Coldfoil/foil objects rendered under Layers
   coldfoil?: {
     coldfoil_layer?: string;
@@ -434,6 +435,14 @@ export const AssetsTable = ({
                             }}>
                               {asset.layer}
                             </span>
+                            {asset.wp && (
+                              <span style={{
+                                fontSize: 14,
+                                color: '#e5e7eb'
+                              }}>
+                                {asset.wp}
+                              </span>
+                            )}
                             {asset.wp_inv_layer && (
                               <span style={{
                                 fontSize: 14,
