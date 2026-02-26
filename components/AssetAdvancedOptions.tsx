@@ -24,6 +24,7 @@ interface AssetConfig {
   chrome: string | boolean;
   oneOfOneWp?: boolean;
   wp_inv_layer?: string;
+  wp?: string;
   // Foil/coldfoil metadata for compatibility with table props
   coldfoil?: { coldfoil_layer?: string; coldfoil_color?: string };
   foil?: boolean | { foil_layer?: string; foil_color?: string };
@@ -129,6 +130,7 @@ export const AssetAdvancedOptions = ({
         if (asset.vfx) cleanAsset.vfx = asset.vfx;
         if (asset.chrome) cleanAsset.chrome = asset.chrome;
         if (asset.wp_inv_layer) cleanAsset.wp_inv_layer = asset.wp_inv_layer;
+        if (asset.wp) cleanAsset.wp = asset.wp;
         if (asset.foil !== undefined) cleanAsset.foil = asset.foil; // Include foil property if defined
         
         return cleanAsset;
@@ -153,18 +155,8 @@ export const AssetAdvancedOptions = ({
         if (shouldRemoveChrome) {
           // Remove chrome entirely
           delete updatedAsset.chrome;
-          
-          // Only remove wp_inv_layer if asset doesn't have VFX (since VFX also needs it)
-          if (!asset.vfx) {
-            delete updatedAsset.wp_inv_layer;
-          } else {
-            // Keep existing wp_inv_layer for VFX, or set it if missing
-            const wpInvLayers = getWpInvLayers();
-            const firstWpInvLayer = wpInvLayers.length > 0 ? wpInvLayers[0] : asset.wp_inv_layer;
-            if (firstWpInvLayer) {
-              updatedAsset.wp_inv_layer = firstWpInvLayer;
-            }
-          }
+          // VFX no longer needs wp_inv_layer (uses wp instead), so always clear it
+          delete updatedAsset.wp_inv_layer;
         } else {
           // Add chrome and wp_inv_layer, preserve everything else exactly as is
           const wpInvLayers = getWpInvLayers();

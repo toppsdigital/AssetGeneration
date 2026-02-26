@@ -21,7 +21,8 @@ interface AssetConfig {
   spot_color_pairs?: SpotColorPair[]; // For PARALLEL cards with multiple combinations
   vfx?: string;
   chrome: string | boolean;
-  wp_inv_layer?: string; // For VFX and chrome effects
+  wp_inv_layer?: string; // For chrome effects
+  wp?: string; // For VFX effects (wp layer, v20+)
   foil?: {
     foil_layer?: string;
     foil_color?: 'silver' | 'gold';
@@ -69,7 +70,8 @@ export const AssetCreationForm = ({
   const [currentConfig, setCurrentConfig] = useState<Partial<AssetConfig>>({
     chrome: false,
     name: '',
-    wp_inv_layer: ''
+    wp_inv_layer: '',
+    wp: ''
   });
   const [spot_color_pairs, setSpot_color_pairs] = useState<SpotColorPair[]>([{ spot: '', color: undefined }]);
 
@@ -125,6 +127,7 @@ export const AssetCreationForm = ({
         vfx: editingAsset.vfx || '',
         chrome: editingAsset.chrome || false,
         wp_inv_layer: editingAsset.wp_inv_layer || '',
+        wp: editingAsset.wp || '',
         foil: typeof editingAsset.foil === 'object'
           ? {
               foil_layer: normalizedFoilLayer || editingAsset.foil?.foil_layer,
@@ -163,7 +166,8 @@ export const AssetCreationForm = ({
       setCurrentConfig({
         chrome: false,
         name: '',
-        wp_inv_layer: ''
+        wp_inv_layer: '',
+        wp: ''
       });
       setSpot_color_pairs([]);
     }
@@ -367,9 +371,17 @@ export const AssetCreationForm = ({
 
   const getWpInvLayers = () => {
     const extractedLayers = getExtractedLayers();
-    return extractedLayers.filter(layer => 
+    return extractedLayers.filter(layer =>
       layer.toLowerCase().includes('wp') && layer.toLowerCase().includes('inv')
     );
+  };
+
+  const getWpLayers = () => {
+    const extractedLayers = getExtractedLayers();
+    return extractedLayers.filter(layer => {
+      const lower = layer.toLowerCase();
+      return lower.includes('wp') && !lower.includes('inv');
+    });
   };
 
   const getColorVariants = () => {
@@ -629,20 +641,29 @@ export const AssetCreationForm = ({
     }
   }, [currentCardType, currentConfig.layer, currentConfig.vfx, currentConfig.chrome, spot_color_pairs, editingAssetId, getConfiguredAssets, generateAssetName]);
 
-  // Auto-select wp_inv layer when VFX or chrome is enabled and only one wp_inv layer exists (not required for topps_now)
+  // Auto-select wp layer for VFX and wp_inv_layer for chrome/foilfractor
   useEffect(() => {
     if (currentCardType && !editingAssetId) {
-      const hasVfxChromeOrFoilfractor = currentConfig.vfx || currentConfig.chrome || currentConfig.foilfractor;
+      const hasChrome = currentConfig.chrome || currentConfig.foilfractor;
+      const hasVfx = !!currentConfig.vfx;
       const wpInvLayers = getWpInvLayers();
-      
-      if (!isToppsNow && hasVfxChromeOrFoilfractor && wpInvLayers.length === 1 && !currentConfig.wp_inv_layer) {
+      const wpLayers = getWpLayers();
+
+      // Chrome/foilfractor needs wp_inv_layer
+      if (!isToppsNow && hasChrome && wpInvLayers.length === 1 && !currentConfig.wp_inv_layer) {
         setCurrentConfig(prev => ({ ...prev, wp_inv_layer: wpInvLayers[0] }));
-      } else if (!hasVfxChromeOrFoilfractor && currentConfig.wp_inv_layer) {
-        // Clear wp_inv_layer if VFX and chrome are both disabled
+      } else if (!hasChrome && currentConfig.wp_inv_layer) {
         setCurrentConfig(prev => ({ ...prev, wp_inv_layer: '' }));
       }
+
+      // VFX needs wp layer (v20+)
+      if (!isToppsNow && hasVfx && wpLayers.length === 1 && !currentConfig.wp) {
+        setCurrentConfig(prev => ({ ...prev, wp: wpLayers[0] }));
+      } else if (!hasVfx && currentConfig.wp) {
+        setCurrentConfig(prev => ({ ...prev, wp: '' }));
+      }
     }
-  }, [currentCardType, currentConfig.vfx, currentConfig.chrome, currentConfig.foilfractor, editingAssetId, getWpInvLayers, isToppsNow]);
+  }, [currentCardType, currentConfig.vfx, currentConfig.chrome, currentConfig.foilfractor, editingAssetId, getWpInvLayers, getWpLayers, isToppsNow]);
 
   // Auto-enable 1/1 when foilfractor is selected or chrome=superfractor
   useEffect(() => {
@@ -696,7 +717,7 @@ export const AssetCreationForm = ({
       
       console.log('✅ onAddAsset completed successfully, resetting form');
       // Only reset form if the operation was successful
-      setCurrentConfig({ chrome: false, name: '', wp_inv_layer: '' });
+      setCurrentConfig({ chrome: false, name: '', wp_inv_layer: '', wp: '' });
       setCurrentCardType(null);
       setSpot_color_pairs([]);
       // Close modal on successful add
@@ -709,7 +730,7 @@ export const AssetCreationForm = ({
 
   // Close modal and reset form when closed
   const handleClose = () => {
-    setCurrentConfig({ chrome: false, name: '', wp_inv_layer: '' });
+    setCurrentConfig({ chrome: false, name: '', wp_inv_layer: '', wp: '' });
     setCurrentCardType(null);
     setSpot_color_pairs([]);
     onClose();
@@ -1577,7 +1598,7 @@ export const AssetCreationForm = ({
           )}
 
           {/* VFX Texture Selection */}
-          {(currentCardType === 'front' || currentCardType === 'base') && (isToppsNow || getWpInvLayers().length > 0) && (
+          {(currentCardType === 'front' || currentCardType === 'base') && (isToppsNow || getWpLayers().length > 0) && (
             <div>
               <label style={{
                 display: 'block',
@@ -1587,14 +1608,14 @@ export const AssetCreationForm = ({
                 marginBottom: 8
               }}>
                 Select VFX Texture
-              {!isToppsNow && getWpInvLayers().length === 1 && (
-                  <span style={{ 
-                    fontSize: 12, 
-                    color: '#9ca3af', 
+              {!isToppsNow && getWpLayers().length === 1 && (
+                  <span style={{
+                    fontSize: 12,
+                    color: '#9ca3af',
                     fontWeight: 400,
-                    marginLeft: 8 
+                    marginLeft: 8
                   }}>
-                    - using {getWpInvLayers()[0]}
+                    - using {getWpLayers()[0]}
                   </span>
                 )}
               </label>
@@ -1618,9 +1639,9 @@ export const AssetCreationForm = ({
                   </option>
                 ))}
               </select>
-              
-              {/* WP_INV Layer Selection - Only show when VFX, chrome, or foilfractor is enabled and there are multiple wp_inv layers */}
-              {!isToppsNow && (currentConfig.vfx || currentConfig.chrome || currentConfig.foilfractor) && getWpInvLayers().length > 1 && (
+
+              {/* WP Layer Selection for VFX - Only show when VFX is enabled and there are multiple wp layers */}
+              {!isToppsNow && currentConfig.vfx && getWpLayers().length > 1 && (
                 <div style={{ marginTop: 12 }}>
                   <label style={{
                     display: 'block',
@@ -1629,11 +1650,11 @@ export const AssetCreationForm = ({
                     color: '#f8f8f8',
                     marginBottom: 8
                   }}>
-                    Select WP_INV Layer
+                    Select WP Layer (for VFX)
                   </label>
                   <select
-                    value={currentConfig.wp_inv_layer || ''}
-                    onChange={(e) => setCurrentConfig(prev => ({ ...prev, wp_inv_layer: e.target.value }))}
+                    value={currentConfig.wp || ''}
+                    onChange={(e) => setCurrentConfig(prev => ({ ...prev, wp: e.target.value }))}
                     style={{
                       width: '100%',
                       padding: '8px 12px',
@@ -1644,10 +1665,10 @@ export const AssetCreationForm = ({
                       fontSize: 14
                     }}
                   >
-                    <option value="" style={{ background: '#1f2937' }}>Select wp_inv layer...</option>
-                    {getWpInvLayers().map(wpInvLayer => (
-                      <option key={wpInvLayer} value={wpInvLayer} style={{ background: '#1f2937' }}>
-                        {wpInvLayer}
+                    <option value="" style={{ background: '#1f2937' }}>Select WP layer...</option>
+                    {getWpLayers().map(wpLayer => (
+                      <option key={wpLayer} value={wpLayer} style={{ background: '#1f2937' }}>
+                        {wpLayer}
                       </option>
                     ))}
                   </select>
@@ -1704,6 +1725,41 @@ export const AssetCreationForm = ({
                     <option value="silver" style={{ background: '#1f2937' }}>Silver</option>
                     <option value="superfractor" style={{ background: '#1f2937' }}>Superfractor</option>
                   </select>
+
+                  {/* WP_INV Layer Selection for Chrome - Only show when chrome/foilfractor is enabled and multiple wp_inv layers */}
+                  {!isToppsNow && (currentConfig.chrome || currentConfig.foilfractor) && getWpInvLayers().length > 1 && (
+                    <div style={{ marginTop: 12 }}>
+                      <label style={{
+                        display: 'block',
+                        fontSize: 14,
+                        fontWeight: 600,
+                        color: '#f8f8f8',
+                        marginBottom: 8
+                      }}>
+                        Select WP_INV Layer (for Chrome)
+                      </label>
+                      <select
+                        value={currentConfig.wp_inv_layer || ''}
+                        onChange={(e) => setCurrentConfig(prev => ({ ...prev, wp_inv_layer: e.target.value }))}
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px',
+                          background: 'rgba(255, 255, 255, 0.08)',
+                          border: '1px solid rgba(255, 255, 255, 0.2)',
+                          borderRadius: 8,
+                          color: '#f8f8f8',
+                          fontSize: 14
+                        }}
+                      >
+                        <option value="" style={{ background: '#1f2937' }}>Select wp_inv layer...</option>
+                        {getWpInvLayers().map(wpInvLayer => (
+                          <option key={wpInvLayer} value={wpInvLayer} style={{ background: '#1f2937' }}>
+                            {wpInvLayer}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </>
               ) : null}
             </div>
