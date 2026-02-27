@@ -155,6 +155,90 @@ class ContentPipelineAPI {
     return [];
   }
 
+  // Two-level pending navigation: list projects in NotProcessed
+  async listNotProcessedProjects(): Promise<string[]> {
+    const response = await fetch(`${this.baseUrl}?operation=list_not_processed_projects`, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error((error as any).error || `Failed to list not-processed projects: ${response.status}`);
+    }
+    const data = await response.json();
+    return Array.isArray(data?.projects) ? data.projects : [];
+  }
+
+  // Two-level pending navigation: list subsets within a NotProcessed project
+  async listNotProcessedSubsetsForProject(projectCode: string): Promise<string[]> {
+    const response = await fetch(
+      `${this.baseUrl}?operation=list_not_processed_subsets_for_project&project_code=${encodeURIComponent(projectCode)}`,
+      { method: 'GET', headers: { 'Accept': 'application/json' } }
+    );
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error((error as any).error || `Failed to list subsets for project: ${response.status}`);
+    }
+    const data = await response.json();
+    return Array.isArray(data?.subsets) ? data.subsets : [];
+  }
+
+  // Two-level pending navigation: list projects in Processed
+  async listProcessedProjects(): Promise<string[]> {
+    const response = await fetch(`${this.baseUrl}?operation=list_processed_projects`, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error((error as any).error || `Failed to list processed projects: ${response.status}`);
+    }
+    const data = await response.json();
+    return Array.isArray(data?.projects) ? data.projects : [];
+  }
+
+  // Two-level pending navigation: list subsets within a Processed project
+  async listProcessedSubsetsForProject(projectCode: string): Promise<string[]> {
+    const response = await fetch(
+      `${this.baseUrl}?operation=list_processed_subsets_for_project&project_code=${encodeURIComponent(projectCode)}`,
+      { method: 'GET', headers: { 'Accept': 'application/json' } }
+    );
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error((error as any).error || `Failed to list processed subsets for project: ${response.status}`);
+    }
+    const data = await response.json();
+    return Array.isArray(data?.subsets) ? data.subsets : [];
+  }
+
+  // Mark a pending subset as processed (move NotProcessed → Processed)
+  async markSubsetProcessed(projectCode: string, subset: string): Promise<any> {
+    const response = await fetch(`${this.baseUrl}?operation=mark_processed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project_code: projectCode, subset }),
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error((error as any).error || `Failed to mark subset as processed: ${response.status}`);
+    }
+    return response.json();
+  }
+
+  // Move a processed subset back to not-processed (Processed → NotProcessed)
+  async moveToNotProcessed(projectCode: string, subset: string): Promise<any> {
+    const response = await fetch(`${this.baseUrl}?operation=move_to_not_processed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project_code: projectCode, subset }),
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error((error as any).error || `Failed to move subset to not-processed: ${response.status}`);
+    }
+    return response.json();
+  }
+
   // Fetch presigned URLs for a subset (used by Pending Jobs)
   async getSubsetPresignedUrls(subsetName: string): Promise<string[]> {
     const response = await fetch(

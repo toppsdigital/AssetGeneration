@@ -120,7 +120,7 @@ export default function Home() {
                 className={styles.secondaryButton}
               >
                 <span className={styles.buttonIcon}>⏳</span>
-                Pending Jobs
+                Pending
               </button>
             </div>
           </div>
