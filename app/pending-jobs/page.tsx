@@ -521,13 +521,35 @@ export default function PendingJobsPage() {
                         gap: 12,
                       }}
                     >
-                      <div style={{ minWidth: 0, flex: '1 1 auto' }}>
+                      <div style={{ minWidth: 0, flex: '1 1 auto', display: 'flex', alignItems: 'center', gap: 10 }}>
                         <OneLineAutoFitText
                           text={subsetName}
                           maxFontSizePx={15}
                           minFontSizePx={9}
                           style={{ color: '#f8f8f8', fontWeight: 700, fontFamily: 'monospace' }}
                         />
+                        {viewMode === 'pending' && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleMarkProcessed(subsetName); }}
+                            disabled={actionInProgress === subsetName}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: '#6b7280',
+                              cursor: actionInProgress === subsetName ? 'not-allowed' : 'pointer',
+                              fontSize: 12,
+                              fontWeight: 500,
+                              whiteSpace: 'nowrap',
+                              opacity: actionInProgress === subsetName ? 0.5 : 1,
+                              padding: '4px 8px',
+                              textDecoration: 'underline',
+                              textUnderlineOffset: 2,
+                              flexShrink: 0,
+                            }}
+                          >
+                            {actionInProgress === subsetName ? 'Moving...' : 'Mark Processed'}
+                          </button>
+                        )}
                       </div>
 
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'nowrap', justifyContent: 'flex-end' }}>
@@ -535,18 +557,6 @@ export default function PendingJobsPage() {
 
                         {viewMode === 'pending' ? (
                           <>
-                            <button
-                              onClick={() => handleMarkProcessed(subsetName)}
-                              disabled={actionInProgress === subsetName}
-                              style={{
-                                ...smallBtnStyle,
-                                opacity: actionInProgress === subsetName ? 0.6 : 1,
-                                cursor: actionInProgress === subsetName ? 'not-allowed' : 'pointer',
-                                minHeight: 40,
-                              }}
-                            >
-                              {actionInProgress === subsetName ? 'Moving...' : 'Mark Processed'}
-                            </button>
                             <button
                               onClick={() => handleProcess(subsetName)}
                               disabled={processingSubset === subsetName}
@@ -580,7 +590,7 @@ export default function PendingJobsPage() {
                               minHeight: 40,
                             }}
                           >
-                            {actionInProgress === subsetName ? 'Moving...' : 'Move to Unprocessed'}
+                            {actionInProgress === subsetName ? 'Moving...' : '↩ Move back to Pending'}
                           </button>
                         )}
                       </div>
