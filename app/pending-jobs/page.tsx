@@ -271,7 +271,7 @@ export default function PendingJobsPage() {
   if (isLoading) {
     return (
       <div className={styles.container}>
-        <PageTitle title="Pending" leftButton="back" />
+        <PageTitle title={viewMode === 'pending' ? 'Pending Jobs' : 'Processed Jobs'} leftButton="back" />
         <div className={styles.content}>
           <div style={{ textAlign: 'center', padding: '48px 0' }}>
             <Spinner />
@@ -288,7 +288,7 @@ export default function PendingJobsPage() {
   if (error) {
     return (
       <div className={styles.container}>
-        <PageTitle title="Pending" leftButton="back" />
+        <PageTitle title={viewMode === 'pending' ? 'Pending Jobs' : 'Processed Jobs'} leftButton="back" />
         <div className={styles.content}>
           <div style={{ textAlign: 'center', padding: '48px 0' }}>
             <h2 style={{ color: '#ef4444', marginBottom: 16 }}>Error</h2>
@@ -328,7 +328,7 @@ export default function PendingJobsPage() {
 
   return (
     <div className={styles.container}>
-      <PageTitle title="Pending" leftButton="back" />
+      <PageTitle title={viewMode === 'pending' ? 'Pending Jobs' : 'Processed Jobs'} leftButton="back" />
       <div className={styles.content} style={{ maxWidth: 1160, padding: '0 1.5rem' }}>
         <div style={{ maxWidth: '100%', margin: '0 auto', padding: '24px' }}>
 
