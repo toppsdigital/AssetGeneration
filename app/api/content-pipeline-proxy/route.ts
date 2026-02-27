@@ -354,6 +354,7 @@ async function handleRequest(request: NextRequest, method: string) {
     const resource = searchParams.get('resource');
     const id = searchParams.get('id');
     const subset = searchParams.get('subset');
+    const project_code = searchParams.get('project_code');
     
     console.log('🔍 Parsed Parameters:', {
       operation,
@@ -538,7 +539,48 @@ async function handleRequest(request: NextRequest, method: string) {
         apiMethod = 'GET';
         apiBody = {}; // no body for GET
         break;
-        
+
+      // Two-level pending navigation operations
+      case 'list_not_processed_projects':
+        apiUrl += '/subsets/not-processed/projects';
+        apiMethod = 'GET';
+        apiBody = {};
+        break;
+
+      case 'list_not_processed_subsets_for_project':
+        if (!project_code) {
+          return NextResponse.json({ error: 'project_code is required' }, { status: 400 });
+        }
+        apiUrl += `/subsets/not-processed/projects/${encodeURIComponent(project_code)}/subsets`;
+        apiMethod = 'GET';
+        apiBody = {};
+        break;
+
+      case 'list_processed_projects':
+        apiUrl += '/subsets/processed/projects';
+        apiMethod = 'GET';
+        apiBody = {};
+        break;
+
+      case 'list_processed_subsets_for_project':
+        if (!project_code) {
+          return NextResponse.json({ error: 'project_code is required' }, { status: 400 });
+        }
+        apiUrl += `/subsets/processed/projects/${encodeURIComponent(project_code)}/subsets`;
+        apiMethod = 'GET';
+        apiBody = {};
+        break;
+
+      case 'mark_processed':
+        apiUrl += '/subsets/mark-processed';
+        apiMethod = 'POST';
+        break;
+
+      case 'move_to_not_processed':
+        apiUrl += '/subsets/move-to-not-processed';
+        apiMethod = 'POST';
+        break;
+
       case 'delete_job':
         if (!id) {
           return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
@@ -1072,6 +1114,9 @@ async function handleRequest(request: NextRequest, method: string) {
             'create_job', 'get_job', 'update_job', 'delete_job', 'list_jobs', 'rerun_job',
             'list_not_processed_subsets',
             'get_subset_presigned_urls',
+            'list_not_processed_projects', 'list_not_processed_subsets_for_project',
+            'list_processed_projects', 'list_processed_subsets_for_project',
+            'mark_processed', 'move_to_not_processed',
             'create_file', 'get_file', 'update_file', 'list_files',
             'batch_create_files', 'batch_get_files', 'update_pdf_status', 'batch_update_pdf_status',
             'generate_assets', 'regenerate_assets', 'update_download_url',

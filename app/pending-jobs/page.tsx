@@ -78,7 +78,7 @@ function OneLineAutoFitText({
         whiteSpace: 'nowrap',
         overflow: 'hidden',
         // Prefer fitting by shrinking. If we *still* overflow at min font size,
-        // clip instead of showing trailing "…".
+        // clip instead of showing trailing "...".
         textOverflow: 'clip',
       }}
     >
@@ -87,123 +87,211 @@ function OneLineAutoFitText({
   );
 }
 
+type ViewMode = 'pending' | 'processed';
+
 export default function PendingJobsPage() {
   const router = useRouter();
+  const [viewMode, setViewMode] = useState<ViewMode>('pending');
+  const [projects, setProjects] = useState<string[]>([]);
+  const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [subsets, setSubsets] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [processingSubset, setProcessingSubset] = useState<string | null>(null);
+  const [actionInProgress, setActionInProgress] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  // Fetch projects for current viewMode
+  const fetchProjects = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const list = viewMode === 'pending'
+        ? await contentPipelineApi.listNotProcessedProjects()
+        : await contentPipelineApi.listProcessedProjects();
+      setProjects(list);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load projects');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [viewMode]);
+
+  // Fetch subsets for selected project
+  const fetchSubsets = useCallback(async (project: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const list = viewMode === 'pending'
+        ? await contentPipelineApi.listNotProcessedSubsetsForProject(project)
+        : await contentPipelineApi.listProcessedSubsetsForProject(project);
+      setSubsets(list);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load subsets');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [viewMode]);
+
+  // Load projects on mount and when viewMode changes
   useEffect(() => {
-    let isMounted = true;
+    setSelectedProject(null);
+    setSubsets([]);
+    setSearchQuery('');
+    fetchProjects();
+  }, [fetchProjects]);
 
-    const load = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const subsetNames = await contentPipelineApi.listNotProcessedSubsets();
-        if (!isMounted) return;
-        setSubsets(subsetNames);
-      } catch (e) {
-        if (!isMounted) return;
-        setError(e instanceof Error ? e.message : 'Failed to load pending subsets');
-      } finally {
-        if (!isMounted) return;
-        setIsLoading(false);
-      }
-    };
-
-    load();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  const sortedSubsets = useMemo(() => {
-    return [...subsets].sort((a, b) => a.localeCompare(b));
-  }, [subsets]);
+  // Load subsets when a project is selected
+  useEffect(() => {
+    if (selectedProject) {
+      fetchSubsets(selectedProject);
+    }
+  }, [selectedProject, fetchSubsets]);
 
   const normalizedQuery = useMemo(() => searchQuery.trim().toLowerCase(), [searchQuery]);
 
-  const filteredSubsets = useMemo(() => {
-    if (!normalizedQuery) return sortedSubsets;
-    return sortedSubsets.filter((subsetName) => subsetName.toLowerCase().includes(normalizedQuery));
-  }, [normalizedQuery, sortedSubsets]);
+  const filteredItems = useMemo(() => {
+    const source = selectedProject ? [...subsets].sort((a, b) => a.localeCompare(b)) : [...projects].sort((a, b) => a.localeCompare(b));
+    if (!normalizedQuery) return source;
+    return source.filter((item) => item.toLowerCase().includes(normalizedQuery));
+  }, [normalizedQuery, projects, subsets, selectedProject]);
+
+  const totalCount = selectedProject ? subsets.length : projects.length;
+
+  const handleProjectClick = (project: string) => {
+    setSelectedProject(project);
+    setSearchQuery('');
+  };
+
+  const handleBreadcrumbBack = () => {
+    setSelectedProject(null);
+    setSubsets([]);
+    setSearchQuery('');
+  };
+
+  const handleToggleView = () => {
+    setViewMode((prev) => (prev === 'pending' ? 'processed' : 'pending'));
+  };
+
+  const handleRefresh = () => {
+    if (selectedProject) {
+      fetchSubsets(selectedProject);
+    } else {
+      fetchProjects();
+    }
+  };
 
   const handleProcess = async (subsetName: string) => {
+    if (!selectedProject) return;
     setProcessingSubset(subsetName);
     try {
-      const urls = await contentPipelineApi.getSubsetPresignedUrls(subsetName);
+      const combinedName = `${selectedProject}-${subsetName}`;
+      const urls = await contentPipelineApi.getSubsetPresignedUrls(combinedName);
 
       if (!urls || urls.length === 0) {
-        alert(`No files found for subset: ${subsetName}`);
+        alert(`No files found for subset: ${combinedName}`);
         return;
       }
 
-      // Store presigned URLs in sessionStorage to avoid huge query strings.
       const presignKey = `presign_${Date.now()}_${Math.random().toString(16).slice(2)}`;
       sessionStorage.setItem(
         presignKey,
         JSON.stringify({
-          subset: subsetName,
+          subset: combinedName,
           presigned_urls: urls,
         })
       );
 
-      // Clear loading state before navigation to avoid setState-on-unmount warnings
       setProcessingSubset(null);
       router.push(
-        `/new-job?pendingSubset=${encodeURIComponent(subsetName)}&presignKey=${encodeURIComponent(presignKey)}`
+        `/new-job?pendingSubset=${encodeURIComponent(combinedName)}&presignKey=${encodeURIComponent(presignKey)}`
       );
     } catch (e) {
       alert(`Failed to fetch presigned URLs: ${e instanceof Error ? e.message : 'Unknown error'}`);
     } finally {
-      setProcessingSubset(prev => (prev === subsetName ? null : prev));
+      setProcessingSubset((prev) => (prev === subsetName ? null : prev));
     }
   };
 
-  const handleRefresh = async () => {
-    setIsLoading(true);
-    setError(null);
+  const handleMarkProcessed = async (subsetName: string) => {
+    if (!selectedProject) return;
+    setActionInProgress(subsetName);
     try {
-      const subsetNames = await contentPipelineApi.listNotProcessedSubsets();
-      setSubsets(subsetNames);
+      await contentPipelineApi.markSubsetProcessed(selectedProject, subsetName);
+      setSubsets((prev) => prev.filter((s) => s !== subsetName));
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load pending subsets');
+      alert(`Failed to mark as processed: ${e instanceof Error ? e.message : 'Unknown error'}`);
     } finally {
-      setIsLoading(false);
+      setActionInProgress((prev) => (prev === subsetName ? null : prev));
+    }
+  };
+
+  const handleMoveToUnprocessed = async (subsetName: string) => {
+    if (!selectedProject) return;
+    setActionInProgress(subsetName);
+    try {
+      await contentPipelineApi.moveToNotProcessed(selectedProject, subsetName);
+      setSubsets((prev) => prev.filter((s) => s !== subsetName));
+    } catch (e) {
+      alert(`Failed to move to unprocessed: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    } finally {
+      setActionInProgress((prev) => (prev === subsetName ? null : prev));
     }
   };
 
   const handleClearSearch = () => {
     setSearchQuery('');
-    // Keep the user in flow: clear + refocus.
     searchInputRef.current?.focus();
   };
 
+  // --- Breadcrumb ---
+  const breadcrumb = (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, color: '#9ca3af' }}>
+      <span
+        onClick={selectedProject ? handleBreadcrumbBack : undefined}
+        style={{
+          cursor: selectedProject ? 'pointer' : 'default',
+          color: selectedProject ? '#60a5fa' : '#e5e7eb',
+          fontWeight: selectedProject ? 400 : 700,
+        }}
+      >
+        Projects
+      </span>
+      {selectedProject && (
+        <>
+          <span style={{ color: '#6b7280' }}>&gt;</span>
+          <span style={{ color: '#e5e7eb', fontWeight: 700 }}>{selectedProject}</span>
+        </>
+      )}
+    </div>
+  );
+
+  // --- Loading state ---
   if (isLoading) {
     return (
       <div className={styles.container}>
-        <PageTitle title="Pending Jobs" leftButton="back" />
+        <PageTitle title="Pending" leftButton="back" />
         <div className={styles.content}>
           <div style={{ textAlign: 'center', padding: '48px 0' }}>
             <Spinner />
-            <p style={{ marginTop: 16, color: '#e0e0e0' }}>Loading pending subsets...</p>
+            <p style={{ marginTop: 16, color: '#e0e0e0' }}>
+              Loading {selectedProject ? 'subsets' : 'projects'}...
+            </p>
           </div>
         </div>
       </div>
     );
   }
 
+  // --- Error state ---
   if (error) {
     return (
       <div className={styles.container}>
-        <PageTitle title="Pending Jobs" leftButton="back" />
+        <PageTitle title="Pending" leftButton="back" />
         <div className={styles.content}>
           <div style={{ textAlign: 'center', padding: '48px 0' }}>
-            <h2 style={{ color: '#ef4444', marginBottom: 16 }}>❌ Error Loading Pending Jobs</h2>
+            <h2 style={{ color: '#ef4444', marginBottom: 16 }}>Error</h2>
             <p style={{ color: '#e0e0e0', marginBottom: 24 }}>{error}</p>
             <button
               onClick={handleRefresh}
@@ -225,12 +313,26 @@ export default function PendingJobsPage() {
     );
   }
 
+  // --- Shared button style ---
+  const smallBtnStyle: React.CSSProperties = {
+    padding: '10px 14px',
+    background: 'rgba(255, 255, 255, 0.08)',
+    border: '1px solid rgba(255, 255, 255, 0.2)',
+    borderRadius: 10,
+    color: '#e5e7eb',
+    cursor: 'pointer',
+    fontSize: 14,
+    fontWeight: 600,
+    whiteSpace: 'nowrap',
+  };
+
   return (
     <div className={styles.container}>
-      <PageTitle title="Pending Jobs" leftButton="back" />
-      {/* Override `styles.content` max-width (default 800px) for this page */}
+      <PageTitle title="Pending" leftButton="back" />
       <div className={styles.content} style={{ maxWidth: 1160, padding: '0 1.5rem' }}>
         <div style={{ maxWidth: '100%', margin: '0 auto', padding: '24px' }}>
+
+          {/* Top bar: breadcrumb + toggle + refresh */}
           <div
             style={{
               display: 'flex',
@@ -241,27 +343,30 @@ export default function PendingJobsPage() {
               flexWrap: 'wrap',
             }}
           >
-            <p style={{ margin: 0, color: '#9ca3af', fontSize: 14 }}>
-              Subsets waiting to be processed
-            </p>
-            <button
-              onClick={handleRefresh}
-              style={{
-                padding: '10px 14px',
-                background: 'rgba(255, 255, 255, 0.08)',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                borderRadius: 10,
-                color: '#e5e7eb',
-                cursor: 'pointer',
-                fontSize: 14,
-                fontWeight: 600,
-              }}
-            >
-              🔄 Refresh
-            </button>
+            {breadcrumb}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button onClick={handleToggleView} style={smallBtnStyle}>
+                {viewMode === 'pending' ? 'Processed' : 'Pending'}
+              </button>
+              <button onClick={handleRefresh} style={smallBtnStyle}>
+                Refresh
+              </button>
+            </div>
           </div>
 
-          {sortedSubsets.length === 0 ? (
+          {/* Subtitle */}
+          <p style={{ margin: '0 0 16px 0', color: '#9ca3af', fontSize: 14 }}>
+            {viewMode === 'pending'
+              ? selectedProject
+                ? 'Subsets waiting to be processed'
+                : 'Projects with pending subsets'
+              : selectedProject
+                ? 'Processed subsets'
+                : 'Projects with processed subsets'}
+          </p>
+
+          {/* Empty state */}
+          {totalCount === 0 ? (
             <div
               style={{
                 textAlign: 'center',
@@ -271,14 +376,21 @@ export default function PendingJobsPage() {
                 border: '1px solid rgba(255, 255, 255, 0.1)',
               }}
             >
-              <div style={{ fontSize: 48, marginBottom: 16 }}>⏳</div>
-              <h3 style={{ color: '#9ca3af', fontSize: 18, marginBottom: 8 }}>No Pending Subsets</h3>
+              <div style={{ fontSize: 48, marginBottom: 16 }}>
+                {viewMode === 'pending' ? '⏳' : '✅'}
+              </div>
+              <h3 style={{ color: '#9ca3af', fontSize: 18, marginBottom: 8 }}>
+                {selectedProject
+                  ? `No ${viewMode === 'pending' ? 'pending' : 'processed'} subsets`
+                  : `No ${viewMode === 'pending' ? 'pending' : 'processed'} projects`}
+              </h3>
               <p style={{ color: '#6b7280', fontSize: 14, marginBottom: 0 }}>
-                Nothing to process right now.
+                Nothing here right now.
               </p>
             </div>
           ) : (
             <>
+              {/* Search bar + count */}
               <div
                 style={{
                   display: 'flex',
@@ -294,8 +406,8 @@ export default function PendingJobsPage() {
                     ref={searchInputRef}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search subsets…"
-                    aria-label="Search pending subsets"
+                    placeholder={selectedProject ? 'Search subsets...' : 'Search projects...'}
+                    aria-label="Search"
                     style={{
                       width: '100%',
                       padding: '10px 40px 10px 12px',
@@ -334,13 +446,13 @@ export default function PendingJobsPage() {
                     </button>
                   )}
                 </div>
-
                 <div style={{ color: '#9ca3af', fontSize: 13 }}>
-                  {filteredSubsets.length} / {sortedSubsets.length}
+                  {filteredItems.length} / {totalCount}
                 </div>
               </div>
 
-              {filteredSubsets.length === 0 ? (
+              {/* No search results */}
+              {filteredItems.length === 0 ? (
                 <div
                   style={{
                     textAlign: 'center',
@@ -350,30 +462,52 @@ export default function PendingJobsPage() {
                     border: '1px solid rgba(255, 255, 255, 0.1)',
                   }}
                 >
-                  <h3 style={{ color: '#9ca3af', fontSize: 16, marginBottom: 8 }}>No matching subsets</h3>
+                  <h3 style={{ color: '#9ca3af', fontSize: 16, marginBottom: 8 }}>No matches</h3>
                   <p style={{ color: '#6b7280', fontSize: 14, marginBottom: 16 }}>
                     Try a different search term.
                   </p>
-                  <button
-                    type="button"
-                    onClick={handleClearSearch}
-                    style={{
-                      padding: '10px 14px',
-                      background: 'rgba(255, 255, 255, 0.08)',
-                      border: '1px solid rgba(255, 255, 255, 0.2)',
-                      borderRadius: 10,
-                      color: '#e5e7eb',
-                      cursor: 'pointer',
-                      fontSize: 14,
-                      fontWeight: 600,
-                    }}
-                  >
+                  <button type="button" onClick={handleClearSearch} style={smallBtnStyle}>
                     Clear search
                   </button>
                 </div>
-              ) : (
+              ) : !selectedProject ? (
+                /* ===== Level 1: Project cards ===== */
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {filteredSubsets.map((subsetName) => (
+                  {filteredItems.map((project) => (
+                    <div
+                      key={project}
+                      onClick={() => handleProjectClick(project)}
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.06)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        borderRadius: 12,
+                        padding: 16,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 12,
+                        cursor: 'pointer',
+                        transition: 'background 0.15s',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255, 255, 255, 0.10)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)')}
+                    >
+                      <div style={{ minWidth: 0, flex: '1 1 auto' }}>
+                        <OneLineAutoFitText
+                          text={project}
+                          maxFontSizePx={15}
+                          minFontSizePx={9}
+                          style={{ color: '#f8f8f8', fontWeight: 700, fontFamily: 'monospace' }}
+                        />
+                      </div>
+                      <span style={{ color: '#6b7280', fontSize: 18 }}>&rsaquo;</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                /* ===== Level 2: Subset cards ===== */
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {filteredItems.map((subsetName) => (
                     <div
                       key={subsetName}
                       style={{
@@ -397,29 +531,58 @@ export default function PendingJobsPage() {
                       </div>
 
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'nowrap', justifyContent: 'flex-end' }}>
-                        <SubsetDownloadButton subsetName={subsetName} />
+                        <SubsetDownloadButton subsetName={`${selectedProject}-${subsetName}`} />
 
-                        <button
-                          onClick={() => handleProcess(subsetName)}
-                          disabled={processingSubset === subsetName}
-                          style={{
-                            padding: '10px 14px',
-                            background: processingSubset === subsetName
-                              ? 'rgba(156, 163, 175, 0.5)'
-                              : 'linear-gradient(135deg, #10b981, #059669)',
-                            border: 'none',
-                            borderRadius: 10,
-                            color: 'white',
-                            cursor: processingSubset === subsetName ? 'not-allowed' : 'pointer',
-                            fontSize: 14,
-                            fontWeight: 700,
-                            whiteSpace: 'nowrap',
-                            opacity: processingSubset === subsetName ? 0.7 : 1,
-                            minHeight: 40,
-                          }}
-                        >
-                          {processingSubset === subsetName ? 'Fetching files...' : '▶︎ Process Job'}
-                        </button>
+                        {viewMode === 'pending' ? (
+                          <>
+                            <button
+                              onClick={() => handleMarkProcessed(subsetName)}
+                              disabled={actionInProgress === subsetName}
+                              style={{
+                                ...smallBtnStyle,
+                                opacity: actionInProgress === subsetName ? 0.6 : 1,
+                                cursor: actionInProgress === subsetName ? 'not-allowed' : 'pointer',
+                                minHeight: 40,
+                              }}
+                            >
+                              {actionInProgress === subsetName ? 'Moving...' : 'Mark Processed'}
+                            </button>
+                            <button
+                              onClick={() => handleProcess(subsetName)}
+                              disabled={processingSubset === subsetName}
+                              style={{
+                                padding: '10px 14px',
+                                background: processingSubset === subsetName
+                                  ? 'rgba(156, 163, 175, 0.5)'
+                                  : 'linear-gradient(135deg, #10b981, #059669)',
+                                border: 'none',
+                                borderRadius: 10,
+                                color: 'white',
+                                cursor: processingSubset === subsetName ? 'not-allowed' : 'pointer',
+                                fontSize: 14,
+                                fontWeight: 700,
+                                whiteSpace: 'nowrap',
+                                opacity: processingSubset === subsetName ? 0.7 : 1,
+                                minHeight: 40,
+                              }}
+                            >
+                              {processingSubset === subsetName ? 'Fetching files...' : 'Process Job'}
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => handleMoveToUnprocessed(subsetName)}
+                            disabled={actionInProgress === subsetName}
+                            style={{
+                              ...smallBtnStyle,
+                              opacity: actionInProgress === subsetName ? 0.6 : 1,
+                              cursor: actionInProgress === subsetName ? 'not-allowed' : 'pointer',
+                              minHeight: 40,
+                            }}
+                          >
+                            {actionInProgress === subsetName ? 'Moving...' : 'Move to Unprocessed'}
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -432,4 +595,3 @@ export default function PendingJobsPage() {
     </div>
   );
 }
-
