@@ -737,7 +737,12 @@ export const AssetCreationForm = ({
     if (!currentConfig.foilfractor) {
       delete (assetConfig as any).foilfractor;
     }
-    
+
+    // Ensure diecut key is only present when enabled
+    if (!currentConfig.diecut) {
+      delete (assetConfig as any).diecut;
+    }
+
     // Ensure seq key is only present when explicitly 1/1
     if ((currentConfig as any).seq !== '1/1') {
       delete (assetConfig as any).seq;
