@@ -32,7 +32,7 @@ interface AssetConfig {
     coldfoil_color?: 'silver' | 'gold';
   };
   foilfractor?: boolean;
-  diecut?: boolean;
+  diecut?: string;
 }
 
 interface AssetCreationFormProps {
@@ -177,13 +177,14 @@ export const AssetCreationForm = ({
 
 
 
-  // Helper: check if extracted layers contain a diecut/dieline/cardcut layer
-  const hasDiecutLayer = (): boolean => {
+  // Helper: find the diecut/dieline/cardcut layer name from extracted layers
+  const getDiecutLayerName = (): string | null => {
     const extractedLayers = getExtractedLayers();
-    return extractedLayers.some(layer => {
+    const match = extractedLayers.find(layer => {
       const lower = layer.toLowerCase();
       return lower.includes('diecut') || lower.includes('dieline') || lower.includes('cardcut');
     });
+    return match || null;
   };
 
   // Helper functions
@@ -1871,7 +1872,7 @@ export const AssetCreationForm = ({
           )}
 
           {/* Die Cut Checkbox - only shown when extracted layers contain a diecut/dieline/cardcut layer */}
-          {currentCardType && hasDiecutLayer() && (
+          {currentCardType && getDiecutLayerName() && (
             <div style={{ marginTop: 12 }}>
               <label style={{
                 display: 'flex',
@@ -1889,7 +1890,7 @@ export const AssetCreationForm = ({
                     const checked = e.target.checked;
                     setCurrentConfig(prev => {
                       if (checked) {
-                        return { ...prev, diecut: true };
+                        return { ...prev, diecut: 'diecut_layer' };
                       } else {
                         const { diecut, ...rest } = prev as any;
                         return { ...rest };

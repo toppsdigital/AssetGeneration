@@ -23,7 +23,7 @@ interface AssetConfig {
   vfx?: string;
   chrome: string | boolean;
   foilfractor?: boolean; // When true, show a gold "foilfractor" pill next to type
-  diecut?: boolean; // When true, show a red "diecut" pill next to type
+  diecut?: string; // When set, show a red "DIECUT" pill next to type with the value
   oneOfOneWp?: boolean; // For BASE assets with superfractor chrome
   wp_inv_layer?: string; // For chrome effects
   wp?: string; // For VFX effects (wp layer, v20+)
@@ -418,7 +418,7 @@ export const AssetsTable = ({
                               letterSpacing: '0.02em',
                               alignSelf: 'flex-start'
                             }}>
-                              DIECUT
+                              DIECUT: {asset.diecut}
                             </span>
                           )}
                           {asset.seq === '1/1' && (
