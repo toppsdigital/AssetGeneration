@@ -404,7 +404,12 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isRefreshing = fal
       if (assetData.coldfoil !== undefined) {
         asset.coldfoil = assetData.coldfoil;
       }
-      
+
+      // Include diecut layer when present
+      if (assetData.diecut) {
+        asset.diecut = assetData.diecut;
+      }
+
       return asset;
     });
     
