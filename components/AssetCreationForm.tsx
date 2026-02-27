@@ -177,14 +177,13 @@ export const AssetCreationForm = ({
 
 
 
-  // Helper: find the diecut/dieline/cardcut layer name from extracted layers
-  const getDiecutLayerName = (): string | null => {
+  // Helper: find all diecut/dieline/cardcut layer names from extracted layers
+  const getDiecutLayers = (): string[] => {
     const extractedLayers = getExtractedLayers();
-    const match = extractedLayers.find(layer => {
+    return extractedLayers.filter(layer => {
       const lower = layer.toLowerCase();
       return lower.includes('diecut') || lower.includes('dieline') || lower.includes('cardcut');
     });
-    return match || null;
   };
 
   // Helper functions
@@ -1871,37 +1870,86 @@ export const AssetCreationForm = ({
             </div>
           )}
 
-          {/* Die Cut Checkbox - only shown when extracted layers contain a diecut/dieline/cardcut layer */}
-          {currentCardType && getDiecutLayerName() && (
-            <div style={{ marginTop: 12 }}>
-              <label style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                fontSize: 14,
-                fontWeight: 600,
-                color: '#f8f8f8',
-                cursor: 'pointer'
-              }}>
-                <input
-                  type="checkbox"
-                  checked={!!currentConfig.diecut}
+          {/* Die Cut - only shown when extracted layers contain a diecut/dieline/cardcut layer */}
+          {currentCardType && getDiecutLayers().length > 0 && (
+            getDiecutLayers().length === 1 ? (
+              /* Single diecut layer: checkbox with layer name shown */
+              <div style={{ marginTop: 12 }}>
+                <label style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: '#f8f8f8',
+                  cursor: 'pointer'
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={!!currentConfig.diecut}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setCurrentConfig(prev => {
+                        if (checked) {
+                          return { ...prev, diecut: getDiecutLayers()[0] };
+                        } else {
+                          const { diecut, ...rest } = prev as any;
+                          return { ...rest };
+                        }
+                      });
+                    }}
+                    style={{ width: 16, height: 16 }}
+                  />
+                  Die Cut
+                  <span style={{ fontSize: 12, color: '#9ca3af', fontWeight: 400 }}>
+                    - using {getDiecutLayers()[0]}
+                  </span>
+                </label>
+              </div>
+            ) : (
+              /* Multiple diecut layers: dropdown */
+              <div style={{ marginTop: 12 }}>
+                <label style={{
+                  display: 'block',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: '#f8f8f8',
+                  marginBottom: 8
+                }}>
+                  Select Die Cut Layer
+                </label>
+                <select
+                  value={currentConfig.diecut || ''}
                   onChange={(e) => {
-                    const checked = e.target.checked;
+                    const val = e.target.value;
                     setCurrentConfig(prev => {
-                      if (checked) {
-                        return { ...prev, diecut: 'diecut_layer' };
+                      if (val) {
+                        return { ...prev, diecut: val };
                       } else {
                         const { diecut, ...rest } = prev as any;
                         return { ...rest };
                       }
                     });
                   }}
-                  style={{ width: 16, height: 16 }}
-                />
-                Die Cut
-              </label>
-            </div>
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    borderRadius: 8,
+                    color: '#f8f8f8',
+                    fontSize: 14
+                  }}
+                >
+                  <option value="" style={{ background: '#1f2937' }}>No die cut</option>
+                  {getDiecutLayers().map((layer: string) => (
+                    <option key={layer} value={layer} style={{ background: '#1f2937' }}>
+                      {layer}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )
           )}
 
           {/* Seq 1/1 Checkbox */}
