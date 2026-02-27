@@ -369,19 +369,41 @@ export const AssetCreationForm = ({
     return [];
   };
 
+  // Determine the expected layer prefix for the current card type
+  const _layerPrefix = (): string => {
+    if (!currentCardType) return '';
+    if (currentCardType === 'back') return 'bk_';
+    // front, base, parallel, multi-parallel, wp, wp-1of1 all use fr_
+    return 'fr_';
+  };
+
   const getWpInvLayers = () => {
     const extractedLayers = getExtractedLayers();
-    return extractedLayers.filter(layer =>
+    const all = extractedLayers.filter(layer =>
       layer.toLowerCase().includes('wp') && layer.toLowerCase().includes('inv')
     );
+    // Prefer layers matching the current card-type prefix (fr_ or bk_)
+    const prefix = _layerPrefix();
+    if (prefix) {
+      const prefixed = all.filter(l => l.toLowerCase().startsWith(prefix));
+      if (prefixed.length > 0) return prefixed;
+    }
+    return all;
   };
 
   const getWpLayers = () => {
     const extractedLayers = getExtractedLayers();
-    return extractedLayers.filter(layer => {
+    const all = extractedLayers.filter(layer => {
       const lower = layer.toLowerCase();
       return lower.includes('wp') && !lower.includes('inv');
     });
+    // Prefer layers matching the current card-type prefix (fr_ or bk_)
+    const prefix = _layerPrefix();
+    if (prefix) {
+      const prefixed = all.filter(l => l.toLowerCase().startsWith(prefix));
+      if (prefixed.length > 0) return prefixed;
+    }
+    return all;
   };
 
   const getColorVariants = () => {
