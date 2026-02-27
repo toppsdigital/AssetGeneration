@@ -35,3 +35,7 @@ Next.js frontend for the asset generation pipeline. Paired with the `ContentPipe
 - Use matching branch names with the ContentPipeline backend repo
 - Commit only relevant files — exclude unrelated working tree changes
 - PRs should include `## Summary` and `## Test plan` sections
+- **Keep `main` and `topps-dev` in sync** — after merging a PR to main, merge main into topps-dev and push:
+  ```
+  git checkout topps-dev && git pull origin topps-dev && git merge main && git push origin topps-dev
+  ```
