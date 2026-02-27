@@ -156,7 +156,11 @@ export default function PendingJobsPage() {
   const filteredItems = useMemo(() => {
     const source = selectedProject ? [...subsets].sort((a, b) => a.localeCompare(b)) : [...projects].sort((a, b) => a.localeCompare(b));
     if (!normalizedQuery) return source;
-    return source.filter((item) => item.toLowerCase().includes(normalizedQuery));
+    const terms = normalizedQuery.split(/\s+/).filter(Boolean);
+    return source.filter((item) => {
+      const lower = item.toLowerCase();
+      return terms.every((term) => lower.includes(term));
+    });
   }, [normalizedQuery, projects, subsets, selectedProject]);
 
   const totalCount = selectedProject ? subsets.length : projects.length;
