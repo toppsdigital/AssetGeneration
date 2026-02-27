@@ -572,17 +572,6 @@ export const AssetsTable = ({
                             }}>
                               {asset.diecut}
                             </span>
-                            <span style={{
-                              background: 'rgba(239, 68, 68, 0.15)',
-                              color: '#f87171',
-                              padding: '1px 5px',
-                              borderRadius: 3,
-                              fontSize: 10,
-                              fontWeight: 600,
-                              letterSpacing: '0.03em'
-                            }}>
-                              DIECUT
-                            </span>
                           </div>
                         )}
 
