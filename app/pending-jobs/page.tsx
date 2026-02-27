@@ -118,9 +118,11 @@ export default function PendingJobsPage() {
     }
   }, [viewMode]);
 
-  // Fetch subsets for selected project
+  // Fetch subsets for selected project (inline loading — no full-page spinner)
+  const [isLoadingSubsets, setIsLoadingSubsets] = useState(false);
+
   const fetchSubsets = useCallback(async (project: string) => {
-    setIsLoading(true);
+    setIsLoadingSubsets(true);
     setError(null);
     try {
       const list = viewMode === 'pending'
@@ -130,7 +132,7 @@ export default function PendingJobsPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load subsets');
     } finally {
-      setIsLoading(false);
+      setIsLoadingSubsets(false);
     }
   }, [viewMode]);
 
@@ -256,7 +258,7 @@ export default function PendingJobsPage() {
           fontWeight: selectedProject ? 400 : 700,
         }}
       >
-        Projects
+        {viewMode === 'pending' ? 'Pending Projects' : 'Processed Projects'}
       </span>
       {selectedProject && (
         <>
@@ -271,7 +273,7 @@ export default function PendingJobsPage() {
   if (isLoading) {
     return (
       <div className={styles.container}>
-        <PageTitle title={viewMode === 'pending' ? 'Pending Jobs' : 'Processed Jobs'} leftButton="back" />
+        <PageTitle title={viewMode === 'pending' ? 'Pending' : 'Processed'} leftButton="back" />
         <div className={styles.content}>
           <div style={{ textAlign: 'center', padding: '48px 0' }}>
             <Spinner />
@@ -288,7 +290,7 @@ export default function PendingJobsPage() {
   if (error) {
     return (
       <div className={styles.container}>
-        <PageTitle title={viewMode === 'pending' ? 'Pending Jobs' : 'Processed Jobs'} leftButton="back" />
+        <PageTitle title={viewMode === 'pending' ? 'Pending' : 'Processed'} leftButton="back" />
         <div className={styles.content}>
           <div style={{ textAlign: 'center', padding: '48px 0' }}>
             <h2 style={{ color: '#ef4444', marginBottom: 16 }}>Error</h2>
@@ -328,7 +330,7 @@ export default function PendingJobsPage() {
 
   return (
     <div className={styles.container}>
-      <PageTitle title={viewMode === 'pending' ? 'Pending Jobs' : 'Processed Jobs'} leftButton="back" />
+      <PageTitle title={viewMode === 'pending' ? 'Pending' : 'Processed'} leftButton="back" />
       <div className={styles.content} style={{ maxWidth: 1160, padding: '0 1.5rem' }}>
         <div style={{ maxWidth: '100%', margin: '0 auto', padding: '24px' }}>
 
@@ -354,19 +356,13 @@ export default function PendingJobsPage() {
             </div>
           </div>
 
-          {/* Subtitle */}
-          <p style={{ margin: '0 0 16px 0', color: '#9ca3af', fontSize: 14 }}>
-            {viewMode === 'pending'
-              ? selectedProject
-                ? 'Subsets waiting to be processed'
-                : 'Projects with pending subsets'
-              : selectedProject
-                ? 'Processed subsets'
-                : 'Projects with processed subsets'}
-          </p>
-
-          {/* Empty state */}
-          {totalCount === 0 ? (
+          {/* Inline loading for subset drill-down */}
+          {isLoadingSubsets ? (
+            <div style={{ textAlign: 'center', padding: '48px 0' }}>
+              <Spinner />
+              <p style={{ marginTop: 16, color: '#e0e0e0' }}>Loading subsets...</p>
+            </div>
+          ) : totalCount === 0 ? (
             <div
               style={{
                 textAlign: 'center',
