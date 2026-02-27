@@ -43,6 +43,7 @@ interface AssetConfig {
   vfx?: string;
   chrome: string | boolean;
   foilfractor?: boolean;
+  diecut?: string;
   oneOfOneWp?: boolean; // For BASE assets with superfractor chrome
   wp_inv_layer?: string; // For chrome effects
   wp?: string; // For VFX effects (wp layer, v20+)
@@ -590,7 +591,12 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isRefreshing = fal
       if (config.foilfractor === true) {
         assetConfig.foilfractor = true;
       }
-      
+
+      // Include diecut only when enabled (string value = layer identifier)
+      if (config.diecut) {
+        assetConfig.diecut = config.diecut;
+      }
+
       // Include seq only when explicitly "1/1"
       if (config.seq && config.seq.toString().trim() === '1/1') {
         assetConfig.seq = '1/1';
