@@ -32,6 +32,7 @@ interface AssetConfig {
     coldfoil_color?: 'silver' | 'gold';
   };
   foilfractor?: boolean;
+  diecut?: boolean;
 }
 
 interface AssetCreationFormProps {
@@ -141,6 +142,7 @@ export const AssetCreationForm = ({
             }
           : undefined,
         foilfractor: editingAsset.foilfractor || undefined,
+        diecut: editingAsset.diecut || undefined,
         type: editingAsset.type
       });
       
@@ -174,6 +176,15 @@ export const AssetCreationForm = ({
   }, [editingAsset, editingAssetId]);
 
 
+
+  // Helper: check if extracted layers contain a diecut/dieline/cardcut layer
+  const hasDiecutLayer = (): boolean => {
+    const extractedLayers = getExtractedLayers();
+    return extractedLayers.some(layer => {
+      const lower = layer.toLowerCase();
+      return lower.includes('diecut') || lower.includes('dieline') || lower.includes('cardcut');
+    });
+  };
 
   // Helper functions
   const getLayersByType = (type: 'wp' | 'back' | 'base' | 'parallel' | 'multi-parallel' | 'wp-1of1' | 'front') => {
@@ -1855,6 +1866,39 @@ export const AssetCreationForm = ({
                   style={{ width: 16, height: 16 }}
                 />
                 Foilfractor
+              </label>
+            </div>
+          )}
+
+          {/* Die Cut Checkbox - only shown when extracted layers contain a diecut/dieline/cardcut layer */}
+          {currentCardType && hasDiecutLayer() && (
+            <div style={{ marginTop: 12 }}>
+              <label style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                fontSize: 14,
+                fontWeight: 600,
+                color: '#f8f8f8',
+                cursor: 'pointer'
+              }}>
+                <input
+                  type="checkbox"
+                  checked={!!currentConfig.diecut}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setCurrentConfig(prev => {
+                      if (checked) {
+                        return { ...prev, diecut: true };
+                      } else {
+                        const { diecut, ...rest } = prev as any;
+                        return { ...rest };
+                      }
+                    });
+                  }}
+                  style={{ width: 16, height: 16 }}
+                />
+                Die Cut
               </label>
             </div>
           )}
