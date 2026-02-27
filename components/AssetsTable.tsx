@@ -407,20 +407,6 @@ export const AssetsTable = ({
                               FOILFRACTOR
                             </span>
                           )}
-                          {asset.diecut && (
-                            <span style={{
-                              background: 'rgba(239, 68, 68, 0.2)',
-                              color: '#f87171',
-                              padding: '2px 6px',
-                              borderRadius: 3,
-                              fontSize: 11,
-                              fontWeight: 600,
-                              letterSpacing: '0.02em',
-                              alignSelf: 'flex-start'
-                            }}>
-                              DIECUT: {asset.diecut}
-                            </span>
-                          )}
                           {asset.seq === '1/1' && (
                             <span style={{
                               background: 'rgba(16, 185, 129, 0.18)', // emerald-like background
@@ -577,8 +563,31 @@ export const AssetsTable = ({
                           </div>
                         )}
                         
+                        {/* Diecut layer */}
+                        {asset.diecut && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}>
+                            <span style={{
+                              fontSize: 14,
+                              color: '#e5e7eb'
+                            }}>
+                              {asset.diecut}
+                            </span>
+                            <span style={{
+                              background: 'rgba(239, 68, 68, 0.15)',
+                              color: '#f87171',
+                              padding: '1px 5px',
+                              borderRadius: 3,
+                              fontSize: 10,
+                              fontWeight: 600,
+                              letterSpacing: '0.03em'
+                            }}>
+                              DIECUT
+                            </span>
+                          </div>
+                        )}
+
                         {/* Fallback: Show dash for empty cases */}
-                        {!asset.layer && (!asset.spot_color_pairs || asset.spot_color_pairs.length === 0) && !asset.spot && !asset.coldfoil?.coldfoil_layer && !(typeof asset.foil === 'object' && asset.foil !== null && (asset.foil as { foil_layer?: string }).foil_layer) && (
+                        {!asset.layer && (!asset.spot_color_pairs || asset.spot_color_pairs.length === 0) && !asset.spot && !asset.coldfoil?.coldfoil_layer && !(typeof asset.foil === 'object' && asset.foil !== null && (asset.foil as { foil_layer?: string }).foil_layer) && !asset.diecut && (
                           <span style={{ color: '#6b7280' }}>—</span>
                         )}
                       </div>
