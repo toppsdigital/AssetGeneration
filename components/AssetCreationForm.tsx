@@ -40,6 +40,7 @@ interface AssetCreationFormProps {
   onClose: () => void;
   jsonData: any;
   getExtractedLayers: () => string[];
+  getDiecutLayers: () => string[];
   getConfiguredAssets: () => AssetConfig[];
   generateAssetName: (type: string, config: Partial<AssetConfig>, existingNames?: string[]) => string;
   savingAsset: boolean;
@@ -57,6 +58,7 @@ export const AssetCreationForm = ({
   onClose,
   jsonData,
   getExtractedLayers,
+  getDiecutLayers: getDiecutLayersAll,
   getConfiguredAssets,
   generateAssetName,
   savingAsset,
@@ -177,13 +179,21 @@ export const AssetCreationForm = ({
 
 
 
-  // Helper: find all diecut/dieline/cardcut layer names from extracted layers
+  // Helper: get diecut layers filtered by current card type (front vs back)
   const getDiecutLayers = (): string[] => {
-    const extractedLayers = getExtractedLayers();
-    return extractedLayers.filter(layer => {
-      const lower = layer.toLowerCase();
-      return lower.includes('diecut') || lower.includes('dieline') || lower.includes('cardcut');
-    });
+    const allDiecut = getDiecutLayersAll();
+
+    // Filter by card type prefix: back cards use bk_ layers, front cards use fr_ layers
+    if (currentCardType) {
+      const prefix = currentCardType === 'back' ? 'bk' : 'fr';
+      const filtered = allDiecut.filter(layer => {
+        const tokens = layer.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+        return tokens.includes(prefix);
+      });
+      if (filtered.length > 0) return filtered;
+    }
+
+    return allDiecut;
   };
 
   // Helper functions
