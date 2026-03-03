@@ -343,7 +343,34 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isRefreshing = fal
     return allLayers.sort();
   };
 
+  // Helper: return layer names whose backend layer_type is 'diecut'
+  const getDiecutLayers = (): string[] => {
+    const diecutNames: string[] = [];
 
+    const extractLayerName = (filename: string): string | null => {
+      const nameWithoutExt = filename.replace(/\.(tif|pdf|png|jpg|jpeg)$/i, '');
+      const parts = nameWithoutExt.split('_');
+      if (parts.length < 3) return null;
+      return parts.slice(2).join('_');
+    };
+
+    if (mergedJobData?.content_pipeline_files) {
+      mergedJobData.content_pipeline_files.forEach((fileGroup: any) => {
+        if (fileGroup.extracted_files) {
+          Object.entries(fileGroup.extracted_files).forEach(([filename, fileData]: [string, any]) => {
+            if (fileData?.layer_type === 'diecut') {
+              const layerName = extractLayerName(filename);
+              if (layerName && !diecutNames.includes(layerName)) {
+                diecutNames.push(layerName);
+              }
+            }
+          });
+        }
+      });
+    }
+
+    return diecutNames.sort();
+  };
 
   // Helper function to get assets from job data
   const getConfiguredAssets = (): AssetConfig[] => {
@@ -1358,6 +1385,7 @@ export const PSDTemplateSelector = ({ jobData, mergedJobData, isRefreshing = fal
         onClose={closeAssetModal}
         jsonData={jsonData}
         getExtractedLayers={getExtractedLayers}
+        getDiecutLayers={getDiecutLayers}
         getConfiguredAssets={getConfiguredAssets}
         generateAssetName={generateAssetName}
         savingAsset={savingAsset}
