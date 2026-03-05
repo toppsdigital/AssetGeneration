@@ -1,3 +1,9 @@
+# E2E test artifacts
+.test-job-ids.json
+
+# Claude Code MCP config
+.mcp.json
+
 # Dependencies
 node_modules/
 venv/
@@ -65,3 +71,9 @@ tmp/
 .vercel
 .env*.local
 tsconfig.tsbuildinfo
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
