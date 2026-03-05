@@ -16,9 +16,12 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const session = await auth();
-  
+
+  // Bypass auth check for E2E testing
+  const isE2ETesting = process.env.E2E_TESTING === 'true';
+
   // Check if session exists AND has a valid user (properly authenticated)
-  const isAuthenticated = session?.user?.email || session?.user?.id;
+  const isAuthenticated = isE2ETesting || session?.user?.email || session?.user?.id;
 
   return (
     <html lang="en">
